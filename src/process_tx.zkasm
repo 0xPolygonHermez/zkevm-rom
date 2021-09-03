@@ -1,0 +1,100 @@
+
+processTx:
+
+
+        $ => E                          :MLOAD(lastHashIdUsed)
+        E+1 => E                        :MSTORE(lastHashIdUsed)
+        E                               :MSTORE(txHashId)
+        
+        ${getTxGas(curTx)} => GAS       :MSTORE(txGas)
+        GAS                             :HASHW(E)
+
+        ${getTxDestAddr(curTx)} => A    :MSTORE(txDestAddr)
+        A                               :HASHW(E)
+
+        ${getTxValue(curTx)} => A       :MSTORE(txValue)
+        A                               :HASHW(E)
+
+        ${getTxNonce(curTx)} => A       :MSTORE(txNonce)
+        A                               :HASHW(E)
+
+        ${getTxGasPrice(curTx)} => A    :MSTORE(txGasPrice)
+        A                               :HASHW(E)
+
+        ${getTxDataLength(curTx)} => B  :MSTORE(txNData)
+
+        1024 => SP
+
+        $${var txDataPointer=0}
+
+callDataCopyLoop:
+        B-1 => B                                        :JMPC(callDataCopyEnd)
+        ${getTxData(curTx, txDataPointer)} => A         :MSTORE(SP++)
+        A                                               :HASHW(E)
+        $${txDataPointer = txDataPointer + 1}
+                                                        :JMP(callDataCopyLoop)
+
+callDataCopyEnd:
+
+                                        :HASHE(E)
+        1024 => SP
+ 
+        ; Check the signature
+        $ => B                          :HASHR(E)
+        ${getTxSigR(curTx)} => C
+        ${getTxSigS(curTx)} => D
+        ${getTxSigV(curTx)} => E           
+        $ => A                          :ECRECOVER
+        A                               :MSTORE(txDestAddr)
+
+        ; TODO Move the VALUE
+
+
+; Next, copy the code
+
+        0 => PC
+        $ => E                          :MLOAD(lastHashIdUsed)
+        E+1 => E                        :MSTORE(lastHashIdUsed)
+        E                               :MSTORE(txHashId)
+
+        $${loadCode(getTxDestAddr())}
+        $${var txCodePointer=0}
+        ${getCodeLength()} => B
+
+codeCopyLoop:
+
+        B-1 => B                        :JMPC(codeCopyEnd)
+        ${getCode(txCodePointer)} => A  :MSTORE(PC++)
+        A                               :HASHW(E)
+        $${txCodePointer = txCodePointer +1}
+                                        :JMP(codeCopyLoop)
+
+codeCopyEnd:
+                                        :HASHE(E)
+        $ => A                          :HASHR(E)
+
+        $ => D                          :MLOAD(txDestAddr)
+        0x123456778 => E                                ; Random constont where the code is Stored
+        $ => B                          :SLOAD, ASSERTAB
+        0 => PC
+
+        $ => CTX                        :MLOAD(lastCtxUsed)
+        CTX+1 => CTX                    :MSTORE(lastCtxUsed)
+
+nextInstuction:
+
+        $ => A                          :MLOAD(PC++)
+        $ => E                          :INST_MAP_ROM, JMP(E)
+
+terminateTX:
+
+;   RECOVER STATE IF THROWED
+;   DISCOUNT GAS
+;
+;
+
+                                        :JMP(processTxEnd)
+
+
+
+

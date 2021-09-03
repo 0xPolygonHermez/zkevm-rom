@@ -1,0 +1,95 @@
+;;;;;;;;;;;;;
+; MLOAD
+;;;;;;;;;;;;;
+opcode_MLOAD:
+        SP-1024         :JMPC(MLOAD_gasOk)
+                        :JMP(throwCall)
+MLOAD_gasOk:
+        GAS-3 => GAS    :JMPC(throwCALL)
+        $mem => A       :MLOAD(SP++)
+        5 => D
+        $op => E        :SHR
+        0x1F => B
+        $op => A        :AND
+        3 => D
+        $op => D        :SHL       
+
+        $mem => A       :MLOAD(E)
+        $op =>  B       :SHL
+        $mem => B       :MLOAD(E+1)
+        $op =>  B       :SHR
+        $op             :OR, MSTORE(SP--), JMP(nextInstuction)
+
+;;;;;;;;;;;;;
+; MSTORE
+;;;;;;;;;;;;;
+opcode_MSTORE:
+        SP-1023         :JMPC(MSTORE_gasOk)
+                        :JMP(throwCall)
+MSTORE_gasOk:
+        GAS-3 => GAS    :JMPC(throwCALL)
+        $mem => A       :MLOAD(SP++)
+        5 => D
+        $op => E        :SHR
+        0x1F => B
+        $op => A        :AND
+        3 => D
+        $op => D        :SHL       
+
+        $mem => A       :MLOAD(SP)
+        $op => B        :SHR 
+
+        $mem => A       :MLOAD(E)
+        256-D => D                               ; D=256-n
+        $op => A        :SHR
+        $op => A        :SHL
+
+        $op             :OR, MSTORE(E)
+
+        $mem => A       :MLOAD(SP++)
+        $op => B        :SHL 
+
+        $mem => A       :MLOAD(E+1)
+        256-D => D                               ; D=256-n
+        $op => A        :SHL
+        $op => A        :SHR
+
+        $op             :OR, MSTORE(E+1)
+                        :JMP(nextInstuction)
+
+
+;;;;;;;;;;;;;
+; MSTORE8
+;;;;;;;;;;;;;
+opcode_MSTORE8:
+        SP-1023         :JMPC(MSTORE_gasOk)
+                        :JMP(throwCall)
+MSTORE8_gasOk:
+        GAS-3 => GAS    :JMPC(throwCALL)
+        $mem => A       :MLOAD(SP++)
+        5 => D
+        $op => E        :SHR
+        0x1F => B
+        $op => A        :AND
+        3 => D
+        $op => D        :SHL       
+
+        $mem => A       :MLOAD(SP)
+        0xFF => B        
+        $op => A        :AND 
+
+        256-D => D
+        $op => C        :SHL
+
+        0xFF => A
+        $op => A        :SHL
+        $op => B        :NOT
+
+        $mem => A       :MLOAD(E)
+        $op => A        :AND
+
+        C=B             
+        $op => A        :OR, MSTORE(E)
+
+        $op             :OR, MSTORE(E+1)
+                        :JMP(nextInstuction)
