@@ -1,97 +1,142 @@
 
 processTx:
 
-
-        $ => E                          :MLOAD(lastHashIdUsed)
-        E+1 => E                        :MSTORE(lastHashIdUsed)
-        E                               :MSTORE(txHashId)
-        
-        ${getTxGas(curTx)} => GAS       :MSTORE(txGas)
-        GAS                             :HASHW(E)
-
-        ${getTxDestAddr(curTx)} => A    :MSTORE(txDestAddr)
-        A                               :HASHW(E)
-
-        ${getTxValue(curTx)} => A       :MSTORE(txValue)
-        A                               :HASHW(E)
-
-        ${getTxNonce(curTx)} => A       :MSTORE(txNonce)
-        A                               :HASHW(E)
-
-        ${getTxGasPrice(curTx)} => A    :MSTORE(txGasPrice)
-        A                               :HASHW(E)
-
-        ${getTxDataLength(curTx)} => B  :MSTORE(txNData)
-
-        1024 => SP
-
-        $${var txDataPointer=0}
-
-callDataCopyLoop:
-        B-1 => B                                        :JMPC(callDataCopyEnd)
-        ${getTxData(curTx, txDataPointer)} => A         :MSTORE(SP++)
-        A                                               :HASHW(E)
-        $${txDataPointer = txDataPointer + 1}
-                                                        :JMP(callDataCopyLoop)
-
-callDataCopyEnd:
-
-                                        :HASHE(E)
-        1024 => SP
- 
-        ; Check the signature
-        $ => B                          :HASHR(E)
-        ${getTxSigR(curTx)} => C
-        ${getTxSigS(curTx)} => D
-        ${getTxSigV(curTx)} => E           
-        $ => A                          :ECRECOVER
-        A                               :MSTORE(txDestAddr)
-
-        ; TODO Move the VALUE
-
-
-; Next, copy the code
-
-        0 => PC
-        $ => E                          :MLOAD(lastHashIdUsed)
-        E+1 => E                        :MSTORE(lastHashIdUsed)
-        E                               :MSTORE(txHashId)
-
-        $${loadCode(getTxDestAddr())}
-        $${var txCodePointer=0}
-        ${getCodeLength()} => B
-
-codeCopyLoop:
-
-        B-1 => B                        :JMPC(codeCopyEnd)
-        ${getCode(txCodePointer)} => A  :MSTORE(PC++)
-        A                               :HASHW(E)
-        $${txCodePointer = txCodePointer +1}
-                                        :JMP(codeCopyLoop)
-
-codeCopyEnd:
-                                        :HASHE(E)
-        $ => A                          :HASHR(E)
-
-        $ => D                          :MLOAD(txDestAddr)
-        0x123456778 => E                                ; Random constont where the code is Stored
-        $ => B                          :SLOAD, ASSERTAB
-        0 => PC
-
+        ; We get a new hashId and store it in txHashId
         $ => CTX                        :MLOAD(lastCtxUsed)
-        CTX+1 => CTX                    :MSTORE(lastCtxUsed)
+        CTX+1 => A                      :MSTORE(lastCtxUsed)
 
-nextInstuction:
+                                        :JMP(loadTx_rlp)
+end_loadTx_rlp:
 
-        $ => A                          :MLOAD(PC++)
-        $ => E                          :INST_MAP_ROM, JMP(E)
+;;;;;;;;
+; Check and update Nonce
+;;;;;;;;
+
+        $ => A, D                       :MLOAD(txSrcOriginAddr)                                 ; Address of the origin to a and D
+        1 => B                                                                                  ; Constance for nonce
+        0 => C                                                                                  ; 3rd parameter does not apply to nonce
+        $ => A, E                       :SLOAD                                                  ; Load the nonce to A and C from storage
+        $                               :MLOAD(txNonce), ASSERT                                 ; Check the txNonce matches
+        D => A                                                                                  ; Set to A the current address
+        E+1                             :SSTORE                                                 ; Store the nonce plus one
+
+
+;;;;;;;;
+; Buy Gas
+;;;;;;;;
+
+        $ => A                          :MLOAD(txGas)                                           ; Nultiplies the txGas amd the txGasPrice 
+        $ => B                          :MLOAD(txGasPrice)
+        0 => C                          
+        0 => D                                                                                  ; Forces no overflow 
+        ${A*B} => D                     :ARITH                                                  ; gas*gasPrice in D
+
+        $ => A                          :MLOAD(txSrcOriginAddr)
+        0 => B,C
+        $ => E                          :SLOAD                                                  ; Original Balance in E
+
+        D => C                                                                                  ; A = E - C
+        1 => B 
+        0 => D
+        ${E-C} => A                     
+        E                                :ARITH                                                 ; originalBalance -gas*gasPrice in A
+
+        A => D                                                                                  ; originalBalance -gas*gasPrice in D
+
+        $ => A                          :MLOAD(txSrcOriginAddr)
+        0 => B,C
+        D                               :SSTORE
+
+;;;;;;;;
+; Set the gas
+;;;;;;;;
+
+        $ => GAS                        :MLOAD(txGas)
+
+;;;;;;;;
+; evmCALL (Move Balances)
+;;;;;;;;
+
+        GAS - 21000 => GAS
+
+        ; Decrement original balance
+        $ => A                          :MLOAD(txSrcAddr)
+        0 => B,C
+        $ => E                          :SLOAD                                                  ; Original Balance in E
+
+        $ => C                          :MLOAD(txValue)                                         ; A = E - C
+        1 => B 
+        0 => D
+        ${E-C} => A                     
+        E                               :ARITH                                                  ; originalBalance -value in A
+
+        A => D                                                                                  ; originalBalance -value in D
+
+        $ => A                          :MLOAD(txSrcAddr)
+        0 => B,C
+        D                               :SSTORE
+
+        ; Increment destination balance
+        $ => A                          :MLOAD(txDestAddr)
+        0 => B,C
+        $ => C                          :SLOAD                                                  ; Original Balance in E
+
+        $ => A                          :MLOAD(txValue)                                         ; E = A + C
+        1 => B 
+        0 => D
+        ${A+C} => D                     :ARITH                                                  ; originalBalance + value in D
+
+        $ => A                          :MLOAD(txDestAddr)
+        0 => B,C
+        D                               :SSTORE
+
+
+
+;;;;;;;;
+; Refund GAS
+;;;;;;;;
+
+        ; We assume gas is exact
+
+        GAS => A
+        $ => B                          :MLOAD(txGasPrice)
+        0 => C                          
+        0 => D                                                                                  ; Forces no overflow 
+        ${A*B} => D                     :ARITH                                                  ; valueToReturn in D
+
+        $ => A                          :MLOAD(txDestAddr)
+        0 => B,C
+        $ => A                          :SLOAD                                                  ; Original Balance in A
+
+        1 => B
+        D => C
+        0 => D
+        ${A+C} => D                     :ARITH                                                  ; New Balance in D
+
+        $ => A                          :MLOAD(txSrcOriginAddr)
+        0 => B,C
+        D                               :SSTORE
+
+;;;;;;;;
+; Send remaining gas to sequencer
+;;;;;;;;
+
+        $ => A                          :MLOAD(txGas)                                           ; Nultiplies the txGas amd the txGasPrice 
+        -GAS => B
+        A+B => A                                                                                ; A = txGas -GAS
+
+        $ => B                          :MLOAD(txGasPrice)
+        0 => C                          
+        0 => D                                                                                  ; Forces no overflow 
+        ${A*B} => C                     :ARITH                                                  ; valueToAccumulate in C
+
+        $ => A                          :MLOAD(sequencerAccValue)
+        1 => B
+        0 => D
+        ${A+C} => A                     :ARITH, MSTORE(sequencerAccValue)                                                
+
 
 terminateTX:
-
-;   RECOVER STATE IF THROWED
-;   DISCOUNT GAS
-;
-;
 
                                         :JMP(processTxEnd)
 

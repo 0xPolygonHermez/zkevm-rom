@@ -2,8 +2,15 @@ INCLUDE "vars.zkasm"
 
 start:
 ; First of all, load The call Data.  The first A value is forced with the hash of the TX. 
-        ${getGlobalHash()} => A                                   ; In A register we have the TXHash
-        A                               :MSTORE(globalHash) 
+        ${getGlobalHash()}         :MSTORE(globalHash)                    ; In A register we have the TXHash
+
+        32 => D
+        ${getSequencerAddr()} => A      :HASHW(0)
+        A                               :MSTORE(sequencerAddr)
+
+        2 => D
+        ${getChainId()}       => A      :HASHW(0)
+        A                               :MSTORE(chainId)
 
         ${getOldStateRoot()}=>SR        :HASHW(0)
 
@@ -27,11 +34,34 @@ processTxEnd:
 
 processTxsEnd: 
 
+        32 => D
         SR              : HASHW(0)
                         : HASHE(0)
 
         $ => A          : MLOAD(globalHash)
-        $ => B          : HASHR(0), ASSERTAB
+        $               : HASHR(0), ASSERT
+
+;;;;;;;
+; Pay Fees to swquencer
+;;;;;;;
+
+        $ => D                          :MLOAD(sequencerAccValue)
+
+        $ => A                          :MLOAD(sequencerAddr)
+        0 => B,C
+        $ => A                          :SLOAD                                                  ; Original Balance in A
+
+        1 => B
+        D => C
+        0 => D
+        ${A+C} => D                     :ARITH                                                   ; New Balance in D
+
+        $ => A                          :MLOAD(sequencerAddr)
+        0 => B,C
+        D                               :SSTORE  
+
+
+
 
         0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM                 ; Set all registers to 0
 finalLoop:
@@ -39,5 +69,6 @@ finalLoop:
 
                          : JMP(start)
 
+INCLUDE "loadtx_rlp.zkasm"
 INCLUDE "process_tx.zkasm"
 
