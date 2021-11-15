@@ -12,6 +12,7 @@ start:
         ${getChainId()}       => A      :HASHW(0)
         A                               :MSTORE(chainId)
 
+        32 => D
         ${getOldStateRoot()}=>SR        :HASHW(0)
 
         ${getNTxs()} => A               :MSTORE(pendingTxs)                           ; In Number of Txs to process
@@ -34,12 +35,6 @@ processTxEnd:
 
 processTxsEnd: 
 
-        32 => D
-        SR              : HASHW(0)
-                        : HASHE(0)
-
-        $ => A          : MLOAD(globalHash)
-        $               : HASHR(0), ASSERT
 
 ;;;;;;;
 ; Pay Fees to swquencer
@@ -58,14 +53,25 @@ processTxsEnd:
 
         $ => A                          :MLOAD(sequencerAddr)
         0 => B,C
-        D                               :SSTORE  
+        $ => SR                         :SSTORE  
+
+;;;;;;;
+; Check Global Hash
+;;;;;;;
+
+        32 => D
+        SR              : HASHW(0)
+                        : HASHE(0)
+
+        $ => A          : MLOAD(globalHash)
+        $               : HASHR(0), ASSERT
 
 
 
-
-        0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM                 ; Set all registers to 0
+        0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR                 ; Set all registers to 0
 finalLoop:
-        STEP-0x100000-1  : JMPC(finalLoop)
+;        STEP-0x100000-1  : JMPC(finalLoop)
+        STEP-0x1000+2  : JMPC(finalLoop)
 
                          : JMP(start)
 

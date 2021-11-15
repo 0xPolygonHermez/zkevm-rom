@@ -12,13 +12,14 @@ end_loadTx_rlp:
 ; Check and update Nonce
 ;;;;;;;;
 
-        $ => A, D                       :MLOAD(txSrcOriginAddr)                                 ; Address of the origin to a and D
+        $ => A, E                       :MLOAD(txSrcOriginAddr)                                 ; Address of the origin to a and D
         1 => B                                                                                  ; Constance for nonce
         0 => C                                                                                  ; 3rd parameter does not apply to nonce
-        $ => A, E                       :SLOAD                                                  ; Load the nonce to A and C from storage
-        $                               :MLOAD(txNonce), ASSERT                                 ; Check the txNonce matches
-        D => A                                                                                  ; Set to A the current address
-        E+1                             :SSTORE                                                 ; Store the nonce plus one
+        $ => A                          :SLOAD                                                  ; Load the nonce to A and C from storage
+        $                               :MLOAD(txNonce), ASSERT                                 ; Check the txNonce matches  TODO: JMP to invalid TX
+        A+1 => D                                                                                ; Set to A the current address
+        E   => A
+        $   => SR                       :SSTORE                                                 ; Store the nonce plus one
 
 
 ;;;;;;;;
@@ -45,7 +46,7 @@ end_loadTx_rlp:
 
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
-        D                               :SSTORE
+        $ => SR                         :SSTORE
 
 ;;;;;;;;
 ; Set the gas
@@ -74,7 +75,7 @@ end_loadTx_rlp:
 
         $ => A                          :MLOAD(txSrcAddr)
         0 => B,C
-        D                               :SSTORE
+        $ => SR                         :SSTORE
 
         ; Increment destination balance
         $ => A                          :MLOAD(txDestAddr)
@@ -88,7 +89,7 @@ end_loadTx_rlp:
 
         $ => A                          :MLOAD(txDestAddr)
         0 => B,C
-        D                               :SSTORE
+        $ => SR                         :SSTORE
 
 
 
@@ -115,7 +116,7 @@ end_loadTx_rlp:
 
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
-        D                               :SSTORE
+        $ => SR                         :SSTORE
 
 ;;;;;;;;
 ; Send remaining gas to sequencer
