@@ -9,7 +9,7 @@ nextOp:
 
     $$(resetHash())
     $$(var level=getMaxLevel())
-    ${readRoWrite()}        JMPI write
+    ${readOrWrite()}        JMPI write
 
 read: 
     ${VisZero}              JMPI readNotExistance
