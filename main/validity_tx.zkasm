@@ -1,0 +1,53 @@
+validity_tx:
+;;;;;;;;
+; Check Nonce
+;;;;;;;;
+        $ => A, E                       :MLOAD(txSrcOriginAddr)
+        1 => B
+        0 => C
+        $ => A                          :SLOAD
+        $ => B                          :MLOAD(txNonce)
+        -A => C
+        C+B                             :JMPC(invalidTx)
+        -B => C
+        C+A                             :JMPC(invalidTx)
+
+;;;;;;;;
+; Check Balances
+;;;;;;;;
+        $ => A                          :MLOAD(txGas)
+        $ => B                          :MLOAD(txGasPrice)
+        ${A*B} => D
+
+        $ => A                          :MLOAD(txSrcOriginAddr)
+        0 => B,C
+        $ => E                          :SLOAD
+
+        $ => C                          :MLOAD(txValue)
+
+        ${E-D} => A
+        ${A-C} => A
+
+        31 => D
+        $ => A                          :SHR
+        0x7F - A                        :JMPC(invalidTx)
+
+                                        :JMP(end_validity_tx)
+
+check_chainId:
+;;;;;;;;
+; Check chainID
+;;;;;;;;
+        $ => B                          :MLOAD(chainId)
+        -B => D
+        A+D                             :JMPC(check_defaultChainId)
+        -A => D
+        B+D                             :JMPC(check_defaultChainId)
+                                        :JMP(endChainId)
+check_defaultChainId:
+        $ => B                          :MLOAD(defaultChainId)
+        -B => D
+        A+D                             :JMPC(invalidChainId)
+        -A => D
+        B+D                             :JMPC(invalidChainId)
+                                        :JMP(endChainId)

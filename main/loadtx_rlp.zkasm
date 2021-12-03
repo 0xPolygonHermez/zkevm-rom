@@ -11,7 +11,7 @@ loadTx_rlp:
 
 
 ;;;;;;;;;
-;; List Length List
+;; List Length
 ;;;;;;;;;
 
         1 => D
@@ -257,24 +257,25 @@ endData:
 chainREAD:
         1 => D
         ${getRawTx(curTx,p,1)} => A
-        $${ p = p + 1}     
+        $${ p = p + 1}
         A                               : HASHW(E)    ; Main Hash
         A                               : HASHW(0)    ; Signature Hash
         C+1 => C
-        A - 0x80                        :JMPC(endChainId)
+        A - 0x80                        :JMPC(validityChainId)
         A - 0xb8                        :JMPC(shortChainId)
                                         :JMP(invalidTx)
 shortChainId:
         A - 0x80 => D
-        ${getRawTx(curTx,p,D)} => A     
+        ${getRawTx(curTx,p,D)} => A
         $${ p = p + D}
         A                               : HASHW(E)    ; Main Hash
         A                               : HASHW(0)    ; Signature Hash
         C+D => C
 
-endChainId:
-        $ => B                          :MLOAD(chainId), ASSERT
+validityChainId:
+                                        :JMP(check_chainId)
 
+endChainId:
 
 ;;;;;;;;;
 ;; Data Last 2 values
@@ -293,22 +294,35 @@ endChainId:
         $                               : MLOAD(txListLength), ASSERT
 
 ;;;;;;;;;
-;; Signaure Verification
+;; Signature Verification
 ;;;;;;;;;
 
                                         :HASHE(E)
         1024 => SP
- 
+
         ; Check the signature
         $ => A                          :HASHR(E)
         ${getTxSigR(curTx)} => B
         ${getTxSigS(curTx)} => C
-        ${getTxSigV(curTx)} => D           
+        ${getTxSigV(curTx)} => D
         $ => A                          :ECRECOVER
         A                               :MSTORE(txSrcAddr)
         A                               :MSTORE(txSrcOriginAddr)
 
                                         :JMP(end_loadTx_rlp)
 
+invalidChainId:
+
+;;;;;;;;;
+;; Data Last 2 values
+;;;;;;;;;
+
+        2 => D
+        0x8080 => A
+        A                               :HASHW(E)
+        A                               :HASHW(0)
+        C+2 => C
+                                        :JMP(invalidTx)
+
 invalidTx:
-        A+1                             :ASSERT
+                                        :JMP(processTxEnd)
