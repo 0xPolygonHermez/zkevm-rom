@@ -1,4 +1,5 @@
-        
+; //TODO: Get function to get full bytes of the transaction (not only signData)
+; or just maybe add initial length at the very beginning of bytes to hash + add rsv as well
 loadTx_rlp:
 
         ; We get a new hashId and store it in txHashId
@@ -17,8 +18,8 @@ loadTx_rlp:
         1 => D
         ${getRawTx(curTx,p,1)} => A     
         $${ p = p + 1}
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(1)    ; Hash A
         A - 0xc0                        :JMPC(invalidTx)
         A - 0xf8                        :JMPC(shortList)
 
@@ -26,8 +27,8 @@ longList:
         A - 0xf7 => D
         ${getRawTx(curTx,p,D)} => A     
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
                                         : JMP(endList)
 shortList:
         A - 0xc0 => A
@@ -45,8 +46,8 @@ nonceREAD:
         1 => D
         ${getRawTx(curTx,p,1)} => A     
         $${ p = p + 1}
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
         C +1 => C
         A - 0x80                        : JMPC(endNonce)
         A - 0xb8                        : JMPC(shortNonce)
@@ -55,8 +56,8 @@ shortNonce:
         A - 0x80 => D
         ${getRawTx(curTx,p,D)} => A     
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
         C+D => C
 
 endNonce:
@@ -72,8 +73,8 @@ gasPriceREAD:
         1 => D
         ${getRawTx(curTx,p,1)} => A     
         $${ p = p + 1}
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
         C+1 => C
 
         A - 0x80                        :JMPC(endGasPrice)
@@ -83,8 +84,8 @@ shortGasPrice:
         A - 0x80 => D
         ${getRawTx(curTx,p,D)} => A     
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
         C+D => C
 
 
@@ -101,8 +102,8 @@ gasREAD:
         1 => D
         ${getRawTx(curTx,p,1)} => A
         $${ p = p + 1}     
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
         C+1 => C                        
         A - 0x80                        :JMPC(endGas)
         A - 0xb8                        :JMPC(shortGas)
@@ -111,8 +112,8 @@ shortGas:
         A - 0x80 => D
         ${getRawTx(curTx,p,D)} => A     
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
         C+D => C
 
 endGas:
@@ -127,8 +128,8 @@ toREAD:
         1 => D
         ${getRawTx(curTx,p,1)} => A
         $${ p = p + 1}     
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
         C+1 => C
         A - 0x80                        :JMPC(invalidTx)
         A - 0x81                        :JMPC(noTo)
@@ -145,8 +146,8 @@ shortTo:
         A - 0x80 => D
         ${getRawTx(curTx,p,D)} => A     
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
         C+D => C
         A                               : MSTORE(txDestAddr)
 ;        0                              : MSTORE(txIsCreateContract)
@@ -163,8 +164,8 @@ valueREAD:
         1 => D
         ${getRawTx(curTx,p,1)} => A     
         $${ p = p + 1}
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
         C+1 => C
 
         A - 0x80                        :JMPC(endValue)
@@ -174,8 +175,8 @@ shortValue:
         A - 0x80 => D
         ${getRawTx(curTx,p,D)} => A     
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
         C+D => C
 
 
@@ -192,8 +193,8 @@ dataREAD:
         1024 => SP
         ${getRawTx(curTx,p,1)} => A
         $${ p = p + 1}     
-        A                                : HASHW(E)    ; Main Hash
-        A                                : HASHW(0)    ; Signature Hash
+        A                                : HASHW(E)    ; Signature Hash
+        A                                : HASHW(0)    ; Hash A
         C+1 => C
         A - 0x80                         : JMPC(veryShortData)
         A - 0x81                         : JMPC(endData)
@@ -216,8 +217,8 @@ longData:
         A - 0xb8 => D
         ${getRawTx(curTx,p,D)} => A  
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
         C+D => C
         A => B                          : MSTORE(txNData)            
 
@@ -226,8 +227,8 @@ readData:
         B -32                           :JMPC(readDataFinal)
         ${getRawTx(curTx,p,32)} => A     
         $${ p = p + 32}
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
         C+32 => C
         A                               : MSTORE(SP++)
         B - 32 => B                     : JMP(readData)
@@ -238,8 +239,8 @@ readDataFinal:
         B => D
         ${getRawTx(curTx,p,D)} => A     
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
         C+D => C
 
         32-D => D
@@ -258,8 +259,8 @@ chainREAD:
         1 => D
         ${getRawTx(curTx,p,1)} => A
         $${ p = p + 1}     
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
         C+1 => C
         A - 0x80                        :JMPC(endChainId)
         A - 0xb8                        :JMPC(shortChainId)
@@ -268,8 +269,8 @@ shortChainId:
         A - 0x80 => D
         ${getRawTx(curTx,p,D)} => A     
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
-        A                               : HASHW(0)    ; Signature Hash
+        A                               : HASHW(E)    ; Signature Hash
+        A                               : HASHW(0)    ; Hash A
         C+D => C
 
 endChainId:

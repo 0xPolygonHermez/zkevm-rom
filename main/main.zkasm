@@ -1,33 +1,49 @@
 INCLUDE "vars.zkasm"
 
 start:
-; First of all, load The call Data.  The first A value is forced with the hash of the TX. 
-        ${getGlobalHash()}         :MSTORE(globalHash)                    ; In A register we have the TXHash
+; First of all, load The call Data.  The first A value is forced with the hash of the TX. ; In A register we have the TXHash
+        ${getGlobalHash()}         :MSTORE(globalHash) ; addr = 0 (offset), OP = ctx.globalHash, ctx.mem[addr] = OP (write globalHash to memory)
 
         32 => D
-        ${getSequencerAddr()} => A      :HASHW(0)
-        A                               :MSTORE(sequencerAddr)
-
-        2 => D
-        ${getChainId()}       => A      :HASHW(0)
-        A                               :MSTORE(chainId)
+        ${getOldStateRoot()}  => SR        :HASHW(0) ;Get oldStateRoot from ctx.input, set it to OP, append 32 bytes of OP into ctx.hash[0]
 
         32 => D
-        ${getOldStateRoot()}=>SR        :HASHW(0)
+        ${getOldLocalExitRoot()} => A      :HASHW(0) ;set addr = 0 (offset), Get oldLocalExitRoot from ctx.input, set it to OP, save it to A register for next iteration, write/append D bytes of OP into ctx.hash[addr]
+        A                                  :MSTORE(oldLocalExitRoot) ;Write oldLocalExitRoot in memory[4]
 
-        ${getNTxs()} => A               :MSTORE(pendingTxs)                           ; In Number of Txs to process
+        32 => D
+        ${getNewStateRoot()}  => A        :HASHW(0) ;Get newStateRoot from ctx.input, set it to OP, append 32 bytes of OP into ctx.hash[0]
+        A                                 :MSTORE(newStateRoot) ;Write oldLocalExitRoot in memory[4]
 
-        $${var curTx = 0}                        
+        32 => D
+        ${newLocalExitRoot()}  => A        :HASHW(0) ;Get newLocalExitRoot from ctx.input, set it to OP, append 32 bytes of OP into ctx.hash[0]
+        A                                 :MSTORE(newLocalExitRoot) ;Write newLocalExitRoot in memory[4]
+
+        20 => D
+        ${getSequencerAddr()} => A      :HASHW(0) ;set addr = 0 (offset), Get seqAddr from ctx.input, set it to OP, save it to A register for next iteration, write/append D bytes of OP into ctx.hash[addr]
+        A                               :MSTORE(sequencerAddr) ;Write sequencerAddress in memory[4]
+
+        ${getChainId()}       => A      ;Get chainID from ctx.input, set it to OP, save it to A register for next iteration, write/append D bytes of OP into ctx.hash[0], ctx.hash[0] --> bytes globalHash
+        A                               :MSTORE(chainId) ;Load A to OP, offset = 6 (probably taken from previous memory writes), ctx.mem[offset] = OP
+
+        ${getNTxs()} => A               :MSTORE(pendingTxs) ;Set addr = 1 (offset), read ctx.pTxs.length and save it in OP, save OP in A, write ctx.mem(addr) = OP                            ; In Number of Txs to process
+
+        $${var curTx = 0}
+
+        ; get new hashId
+        $ => E                          :MLOAD(lastHashIdUsed)
+        E+1 => E                        :MSTORE(lastHashIdUsed)
+        E                               :MSTORE(txHashId)
 
 txLoop:
-        $ => A          : MLOAD(pendingTxs)
-        A-1 =>  A       : MSTORE(pendingTxs) 
-        A               : JMPC(processTxsEnd)
+        $ => A          : MLOAD(pendingTxs) ;Set addr = offset(1), read ctx.mem[addr] and store it in OP, set OP to A(next iteration)
+        A-1 =>  A       : MSTORE(pendingTxs)  ;Set A to OP, addr = 1 (offset), apply constant -1 to OP, Write OP in A, write ctx.mem[1] = OP
+        A               : JMPC(processTxsEnd); Set A to OP, addr = 17 (offset), main.pols.zkPC[nexti] = main.pols.zkPC[i]+1
 
-        $ => A          : MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
-        A+1 => CTX      : MSTORE(lastCtxUsed)
+        $ => A          : MLOAD(lastCtxUsed) ;Set addr = 2 (offset), read ctx.mem[2] (undefined = 0) an store it in OP, store OP in A                         ; Set the CTX and store in system 
+        A+1 => CTX      : MSTORE(lastCtxUsed) ; Load A in OP, add CONST to OP[0], Set addr = 2 (offset), pols.main.CTX[nexti] = OP[0], ctx.mem[2] = OP
 
-                        : JMP(processTx)
+                        : JMP(processTx) ; Set addr = 234 (offset), set pols.main.zkPC[nexti] = addr, next iteration --> load zkPC = 234 --> load ROM[234] --> processTx
 
 processTxEnd:
         $${curTx = curTx +1}
@@ -37,7 +53,7 @@ processTxsEnd:
 
 
 ;;;;;;;
-; Pay Fees to swquencer
+; Pay Fees to sequencer
 ;;;;;;;
 
         $ => D                          :MLOAD(sequencerAccValue)
@@ -58,6 +74,9 @@ processTxsEnd:
 ;;;;;;;
 ; Check Global Hash
 ;;;;;;;
+
+        4 => D
+        ${getChainId()}             :HASHW(0) ;Get chainID from ctx.input, set it to OP, save it to A register for next iteration, write/append D bytes of OP into ctx.hash[0], ctx.hash[0] --> bytes globalHash
 
         32 => D
         SR              : HASHW(0)
