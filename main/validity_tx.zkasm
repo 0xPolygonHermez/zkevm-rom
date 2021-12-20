@@ -5,32 +5,32 @@ validity_tx:
         $ => A, E                       :MLOAD(txSrcOriginAddr)
         1 => B
         0 => C
-        $ => A                          :SLOAD
-        $ => B                          :MLOAD(txNonce)
+        $ => A                          :SLOAD                        ; A: nonce from storage for origin address
+        $ => B                          :MLOAD(txNonce)               ; B: nonce tx
         -A => C
-        C+B                             :JMPC(invalidTx)
+        C+B                             :JMPC(invalidTx)              ; Compare "nonce storage" (A) and "nonce tx" (B). If -A+B < 0 --> invalidTx, further check A-B < 0.
         -B => C
-        C+A                             :JMPC(invalidTx)
+        C+A                             :JMPC(invalidTx)              ; Compare "nonce storage" (A) and "nonce tx" (B). If -B+A < 0 --> invalidTx.
 
 ;;;;;;;;
 ; Check Balances
 ;;;;;;;;
         $ => A                          :MLOAD(txGas)
         $ => B                          :MLOAD(txGasPrice)
-        ${A*B} => D
+        ${A*B} => D                                                   ; D: txGas * txGasPrice
 
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
-        $ => E                          :SLOAD
+        $ => E                          :SLOAD                        ; E: balance from storage for origin addr
 
-        $ => C                          :MLOAD(txValue)
+        $ => C                          :MLOAD(txValue)               ; C: txValue
 
-        ${E-D} => A
-        ${A-C} => A
+        ${E-D} => A                                                   ; A: balance storage - (txGas * txGasPrice)
+        ${A-C} => A                                                   ; A: (balance storage - (txGas * txGasPrice)) - txValue
 
         31 => D
         $ => A                          :SHR
-        0x7F - A                        :JMPC(invalidTx)
+        0x7F - A                        :JMPC(invalidTx)              ; If A is a negative value --> invalidTx
 
                                         :JMP(end_validity_tx)
 
@@ -38,16 +38,16 @@ check_chainId:
 ;;;;;;;;
 ; Check chainID
 ;;;;;;;;
-        $ => B                          :MLOAD(chainId)
+        $ => B                          :MLOAD(chainId)               ; B: chainId, A: chainId tx
         -B => D
-        A+D                             :JMPC(check_defaultChainId)
+        A+D                             :JMPC(check_defaultChainId)   ; If A - B < 0, A is not equal to B --> check defaultChainId
         -A => D
-        B+D                             :JMPC(check_defaultChainId)
+        B+D                             :JMPC(check_defaultChainId)   ; If B - A < 0, A is not equal to B --> check defaultChainId
                                         :JMP(endChainId)
 check_defaultChainId:
-        $ => B                          :MLOAD(defaultChainId)
+        $ => B                          :MLOAD(defaultChainId)        ; B: defaultChainId, A: chainId tx
         -B => D
-        A+D                             :JMPC(invalidChainId)
+        A+D                             :JMPC(invalidChainId)         ; If A - B < 0, A is not equal to B --> check defaultChainId
         -A => D
-        B+D                             :JMPC(invalidChainId)
+        B+D                             :JMPC(invalidChainId)         ; If A - B < 0, A is not equal to B --> check defaultChainId
                                         :JMP(endChainId)
