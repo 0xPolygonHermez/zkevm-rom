@@ -50,7 +50,7 @@ nonceREAD:
         C +1 => C
         A - 0x80                        : JMPC(endNonce)
         A - 0xb8                        : JMPC(shortNonce)
-                                        : JMP(invalidTx)
+                                        : JMP(addDataInvalid32)
 shortNonce:
         A - 0x80 => D
         ${getRawTx(curTx,p,D)} => A     
@@ -78,7 +78,7 @@ gasPriceREAD:
 
         A - 0x80                        :JMPC(endGasPrice)
         A - 0xb8                        :JMPC(shortGasPrice)
-                                        :JMP(invalidTx)
+                                        :JMP(addDataInvalid32)
 shortGasPrice:
         A - 0x80 => D
         ${getRawTx(curTx,p,D)} => A     
@@ -106,7 +106,7 @@ gasREAD:
         C+1 => C                        
         A - 0x80                        :JMPC(endGas)
         A - 0xb8                        :JMPC(shortGas)
-                                        :JMP(invalidTx)
+                                        :JMP(addDataInvalid32)
 shortGas:
         A - 0x80 => D
         ${getRawTx(curTx,p,D)} => A     
@@ -130,11 +130,11 @@ toREAD:
         A                               : HASHW(E)    ; Main Hash
         A                               : HASHW(0)    ; Signature Hash
         C+1 => C
-        A - 0x80                        :JMPC(invalidTx)
+        A - 0x80                        :JMPC(addDataInvalid32)
         A - 0x81                        :JMPC(noTo)
-        A - 0x94                        :JMPC(invalidTx)
+        A - 0x94                        :JMPC(addDataInvalid32)
         A - 0x95                        :JMPC(shortTo)
-                                        :JMP(invalidTx)
+                                        :JMP(addDataInvalid32)
 
 
 noTo:
@@ -169,7 +169,7 @@ valueREAD:
 
         A - 0x80                        :JMPC(endValue)
         A - 0xb8                        :JMPC(shortValue)
-                                        :JMP(invalidTx)
+                                        :JMP(addDataInvalid32)
 shortValue:
         A - 0x80 => D
         ${getRawTx(curTx,p,D)} => A     
@@ -199,7 +199,7 @@ dataREAD:
         A - 0x81                         : JMPC(endData)
         A - 0xb8                         : JMPC(shortData)
         A - 0xc0                         : JMPC(longData)
-                                         : JMP(invalidTx)
+                                         : JMP(addDataInvalid32)
 
 veryShortData:
         1                               : MSTORE(txNData)
@@ -263,7 +263,7 @@ chainREAD:
         C+1 => C
         A - 0x80                        :JMPC(validityChainId)
         A - 0xb8                        :JMPC(shortChainId)
-                                        :JMP(invalidTx)
+                                        :JMP(addDataInvalid32)
 shortChainId:
         A - 0x80 => D
         ${getRawTx(curTx,p,D)} => A
@@ -326,3 +326,21 @@ invalidChainId:
 
 invalidTx:
                                         :JMP(processTxEnd)
+
+addDataInvalid32:
+        32 => D
+        $ => A                          : MLOAD(txListLength)
+        A - C - D                      : JMPC(addDataInvalid)
+        ${getRawTx(curTx,p,D)} => A     
+        $${ p = p + D}
+        A                               : HASHW(E)    ; Main Hash
+        A                               : HASHW(0)    ; Signature Hash
+        C + D => C
+                                        : JMP(addDataInvalid32)
+addDataInvalid:
+        A - C => D
+        ${getRawTx(curTx,p,D)} => A     
+        $${ p = p + D}
+        A                               : HASHW(E)    ; Main Hash
+        A                               : HASHW(0)    ; Signature Hash
+                                        : JMP(invalidTx)
