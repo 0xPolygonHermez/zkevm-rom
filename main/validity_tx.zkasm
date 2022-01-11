@@ -7,10 +7,8 @@ validity_tx:
         0 => C
         $ => A                          :SLOAD                        ; A: nonce from storage for origin address
         $ => B                          :MLOAD(txNonce)               ; B: nonce tx
-        -A => C
-        C+B                             :JMPC(invalidTx)              ; Compare "nonce storage" (A) and "nonce tx" (B). If -A+B < 0 --> invalidTx, further check A-B < 0.
-        -B => C
-        C+A                             :JMPC(invalidTx)              ; Compare "nonce storage" (A) and "nonce tx" (B). If -B+A < 0 --> invalidTx.
+        B-A                             :JMPC(invalidTx)              ; Compare "nonce storage" (A) and "nonce tx" (B). If -A+B < 0 --> invalidTx, further check A-B < 0.
+        A-B                             :JMPC(invalidTx)              ; Compare "nonce storage" (A) and "nonce tx" (B). If -B+A < 0 --> invalidTx.
 
 ;;;;;;;;
 ; Check Balances
@@ -39,15 +37,11 @@ check_chainId:
 ; Check chainID
 ;;;;;;;;
         $ => B                          :MLOAD(chainId)               ; B: chainId, A: chainId tx
-        -B => D
-        A+D                             :JMPC(check_defaultChainId)   ; If A - B < 0, A is not equal to B --> check defaultChainId
-        -A => D
-        B+D                             :JMPC(check_defaultChainId)   ; If B - A < 0, A is not equal to B --> check defaultChainId
+        A-B                             :JMPC(check_defaultChainId)   ; If A - B < 0, A is not equal to B --> check defaultChainId
+        B-A                             :JMPC(check_defaultChainId)   ; If B - A < 0, A is not equal to B --> check defaultChainId
                                         :JMP(endChainId)
 check_defaultChainId:
         $ => B                          :MLOAD(defaultChainId)        ; B: defaultChainId, A: chainId tx
-        -B => D
-        A+D                             :JMPC(invalidChainId)         ; If A - B < 0, A is not equal to B --> check defaultChainId
-        -A => D
-        B+D                             :JMPC(invalidChainId)         ; If A - B < 0, A is not equal to B --> check defaultChainId
+        A-B                             :JMPC(invalidChainId)         ; If A - B < 0, A is not equal to B --> check defaultChainId
+        B-A                             :JMPC(invalidChainId)         ; If A - B < 0, A is not equal to B --> check defaultChainId
                                         :JMP(endChainId)
