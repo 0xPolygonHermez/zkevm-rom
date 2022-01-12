@@ -5,17 +5,37 @@ start:
         ${getGlobalHash()}         :MSTORE(globalHash)                    ; In A register we have the TXHash
 
         32 => D
-        ${getSequencerAddr()} => A      :HASHW(0)
-        A                               :MSTORE(sequencerAddr)
-
-        2 => D
-        ${getChainId()}       => A      :HASHW(0)
-        A                               :MSTORE(chainId)
+        ${getOldStateRoot()}=>SR            :HASHW(0)
 
         32 => D
-        ${getOldStateRoot()}=>SR        :HASHW(0)
+        ${getOldLocalExitRoot()}  => A      :HASHW(0)
+                                            :MSTORE(oldLocalExitRoot)
 
-        ${getNTxs()} => A               :MSTORE(pendingTxs)                           ; In Number of Txs to process
+        32 => D
+        ${getNewStateRoot()}  => A          :HASHW(0)
+                                            :MSTORE(newStateRoot)
+
+        32 => D
+        ${getNewLocalExitRoot()}   => A     :HASHW(0)
+        A                                   :MSTORE(newLocalExitRoot)
+
+        32 => D
+        ${getSequencerAddr()} => A          :HASHW(0)
+        A                                   :MSTORE(sequencerAddr)
+
+        32 => D
+        ${getBatchHashData()} => A          :HASHW(0)
+        A                                   :MSTORE(batchHashData)
+
+        2 => D
+        ${getChainId()}       => A          :HASHW(0)
+        A                                   :MSTORE(chainId)
+
+        32 => D
+        ${getNumBatch()}        => A        :HASHW(0)
+        A                                   :MSTORE(numBatch)
+
+        ${getNTxs()} => A                   :MSTORE(pendingTxs)                           ; In Number of Txs to process
 
         $${var curTx = 0}
 
@@ -23,7 +43,7 @@ start:
 
 txLoop:
         $ => A          : MLOAD(pendingTxs)
-        A-1 =>  A       : MSTORE(pendingTxs) 
+        A-1 =>  A       : MSTORE(pendingTxs)
         A               : JMPC(processTxsEnd)
 
         $ => A          : MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
