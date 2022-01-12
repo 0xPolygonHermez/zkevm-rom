@@ -2,7 +2,7 @@ INCLUDE "vars.zkasm"
 
 start:
 ; First of all, load The call Data.  The first A value is forced with the hash of the TX. 
-        ${getGlobalHash()}         :MSTORE(globalHash)                    ; In A register we have the TXHash
+        ${getGlobalHash()}                  :MSTORE(globalHash)                    ; In A register we have the TXHash
 
         32 => D
         ${getOldStateRoot()}=>SR            :HASHW(0)
@@ -11,29 +11,15 @@ start:
         ${getOldLocalExitRoot()}  => A      :HASHW(0)
                                             :MSTORE(oldLocalExitRoot)
 
-        32 => D
-        ${getNewStateRoot()}  => A          :HASHW(0)
-                                            :MSTORE(newStateRoot)
+        ${getNewLocalExitRoot()}            :MSTORE(newLocalExitRoot)
 
-        32 => D
-        ${getNewLocalExitRoot()}   => A     :HASHW(0)
-        A                                   :MSTORE(newLocalExitRoot)
+        ${getSequencerAddr()}               :MSTORE(sequencerAddr)
 
-        32 => D
-        ${getSequencerAddr()} => A          :HASHW(0)
-        A                                   :MSTORE(sequencerAddr)
+        ${getBatchHashData()}               :MSTORE(batchHashData)
 
-        32 => D
-        ${getBatchHashData()} => A          :HASHW(0)
-        A                                   :MSTORE(batchHashData)
+        ${getChainId()}                     :MSTORE(chainId)
 
-        2 => D
-        ${getChainId()}       => A          :HASHW(0)
-        A                                   :MSTORE(chainId)
-
-        32 => D
-        ${getNumBatch()}        => A        :HASHW(0)
-        A                                   :MSTORE(numBatch)
+        ${getNumBatch()}                    :MSTORE(numBatch)
 
         ${getNTxs()} => A                   :MSTORE(pendingTxs)                           ; In Number of Txs to process
 
@@ -82,11 +68,32 @@ processTxsEnd:
 ;;;;;;;
 
         32 => D
-        SR              : HASHW(0)
-                        : HASHE(0)
+        SR                                  :HASHW(0)
 
-        $ => A          : MLOAD(globalHash)
-        $               : HASHR(0), ASSERT
+        32 => D
+        $ => A                              :MLOAD(newLocalExitRoot)
+        A                                   :HASHW(0)
+
+        20 => D
+        $ => A                              :MLOAD(sequencerAddr)
+        A                                   :HASHW(0)
+
+        32 => D
+        $ => A                              :MLOAD(batchHashData)
+        A                                   :HASHW(0)
+
+        4 => D
+        $ => A                              :MLOAD(chainId)
+        A                                   :HASHW(0)
+
+        4 => D
+        $ => A                              :MLOAD(numBatch)
+        A                                   :HASHW(0)
+
+                                            :HASHE(0)
+
+        $ => A                              : MLOAD(globalHash)
+        $                                   : HASHR(0), ASSERT
 
 
 
