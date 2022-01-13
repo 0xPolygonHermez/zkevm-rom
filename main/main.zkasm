@@ -22,11 +22,39 @@ start:
 
         ${getNumBatch()}                    :MSTORE(numBatch)
 
-        ${getNTxs()} => A                   :MSTORE(pendingTxs)                           ; In Number of Txs to process
+        ${getNTxs()} => A                   :MSTORE(numTxs)                           ; In Number of Txs to process
+
+        $ => A                              :MLOAD(lastCtxUsed)
+        A                                   :MSTORE(firstCtxUsed)
 
         $${var curTx = 0}
 
         $${var p = 0}
+
+checkRLP:
+        $ => A          : MLOAD(numTxs)
+        A               : MSTORE(pendingTxs)
+
+txLoopRLP:
+        $ => A          : MLOAD(pendingTxs)
+        A-1 =>  A       : MSTORE(pendingTxs)
+        A               : JMPC(endCheckRLP)
+
+        $ => A          : MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
+        A+1 => CTX      : MSTORE(lastCtxUsed)
+
+                        : JMP(loadTx_rlp)
+txLoopRLPEnd:
+        $${curTx = curTx +1}
+                        : JMP(txLoopRLP)
+
+endCheckRLP:
+        $${curTx = 0}
+        $ => A          : MLOAD(firstCtxUsed)
+        A               : MSTORE(lastCtxUsed)
+        $ => A          : MLOAD(numTxs)
+        A               : MSTORE(pendingTxs)
+                        : JMP(txLoop)
 
 txLoop:
         $ => A          : MLOAD(pendingTxs)
