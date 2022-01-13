@@ -1,4 +1,4 @@
-        
+
 loadTx_rlp:
 
         ; We get a new hashId and store it in txHashId
@@ -17,27 +17,21 @@ loadTx_rlp:
         1 => D
         ${getRawTx(curTx,p,1)} => A     
         $${ p = p + 1}
-        A                               : HASHW(E)    ; Main Hash
         A - 0xc0                        :JMPC(invalidTxRLP)
-        A - 0xf8                        :JMPC(shortList)
+        A - 0xf8                        :JMPC(endList)
 
 longList:
         A - 0xf7 => D
         ${getRawTx(curTx,p,D)} => A     
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
                                         : JMP(endList)
-shortList:
-        A - 0xc0 => A
 
 endList:
-        A                               : MSTORE(txListLength);
 
 
 ;;;;;;;;;
 ;; Nonce READ
 ;;;;;;;;;
-
 
 nonceREAD:
         1 => D
@@ -234,29 +228,54 @@ endData:
 
 
 ;;;;;;;;;
-;; chainId READ
+;; v READ & Calculate chainId
 ;;;;;;;;;
 
 
-chainREAD:
+readV:
         1 => D
         ${getRawTx(curTx,p,1)} => A
-        $${ p = p + 1}     
-        A                               : HASHW(E)    ; Main Hash
-        C+1 => C
-        A - 0x80                        :JMPC(endChainId)
-        A - 0xb8                        :JMPC(shortChainId)
-                                        :JMP(invalidTxRLP)
-shortChainId:
+        $${ p = p + 1}
+        A - 0x80                              : JMPC(invalidTxRLP)
+        A                                     : HASHW(E)
+        C+D => C
         A - 0x80 => D
-        ${getRawTx(curTx,p,D)} => A     
+        ${getRawTx(curTx,p,D)} => A           : MSTORE(txV)
+        ${calculateChainId(A)} => A
+        A                                     : HASHW(E)
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
         C+D => C
 
-endChainId:
-        $ => B                          :MLOAD(chainId), ASSERT
 
+;;;;;;;;;
+;; r READ
+;;;;;;;;;
+
+rREADTx:
+        1 => D
+        ${getRawTx(curTx,p,1)} => A
+        $${ p = p + 1}
+
+        A - 0x80                        :JMPC(invalidTxRLP)
+        A - 0x80 => D
+        ${getRawTx(curTx,p,D)} => A
+        $${ p = p + D}
+        A                               :MSTORE(txR)
+
+;;;;;;;;;
+;; s READ
+;;;;;;;;;
+
+
+sREADTx:
+        1 => D
+        ${getRawTx(curTx,p,1)} => A
+        $${ p = p + 1}
+        A - 0x80                        :JMPC(invalidTxRLP)
+        A - 0x80 => D
+        ${getRawTx(curTx,p,D)} => A
+        $${ p = p + D}
+        A                               : MSTORE(txS)
 
 ;;;;;;;;;
 ;; Data Last 2 values
@@ -265,26 +284,19 @@ endChainId:
         2 => D
         0x8080 => A
         A                               : HASHW(E)
-        C+2 => C
-
-;;;;;;;;;
-;; Size Verification
-;;;;;;;;;
-        C  => A
-        $                               : MLOAD(txListLength), ASSERT
+        C + D => C
 
 ;;;;;;;;;
 ;; Signaure Verification
 ;;;;;;;;;
-
-                                        :HASHE(E)
         1024 => SP
- 
         ; Check the signature
+        ${buildHashRLP(C)}
+                                        :HASHE(E)
         $ => A                          :HASHR(E)
-        ${getTxSigR(curTx)} => B
-        ${getTxSigS(curTx)} => C
-        ${getTxSigV(curTx)} => D           
+        $ => B                          :MLOAD(txR)
+        $ => C                          :MLOAD(txS)
+        $ => D                          :MLOAD(txV)
         $ => A                          :ECRECOVER
         A                               :MSTORE(txSrcAddr)
         A                               :MSTORE(txSrcOriginAddr)
