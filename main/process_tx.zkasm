@@ -2,6 +2,22 @@
 processTx:
 
 ;;;;;;;;
+; Check chainID
+;;;;;;;;
+        $ => A                          :MLOAD(txChainId)             ; A: chainId tx
+        $ => B                          :MLOAD(chainId)               ; B: chainId
+        A-B                             :JMPC(check_defaultChainId)   ; If A - B < 0, A is not equal to B --> check defaultChainId
+        B-A                             :JMPC(check_defaultChainId)   ; If B - A < 0, A is not equal to B --> check defaultChainId
+                                        :JMP(endChainId)
+check_defaultChainId:
+        $ => B                          :MLOAD(defaultChainId)        ; B: defaultChainId, A: chainId tx
+        A-B                             :JMPC(invalidTx)              ; If A - B < 0, A is not equal to B --> check defaultChainId
+        B-A                             :JMPC(invalidTx)              ; If A - B < 0, A is not equal to B --> check defaultChainId
+                                        :JMP(endChainId)
+
+endChainId:
+
+;;;;;;;;
 ; Check and update Nonce
 ;;;;;;;;
 
@@ -19,7 +35,7 @@ processTx:
 ; Buy Gas
 ;;;;;;;;
 
-        $ => A                          :MLOAD(txGas)                                           ; Nultiplies the txGas amd the txGasPrice 
+        $ => A                          :MLOAD(txGas)                                           ; Multiplies the txGas amd the txGasPrice 
         $ => B                          :MLOAD(txGasPrice)
         0 => C                          
         0 => D                                                                                  ; Forces no overflow 
@@ -134,6 +150,7 @@ terminateTX:
 
                                         :JMP(processTxEnd)
 
-
+invalidTx:
+                                        :JMP(processTxEnd)
 
 
