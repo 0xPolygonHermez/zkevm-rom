@@ -54,6 +54,7 @@ endCheckRLP:
         A               : MSTORE(lastCtxUsed)
         $ => A          : MLOAD(numTxs)
         A               : MSTORE(pendingTxs)
+        0               : MSTORE(lastHashIdUsed)
                         : JMP(txLoop)
 
 txLoop:
@@ -92,73 +93,6 @@ processTxsEnd:
         0 => B,C
         $ => SR                         :SSTORE  
 
-;;;;;;;
-; Get RLP TX
-;;;;;;;
-        ; We get a new hashId and store it in txHashId
-        $ => E                          :MLOAD(lastHashIdUsed)
-        E+1 => E                        :MSTORE(lastHashIdUsed)
-        E                               :MSTORE(txHashId) ; todo check needed
-
-;;;;;;;;;
-;; List Length txs
-;;;;;;;;;
-        $${p = 0}
-        1 => D
-        ${getRLPtxs(p,D)} => A     
-        $${ p = p + 1}
-        A                               : HASHW(E)
-        A - 0xc0                        :JMPC(invalidTx)
-        A - 0xf8                        :JMPC(shortListTxs)
-
-longListTxs:
-        A - 0xf7 => D
-        ${getRLPtxs(p,D)} => A     
-        $${ p = p + D}
-        A                               : HASHW(E)
-                                        : JMP(endListTxs)
-shortListTxs:
-        A - 0xc0 => A
-
-endListTxs:
-        A                               : MSTORE(txsListLength);
-        A => B 
-
-;;;;;;;;;
-;; Append TXs
-;;;;;;;;;
-appendTxs:
-        B - 32                          :JMPC(endAppendTxs)
-        32 => D
-        ${getRLPtxs(p,D)} => A     
-        $${ p = p + D}
-        A                               : HASHW(E)
-        C + D => C
-        B - D => B
-                                        :JMP(appendTxs)
-
-endAppendTxs:
-        B => D
-        ${getRLPtxs(p,D)} => A     
-        $${ p = p + D}
-        A                               : HASHW(E)
-        C + D => C
-
-;;;;;;;;;
-;; Txs Size Verification
-;;;;;;;;;
-        C => A
-        $                               : MLOAD(txsListLength), ASSERT
-
-;;;;;;;;;
-;; Check batchHashData
-;;;;;;;;;
-        32 => D
-        $ => A                              : MLOAD(globalExitRoot)
-        A                                   : HASHW(E)
-                                            : HASHE(E)
-        $ => A                              : MLOAD(batchHashData)
-        $                                   : HASHR(E), ASSERT
 
 ;;;;;;;
 ; Check Global Hash

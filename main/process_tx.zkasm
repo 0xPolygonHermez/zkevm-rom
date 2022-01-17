@@ -1,6 +1,27 @@
 
 processTx:
 
+        ; We get a new hashId and store it in txHashId
+        $ => E                          :MLOAD(lastHashIdUsed)
+        E+1 => E                        :MSTORE(lastHashIdUsed)
+        E                               :MSTORE(txHashId)
+        0 => C
+
+;;;;;;;;;
+;; Signaure Verification
+;;;;;;;;;
+
+        1024 => SP
+ 
+        ; Check the signature
+        $ => A                          :HASHR(E)
+        $ => B                          :MLOAD(txR)
+        $ => C                          :MLOAD(txS)
+        $ => D                          :MLOAD(txV)
+        $ => A                          :ECRECOVER
+        A                               :MSTORE(txSrcAddr)
+        A                               :MSTORE(txSrcOriginAddr)
+
 ;;;;;;;;
 ; Check and update Nonce
 ;;;;;;;;
@@ -19,7 +40,7 @@ processTx:
 ; Buy Gas
 ;;;;;;;;
 
-        $ => A                          :MLOAD(txGas)                                           ; Nultiplies the txGas amd the txGasPrice 
+        $ => A                          :MLOAD(txGas)                                           ; Multiplies the txGas amd the txGasPrice 
         $ => B                          :MLOAD(txGasPrice)
         0 => C                          
         0 => D                                                                                  ; Forces no overflow 
