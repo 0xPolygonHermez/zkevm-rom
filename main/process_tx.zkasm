@@ -23,6 +23,22 @@ processTx:
         A                               :MSTORE(txSrcOriginAddr)
 
 ;;;;;;;;
+; Check chainID
+;;;;;;;;
+        $ => A                          :MLOAD(txChainId)                                       ; A: chainId tx
+        $ => B                          :MLOAD(chainId)                                         ; B: chainId
+        A-B                             :JMPC(check_defaultChainId)                             ; If A - B < 0, A is not equal to B --> check defaultChainId
+        B-A                             :JMPC(check_defaultChainId)                             ; If B - A < 0, A is not equal to B --> check defaultChainId
+                                        :JMP(endCheckChainId)
+check_defaultChainId:
+        $ => B                          :MLOAD(defaultChainId)                                  ; B: defaultChainId, A: chainId tx
+        A-B                             :JMPC(invalidTx)                                        ; If A - B < 0, A is not equal to B --> check defaultChainId
+        B-A                             :JMPC(invalidTx)                                        ; If A - B < 0, A is not equal to B --> check defaultChainId
+                                        :JMP(endCheckChainId)
+
+endCheckChainId:
+
+;;;;;;;;
 ; Check and update Nonce
 ;;;;;;;;
 
@@ -155,6 +171,7 @@ terminateTX:
 
                                         :JMP(processTxEnd)
 
-
+invalidTx:
+                                        :JMP(processTxEnd)
 
 
