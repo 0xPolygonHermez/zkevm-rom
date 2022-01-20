@@ -2,11 +2,59 @@
 processTx:
 
         ; We get a new hashId and store it in txHashId
-        $ => CTX                        :MLOAD(lastCtxUsed)
-        CTX+1 => A                      :MSTORE(lastCtxUsed)
+        $ => E                          :MLOAD(lastHashIdUsed)
+        E+1 => E                        :MSTORE(lastHashIdUsed)
+        E                               :MSTORE(txHashId)
+        0 => C
 
-                                        :JMP(loadTx_rlp)
-end_loadTx_rlp:
+;;;;;;;;;
+;; Signaure Verification
+;;;;;;;;;
+
+        1024 => SP
+ 
+        ; Check the signature
+        $ => A                          :HASHR(E)
+        $ => B                          :MLOAD(txR)
+        $ => C                          :MLOAD(txS)
+        $ => D                          :MLOAD(txV)
+        $ => A                          :ECRECOVER
+        A                               :MSTORE(txSrcAddr)
+        A                               :MSTORE(txSrcOriginAddr)
+
+;;;;;;;;;
+;; Store init state
+;;;;;;;;;
+
+        SR                              :MSTORE(initSR)
+        $ => A                          :MLOAD(txSrcOriginAddr)                                 ; Address of the origin to a and D
+        1 => B                                                                                  ; Constance for nonce
+        0 => C                                                                                  ; 3rd parameter does not apply to nonce
+        $ => E                          :SLOAD
+        E                               :MSTORE(initNonce)
+        $ => A                          :MLOAD(txSrcAddr)
+        0 => B,C
+        $ => E                          :SLOAD
+        E                               :MSTORE(initSrcBalance)
+        $ => A                          :MLOAD(txSrcOriginAddr)
+        $ => E                          :SLOAD
+        E                               :MSTORE(initSrcOriginBalance)
+
+;;;;;;;;
+; Check chainID
+;;;;;;;;
+        $ => A                          :MLOAD(txChainId)                                       ; A: chainId tx
+        $ => B                          :MLOAD(chainId)                                         ; B: chainId
+        A-B                             :JMPC(check_defaultChainId)                             ; If A - B < 0, A is not equal to B --> check defaultChainId
+        B-A                             :JMPC(check_defaultChainId)                             ; If B - A < 0, A is not equal to B --> check defaultChainId
+                                        :JMP(endCheckChainId)
+check_defaultChainId:
+        $ => B                          :MLOAD(defaultChainId)                                  ; B: defaultChainId, A: chainId tx
+        A-B                             :JMPC(invalidTx)                                        ; If A - B < 0, A is not equal to B --> check defaultChainId
+        B-A                             :JMPC(invalidTx)                                        ; If A - B < 0, A is not equal to B --> check defaultChainId
+                                        :JMP(endCheckChainId)
+
+endCheckChainId:
 
 ;;;;;;;;
 ; Check and update Nonce
@@ -16,9 +64,14 @@ end_loadTx_rlp:
         1 => B                                                                                  ; Constance for nonce
         0 => C                                                                                  ; 3rd parameter does not apply to nonce
         $ => A                          :SLOAD                                                  ; Load the nonce to A and C from storage
-        $                               :MLOAD(txNonce), ASSERT                                 ; Check the txNonce matches  TODO: JMP to invalid TX
+        $ => B                          :MLOAD(txNonce)
+        B-A                             :JMPC(invalidTx)                                        ; Compare "nonce storage" (A) and "nonce tx" (B). If -A+B < 0 --> invalidTx, further check A-B < 0.
+        A-B                             :JMPC(invalidTx)                                        ; Compare "nonce storage" (A) and "nonce tx" (B). If -B+A < 0 --> invalidTx.
+        B                               :ASSERT
         A+1 => D                                                                                ; Set to A the current address
-        E   => A
+        E => A
+        1 => B                                                                                  ; Constance for nonce
+        0 => C
         $   => SR                       :SSTORE                                                 ; Store the nonce plus one
 
 
@@ -26,20 +79,23 @@ end_loadTx_rlp:
 ; Buy Gas
 ;;;;;;;;
 
-        $ => A                          :MLOAD(txGas)                                           ; Nultiplies the txGas amd the txGasPrice 
+        $ => A                          :MLOAD(txGas)                                           ; Multiplies the txGas amd the txGasPrice 
         $ => B                          :MLOAD(txGasPrice)
-        0 => C                          
+        0 => C
         0 => D                                                                                  ; Forces no overflow 
-        ${A*B} => D                     :ARITH                                                  ; gas*gasPrice in D
+        ${A*B} => D                     :ARITH                                                                                  ; gas*gasPrice in D
 
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
         $ => E                          :SLOAD                                                  ; Original Balance in E
-
+        E                               :MSTORE(initSrcOriginBalance)
         D => C                                                                                  ; A = E - C
-        1 => B 
+        ${E-C} => A
+        31 => D
+        $ => B                          :SHR
+        0x7F - B                        :JMPC(invalidTx)                                       ; If A is a negative value --> invalidTx
+        1 => B
         0 => D
-        ${E-C} => A                     
         E                                :ARITH                                                 ; originalBalance -gas*gasPrice in A
 
         A => D                                                                                  ; originalBalance -gas*gasPrice in D
@@ -64,11 +120,14 @@ end_loadTx_rlp:
         $ => A                          :MLOAD(txSrcAddr)
         0 => B,C
         $ => E                          :SLOAD                                                  ; Original Balance in E
-
+        E                               :MSTORE(initSrcBalance)
         $ => C                          :MLOAD(txValue)                                         ; A = E - C
+        ${E-C} => A
+        31 => D
+        $ => B                          :SHR
+        0x7F - B                        :JMPC(invalidTx)                                        ; If A is a negative value --> invalidTx
         1 => B 
         0 => D
-        ${E-C} => A                     
         E                               :ARITH                                                  ; originalBalance -value in A
 
         A => D                                                                                  ; originalBalance -value in D
@@ -122,7 +181,7 @@ end_loadTx_rlp:
 ; Send remaining gas to sequencer
 ;;;;;;;;
 
-        $ => A                          :MLOAD(txGas)                                           ; Nultiplies the txGas amd the txGasPrice 
+        $ => A                          :MLOAD(txGas)                                           ; Multiplies the txGas amd the txGasPrice
         -GAS => B
         A+B => A                                                                                ; A = txGas -GAS
 
@@ -141,6 +200,18 @@ terminateTX:
 
                                         :JMP(processTxEnd)
 
-
-
-
+invalidTx:
+        $ => D                          :MLOAD(initSrcBalance)
+        $ => A                          :MLOAD(txSrcAddr)
+        0 => B,C
+                                        :SSTORE
+        $ => D                          :MLOAD(initSrcOriginBalance)
+        $ => A                          :MLOAD(txSrcOriginAddr)
+        0 => B,C
+                                        :SSTORE
+        $ => D                          :MLOAD(initNonce)
+        1 => B
+        0 => C
+                                        :SSTORE
+        $ => SR                         :MLOAD(initSR)
+                                        :JMP(terminateTX)

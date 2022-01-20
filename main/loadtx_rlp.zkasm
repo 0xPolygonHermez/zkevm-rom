@@ -1,4 +1,4 @@
-        
+
 loadTx_rlp:
 
         ; We get a new hashId and store it in txHashId
@@ -15,23 +15,23 @@ loadTx_rlp:
 ;;;;;;;;;
 
         1 => D
-        ${getRawTx(curTx,p,1)} => A     
-        $${ p = p + 1}
-        A                               : HASHW(E)    ; Main Hash
-        A - 0xc0                        :JMPC(invalidTx)
+        ${getRawTx(curTx,p,D)} => A
+        $${ p = p + D}
+        A                               :HASHW(E)    ; Main Hash
+        A - 0xc0                        :JMPC(invalidTxRLP)
         A - 0xf8                        :JMPC(shortList)
 
 longList:
         A - 0xf7 => D
-        ${getRawTx(curTx,p,D)} => A     
+        ${getRawTx(curTx,p,D)} => A
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
-                                        : JMP(endList)
+        A                               :HASHW(E)    ; Main Hash
+                                        :JMP(endList)
 shortList:
         A - 0xc0 => A
 
 endList:
-        A                               : MSTORE(txListLength);
+        A                               :MSTORE(txListLength);
 
 
 ;;;;;;;;;
@@ -41,22 +41,22 @@ endList:
 
 nonceREAD:
         1 => D
-        ${getRawTx(curTx,p,1)} => A     
-        $${ p = p + 1}
-        A                               : HASHW(E)    ; Main Hash
-        C +1 => C
-        A - 0x80                        : JMPC(endNonce)
-        A - 0xb8                        : JMPC(shortNonce)
-                                        : JMP(invalidTx)
+        ${getRawTx(curTx,p,D)} => A
+        $${ p = p + D}
+        A                               :HASHW(E)    ; Main Hash
+        C + D => C
+        A - 0x80                        :JMPC(endNonce)
+        A - 0xb8                        :JMPC(shortNonce)
+                                        :JMP(invalidTxRLP)
 shortNonce:
         A - 0x80 => D
-        ${getRawTx(curTx,p,D)} => A     
+        ${getRawTx(curTx,p,D)} => A
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
-        C+D => C
+        A                               :HASHW(E)    ; Main Hash
+        C + D => C
 
 endNonce:
-        A                               : MSTORE(txNonce)
+        A                               :MSTORE(txNonce)
 
 
 ;;;;;;;;;
@@ -66,19 +66,19 @@ endNonce:
 
 gasPriceREAD:
         1 => D
-        ${getRawTx(curTx,p,1)} => A     
-        $${ p = p + 1}
-        A                               : HASHW(E)    ; Main Hash
-        C+1 => C
+        ${getRawTx(curTx,p,D)} => A
+        $${ p = p + D}
+        A                               :HASHW(E)    ; Main Hash
+        C + D => C
 
         A - 0x80                        :JMPC(endGasPrice)
         A - 0xb8                        :JMPC(shortGasPrice)
-                                        :JMP(invalidTx)
+                                        :JMP(invalidTxRLP)
 shortGasPrice:
         A - 0x80 => D
-        ${getRawTx(curTx,p,D)} => A     
+        ${getRawTx(curTx,p,D)} => A
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
+        A                               :HASHW(E)    ; Main Hash
         C+D => C
 
 
@@ -93,18 +93,18 @@ endGasPrice:
 
 gasREAD:
         1 => D
-        ${getRawTx(curTx,p,1)} => A
-        $${ p = p + 1}     
-        A                               : HASHW(E)    ; Main Hash
-        C+1 => C                        
+        ${getRawTx(curTx,p,D)} => A
+        $${ p = p + D}
+        A                               :HASHW(E)    ; Main Hash
+        C + D => C
         A - 0x80                        :JMPC(endGas)
         A - 0xb8                        :JMPC(shortGas)
-                                        :JMP(invalidTx)
+                                        :JMP(invalidTxRLP)
 shortGas:
         A - 0x80 => D
-        ${getRawTx(curTx,p,D)} => A     
+        ${getRawTx(curTx,p,D)} => A
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
+        A                               :HASHW(E)    ; Main Hash
         C+D => C
 
 endGas:
@@ -117,29 +117,29 @@ endGas:
 
 toREAD:
         1 => D
-        ${getRawTx(curTx,p,1)} => A
-        $${ p = p + 1}     
-        A                               : HASHW(E)    ; Main Hash
-        C+1 => C
-        A - 0x80                        :JMPC(invalidTx)
+        ${getRawTx(curTx,p,D)} => A
+        $${ p = p + D}
+        A                               :HASHW(E)    ; Main Hash
+        C + D => C
+        A - 0x80                        :JMPC(invalidTxRLP)
         A - 0x81                        :JMPC(noTo)
-        A - 0x94                        :JMPC(invalidTx)
+        A - 0x94                        :JMPC(invalidTxRLP)
         A - 0x95                        :JMPC(shortTo)
-                                        :JMP(invalidTx)
+                                        :JMP(invalidTxRLP)
 
 
 noTo:
         1                               :MSTORE(txIsCreateContract)
                                         :JMP(endTo)
-                                        
+
 shortTo:
         A - 0x80 => D
-        ${getRawTx(curTx,p,D)} => A     
+        ${getRawTx(curTx,p,D)} => A
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
-        C+D => C
-        A                               : MSTORE(txDestAddr)
-;        0                              : MSTORE(txIsCreateContract)
+        A                               :HASHW(E)    ; Main Hash
+        C + D => C
+        A                               :MSTORE(txDestAddr)
+;        0                              :MSTORE(txIsCreateContract)
 
 endTo:
 
@@ -151,20 +151,20 @@ endTo:
 
 valueREAD:
         1 => D
-        ${getRawTx(curTx,p,1)} => A     
-        $${ p = p + 1}
-        A                               : HASHW(E)    ; Main Hash
-        C+1 => C
+        ${getRawTx(curTx,p,D)} => A
+        $${ p = p + D}
+        A                               :HASHW(E)    ; Main Hash
+        C + D => C
 
         A - 0x80                        :JMPC(endValue)
         A - 0xb8                        :JMPC(shortValue)
-                                        :JMP(invalidTx)
+                                        :JMP(invalidTxRLP)
 shortValue:
         A - 0x80 => D
-        ${getRawTx(curTx,p,D)} => A     
+        ${getRawTx(curTx,p,D)} => A
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
-        C+D => C
+        A                               :HASHW(E)    ; Main Hash
+        C + D => C
 
 
 endValue:
@@ -178,53 +178,53 @@ endValue:
 dataREAD:
         1 => D
         1024 => SP
-        ${getRawTx(curTx,p,1)} => A
-        $${ p = p + 1}     
-        A                                : HASHW(E)    ; Main Hash
-        C+1 => C
-        A - 0x80                         : JMPC(veryShortData)
-        A - 0x81                         : JMPC(endData)
-        A - 0xb8                         : JMPC(shortData)
-        A - 0xc0                         : JMPC(longData)
-                                         : JMP(invalidTx)
+        ${getRawTx(curTx,p,D)} => A
+        $${ p = p + D}
+        A                                :HASHW(E)    ; Main Hash
+        C + D => C
+        A - 0x80                         :JMPC(veryShortData)
+        A - 0x81                         :JMPC(endData)
+        A - 0xb8                         :JMPC(shortData)
+        A - 0xc0                         :JMPC(longData)
+                                         :JMP(invalidTxRLP)
 
 veryShortData:
-        1                               : MSTORE(txNData)
+        1                               :MSTORE(txNData)
         31 => D
-        $ => A                          : SHL
-        A                               : MSTORE(SP++)
-                                        : JMP(endData)
+        $ => A                          :SHL
+        A                               :MSTORE(SP++)
+                                        :JMP(endData)
 
 shortData:
-        A - 0x80 => B                   : MSTORE(txNData)
-                                        : JMP(readData)
+        A - 0x80 => B                   :MSTORE(txNData)
+                                        :JMP(readData)
 
 longData:
         A - 0xb8 => D
-        ${getRawTx(curTx,p,D)} => A  
+        ${getRawTx(curTx,p,D)} => A
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
+        A                               :HASHW(E)    ; Main Hash
         C+D => C
-        A => B                          : MSTORE(txNData)            
+        A => B                          :MSTORE(txNData)
 
 readData:
         32 => D
-        B -32                           :JMPC(readDataFinal)
-        ${getRawTx(curTx,p,32)} => A     
-        $${ p = p + 32}
-        A                               : HASHW(E)    ; Main Hash
-        C+32 => C
-        A                               : MSTORE(SP++)
-        B - 32 => B                     : JMP(readData)
+        B - D                           :JMPC(readDataFinal)
+        ${getRawTx(curTx,p,D)} => A
+        $${ p = p + D}
+        A                               :HASHW(E)    ; Main Hash
+        C + D => C
+        A                               :MSTORE(SP++)
+        B - D => B                      :JMP(readData)
 
 
 readDataFinal:
-        B -1                            :JMPC(endData)
+        B - 1                           :JMPC(endData)
         B => D
-        ${getRawTx(curTx,p,D)} => A     
+        ${getRawTx(curTx,p,D)} => A
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
-        C+D => C
+        A                               :HASHW(E)    ; Main Hash
+        C + D => C
 
         32-D => D
         $ => A                          :SHL
@@ -240,56 +240,74 @@ endData:
 
 chainREAD:
         1 => D
-        ${getRawTx(curTx,p,1)} => A
-        $${ p = p + 1}     
-        A                               : HASHW(E)    ; Main Hash
-        C+1 => C
+        ${getRawTx(curTx,p,D)} => A
+        $${ p = p + D}
+        A                               :HASHW(E)    ; Main Hash
+        C+D => C
         A - 0x80                        :JMPC(endChainId)
         A - 0xb8                        :JMPC(shortChainId)
-                                        :JMP(invalidTx)
+                                        :JMP(invalidTxRLP)
 shortChainId:
         A - 0x80 => D
-        ${getRawTx(curTx,p,D)} => A     
+        ${getRawTx(curTx,p,D)} => A
         $${ p = p + D}
-        A                               : HASHW(E)    ; Main Hash
+        A                               :HASHW(E)    ; Main Hash
         C+D => C
 
 endChainId:
-        $ => B                          :MLOAD(chainId), ASSERT
-
+        A                               :MSTORE(txChainId)
 
 ;;;;;;;;;
 ;; Data Last 2 values
 ;;;;;;;;;
 
         2 => D
-        0x8080 => A
-        A                               : HASHW(E)
-        C+2 => C
+        ${getRawTx(curTx,p,D)} => A
+        $${ p = p + D}
+        A - 0x8080                      :JMPC(invalidTxRLP)
+        0x8080 - A                      :JMPC(invalidTxRLP)
+        A                               :HASHW(E)
+        C+D => C
+
+;;;;;;;;;
+;; r READ
+;;;;;;;;;
+
+rREADTx:
+        32 => D
+        ${getRawTx(curTx,p,D)} => A
+        $${ p = p + D}
+        A                               :MSTORE(txR)
+
+;;;;;;;;;
+;; s READ
+;;;;;;;;;
+
+sREADTx:
+        32 => D
+        ${getRawTx(curTx,p,D)} => A
+        $${ p = p + D}
+        A                               :MSTORE(txS)
+
+;;;;;;;;;
+;; v READ
+;;;;;;;;;
+
+vREADTx:
+        1 => D
+        ${getRawTx(curTx,p,D)} => A
+        $${ p = p + D}
+        A                               :MSTORE(txV)
 
 ;;;;;;;;;
 ;; Size Verification
 ;;;;;;;;;
         C  => A
-        $                               : MLOAD(txListLength), ASSERT
-
-;;;;;;;;;
-;; Signaure Verification
-;;;;;;;;;
-
+        $  => B                         :MLOAD(txListLength)
+        A - B                           :JMPC(invalidTxRLP)
+        B - A                           :JMPC(invalidTxRLP)
                                         :HASHE(E)
-        1024 => SP
- 
-        ; Check the signature
-        $ => A                          :HASHR(E)
-        ${getTxSigR(curTx)} => B
-        ${getTxSigS(curTx)} => C
-        ${getTxSigV(curTx)} => D           
-        $ => A                          :ECRECOVER
-        A                               :MSTORE(txSrcAddr)
-        A                               :MSTORE(txSrcOriginAddr)
+                                        :JMP(txLoopRLPEnd)
 
-                                        :JMP(end_loadTx_rlp)
-
-invalidTx:
-        A+1                             :ASSERT
+invalidTxRLP:
+                                        :JMP(processTxsEnd)
