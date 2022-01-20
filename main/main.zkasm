@@ -2,20 +2,27 @@ INCLUDE "vars.zkasm"
 
 start:
 ; First of all, load The call Data.  The first A value is forced with the hash of the TX. 
-        ${getGlobalHash()}         :MSTORE(globalHash)                    ; In A register we have the TXHash
+        ${getGlobalHash()}                  :MSTORE(globalHash)                    ; In A register we have the TXHash
+        ${getGlobalExitRoot()}              :MSTORE(globalExitRoot)
 
         32 => D
-        ${getSequencerAddr()} => A      :HASHW(0)
-        A                               :MSTORE(sequencerAddr)
-
-        2 => D
-        ${getChainId()}       => A      :HASHW(0)
-        A                               :MSTORE(chainId)
+        ${getOldStateRoot()}=>SR            :HASHW(0)
 
         32 => D
-        ${getOldStateRoot()}=>SR        :HASHW(0)
+        ${getOldLocalExitRoot()}  => A      :HASHW(0)
+                                            :MSTORE(oldLocalExitRoot)
 
-        ${getNTxs()} => A               :MSTORE(pendingTxs)                           ; In Number of Txs to process
+        ${getNewLocalExitRoot()}            :MSTORE(newLocalExitRoot)
+
+        ${getSequencerAddr()}               :MSTORE(sequencerAddr)
+
+        ${getBatchHashData()}               :MSTORE(batchHashData)
+
+        ${getChainId()}                     :MSTORE(chainId)
+
+        ${getNumBatch()}                    :MSTORE(numBatch)
+
+        ${getNTxs()} => A                   :MSTORE(pendingTxs)                           ; In Number of Txs to process
 
         $${var curTx = 0}
 
@@ -23,7 +30,7 @@ start:
 
 txLoop:
         $ => A          : MLOAD(pendingTxs)
-        A-1 =>  A       : MSTORE(pendingTxs) 
+        A-1 =>  A       : MSTORE(pendingTxs)
         A               : JMPC(processTxsEnd)
 
         $ => A          : MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
@@ -39,7 +46,7 @@ processTxsEnd:
 
 
 ;;;;;;;
-; Pay Fees to swquencer
+; Pay Fees to sequencer
 ;;;;;;;
 
         $ => D                          :MLOAD(sequencerAccValue)
@@ -58,17 +65,97 @@ processTxsEnd:
         $ => SR                         :SSTORE  
 
 ;;;;;;;
+; Get Signed TXs
+;;;;;;;
+        ; We get a new hashId and store it in txHashId
+        $ => E                          :MLOAD(lastHashIdUsed)
+        E+1 => E                        :MSTORE(lastHashIdUsed)
+        E                               :MSTORE(txHashId) ; todo check needed
+
+;;;;;;;;;
+;; Append TXs
+;;;;;;;;;
+
+        ${getTxsLen()} => B                            : MSTORE(txsListLength);
+        0 => C
+        $${p = 0}
+
+appendTxs:
+        B - C - 32                          :JMPC(endAppendTxs)
+        32 => D
+        ${getTxs(p,D)} => A     
+        $${p = p + D}
+        A                               : HASHW(E)
+        C + D => C
+                                        :JMP(appendTxs)
+
+endAppendTxs:
+        B - C => D
+        ${getTxs(p,D)} => A     
+        $${ p = p + D}
+        A                               : HASHW(E)
+        C + D => C
+
+;;;;;;;;;
+;; Txs Size Verification
+;;;;;;;;;
+        C => A
+        $                               : MLOAD(txsListLength), ASSERT
+
+;;;;;;;;;
+;; Check batchHashData
+;;;;;;;;;
+        32 => D
+        $ => A                              : MLOAD(globalExitRoot)
+        A                                   : HASHW(E)
+                                            : HASHE(E)
+        $ => A                              : MLOAD(batchHashData)
+        $                                   : HASHR(E), ASSERT
+
+;;;;;;;
 ; Check Global Hash
 ;;;;;;;
 
         32 => D
-        SR              : HASHW(0)
-                        : HASHE(0)
+        SR                                  :HASHW(0)
 
-        $ => A          : MLOAD(globalHash)
-        $               : HASHR(0), ASSERT
+        32 => D
+        $ => A                              :MLOAD(newLocalExitRoot)
+        A                                   :HASHW(0)
 
+        20 => D
+        $ => A                              :MLOAD(sequencerAddr)
+        A                                   :HASHW(0)
 
+        32 => D
+        $ => A                              :MLOAD(batchHashData)
+        A                                   :HASHW(0)
+
+        4 => D
+        $ => A                              :MLOAD(chainId)
+        A                                   :HASHW(0)
+
+        4 => D
+        $ => A                              :MLOAD(numBatch)
+        A                                   :HASHW(0)
+
+                                            :HASHE(0)
+
+        $ => E                              : MLOAD(globalHash)
+        $ => A                              : HASHR(0)
+        8 => D
+        $ => B                              :SHR
+        16 => D
+        $ => C                              :SHR
+        24 => D
+        $ => D                              :SHR
+
+        A + 2**64*B + 2**128*C + 2**192*D - E   : JMPC(assertError)
+        E - A - 2**64*B - 2**128*C - 2**192*D   : JMPC(assertError)
+                                                : JMP(assertOk)
+assertError:
+        A+1   :ASSERT ; Global Hash Assert
+assertOk:
 
         0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR                 ; Set all registers to 0
 
