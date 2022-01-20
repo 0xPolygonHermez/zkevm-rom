@@ -95,6 +95,53 @@ processTxsEnd:
         0 => B,C
         $ => SR                         :SSTORE
 
+;;;;;;;;
+; Get Signed TXs
+;;;;;;;
+        ; We get a new hashId and store it in txHashId
+        $ => E                          :MLOAD(lastHashIdUsed)
+        E+1 => E                        :MSTORE(lastHashIdUsed)
+        E                               :MSTORE(txHashId) ; todo check needed
+
+;;;;;;;;;
+;; Append TXs
+;;;;;;;;;
+
+        ${getTxsLen()} => B                            : MSTORE(txsListLength);
+        0 => C
+        $${p = 0}
+
+appendTxs:
+        B - C - 32                          :JMPC(endAppendTxs)
+        32 => D
+        ${getTxs(p,D)} => A     
+        $${p = p + D}
+        A                               : HASHW(E)
+        C + D => C
+                                        :JMP(appendTxs)
+
+endAppendTxs:
+        B - C => D
+        ${getTxs(p,D)} => A     
+        $${ p = p + D}
+        A                               : HASHW(E)
+        C + D => C
+
+;;;;;;;;;
+;; Txs Size Verification
+;;;;;;;;;
+        C => A
+        $                               : MLOAD(txsListLength), ASSERT
+
+;;;;;;;;;
+;; Check batchHashData
+;;;;;;;;;
+        32 => D
+        $ => A                              : MLOAD(globalExitRoot)
+        A                                   : HASHW(E)
+                                            : HASHE(E)
+        $ => A                              : MLOAD(batchHashData)
+        $                                   : HASHR(E), ASSERT
 
 ;;;;;;;
 ; Check Global Hash
@@ -125,10 +172,21 @@ processTxsEnd:
 
                                             :HASHE(0)
 
-        $ => A                              : MLOAD(globalHash)
-        $                                   : HASHR(0), ASSERT
+        $ => E                              : MLOAD(globalHash)
+        $ => A                              : HASHR(0)
+        8 => D
+        $ => B                              :SHR
+        16 => D
+        $ => C                              :SHR
+        24 => D
+        $ => D                              :SHR
 
-
+        A + 2**64*B + 2**128*C + 2**192*D - E   : JMPC(assertError)
+        E - A - 2**64*B - 2**128*C - 2**192*D   : JMPC(assertError)
+                                                : JMP(assertOk)
+assertError:
+        A+1   :ASSERT ; Global Hash Assert
+assertOk:
 
         0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR                 ; Set all registers to 0
 
