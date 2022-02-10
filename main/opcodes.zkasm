@@ -1,0 +1,1006 @@
+opSTOP:
+                    :JMP(endCode)
+
+opADD:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--)
+    $ => C          :MLOAD(SP)
+    1 => B
+    0 => D
+    ${A+C} => E     :ARITH
+    E               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opMUL:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--)
+    $ => B          :MLOAD(SP)
+    0 => C
+    0 => D
+    ${A*B} => E     :ARITH
+    E               :MSTORE(SP++)
+    GAS-5 => GAS
+                    :JMP(readCode)
+
+opSUB:
+    SP - 1 => SP
+    $ => E          :MLOAD(SP--)
+    $ => C          :MLOAD(SP)
+    1 => B
+    0 => D
+    ${E-C} => A
+    E               :ARITH
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDIV:               ;;; verify E%A < E/A
+    SP - 1 => SP
+    $ => E          :MLOAD(SP--)
+    $ => A          :MLOAD(SP)
+    ${E%A} => C
+    ${E/A} => B
+    0 => D
+    E               :ARITH
+    B               :MSTORE(SP++)
+    GAS-5 => GAS
+                    :JMP(readCode)
+
+;opSDIV:
+;    $ => E          :MLOAD(0)
+;    $ => A          :MLOAD(1)
+;    ${E%A} => C
+;    ${E/A} => B
+;    0 => D
+;    E               :ARITH
+;    B               :MSTORE(0)
+;    GAS-5 => GAS
+
+opMOD:
+    SP - 1 => SP
+    $ => E          :MLOAD(SP--)
+    $ => A          :MLOAD(SP)
+    ${E%A} => C
+    ${E/A} => B
+    0 => D
+    E               :ARITH
+    C               :MSTORE(SP++)
+    GAS-5 => GAS
+                    :JMP(readCode)
+
+;opSMOD:
+;    $ => E          :MLOAD(0)
+;    $ => A          :MLOAD(1)
+;    ${E%A} => C
+;    ${E/A} => B
+;    0 => D
+;    E               :ARITH
+;    C               :MSTORE(0)
+;    GAS-5 => GAS
+
+opADDMOD:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--)
+    $ => B          :MLOAD(SP--)
+    ${A+B} => E
+    $ => A          :MLOAD(SP)
+    ${E%A} => C
+    ${E/A} => B
+    0 => D
+    E               :ARITH
+    C               :MSTORE(SP++)
+    GAS-8 => GAS
+                    :JMP(readCode)
+
+opMULMOD:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--)
+    $ => B          :MLOAD(SP--)
+    ${A*B} => E
+    $ => A          :MLOAD(SP)
+    ${E%A} => C
+    ${E/A} => B
+    0 => D
+    E               :ARITH
+    C               :MSTORE(SP++)
+    GAS-8 => GAS
+                    :JMP(readCode)
+
+;opEXP:
+;GAS-10-50*byte_len_exponent => GAS
+
+;opSIGNEXTEND:
+;   GAS-5 => GAS
+
+set0:
+    0               :MSTORE(SP++)
+                    :JMP(readCode)
+
+set1:
+    1               :MSTORE(SP++)
+                    :JMP(readCode)
+
+opLT:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--)
+    $ => B          :MLOAD(SP)
+    GAS-3 => GAS
+    A - B           :JMPC(set1)
+                    :JMP(set0)
+
+opGT:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--)
+    $ => B          :MLOAD(SP)
+    GAS-3 => GAS
+    B - A           :JMPC(set1)
+                    :JMP(set0)
+
+opSLT:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--)
+    31 => D
+    $ => B          :SHR
+    B - 0x7f        :JMPC(opSLT1)
+    A - 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff => A
+opSLT1:
+    A => B
+    $ => A          :MLOAD(SP)
+    31 => D
+    $ => D          :SHR
+    D - 0x7f        :JMPC(opSLT2)
+    A - 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff => A
+opSLT2:
+    GAS-3 => GAS
+    B - A           :JMPC(set1)
+                    :JMP(set0)
+
+
+;opSGT:
+;    $ => A          :MLOAD(0)
+;    $ => B          :MLOAD(1)
+;    GAS-3 => GAS
+;    B - A           :JMPC(set1)
+;                    :JMP(set0)
+
+opEQ:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--)
+    $ => B          :MLOAD(SP)
+    GAS-3 => GAS
+    B - A           :JMPC(set0)
+    A - B           :JMPC(set0)
+                    :JMP(set1)
+
+opISZERO:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    1 - A => B
+    1 + A => A
+    GAS-3 => GAS
+    A - B           :JMPC(set0)
+    B - A           :JMPC(set0)
+                    :JMP(set1)
+
+;opAND:
+;opOR:
+;opXOR:
+;opNOT:
+;opBYTE:
+;opSHL:
+opSHR:
+    SP - 1 => SP
+    $ => D          :MLOAD(SP--)
+    ${D/8} => D
+    $ => A          :MLOAD(SP)
+    $ => A          :SHR
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+;opSAR:
+;opKECCAK256:
+;   GAS - 30 - 6*data_size_words - mem_expansion_cost
+;opADDRESS:
+
+;opBALANCE:
+;    SP - 1 => SP
+;    $ => A          :MLOAD(SP)
+;    0 => B,C
+;    $ => E          :SLOAD
+;    E               :MSTORE(SP++)
+;    ;GAS-X => GAS
+;                    :JMP(readCode)
+
+;opORIGIN:
+;opCALLER:
+
+opCALLVALUE:
+    $ => A          :MLOAD(txValue)
+    A               :MSTORE(SP++)
+    GAS-2 => GAS
+                    :JMP(readCode)
+
+opCALLDATALOAD:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    ${A/32} => B
+    ${A%32} => A
+    0 - A           :JMPC(opCALLDATALOAD2)
+    SP => C
+    1024 + B => SP
+    $ => B          :MLOAD(SP)
+    C => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opCALLDATALOAD2:
+    SP => C
+    A => D
+    1024 + B => SP
+    $ => A          :MLOAD(SP++)
+    $ => B          :SHL
+    32 - D => D
+    $ => A          :MLOAD(SP)
+    $ => A          :SHR
+    C => SP
+    B + A           :MSTORE(SP++)
+    GAS - 3 => GAS
+                    :JMP(readCode)
+
+opCALLDATASIZE:
+    $ => B          :MLOAD(txNData)
+    B               :MSTORE(SP++)
+    GAS-2 => GAS
+                    :JMP(readCode)
+
+;opCALLDATACOPY:
+
+opCODESIZE:
+    ;$ => A          :MLOAD(txSrcOriginAddr)
+    ;$ => B          :MLOAD(txNonce)
+    ;${getBytecodeLengthDeploy(A,B)} => B
+    ;B               :MSTORE(SP++)
+    $ => B          :MLOAD(txNData)
+    B               :MSTORE(SP++)
+    GAS-2 => GAS
+                    :JMP(readCode)
+
+
+opCODECOPY:
+    SP - 1 => SP
+    $ => E          :MLOAD(SP--) ;destOffset
+    $ => B          :MLOAD(SP--) ;offset
+    $ => C          :MLOAD(SP)   ;length
+    C => D
+    SP              :MSTORE(SPw)
+    0 - ${B%32}     :JMPC(opCODECOPYinit)
+    C - 32          :JMPC(opCODECOPYfinal)
+                    :JMP(opCODECOPYmid)
+
+opCODECOPYinit:
+    1024 + ${B/32} => SP
+    A               :MLOAD(SP)
+    ${B%32} => D
+    $ => A          :SHL
+    A               :MSTORE(MEM:E)
+    E + 32 - D => E
+    B + 32 - D => B
+    C - 32 + D => D
+    32 - D          :JMPC(opCODECOPYmid)
+    D - 1           :JMPC(opCODECOPYend)
+                    :JMP(opCODECOPYfinal)
+
+opCODECOPYmid:
+    1024 + ${B/32} => SP
+    A               :MLOAD(SP)
+    A               :MSTORE(MEM:E)
+    E + 32 => E
+    B + 32 => B
+    D - 32 => D
+    D - 1           :JMPC(opCODECOPYend)
+    32 - D          :JMPC(opCODECOPYmid)
+                    :JMP(opCODECOPYfinal)
+
+opCODECOPYfinal:
+    1024 + ${B/32} => SP
+    A               :MLOAD(SP)
+    A               :MSTORE(MEM:E)
+                    :JMP(opCODECOPYend)
+
+opCODECOPYend:
+    E + D => E
+    $ => SP         :MLOAD(SPw)
+    $ => B          :MLOAD(memLength)
+    GAS - 3 => GAS
+    B - E           :JMPC(saveMemLength)
+                    :JMP(readCode)
+
+opGASPRICE:
+    $ => A          :MLOAD(txGasPrice)
+    A               :MSTORE(SP++)
+    GAS-2 => GAS
+                    :JMP(readCode)
+
+;opEXTCODESIZE:
+;opEXTCODECOPY:
+;opRETURNDATASIZE:
+;opRETURNDATACOPY:
+;opEXTCODEHASH:
+;opBLOCKHASH:
+;opCOINBASE:
+;opTIMESTAMP:
+;opNUMBER:
+;opDIFFICULT:
+
+opGASLIMIT:
+    $ => A          :MLOAD(txGas)
+    A               :MSTORE(SP++)
+    GAS-2 => GAS
+                    :JMP(readCode)
+
+opCHAINID:
+    $ => A          :MLOAD(txChainId)
+    A               :MSTORE(SP++)
+    GAS-2 => GAS
+                    :JMP(readCode)
+
+;opSELFBALANCE:
+opPOP:
+    SP - 1 => SP
+    GAS-2 => GAS
+                    :JMP(readCode)
+
+opMLOAD:
+    SP - 1 => SP
+    $ => E          :MLOAD(SP)
+    $ => B          :MLOAD(MEM:E)
+    B               :MSTORE(SP++)
+    GAS - 3 => GAS
+    $ => B          :MLOAD(memLength)
+    E + 32 => E
+    B - E           :JMPC(saveMemLength)
+                    :JMP(readCode)
+
+opMSTORE:
+    SP - 1 => SP
+    $ => E          :MLOAD(SP--)
+    $ => B          :MLOAD(SP)
+    B               :MSTORE(MEM:E)
+    GAS - 3 => GAS
+    $ => B          :MLOAD(memLength)
+    E + 32 => E
+    B - E           :JMPC(saveMemLength)
+                    :JMP(readCode)
+
+saveMemLength:
+    E               :MSTORE(memLength)
+    ${E/32} => A
+    ${B/32} => B
+    GAS - 3*A - ${A*A/512} => GAS
+    GAS + 3*B + ${B*B/512} => GAS
+                    :JMP(readCode)
+
+
+;opMSTORE8:
+;opSLOAD:
+opSSTORE:
+;Falta mirar touched_storage_slots
+    SP - 1 => SP
+    $ => C          :MLOAD(SP--)
+    $ => D          :MLOAD(SP)
+    $ => A          :MLOAD(txDestAddr)
+    3 => B
+    $ => E          :SLOAD
+    GAS - 2100 => GAS
+    E - D           :JMPC(opSSTOREdif)
+    D - E           :JMPC(opSSTOREdif)
+    GAS - 100 => GAS
+    $ => SR         :SSTORE
+                    :JMP(readCode)
+
+opSSTOREdif:
+;Falta mirar si current_val != orig_val, ara fem com si current_val == orig_val
+    0 - E           :JMPC(opSSTOREdif2)
+    0 + E           :JMPC(opSSTOREdif2)
+    GAS - 20000 => GAS
+    $ => SR         :SSTORE
+                    :JMP(readCode)
+
+opSSTOREdif2:
+    GAS - 2900 => GAS
+    0 - D           :JMPC(opSSTOREdif3)
+    0 + D           :JMPC(opSSTOREdif3)
+    GAS + 4800 => GAS
+    $ => SR         :SSTORE
+                    :JMP(readCode)
+
+opSSTOREdif3:
+    $ => SR         :SSTORE
+                    :JMP(readCode)
+
+opJUMP:
+    SP - 1 => SP
+    $ => E          :MLOAD(SP)
+    E => PC
+    GAS - 8 => GAS
+                    :JMP(readCode)
+
+opJUMPI:
+    SP - 2 => SP
+    $ => B          :MLOAD(SP)
+    GAS - 10 => GAS
+    B - 1           :JMPC(readCode)
+    SP + 1 => SP
+    $ => E          :MLOAD(SP--)
+    E => PC
+                    :JMP(readCode)
+
+;opPC:
+;opMSIZE:
+;opGAS:
+
+opJUMPDEST:
+    GAS - 1 => GAS
+                    :JMP(readCode)
+
+opAuxPUSHA:
+    ${getBytecode(A,PC,D)} => B
+    B                           :MSTORE(SP++)
+    PC + D => PC
+    GAS-3 => GAS
+                                :JMP(readCode)
+
+opAuxPUSHB:
+    SP                          :MSTORE(SPw)
+    $ => SP                     :MLOAD(SPr)
+    ${PC/32} => A
+    SP + A => SP
+    ${PC%32} => C
+    A - ${(PC+D)/32}            :JMPC(opAuxPUSHC)
+    $ => A                      :MLOAD(SP)
+    $ => SP                     :MLOAD(SPw)
+    ${getByte(A,C,D)} => B
+    B                           :MSTORE(SP++)
+    PC + D => PC
+    GAS-3 => GAS
+                                :JMP(readCode)
+
+opAuxPUSHC:
+    32 - C => E
+    $ => A                      :MLOAD(SP++)
+    ${getByte(A,C,E)} => A
+    0 => C
+    PC + D => PC
+    D - E => D
+    $ => B                      :MLOAD(SP)
+    ${getByte(B,C,D)} => B
+    $ => A                      :SHR
+    $ => SP                     :MLOAD(SPw)
+    A + B                       :MSTORE(SP++)
+    GAS-3 => GAS
+                                :JMP(readCode)
+
+opPUSH1:
+    1 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH2:
+    2 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH3:
+    3 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH4:
+    4 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH5:
+    5 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH6:
+    6 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH7:
+    7 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH8:
+    8 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH9:
+    9 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH10:
+    10 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH11:
+    11 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH12:
+    12 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH13:
+    13 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH14:
+    14 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH15:
+    15 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH16:
+    16 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH17:
+    17 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH18:
+    18 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH19:
+    19 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH20:
+    20 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH21:
+    21 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH22:
+    22 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH23:
+    23 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH24:
+    24 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH25:
+    25 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH26:
+    26 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH27:
+    27 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH28:
+    28 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH29:
+    29 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH30:
+    30 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH31:
+    31 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opPUSH32:
+    32 => D
+    $ => B                          :MLOAD(txIsCreateContract)
+    0 - B                           :JMPC(opAuxPUSHB)
+                                    :JMP(opAuxPUSHA)
+
+opDUP1:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP++)
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDUP2:
+    SP - 2 => SP
+    $ => A          :MLOAD(SP)
+    SP + 2 => SP
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDUP3:
+    SP - 3 => SP
+    $ => A          :MLOAD(SP)
+    SP + 3 => SP
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDUP4:
+    SP - 4 => SP
+    $ => A          :MLOAD(SP)
+    SP + 4 => SP
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDUP5:
+    SP - 5 => SP
+    $ => A          :MLOAD(SP)
+    SP + 5 => SP
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDUP6:
+    SP - 6 => SP
+    $ => A          :MLOAD(SP)
+    SP + 6 => SP
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDUP7:
+    SP - 7 => SP
+    $ => A          :MLOAD(SP)
+    SP + 7 => SP
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDUP8:
+    SP - 8 => SP
+    $ => A          :MLOAD(SP)
+    SP + 8 => SP
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDUP9:
+    SP - 9 => SP
+    $ => A          :MLOAD(SP)
+    SP + 9 => SP
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDUP10:
+    SP - 10 => SP
+    $ => A          :MLOAD(SP)
+    SP + 10 => SP
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDUP11:
+    SP - 11 => SP
+    $ => A          :MLOAD(SP)
+    SP + 11 => SP
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDUP12:
+    SP - 12 => SP
+    $ => A          :MLOAD(SP)
+    SP + 12 => SP
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDUP13:
+    SP - 13 => SP
+    $ => A          :MLOAD(SP)
+    SP + 13 => SP
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDUP14:
+    SP - 14 => SP
+    $ => A          :MLOAD(SP)
+    SP + 14 => SP
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDUP15:
+    SP - 15 => SP
+    $ => A          :MLOAD(SP)
+    SP + 15 => SP
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opDUP16:
+    SP - 16 => SP
+    $ => A          :MLOAD(SP)
+    SP + 16 => SP
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP1:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--)
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP++)
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP2:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    SP - 2 => SP
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP)
+    SP + 2 => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP3:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    SP - 3 => SP
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP)
+    SP + 3 => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP4:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    SP - 4 => SP
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP)
+    SP + 4 => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP5:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    SP - 5 => SP
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP)
+    SP + 5 => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP6:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    SP - 6 => SP
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP)
+    SP + 6 => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP7:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    SP - 7 => SP
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP)
+    SP + 7 => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP8:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    SP - 8 => SP
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP)
+    SP + 8 => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP9:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    SP - 9 => SP
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP)
+    SP + 9 => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP10:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    SP - 10 => SP
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP)
+    SP + 10 => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP11:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    SP - 11 => SP
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP)
+    SP + 11 => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP12:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    SP - 12 => SP
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP)
+    SP + 12 => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP13:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    SP - 13 => SP
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP)
+    SP + 13 => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP14:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    SP - 14 => SP
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP)
+    SP + 14 => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP15:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    SP - 15 => SP
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP)
+    SP + 15 => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+opSWAP16:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    SP - 16 => SP
+    $ => B          :MLOAD(SP)
+    A               :MSTORE(SP)
+    SP + 16 => SP
+    B               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+;opLOG0:
+;opLOG1:
+;opLOG2:
+;opLOG3:
+;opLOG4:
+
+;opCREATE:
+;opCALL:
+;opCALLCODE:
+opRETURN:
+    SP - 1 => SP
+    $ => E          :MLOAD(SP--) ;offset
+    $ => B          :MLOAD(SP)   ;length
+    $ => A          :MLOAD(MEM:E)
+    E + B => E
+    $ => B          :MLOAD(memLength)
+    B - E           :JMPC(saveMemLength)
+                    :JMP(endCode)
+
+;opDELEGATECALL:
+;opCREATE2:
+;opSTATICCALL:
+
+opREVERT:
+                :JMP(invalidTx)
+
+;opINVALID:
+;opSELFDESTRUCT":

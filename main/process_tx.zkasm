@@ -10,8 +10,6 @@ processTx:
 ;; Signaure Verification
 ;;;;;;;;;
 
-        1024 => SP
- 
         ; Check the signature
         $ => A                          :HASHR(E)
         $ => B                          :MLOAD(txR)
@@ -96,12 +94,128 @@ endCheckChainId:
 ;;;;;;;;
 
         $ => GAS                        :MLOAD(txGas)
+        GAS - 21000 => GAS
+
+;;;;;;;;
+; Gas calldata
+;;;;;;;;
+        $ => A                          :MLOAD(txNData)
+        A - 1                           :JMPC(txType)
+        0 => D
+        -1 => C
+
+addGas:
+        C + 1 => C
+        0 => D
+        1024 + C => SP
+                                        :JMP(loopBytes)
+loopBytes:
+        A - ${C*32} - D - 1             :JMPC(txType)
+        32 - D - 1                      :JMPC(addGas)
+        $ => B                          :MLOAD(SP)
+        ${getByte(B,D)} => B
+        D + 1 => D
+        B - 1                           :JMPC(add4Gas)
+                                        :JMP(add16Gas)
+
+add4Gas:
+        GAS - 4 => GAS
+                                        :JMP(loopBytes)
+
+add16Gas:
+        GAS - 16 => GAS
+                                        :JMP(loopBytes)
+txType:
+;;;;;;;;;;
+;;;;; Tx type
+;;;;;;;;;;
+        $ => A                          :MLOAD(txIsCreateContract)
+        0 - A                           :JMPC(deploy)
+        $ => A                          :MLOAD(txDestAddr)
+        2 => B
+        0 => C
+        $ => A                          :SLOAD
+        28 => D
+        $ => D                          :SHR
+        D - 1                           :JMPC(moveBalances)
+                                        :JMP(callContract)
+
+deploy:
+        1024                            :MSTORE(SPr)
+        0                               :MSTORE(SPw)
+        0 => PC
+        0 => SP
+        GAS - 32000 => GAS
+                                        :JMP(readCode)
+
+readDeployBytecode:
+        SP                              :MSTORE(SPw)
+        $ => SP                         :MLOAD(SPr)
+        SP + ${PC/32} => SP
+        ${PC%32} => C
+        $ => B                          :MLOAD(txNData)
+        B - PC                          :JMPC(endDeploy)
+        $ => A                          :MLOAD(SP)
+        $ => SP                         :MLOAD(SPw)
+        ${getByte(A,C)} => B
+        ${addrOp(B)} => E
+        PC + 1 => PC
+                                        :JMP(E)
+
+; actualitzar SR amb hashbytecode
+
+callContract:
+        0 => PC
+        0 => SP
+                                        :JMP(readCode)
+
+readByteCode:
+        $ => A                          :MLOAD(txDestAddr)
+        2 => B
+        0 => C
+        $ => A                          :SLOAD
+        ${getBytecodeLength(A)} => B
+        B - PC                          :JMPC(endByteCode)
+        ${getBytecode(A,PC)} => B
+        ${addrOp(B)} => E
+        PC + 1 => PC
+                                        :JMP(E)
+
+readCode:
+        $ => A                          :MLOAD(txIsCreateContract)
+        0 - A                           :JMPC(readDeployBytecode)
+                                        :JMP(readByteCode)
+
+endCode:
+        $ => A                          :MLOAD(txIsCreateContract)
+        0 - A                           :JMPC(endDeploy)
+                                        :JMP(endByteCode)
+
+endDeploy:
+        ; Update contract nonce
+        $ => A                          :MLOAD(txSrcOriginAddr)
+        $ => B                          :MLOAD(txNonce)
+        ${getContractAddress(A,B)} => A
+        1 => B                                                                                  ; Constance for nonce
+        0 => C
+        1 => D
+        $ => SR                         :SSTORE
+
+        $ => A                          :MLOAD(txSrcOriginAddr)
+        $ => B                          :MLOAD(txNonce)
+        ${getHashBytecode(A,B)} => D
+        ${getContractAddress(A,B)} => A
+        2 => B
+        0 => C
+        $ => SR                         :SSTORE
+
+endByteCode:
+
+moveBalances:
 
 ;;;;;;;;
 ; evmCALL (Move Balances)
 ;;;;;;;;
-
-        GAS - 21000 => GAS
 
         ; Decrement original balance
         $ => A                          :MLOAD(txSrcAddr)
@@ -129,7 +243,7 @@ endCheckChainId:
         $ => C                          :SLOAD                                                  ; Original Balance in E
 
         $ => A                          :MLOAD(txValue)                                         ; E = A + C
-        1 => B 
+        1 => B
         0 => D
         ${A+C} => D                     :ARITH                                                  ; originalBalance + value in D
 
