@@ -6,7 +6,14 @@ start:
         ${getGlobalExitRoot()}              :MSTORE(globalExitRoot)
 
         32 => D
-        ${getOldStateRoot()}=>SR            :HASHW(0)
+        ${getOldStateRoot()}=> A            :HASHW(0)
+        8 => D
+        $ => B                              :SHR
+        16 => D
+        $ => C                              :SHR
+        24 => D
+        $ => D                              :SHR 
+        A + 2**64*B + 2**128*C + 2**192*D => SR 
 
         32 => D
         ${getOldLocalExitRoot()}  => A      :HASHW(0)
@@ -20,103 +27,70 @@ start:
 
         ${getChainId()}                     :MSTORE(chainId)
 
-        ${getDefaultChainId()}              :MSTORE(defaultChainId)
+        1000                                :MSTORE(defaultChainId)    ; Hardcoded default chain id
 
         ${getNumBatch()}                    :MSTORE(numBatch)
 
-        ${getNTxs()} => A                   :MSTORE(numTxs)                           ; In Number of Txs to process
+        ${getTimestamp()}                    :MSTORE(timestamp)
+
+        ${getTxsLen()}                      :MSTORE(txsListLength);
 
         $ => A                              :MLOAD(lastCtxUsed)
         A                                   :MSTORE(firstCtxUsed)
 
-        $${var curTx = 0}
-
         $${var p = 0}
 
-checkRLP:
-        $ => A          : MLOAD(numTxs)
-        A               : MSTORE(pendingTxs)
-
 txLoopRLP:
-        $ => A          : MLOAD(pendingTxs)
-        A-1 =>  A       : MSTORE(pendingTxs)
-        A               : JMPC(endCheckRLP)
+        $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
+        A+1 => CTX      :MSTORE(lastCtxUsed)
 
-        $ => A          : MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
-        A+1 => CTX      : MSTORE(lastCtxUsed)
-
-                        : JMP(loadTx_rlp)
-txLoopRLPEnd:
-        $${curTx = curTx +1}
-                        : JMP(txLoopRLP)
+        $ => A          :MLOAD(txsListLength)
+        $ => C          :MLOAD(batchL2DataRead)
+        C - A           :JMPC(loadTx_rlp)
+                        :JMP(endCheckRLP)
 
 endCheckRLP:
-        $${curTx = 0}
-        $ => A          : MLOAD(firstCtxUsed)
-        A               : MSTORE(lastCtxUsed)
-        $ => A          : MLOAD(numTxs)
-        A               : MSTORE(pendingTxs)
-        0               : MSTORE(lastHashIdUsed)
-                        : JMP(txLoop)
+        $ => A          :MLOAD(firstCtxUsed)
+        A               :MSTORE(lastCtxUsed)
+        0               :MSTORE(lastHashIdUsed)
+                        :JMP(txLoop)
 
 txLoop:
-        $ => A          : MLOAD(pendingTxs)
-        A-1 =>  A       : MSTORE(pendingTxs)
-        A               : JMPC(processTxsEnd)
+        $ => A          :MLOAD(pendingTxs)
+        A-1 =>  A       :MSTORE(pendingTxs)
+        A               :JMPC(processTxsEnd)
 
-        $ => A          : MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
-        A+1 => CTX      : MSTORE(lastCtxUsed)
+        $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
+        A+1 => CTX      :MSTORE(lastCtxUsed)
 
-                        : JMP(processTx)
+                        :JMP(processTx)
 
 processTxEnd:
-        $${curTx = curTx +1}
-                        : JMP(txLoop)
+                        :JMP(txLoop)
 
-processTxsEnd: 
+processTxsEnd:
 
-
-;;;;;;;
-; Pay Fees to sequencer
-;;;;;;;
-
-        $ => D                          :MLOAD(sequencerAccValue)
-
-        $ => A                          :MLOAD(sequencerAddr)
-        0 => B,C
-        $ => A                          :SLOAD                                                  ; Original Balance in A
-
-        1 => B
-        D => C
-        0 => D
-        ${A+C} => D                     :ARITH                                                   ; New Balance in D
-
-        $ => A                          :MLOAD(sequencerAddr)
-        0 => B,C
-        $ => SR                         :SSTORE
 
 ;;;;;;;;
-; Get Signed TXs
+; Get new hashId
 ;;;;;;;
-        ; We get a new hashId and store it in txHashId
+        ; We get a new hashId
         $ => E                          :MLOAD(lastHashIdUsed)
         E+1 => E                        :MSTORE(lastHashIdUsed)
-        E                               :MSTORE(txHashId) ; todo check needed
 
 ;;;;;;;;;
 ;; Append TXs
 ;;;;;;;;;
-
-        ${getTxsLen()} => B                            : MSTORE(txsListLength);
+        $ => B                          :MLOAD(txsListLength)
         0 => C
         $${p = 0}
 
 appendTxs:
-        B - C - 32                          :JMPC(endAppendTxs)
+        B - C - 32                      :JMPC(endAppendTxs)
         32 => D
         ${getTxs(p,D)} => A     
         $${p = p + D}
-        A                               : HASHW(E)
+        A                               :HASHW(E)
         C + D => C
                                         :JMP(appendTxs)
 
@@ -124,66 +98,67 @@ endAppendTxs:
         B - C => D
         ${getTxs(p,D)} => A     
         $${ p = p + D}
-        A                               : HASHW(E)
+        A                               :HASHW(E)
         C + D => C
 
 ;;;;;;;;;
 ;; Txs Size Verification
 ;;;;;;;;;
         C => A
-        $                               : MLOAD(txsListLength), ASSERT
+        $                               :MLOAD(txsListLength), ASSERT
 
 ;;;;;;;;;
 ;; Check batchHashData
 ;;;;;;;;;
         32 => D
-        $ => A                              : MLOAD(globalExitRoot)
-        A                                   : HASHW(E)
-                                            : HASHE(E)
-        $ => A                              : MLOAD(batchHashData)
-        $                                   : HASHR(E), ASSERT
+        $ => A                          :MLOAD(globalExitRoot)
+        A                               :HASHW(E)
+        32 => D
+        $ => A                          :MLOAD(timestamp)
+        A                               :HASHW(E)
+        20 => D
+        $ => A                          :MLOAD(sequencerAddr)
+        A                               :HASHW(E)
+        4 => D
+        $ => A                          :MLOAD(chainId)
+        A                               :HASHW(E)
+                                        :HASHE(E)
+        $ => A                          :MLOAD(batchHashData)
+        $                               :HASHR(E), ASSERT
 
 ;;;;;;;
 ; Check Global Hash
 ;;;;;;;
 
         32 => D
-        SR                                  :HASHW(0)
+        SR                                      :HASHW(0)
 
         32 => D
-        $ => A                              :MLOAD(newLocalExitRoot)
-        A                                   :HASHW(0)
-
-        20 => D
-        $ => A                              :MLOAD(sequencerAddr)
-        A                                   :HASHW(0)
+        $ => A                                  :MLOAD(newLocalExitRoot)
+        A                                       :HASHW(0)
 
         32 => D
-        $ => A                              :MLOAD(batchHashData)
-        A                                   :HASHW(0)
+        $ => A                                  :MLOAD(batchHashData)
+        A                                       :HASHW(0)
 
         4 => D
-        $ => A                              :MLOAD(chainId)
-        A                                   :HASHW(0)
+        $ => A                                  :MLOAD(numBatch)
+        A                                       :HASHW(0)
 
-        4 => D
-        $ => A                              :MLOAD(numBatch)
-        A                                   :HASHW(0)
+                                                :HASHE(0)
 
-                                            :HASHE(0)
-
-        $ => E                              : MLOAD(globalHash)
-        $ => A                              : HASHR(0)
+        $ => E                                  :MLOAD(globalHash)
+        $ => A                                  :HASHR(0)
         8 => D
-        $ => B                              :SHR
+        $ => B                                  :SHR
         16 => D
-        $ => C                              :SHR
+        $ => C                                  :SHR
         24 => D
-        $ => D                              :SHR
+        $ => D                                  :SHR
 
-        A + 2**64*B + 2**128*C + 2**192*D - E   : JMPC(assertError)
-        E - A - 2**64*B - 2**128*C - 2**192*D   : JMPC(assertError)
-                                                : JMP(assertOk)
+        A + 2**64*B + 2**128*C + 2**192*D - E   :JMPC(assertError)
+        E - A - 2**64*B - 2**128*C - 2**192*D   :JMPC(assertError)
+                                                :JMP(assertOk)
 assertError:
         A+1   :ASSERT ; Global Hash Assert
 assertOk:
@@ -226,7 +201,7 @@ longLoop2:
         0
         0
         0       : JMP(longLoop) ; 32
-                       
+
 
 finalLoop:
 ;        STEP-0x800000+2  : JMPC(finalLoop)  ; 2**23
