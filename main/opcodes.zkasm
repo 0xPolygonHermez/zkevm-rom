@@ -156,13 +156,24 @@ opSLT2:
     B - A           :JMPC(set1)
                     :JMP(set0)
 
-
-;opSGT:
-;    $ => A          :MLOAD(0)
-;    $ => B          :MLOAD(1)
-;    GAS-3 => GAS
-;    B - A           :JMPC(set1)
-;                    :JMP(set0)
+opSGT:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--)
+    31 => D
+    $ => B          :SHR
+    B - 0x7f        :JMPC(opSGT1)
+    A - 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff => A
+opSGT1:
+    A => B
+    $ => A          :MLOAD(SP)
+    31 => D
+    $ => D          :SHR
+    D - 0x7f        :JMPC(opSGT2)
+    A - 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff => A
+opSGT2:
+    GAS-3 => GAS
+    A - B           :JMPC(set1)
+                    :JMP(set0)
 
 opEQ:
     SP - 1 => SP
@@ -176,18 +187,35 @@ opEQ:
 opISZERO:
     SP - 1 => SP
     $ => A          :MLOAD(SP)
-    1 - A => B
-    1 + A => A
     GAS-3 => GAS
-    A - B           :JMPC(set0)
-    B - A           :JMPC(set0)
+    0 - A           :JMPC(set0)
+    0 + A           :JMPC(set0)
                     :JMP(set1)
 
 ;opAND:
+;    SP - 1 => SP
+;    $ => A          :MLOAD(SP--)
+;    $ => B          :MLOAD(SP)
+
 ;opOR:
+;    SP - 1 => SP
+;    $ => A          :MLOAD(SP--)
+;    $ => B          :MLOAD(SP)
+
 ;opXOR:
+;    SP - 1 => SP
+;    $ => A          :MLOAD(SP--)
+;    $ => B          :MLOAD(SP)
+
 ;opNOT:
+;    SP - 1 => SP
+;    $ => A          :MLOAD(SP)
+
 ;opBYTE:
+;    SP - 1 => SP
+;    $ => A          :MLOAD(SP--)
+;    $ => B          :MLOAD(SP)
+
 ;opSHL:
 opSHR:
     SP - 1 => SP
@@ -198,8 +226,9 @@ opSHR:
     A               :MSTORE(SP++)
     GAS-3 => GAS
                     :JMP(readCode)
-
 ;opSAR:
+
+
 ;opKECCAK256:
 ;   GAS - 30 - 6*data_size_words - mem_expansion_cost
 ;opADDRESS:
