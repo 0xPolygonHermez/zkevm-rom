@@ -177,11 +177,31 @@ opSGT2:
 
 opEQ:
     SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-    $ => B          :MLOAD(SP)
     GAS-3 => GAS
-    B - A           :JMPC(set0)
+    28 => D
+
+opEQcomp4:
+    31 - D           :JMPC(opEQfinal)
+    $ => A          :MLOAD(SP--)
+    $ => A          :SHL
+    D => C
+    31 => D
+    $ => B          :SHR
+    $ => A          :MLOAD(SP++)
+    C => D
+    $ => A          :SHL
+    D => C
+    31 => D
+    $ => A          :SHR
+    C + 1 => D
+    A - B           :JMPC(opEQfinal)
+    B - A           :JMPC(opEQfinal)
+                    :JMP(opEQcomp4)
+
+opEQfinal:
+    SP - 1 => SP
     A - B           :JMPC(set0)
+    B - A           :JMPC(set0)
                     :JMP(set1)
 
 opISZERO:
@@ -498,21 +518,22 @@ opSSTOREdifA1:
     0 - E           :JMPC(opSSTOREdifA12)
     0 + E           :JMPC(opSSTOREdifA12)
     ;if current_val == 0
-    GAS - 4800 => GAS
-                    :JMP(opSSTOREend)
+    $ => B          :MLOAD(gasRefund)
+    B - 15000 => B  :MSTORE(gasRefund)
+                    :JMP(opSSTOREdifAB)
 opSSTOREdifA12:
     ;if current_val != 0
-    0 - D           :JMPC(opSSTOREend)
-    0 + D           :JMPC(opSSTOREend)
+    0 - D           :JMPC(opSSTOREdifAB)
+    0 + D           :JMPC(opSSTOREdifAB)
     ;if new_val == 0
     $ => B          :MLOAD(gasRefund)
-    B + 4800 => B   :MSTORE(gasRefund)
-                    :JMP(opSSTOREend)
+    B + 15000 => B  :MSTORE(gasRefund)
+                    :JMP(opSSTOREdifAB)
 
 opSSTOREdifA2:
     ;if orig_val != 0
     $ => B          :MLOAD(gasRefund)
-    B + 2800 => B   :MSTORE(gasRefund)
+    B + 4900 => B   :MSTORE(gasRefund)
                     :JMP(opSSTOREend)
 
 opSSTOREdifB:
@@ -522,7 +543,7 @@ opSSTOREdifB:
     0 + D           :JMPC(opSSTOREend)
     ;if new_val == 0
     $ => B          :MLOAD(gasRefund)
-    B - 4800 => B   :MSTORE(gasRefund)
+    B + 15000 => B  :MSTORE(gasRefund)
                     :JMP(opSSTOREend)
 
 opSSTOREend:
