@@ -137,57 +137,116 @@ opGT:
     B - A           :JMPC(set1)
                     :JMP(set0)
 
+; TODO: missing complement2 conversion
 opSLT:
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
     31 => D
     $ => B          :SHR
     B - 0x7f        :JMPC(opSLT1)
-    A - 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff => A
+    A - 2**256 => A
 opSLT1:
     A => B
     $ => A          :MLOAD(SP)
     31 => D
     $ => D          :SHR
     D - 0x7f        :JMPC(opSLT2)
-    A - 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff => A
+    A - 2**256 => A
 opSLT2:
     GAS-3 => GAS
     B - A           :JMPC(set1)
                     :JMP(set0)
 
-
+; TODO: missing complement2 conversion
 ;opSGT:
-;    $ => A          :MLOAD(0)
-;    $ => B          :MLOAD(1)
+;    SP - 1 => SP
+;    $ => A          :MLOAD(SP--)
+;    31 => D
+;    $ => B          :SHR
+;    B - 0x7f        :JMPC(opSGT1)
+;    A - 2**256 => A
+;opSGT1:
+;    A => B
+;    $ => A          :MLOAD(SP)
+;    31 => D
+;    $ => D          :SHR
+;    D - 0x7f        :JMPC(opSGT2)
+;    A - 2**256 => A
+;opSGT2:
 ;    GAS-3 => GAS
-;    B - A           :JMPC(set1)
+;    A - B           :JMPC(set1)
 ;                    :JMP(set0)
 
 opEQ:
     SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-    $ => B          :MLOAD(SP)
     GAS-3 => GAS
-    B - A           :JMPC(set0)
+    0 => D
+
+opEQcomp:
+    31 - D          :JMPC(opEQfinal)
+    $ => A          :MLOAD(SP--)
+    $ => A          :SHL
+    D => C
+    31 => D
+    $ => B          :SHR
+    $ => A          :MLOAD(SP++)
+    C => D
+    $ => A          :SHL
+    D => C
+    31 => D
+    $ => A          :SHR
+    C + 1 => D
+    A - B           :JMPC(opEQfinal)
+    B - A           :JMPC(opEQfinal)
+                    :JMP(opEQcomp)
+
+opEQfinal:
+    SP - 1 => SP
     A - B           :JMPC(set0)
+    B - A           :JMPC(set0)
                     :JMP(set1)
 
 opISZERO:
     SP - 1 => SP
-    $ => A          :MLOAD(SP)
-    1 - A => B
-    1 + A => A
     GAS-3 => GAS
-    A - B           :JMPC(set0)
-    B - A           :JMPC(set0)
-                    :JMP(set1)
+    0 => D
+
+opISZEROcomp:
+    31 - D          :JMPC(set1)
+    $ => A          :MLOAD(SP)
+    $ => A          :SHL
+    D => C
+    31 => D
+    $ => A          :SHR
+    C + 1 => D
+    0 - A           :JMPC(set0)
+    0 + A           :JMPC(set0)
+                    :JMP(opISZEROcomp)
 
 ;opAND:
+;    SP - 1 => SP
+;    $ => A          :MLOAD(SP--)
+;    $ => B          :MLOAD(SP)
+
 ;opOR:
+;    SP - 1 => SP
+;    $ => A          :MLOAD(SP--)
+;    $ => B          :MLOAD(SP)
+
 ;opXOR:
+;    SP - 1 => SP
+;    $ => A          :MLOAD(SP--)
+;    $ => B          :MLOAD(SP)
+
 ;opNOT:
+;    SP - 1 => SP
+;    $ => A          :MLOAD(SP)
+
 ;opBYTE:
+;    SP - 1 => SP
+;    $ => A          :MLOAD(SP--)
+;    $ => B          :MLOAD(SP)
+
 ;opSHL:
 opSHR:
     SP - 1 => SP
@@ -198,8 +257,9 @@ opSHR:
     A               :MSTORE(SP++)
     GAS-3 => GAS
                     :JMP(readCode)
-
 ;opSAR:
+
+
 ;opKECCAK256:
 ;   GAS - 30 - 6*data_size_words - mem_expansion_cost
 ;opADDRESS:
@@ -469,21 +529,22 @@ opSSTOREdifA1:
     0 - E           :JMPC(opSSTOREdifA12)
     0 + E           :JMPC(opSSTOREdifA12)
     ;if current_val == 0
-    GAS - 4800 => GAS
-                    :JMP(opSSTOREend)
+    $ => B          :MLOAD(gasRefund)
+    B - 15000 => B  :MSTORE(gasRefund)
+                    :JMP(opSSTOREdifAB)
 opSSTOREdifA12:
     ;if current_val != 0
-    0 - D           :JMPC(opSSTOREend)
-    0 + D           :JMPC(opSSTOREend)
+    0 - D           :JMPC(opSSTOREdifAB)
+    0 + D           :JMPC(opSSTOREdifAB)
     ;if new_val == 0
     $ => B          :MLOAD(gasRefund)
-    B + 4800 => B   :MSTORE(gasRefund)
-                    :JMP(opSSTOREend)
+    B + 15000 => B  :MSTORE(gasRefund)
+                    :JMP(opSSTOREdifAB)
 
 opSSTOREdifA2:
     ;if orig_val != 0
     $ => B          :MLOAD(gasRefund)
-    B + 2800 => B   :MSTORE(gasRefund)
+    B + 4900 => B   :MSTORE(gasRefund)
                     :JMP(opSSTOREend)
 
 opSSTOREdifB:
@@ -493,7 +554,7 @@ opSSTOREdifB:
     0 + D           :JMPC(opSSTOREend)
     ;if new_val == 0
     $ => B          :MLOAD(gasRefund)
-    B - 4800 => B   :MSTORE(gasRefund)
+    B + 15000 => B  :MSTORE(gasRefund)
                     :JMP(opSSTOREend)
 
 opSSTOREend:
