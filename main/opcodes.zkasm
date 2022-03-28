@@ -495,9 +495,7 @@ opSSTOREinit:
     D - E           :JMPC(opSSTOREdif)
     ;if new_val == current_val
     GAS - 100 => GAS
-    3 => B
-    $ => SR         :SSTORE
-                    :JMP(readCode)
+                    :JMP(opSSTOREend)
 
 opSSTOREdif:
     ;if new_val != current_val
@@ -508,9 +506,7 @@ opSSTOREdif:
     0 + B           :JMPC(opSSTOREdifB)
     ;if origin_val == 0
     GAS - 20000 => GAS
-    3 => B
-    $ => SR         :SSTORE
-                    :JMP(readCode)
+                    :JMP(opSSTOREend)
 
 opSSTOREdifA:
     ;if current_val != orig_val
@@ -529,30 +525,31 @@ opSSTOREdifAB:
     0 - B           :JMPC(opSSTOREdifA2)
     0 + B           :JMPC(opSSTOREdifA2)
     ;if orig_val == 0
-    $ => B          :MLOAD(gasRefund)
-    B + 19900 => B  :MSTORE(gasRefund)
+    $ => A          :MLOAD(gasRefund)
+    A + 19900 => A  :MSTORE(gasRefund)
+                    :JMP(opSSTOREend)
 
 opSSTOREdifA1:
     ;if orig_val != 0
     0 - E           :JMPC(opSSTOREdifA12)
     0 + E           :JMPC(opSSTOREdifA12)
     ;if current_val == 0
-    $ => B          :MLOAD(gasRefund)
-    B - 15000 => B  :MSTORE(gasRefund)
+    $ => A          :MLOAD(gasRefund)
+    A - 15000 => A  :MSTORE(gasRefund)
                     :JMP(opSSTOREdifAB)
 opSSTOREdifA12:
     ;if current_val != 0
     0 - D           :JMPC(opSSTOREdifAB)
     0 + D           :JMPC(opSSTOREdifAB)
     ;if new_val == 0
-    $ => B          :MLOAD(gasRefund)
-    B + 15000 => B  :MSTORE(gasRefund)
+    $ => A          :MLOAD(gasRefund)
+    A + 15000 => A  :MSTORE(gasRefund)
                     :JMP(opSSTOREdifAB)
 
 opSSTOREdifA2:
     ;if orig_val != 0
-    $ => B          :MLOAD(gasRefund)
-    B + 4900 => B   :MSTORE(gasRefund)
+    $ => A          :MLOAD(gasRefund)
+    A + 2800 => A   :MSTORE(gasRefund)
                     :JMP(opSSTOREend)
 
 opSSTOREdifB:
@@ -561,11 +558,20 @@ opSSTOREdifB:
     0 - D           :JMPC(opSSTOREend)
     0 + D           :JMPC(opSSTOREend)
     ;if new_val == 0
-    $ => B          :MLOAD(gasRefund)
-    B + 15000 => B  :MSTORE(gasRefund)
+    $ => A          :MLOAD(gasRefund)
+    A + 15000 => A  :MSTORE(gasRefund)
                     :JMP(opSSTOREend)
 
 opSSTOREend:
+    $ => A          :MLOAD(txIsCreateContract)
+    0 - A           :JMPC(mloadContract)
+    $ => A          :MLOAD(txDestAddr)
+                    :JMP(opSSTOREsr)
+
+mloadContract:
+    $ => A          :MLOAD(createContractAddress)
+
+opSSTOREsr:
     3 => B
     $ => SR         :SSTORE
                     :JMP(readCode)
