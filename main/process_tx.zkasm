@@ -2,8 +2,8 @@
 processTx:
 
         ; We get a new hashId
-        $ => E                          :MLOAD(lastHashIdUsed)
-        E+1 => E                        :MSTORE(lastHashIdUsed)
+        $ => E                          :MLOAD(currentHashId)
+        E+1 => E                        :MSTORE(currentHashId)
         0 => C
 
 ;;;;;;;;;
@@ -73,7 +73,6 @@ endCheckChainId:
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
         $ => E                          :SLOAD                                                  ; Original Balance in E
-        E                               :MSTORE(initSrcOriginBalance)
         D => C                                                                                  ; A = E - C
         ${E-C} => A
         31 => D
@@ -130,7 +129,7 @@ txType:
 ;;;;; Tx type
 ;;;;;;;;;;
         $ => A                          :MLOAD(txIsCreateContract)
-        0 - A                           :JMPC(deploy)
+        0 - A                           :JMPC(getContractAddress)
         $ => A                          :MLOAD(txDestAddr)
         2 => B
         0 => C
@@ -143,6 +142,34 @@ checkTxType:
         0 - B                           :JMPC(callContract)
         D + 1 => D
                                         :JMP(checkTxType)
+
+
+
+getContractAddress:
+        ; We get a new hashId
+        $ => E                          :MLOAD(lastHashIdUsed)
+        E+1 => E                        :MSTORE(lastHashIdUsed)
+        $ => A                          :MLOAD(txSrcOriginAddr)
+        $ => B                          :MLOAD(txNonce)
+        $ => C                          :MLOAD(lengthNonce)
+        1 => D
+        0xc0 + 22 + C                   :HASHW(E) ; 1 byte length address, 20 bytes address, 1 bytes length nonce = 22 bytes
+        0x94                            :HASHW(E)
+        20 => D
+        A                               :HASHW(E)
+        1 => D
+        0x80 + C                        :HASHW(E)
+        C - 1                           :JMPC(endContractAddress)
+        C => D
+        B                               :HASHW(E)
+
+endContractAddress:
+                                        :HASHE(E)
+        $ => A                          :HASHR(E)
+        12 => D
+        $ => A                          :SHL
+        $ => A                          :SHR
+        A                               :MSTORE(createContractAddress)
 
 deploy:
         1024                            :MSTORE(SPr)
@@ -195,18 +222,13 @@ endCode:
 
 endDeploy:
         ; Update contract nonce
-        $ => A                          :MLOAD(txSrcOriginAddr)
-        $ => B                          :MLOAD(txNonce)
-        ${getContractAddress(A,B)} => A
+        $ => A                          :MLOAD(createContractAddress)
         1 => B                                                                                  ; Constance for nonce
         0 => C
         1 => D
         $ => SR                         :SSTORE
 
-        $ => A                          :MLOAD(txSrcOriginAddr)
-        $ => B                          :MLOAD(txNonce)
-        ${getHashBytecode(A,B)} => D
-        ${getContractAddress(A,B)} => A
+        ${getHashBytecode(A)} => D
         2 => B
         0 => C
         $ => SR                         :SSTORE
@@ -223,7 +245,6 @@ moveBalances:
         $ => A                          :MLOAD(txSrcAddr)
         0 => B,C
         $ => E                          :SLOAD                                                  ; Original Balance in E
-        E                               :MSTORE(initSrcBalance)
         $ => C                          :MLOAD(txValue)                                         ; A = E - C
         ${E-C} => A
         31 => D
