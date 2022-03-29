@@ -1,0 +1,50 @@
+; This file is WIP and any of those functions are used
+
+; @info complement a 2 conversion
+; @in A => number to convert
+; @in RR => old zkPC pointer
+; @out A => number converted in ca2
+ca2:
+    31 => D
+    $ => B          :SHR
+    B - 0x7f        :JMPC(RR) ; negative number
+    2**256 => B
+    $ => A          :XOR ; A xor B
+    A + 1 => A
+                    :JMP(RR)
+
+; @info compare numbers byte by byte starting from LSB
+; @in A => number of bytes to compare
+; @in B => first number
+; @in C => second number
+; @in RR => old zkPC pointer
+; @out A => 1 if equal, 0 otherwise
+isEqual:
+    A => D
+
+isEqualLoop:
+    31 - D          :JMPC(ret1) ; missing bytes
+    B               :MSTORE(tmpVarA)
+    C               :MSTORE(tmpVarB)
+
+    A               :MLOAD(tmpVarA) ; (in >> 2**byte) && 0xff, where D is the byte to compare
+                    :SHR
+    0xff => B
+    ${A*B} => A     :MSTORE(tmpVarC)
+
+    A               :MLOAD(tmpVarB) ; (in >> 2**byte) && 0xff, where D is the byte to compare
+                    :SHR
+    ${A*B} => A     :MSTORE(tmpVarD)
+
+    D + 1 => D                      ; next iteration
+    A               :MLOAD(tmpVarC) ; compare bytes
+    B               :MLOAD(tmpVarD)
+    A - B           :JMPC(ret0)
+    B - A           :JMPC(ret0)
+                    :JMP(isEqualLoop)
+
+ret0:
+    0 => C         :JMP(RR)
+
+ret1:
+    1 => C         :JMP(RR)
