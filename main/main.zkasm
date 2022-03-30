@@ -34,6 +34,22 @@ start:
 
         ${getTxsLen()}                      :MSTORE(txsListLength);
 
+;;;;;;;;;
+;; Set global exit root
+;;;;;;;;;       
+        $ => E                              :MLOAD(lastHashIdUsed)
+        E+1 => E                            :MSTORE(lastHashIdUsed)
+        32 => D 
+        $ => A                              :MLOAD(numBatch)
+        A                                   :HASHW(E)
+        0                                   :HASHW(E)                  ; Storage position of the global exit root map
+                                            :HASHE(E)
+        $ => C                              :HASHR(E)                  ; Storage position of the current global exit root
+
+        ${getGlobalExitRootManagerAddr()}  => A
+        3 => B
+        $ => SR                             :SSTORE
+
         $ => A                              :MLOAD(lastCtxUsed)
         A                                   :MSTORE(firstCtxUsed)
 
@@ -68,6 +84,15 @@ processTxEnd:
                         :JMP(txLoop)
 
 processTxsEnd:
+
+;;;;;;;;;
+;; Assert local exit root
+;;;;;;;;;       
+        ${getGlobalExitRootManagerAddr()}  => A
+        3 => B
+        1 => C                                                         ; Storage position of the local exit root
+        $ => A                          :SLOAD
+        $                               :MLOAD(newLocalExitRoot), ASSERT
 
 
 ;;;;;;;;
@@ -134,11 +159,9 @@ endAppendTxs:
         32 => D
         SR                                      :HASHW(0)
 
-        32 => D
         $ => A                                  :MLOAD(newLocalExitRoot)
         A                                       :HASHW(0)
 
-        32 => D
         $ => A                                  :MLOAD(batchHashData)
         A                                       :HASHW(0)
 
