@@ -4,14 +4,14 @@
 ; @in A => number to convert
 ; @in RR => old zkPC pointer
 ; @out A => number converted in ca2
-ca2:
-    31 => D
-    $ => B          :SHR
-    B - 0x7f        :JMPC(RR) ; negative number
-    2**256 => B
-    $ => A          :XOR ; A xor B
-    A + 1 => A
-                    :JMP(RR)
+; ca2:
+;     31 => D
+;     $ => B          :SHR
+;     B - 0x7f        :JMPC(RR) ; negative number
+;     2**256 => B
+;     $ => A          :XOR ; A xor B
+;     A + 1 => A
+;                     :JMP(RR)
 
 ; @info compare numbers byte by byte starting from LSB
 ; @in A => number of bytes to compare
@@ -19,32 +19,83 @@ ca2:
 ; @in C => second number
 ; @in RR => old zkPC pointer
 ; @out A => 1 if equal, 0 otherwise
-isEqual:
-    A => D
 
-isEqualLoop:
-    31 - D          :JMPC(ret1) ; missing bytes
-    B               :MSTORE(tmpVarA)
-    C               :MSTORE(tmpVarB)
+; VAR GLOBAL tmpVarA
+; VAR GLOBAL tmpVarB
+; VAR GLOBAL tmpVarC
+; VAR GLOBAL tmpVarD
 
-    A               :MLOAD(tmpVarA) ; (in >> 2**byte) && 0xff, where D is the byte to compare
-                    :SHR
-    0xff => B
-    ${A*B} => A     :MSTORE(tmpVarC)
+; isEqual:
+;     A => D
+;
+; isEqualLoop:
+;     31 - D          :JMPC(ret1) ; missing bytes
+;     B               :MSTORE(tmpVarA)
+;     C               :MSTORE(tmpVarB)
+;
+;     A               :MLOAD(tmpVarA) ; (in >> 2**byte) && 0xff, where D is the byte to compare
+;                     :SHR
+;     0xff => B
+;     ${A*B} => A     :MSTORE(tmpVarC)
+;
+;     A               :MLOAD(tmpVarB) ; (in >> 2**byte) && 0xff, where D is the byte to compare
+;                     :SHR
+;     ${A*B} => A     :MSTORE(tmpVarD)
+;
+;     D + 1 => D                      ; next iteration
+;     A               :MLOAD(tmpVarC) ; compare bytes
+;     B               :MLOAD(tmpVarD)
+;     A - B           :JMPC(ret0)
+;     B - A           :JMPC(ret0)
+;                     :JMP(isEqualLoop)
+;
+; ret0:
+;     0 => C         :JMP(RR)
+;
+; ret1:
+;     1 => C         :JMP(RR)
 
-    A               :MLOAD(tmpVarB) ; (in >> 2**byte) && 0xff, where D is the byte to compare
-                    :SHR
-    ${A*B} => A     :MSTORE(tmpVarD)
+; /**
+;  * @info compare numbers byte by byte starting from LSB
+;  * @in A => first number
+;  * @in B => second number
+;  * @out C => result
+;  */
 
+VAR GLOBAL tmpD
+
+comp:
+    0 => D
+    A => C
+    B => E
+
+compLoop:
+    31 - D              :JMPC(equal) ; missing bytes
+    C => A                           ; load initial value
+    $ => A              :SHL
+    D                   :MSTORE(tmpD)
+    31 => D
+    $ => B              :SHR
+
+    E => A
+    $ => D              :MLOAD(tmpD)
+
+    $ => A              :SHL
+    31 => D
+    $ => A              :SHR
+
+    $ => D              :MLOAD(tmpD)
     D + 1 => D                      ; next iteration
-    A               :MLOAD(tmpVarC) ; compare bytes
-    B               :MLOAD(tmpVarD)
-    A - B           :JMPC(ret0)
-    B - A           :JMPC(ret0)
-                    :JMP(isEqualLoop)
 
-ret0:
-    0 => C         :JMP(RR)
+    A - B           :JMPC(gt)
+    B - A           :JMPC(lt)
+                    :JMP(compLoop)
 
-ret1:
-    1 => C         :JMP(RR)
+equal:
+    0 => C         :RETURN
+
+gt:
+    1 => C          :RETURN
+
+lt:
+   -1 => C          :RETURN

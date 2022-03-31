@@ -1,4 +1,4 @@
-; INCLUDE "utils.zkasm"
+INCLUDE "utils.zkasm"
 
 opSTOP:
                     :JMP(endCode)
@@ -142,11 +142,37 @@ opLT:
 
 opGT:
     SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-    $ => B          :MLOAD(SP)
     GAS-3 => GAS
-    B - A           :JMPC(set1)
+    31 => D
+
+opGTLoop:
+    D               :JMPC(opGTFinal)
+    $ => A          :MLOAD(SP--)
+    D => C
+    31 - D => D
+    $ => A          :SHL
+    31 => D
+    $ => B          :SHR
+
+    $ => A          :MLOAD(SP++)
+    C => D
+    31 - D => D
+    $ => A          :SHL
+    31 => D
+    $ => A          :SHR
+
+    C - 1 => D
+
+    A - B           :JMPC(opGTFinal)
+    B - A           :JMPC(opGTFinal)
+                    :JMP(opGTLoop)
+
+opGTFinal:
+    SP - 1 => SP
+    A - B           :JMPC(set1)
+    B - A           :JMPC(set0)
                     :JMP(set0)
+
 
 ; TODO: missing complement2 conversion
 opSLT:
@@ -555,6 +581,15 @@ opSSTOREdifA2:
 opSSTOREdifB:
     ;if orig_val != 0
     GAS - 2900 => GAS
+    @ 0 => A
+    @ D => B
+    @                 :CALL(comp)
+    @ C               :JMPC(opSSTOREend)
+    @ -C              :JMPC(opSSTOREend)
+
+    ${eq(A, B} => C
+    C - 1             :JMPC(opSSTOREend)
+
     0 - D           :JMPC(opSSTOREend)
     0 + D           :JMPC(opSSTOREend)
     ;if new_val == 0
