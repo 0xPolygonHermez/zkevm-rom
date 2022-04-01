@@ -37,7 +37,8 @@ opSUB:
     GAS-3 => GAS
                     :JMP(readCode)
 
-opDIV:               ;;; verify E%A < E/A
+opSDIV: ; //TODO: implement SDiv
+opDIV:
     SP - 1 => SP
     $ => E          :MLOAD(SP--)
     $ => A          :MLOAD(SP)
@@ -49,25 +50,26 @@ opDIV:               ;;; verify E%A < E/A
     GAS-5 => GAS
                     :JMP(readCode)
 
-; //TODO: waiting for XOR
+; // TODO: ca2 if negative, div, toCa2 if different signs
 ; opSDIV:
-;    SP - 1 => SP
-;    $ => A          :MLOAD(SP--)
-;    zkPC+1 => RR
-;                    :JMP(ca2)
-;    A => B
-;    $ => A          :MLOAD(SP)
-;    zkPC+1 => RR
-;                    :JMP(ca2)
-;    B => E
-;    ${E%A} => C
-;    ${E/A} => B
-;    0 => D
-;    E               :ARITH
-;    B               :MSTORE(SP++)
+;     SP - 1 => SP
+;     $ => A          :MLOAD(SP--)
+;     zkPC+1 => RR
+;                     :JMP(ca2)
+;     A => B
+;     $ => A          :MLOAD(SP)
+;     zkPC+1 => RR
+;                     :JMP(ca2)
+;     B => E
+;     ${E%A} => C
+;     ${E/A} => B
+;     0 => D
+;     E               :ARITH
+;     B               :MSTORE(SP++)
 ;    GAS-5 => GAS
 ;                    :JMP(readCode)
 
+opSMOD: ; //TODO: implement SMOD
 opMOD:
     SP - 1 => SP
     $ => E          :MLOAD(SP--)
@@ -132,41 +134,31 @@ set1:
     1               :MSTORE(SP++)
                     :JMP(readCode)
 
+opSLT: ; //TODO: implement SLT
 opLT:
     SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-    $ => B          :MLOAD(SP)
+    $ => A              :MLOAD(SP--)
+    $ => B              :MLOAD(SP)
     GAS-3 => GAS
-    A - B           :JMPC(set1)
-                    :JMP(set0)
+    ${comp_lt(A, B)}    :MSTORE(SP++)
+                        :JMP(readCode)
 
+opSGT: ; //TODO: missing SGT implementation
 opGT:
     SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-    $ => B          :MLOAD(SP)
+    $ => A              :MLOAD(SP--)
+    $ => B              :MLOAD(SP)
     GAS-3 => GAS
-    B - A           :JMPC(set1)
-                    :JMP(set0)
+    ${comp_gt(A, B)}    :MSTORE(SP++)
+                        :JMP(readCode)
 
-; TODO: missing complement2 conversion
-opSLT:
-    SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-    31 => D
-    $ => B          :SHR
-    B - 0x7f        :JMPC(opSLT1)
-    A - 2**256 => A
-opSLT1:
-    A => B
-    $ => A          :MLOAD(SP)
-    31 => D
-    $ => D          :SHR
-    D - 0x7f        :JMPC(opSLT2)
-    A - 2**256 => A
-opSLT2:
-    GAS-3 => GAS
-    B - A           :JMPC(set1)
-                    :JMP(set0)
+; opSLT:
+;    SP - 1 => SP
+;    $ => A          :MLOAD(SP--)
+;    31 => D
+;    $ => B          :SHR
+;    B - 0x7f        :JMPC(opSLT1) // TODO: Check ca2 conversion by substracting 2**256 instead of (XOR + 1)
+;    A - 2**256 => A               // Does not work, CONST > Field Element
 
 ; TODO: missing complement2 conversion
 ;opSGT:
@@ -176,90 +168,60 @@ opSLT2:
 ;    $ => B          :SHR
 ;    B - 0x7f        :JMPC(opSGT1)
 ;    A - 2**256 => A
-;opSGT1:
-;    A => B
-;    $ => A          :MLOAD(SP)
-;    31 => D
-;    $ => D          :SHR
-;    D - 0x7f        :JMPC(opSGT2)
-;    A - 2**256 => A
-;opSGT2:
-;    GAS-3 => GAS
-;    A - B           :JMPC(set1)
-;                    :JMP(set0)
 
 opEQ:
     SP - 1 => SP
+    $ => A              :MLOAD(SP--)
+    $ => B              :MLOAD(SP)
     GAS-3 => GAS
-    0 => D
-
-opEQcomp:
-    31 - D          :JMPC(opEQfinal)
-    $ => A          :MLOAD(SP--)
-    $ => A          :SHL
-    D => C
-    31 => D
-    $ => B          :SHR
-    $ => A          :MLOAD(SP++)
-    C => D
-    $ => A          :SHL
-    D => C
-    31 => D
-    $ => A          :SHR
-    C + 1 => D
-    A - B           :JMPC(opEQfinal)
-    B - A           :JMPC(opEQfinal)
-                    :JMP(opEQcomp)
-
-opEQfinal:
-    SP - 1 => SP
-    A - B           :JMPC(set0)
-    B - A           :JMPC(set0)
-                    :JMP(set1)
+    ${comp_eq(A, B)}    :MSTORE(SP++)
+                        :JMP(readCode)
 
 opISZERO:
     SP - 1 => SP
+    $ => A              :MLOAD(SP)
     GAS-3 => GAS
-    0 => D
+    ${comp_eq(A, 0)}    :MSTORE(SP++)
+                        :JMP(readCode)
 
-opISZEROcomp:
-    31 - D          :JMPC(set1)
-    $ => A          :MLOAD(SP)
-    $ => A          :SHL
-    D => C
-    31 => D
-    $ => A          :SHR
-    C + 1 => D
-    0 - A           :JMPC(set0)
-    0 + A           :JMPC(set0)
-                    :JMP(opISZEROcomp)
+opAND:
+    SP - 1 => SP
+    $ => A                  :MLOAD(SP--)
+    $ => B                  :MLOAD(SP)
+    ${bitwise_and(A, B)}    :MSTORE(SP++)
+                            :JMP(readCode)
 
-;opAND:
-;    SP - 1 => SP
-;    $ => A          :MLOAD(SP--)
-;    $ => B          :MLOAD(SP)
+opOR:
+    SP - 1 => SP
+    $ => A                  :MLOAD(SP--)
+    $ => B                  :MLOAD(SP)
+    ${bitwise_or(A, B)}     :MSTORE(SP++)
+                            :JMP(readCode)
 
-;opOR:
-;    SP - 1 => SP
-;    $ => A          :MLOAD(SP--)
-;    $ => B          :MLOAD(SP)
+opXOR:
+    SP - 1 => SP
+    $ => A                  :MLOAD(SP--)
+    $ => B                  :MLOAD(SP)
+    ${bitwise_xor(A, B)}    :MSTORE(SP++)
+                            :JMP(readCode)
 
-;opXOR:
-;    SP - 1 => SP
-;    $ => A          :MLOAD(SP--)
-;    $ => B          :MLOAD(SP)
+opNOT:
+    SP - 1 => SP
+    $ => A                  :MLOAD(SP--)
+    $ => B                  :MLOAD(SP)
+    ${bitwise_not(A)}    :MSTORE(SP++)
+                            :JMP(readCode)
 
-;opNOT:
-;    SP - 1 => SP
-;    $ => A          :MLOAD(SP)
+opBYTE:
+    SP - 1 => SP
+    $ => A                  :MLOAD(SP--)
+    $ => B                  :MLOAD(SP)
+    31 - B => D
+    $ => B                  :SHR
+    ${bitwise_and(B, 255)}  :MSTORE(SP++)
+                            :JMP(readCode)
 
-;opBYTE:
-;    SP - 1 => SP
-;    $ => A          :MLOAD(SP--)
-;    $ => B          :MLOAD(SP)
-
-;opSHL:
-opSHR:
+opSHR:  ; //TODO: SHR byte by byte working fine. Not working when shifting bits. Could be done by: [B / 2**(A%8)] or SHR bits directly
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
     ${D/8} => D
@@ -268,8 +230,18 @@ opSHR:
     A               :MSTORE(SP++)
     GAS-3 => GAS
                     :JMP(readCode)
-;opSAR:
 
+opSHL:  ; //TODO: SHL byte by byte working fine. Not working when shifting bits. Could be done by: [B / 2**(A%8)] or SHR bits directly
+    SP - 1 => SP
+    $ => D          :MLOAD(SP--)
+    ${D/8} => D
+    $ => A          :MLOAD(SP)
+    $ => A          :SHL
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+
+;opSAR:
 
 ;opKECCAK256:
 ;   GAS - 30 - 6*data_size_words - mem_expansion_cost
@@ -491,19 +463,16 @@ opSSTOREinit:
     ; TODO: check touched key / addr
     GAS - ${getTouchedKeyGas(C,CTX)} => GAS
     ${pushTouchedKey(C,CTX)}
-    E - D           :JMPC(opSSTOREdif)
-    D - E           :JMPC(opSSTOREdif)
+    ${comp_eq(E, D)} - 1 :JMPC(opSSTOREdif)
     ;if new_val == current_val
     GAS - 100 => GAS
                     :JMP(opSSTOREend)
 
 opSSTOREdif:
     ;if new_val != current_val
-    B - E           :JMPC(opSSTOREdifA)
-    E - B           :JMPC(opSSTOREdifA)
+    ${comp_eq(B, E)} - 1 :JMPC(opSSTOREdifA)
     ;if current_val == orig_val
-    0 - B           :JMPC(opSSTOREdifB)
-    0 + B           :JMPC(opSSTOREdifB)
+    ${comp_eq(0, B)} - 1 :JMPC(opSSTOREdifB)
     ;if origin_val == 0
     GAS - 20000 => GAS
                     :JMP(opSSTOREend)
@@ -513,17 +482,14 @@ opSSTOREdifA:
     GAS - 100 => GAS
 
 opSSTOREdifAA:
-    0 - B           :JMPC(opSSTOREdifA1)
-    0 + B           :JMPC(opSSTOREdifA1)
+    ${comp_eq(0, B)} - 1 :JMPC(opSSTOREdifA1)
     ;if origin_value == 0
                     :JMP(opSSTOREdifAB)
 
 opSSTOREdifAB:
-    D - B           :JMPC(opSSTOREend)
-    B - D           :JMPC(opSSTOREend)
+    ${comp_eq(D, B)} - 1 :JMPC(opSSTOREend)
     ;if new_val == orig_val
-    0 - B           :JMPC(opSSTOREdifA2)
-    0 + B           :JMPC(opSSTOREdifA2)
+    ${comp_eq(0, B)} - 1 :JMPC(opSSTOREdifA2)
     ;if orig_val == 0
     $ => A          :MLOAD(gasRefund)
     A + 19900 => A  :MSTORE(gasRefund)
@@ -531,16 +497,14 @@ opSSTOREdifAB:
 
 opSSTOREdifA1:
     ;if orig_val != 0
-    0 - E           :JMPC(opSSTOREdifA12)
-    0 + E           :JMPC(opSSTOREdifA12)
+    ${comp_eq(0, E)} - 1 :JMPC(opSSTOREdifA12)
     ;if current_val == 0
     $ => A          :MLOAD(gasRefund)
     A - 15000 => A  :MSTORE(gasRefund)
                     :JMP(opSSTOREdifAB)
 opSSTOREdifA12:
     ;if current_val != 0
-    0 - D           :JMPC(opSSTOREdifAB)
-    0 + D           :JMPC(opSSTOREdifAB)
+    ${comp_eq(0, D)} - 1 :JMPC(opSSTOREdifAB)
     ;if new_val == 0
     $ => A          :MLOAD(gasRefund)
     A + 15000 => A  :MSTORE(gasRefund)
@@ -555,8 +519,7 @@ opSSTOREdifA2:
 opSSTOREdifB:
     ;if orig_val != 0
     GAS - 2900 => GAS
-    0 - D           :JMPC(opSSTOREend)
-    0 + D           :JMPC(opSSTOREend)
+    ${comp_eq(0, D)} - 1 :JMPC(opSSTOREend)
     ;if new_val == 0
     $ => A          :MLOAD(gasRefund)
     A + 15000 => A  :MSTORE(gasRefund)
