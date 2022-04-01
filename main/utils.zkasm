@@ -12,3 +12,94 @@ ca2:
 
 endca2:
                     :RETURN
+
+; @info copy MEM A to ctxB SP = 1024
+copySP:
+    CTX             :MSTORE(currentCTX)
+    1024 => SP                             ;destOffset = 0
+    $ => CTX        :MLOAD(originCTX)
+    $ => E          :MLOAD(argsOffsetCall) ;offset
+    $ => C          :MLOAD(argsLengthCall) ;length
+
+copyInit:
+    C - 1           :JMPC(copyEnd)
+    $ => A          :MLOAD(MEM:E)
+    E + 1 => E
+    $ => CTX        :MLOAD(currentCTX)
+    A               :MSTORE(SP++)
+    $ => CTX        :MLOAD(originCTX)
+    C - 32 => C
+                    :JMP(copyInit)
+
+copyEnd:
+    $ => CTX        :MLOAD(currentCTX)
+                    :RETURN
+
+; @info byte length of B
+; @in B => number
+; @out A => bytes length
+getLenBytes:
+    0 => C
+
+getLenBytesLoop:
+    31 - C          :JMPC(getLenEnd)
+    ${getByte(B,D)} => A
+    0 - A           :JMPC(getLenEnd)
+    C + 1 => C
+                    :JMP(getLenBytesLoop)
+
+getLenEnd:
+    32 - C => A
+                    :RETURN
+
+
+;copyInit:
+;    C - 1           :JMPC(copyEnd)
+;    C - 32          :JMPC(copyFinal)
+;    ${B%32} => D
+;    1024 + ${B/32} => SP
+;    $ => A          :MLOAD(SP)
+;    $ => C          :SHL
+;    1024 + ${B/32} + 1 => SP
+;    32 - D => D
+;    $ => A          :MLOAD(SP)
+;    $ => A          :SHR
+;    $ => CTX        :MLOAD(currentCTX)
+;    1024 + E => SP
+;    A + C           :MSTORE(SP)
+;    E + 1 => E
+;    $ => CTX        :MLOAD(originCTX)
+;    $ => C          :MLOAD(argsLengthCall)   ;length
+;    C - 32 => C
+;    C               :MSTORE(argsLengthCall)
+;    B + 32 => B
+;                    :JMP(copyInit)
+;
+;copyFinal:
+;    ${B%32} => D
+;    1024 + ${B/32} => SP
+;    $ => A          :MLOAD(SP)
+;    $ => A          :SHL
+;    1024 + ${B/32} + 1 => SP
+;    C - 32 + D => D
+;    D               :JMPC(copyXor)
+;    A => C
+;    $ => A          :MLOAD(SP)
+;    $ => A          :SHR
+;    $ => CTX        :MLOAD(currentCTX)
+;    1024 + E => SP
+;    A + C           :MSTORE(SP)
+;    E + 1 => E
+;                    :JMP(copyEnd)
+;
+;copyXor:
+;    $ => CTX        :MLOAD(currentCTX)
+;    1024 + E => SP
+;    A               :MSTORE(SP)
+;
+;copyEnd:
+;    $ => CTX        :MLOAD(currentCTX)
+;    $ => E          :MLOAD(txNData)
+;    $ => B          :MLOAD(memLength)
+;    B - E           :JMPC(saveMemLength)
+;                    :RETURN
