@@ -1,13 +1,13 @@
 INCLUDE "vars.zkasm"
 
 start:
-; First of all, load The call Data.  The first A value is forced with the hash of the TX. 
+; First of all, load The call Data.  The first A value is forced with the hash of the TX.
         ${getGlobalHash()}                  :MSTORE(globalHash)                    ; In A register we have the TXHash
         ${getGlobalExitRoot()}              :MSTORE(globalExitRoot)
 
         32 => D
         ${getOldStateRoot()}=> A            :HASHW(0)
-        A => SR 
+        A => SR
 
         32 => D
         ${getOldLocalExitRoot()}  => A      :HASHW(0)
@@ -34,13 +34,34 @@ start:
 
         ${getTxsLen()}                      :MSTORE(txsListLength);
 
+;;;;;;;;;
+;; Set global exit root
+;;;;;;;;;
+        $ => E                              :MLOAD(lastHashIdUsed)
+        E+1 => E                            :MSTORE(lastHashIdUsed)
+        32 => D
+        $ => A                              :MLOAD(numBatch)
+        A                                   :HASHW(E)
+        0                                   :HASHW(E)                  ; Storage position of the global exit root map
+                                            :HASHE(E)
+        $ => C                              :HASHR(E)                  ; Storage position of the current global exit root
+
+        ${getGlobalExitRootManagerAddr()}  => A
+        3 => B
+        $ => D                              :MLOAD(globalExitRoot)
+        $ => SR                             :SSTORE
+
+;;;;;;;;;
+;; Prepare transaction loop
+;;;;;;;;;
+        E                                   :MSTORE(lastTxHashId)
         $ => A                              :MLOAD(lastCtxUsed)
         A                                   :MSTORE(firstCtxUsed)
 
         $${var p = 0}
 
 txLoopRLP:
-        $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
+        $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
         A+1 => CTX      :MSTORE(lastCtxUsed)
 
         $ => A          :MLOAD(txsListLength)
@@ -51,7 +72,6 @@ txLoopRLP:
 endCheckRLP:
         $ => A          :MLOAD(firstCtxUsed)
         A               :MSTORE(lastCtxUsed)
-        0               :MSTORE(currentHashId)
                         :JMP(txLoop)
 
 txLoop:
@@ -59,7 +79,7 @@ txLoop:
         A-1 =>  A       :MSTORE(pendingTxs)
         A               :JMPC(processTxsEnd)
 
-        $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
+        $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
         A+1 => CTX      :MSTORE(lastCtxUsed)
 
                         :JMP(processTx)
@@ -68,6 +88,15 @@ processTxEnd:
                         :JMP(txLoop)
 
 processTxsEnd:
+
+;;;;;;;;;
+;; Assert local exit root
+;;;;;;;;;
+        ${getGlobalExitRootManagerAddr()}  => A
+        3 => B
+        1 => C                                                         ; Storage position of the local exit root
+        $ => A                          :SLOAD
+        $                               :MLOAD(newLocalExitRoot), ASSERT
 
 
 ;;;;;;;;
@@ -87,7 +116,7 @@ processTxsEnd:
 appendTxs:
         B - C - 32                      :JMPC(endAppendTxs)
         32 => D
-        ${getTxs(p,D)} => A     
+        ${getTxs(p,D)} => A
         $${p = p + D}
         A                               :HASHW(E)
         C + D => C
@@ -95,7 +124,7 @@ appendTxs:
 
 endAppendTxs:
         B - C => D
-        ${getTxs(p,D)} => A     
+        ${getTxs(p,D)} => A
         $${ p = p + D}
         A                               :HASHW(E)
         C + D => C
@@ -134,11 +163,9 @@ endAppendTxs:
         32 => D
         SR                                      :HASHW(0)
 
-        32 => D
         $ => A                                  :MLOAD(newLocalExitRoot)
         A                                       :HASHW(0)
 
-        32 => D
         $ => A                                  :MLOAD(batchHashData)
         A                                       :HASHW(0)
 
