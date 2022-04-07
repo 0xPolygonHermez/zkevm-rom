@@ -355,8 +355,8 @@ opCALLDATACOPYinit:
     32 - D => D
     $ => A          :MLOAD(SP)
     $ => A          :SHR
-    A + C           :MSTORE(MEM:E)
-    E + 1 => E
+    A + C           :MSTORE(bytesToStore)
+                    :CALL(MSTORE32)
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP)   ;length
     C - 32 => C
@@ -374,16 +374,23 @@ opCALLDATACOPYfinal:
     1024 + ${B/32} + 1 => SP
     C - 32 + D => D
     D               :JMPC(opCALLDATACOPYxor)
-    A => C
+    A => B
     $ => A          :MLOAD(SP)
+    32 - D => D
     $ => A          :SHR
-    C + A => A
-    A               :MSTORE(MEM:E)
-    E + 1 => E
+    32 - C => D
+    $ => A          :SHL
+    B + A => A
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
                     :JMP(opCALLDATACOPYend)
 
 opCALLDATACOPYxor:
-    A               :MSTORE(MEM:E)
+    32 - C => D
+    $ => A          :SHR
+    $ => A          :SHL
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
 
 opCALLDATACOPYend:
     $ => SP         :MLOAD(SPw)
@@ -430,17 +437,23 @@ opCODECOPYinit:
     C - 1           :JMPC(opCODECOPYend)
     C - 32          :JMPC(opCODECOPYfinal)
     ${getBytecode(A,B,32)} => D
-    D               :MSTORE(MEM:E)
-    E + 1 => E
+    D               :MSTORE(bytesToStore)
+                    :CALL(MSTORE32)
     C - 32 => C
     B + 32 => B
                     :JMP(opCODECOPYinit)
 
 opCODECOPYfinal:
-    ${getBytecode(A,B,C)} => D
-    D               :MSTORE(MEM:E)
+    ${getBytecode(A,B,C)} => A
+    32 - C  => D
+    $ => A          :SHL
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
 
 opCODECOPYend:
+    $ => E          :MLOAD(lastMemLength)
+    $ => B          :MLOAD(memLength)
+    B - E           :JMPC(saveMemLength)
                     :JMP(readCode)
 
 opGASPRICE:
@@ -463,11 +476,11 @@ opEXTCODESIZE:
 
 opEXTCODECOPY:
     SP - 1 => SP
-    $ => A          :MLOAD(SP--) ;destOffset
+    $ => A          :MLOAD(SP--) ;addr
     ${touchedAddress(A,CTX)} => D
     2 => B
     0 => C
-    $ => A          :SLOAD
+    $ => A          :SLOAD       ;hash
     $ => E          :MLOAD(SP--) ;destOffset
     $ => B          :MLOAD(SP--) ;offset
     $ => C          :MLOAD(SP)   ;length
@@ -479,17 +492,23 @@ opEXTCODECOPYinit:
     C - 1           :JMPC(opEXTCODECOPYend)
     C - 32          :JMPC(opEXTCODECOPYfinal)
     ${getBytecode(A,B,32)} => D
-    D               :MSTORE(MEM:E)
-    E + 1 => E
+    D               :MSTORE(bytesToStore)
+                    :CALL(MSTORE32)
     C - 32 => C
     B + 32 => B
                     :JMP(opEXTCODECOPYinit)
 
 opEXTCODECOPYfinal:
-    ${getBytecode(A,B,C)} => D
-    D               :MSTORE(MEM:E)
+    ${getBytecode(A,B,C)} => A
+    32 - C  => D
+    $ => A          :SHL
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
 
 opEXTCODECOPYend:
+    $ => E          :MLOAD(lastMemLength)
+    $ => B          :MLOAD(memLength)
+    B - E           :JMPC(saveMemLength)
                     :JMP(readCode)
 
 opRETURNDATASIZE:
@@ -500,25 +519,36 @@ opRETURNDATASIZE:
 
 opRETURNDATACOPY:
     SP - 1 => SP
-    $ => D          :MLOAD(SP--) ;destOffset
-    $ => B          :MLOAD(SP--) ;offset
-    $ => C          :MLOAD(retOffset) ;RETURNDATA
-    B + C => B                    ;RETURNDATA[offset:offset+length]
-    $ => C          :MLOAD(SP)   ;length
+    $ => D          :MLOAD(SP--)            ;destOffset
+    $ => B          :MLOAD(SP--)            ;offset
+    ;TODO: offset is only offset or returndata + offset?
+    $ => C          :MLOAD(retOffset)       ;RETURNDATA
+    B + C => B                              ;RETURNDATA[offset:offset+length]
+    $ => C          :MLOAD(SP)              ;length
     GAS - 3 => GAS
     GAS - ${3*((C+31)/32)} => GAS
     B + C           :MSTORE(lastMemLength)
 
 opRETURNDATACOPYinit:
     C - 1           :JMPC(opRETURNDATACOPYend)
+    C - 32          :JMPC(opRETURNDATACOPYfinal)
     B => E
-    $ => A          :MLOAD(MEM:E)
-    B + 1 => B
+                    :CALL(MLOAD32)
+    E => B
     D => E
-    A               :MSTORE(MEM:E)
-    D + 1 => D
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTORE32)
+    E => D
     C - 32 => C
                     :JMP(opRETURNDATACOPYinit)
+
+opRETURNDATACOPYfinal:
+    B => E
+                    :CALL(MLOADX)
+    E => B
+    D => E
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
 
 opRETURNDATACOPYend:
     $ => E          :MLOAD(lastMemLength)
@@ -586,25 +616,22 @@ opPOP:
 
 opMLOAD:
     SP - 1 => SP
-    $ => E          :MLOAD(SP) ;offset
-    $ => B          :MLOAD(MEM:E)
-    B               :MSTORE(SP++)
+    $ => E          :MLOAD(SP)                  ;offset
+                    :CALL(MLOAD32)
+    A               :MSTORE(SP++)
     GAS - 3 => GAS
     $ => B          :MLOAD(memLength)
-    E + 32 => E
-    ;E               :MSTORE(lastMemLength)
     B - E           :JMPC(saveMemLength)
                     :JMP(readCode)
 
-opMSTORE:
+opMSTORE:                                       ;MSTORE 32 bytes
     SP - 1 => SP
-    $ => E          :MLOAD(SP--) ;offset
-    $ => B          :MLOAD(SP) ;value
-    B               :MSTORE(MEM:E)
+    $ => E          :MLOAD(SP--)                ;offset
+    $ => B          :MLOAD(SP)                  ;value
+    B               :MSTORE(bytesToStore)
+                    :CALL(MSTORE32)
     GAS - 3 => GAS
     $ => B          :MLOAD(memLength)
-    E + 32 => E
-    ;E               :MSTORE(lastMemLength)
     B - E           :JMPC(saveMemLength)
                     :JMP(readCode)
 
@@ -615,7 +642,6 @@ saveMemLength:
     GAS - 3*A - ${A*A/512} => GAS
     GAS + 3*B + ${B*B/512} => GAS
                     :JMP(readCode)
-
 
 ;opMSTORE8:
 opSLOAD:
@@ -1337,39 +1363,69 @@ opCALLend:
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txNData)
                     :CALL(copySP)
-    $ => B          :MLOAD(memLength)
-    B - A           :JMPC(saveMemLength)
+; TODO: memory?
+;    $ => B          :MLOAD(memLength)
+;    B - X           :JMPC(saveMemLength)
                     :JMP(txType)
 
 ;opCALLCODE:
+;TODO RETURN + 32 bytes
 opRETURN:
     SP - 1 => SP
     $ => E          :MLOAD(SP--) ;offset
-    $ => B          :MLOAD(SP)   ;length
-    $ => A          :MLOAD(MEM:E)
+    $ => C          :MLOAD(SP)   ;length
+    E+C             :MSTORE(lastMemLength)
     $ => D          :MLOAD(txIsCreateContract)
     0 - D           :JMPC(opRETURNdeploy)
-    $ => C          :MLOAD(originCTX)
-    C - 1           :JMPC(opReturnEnd)
-    C => CTX
-    $ => E          :MLOAD(argsOffsetCall)
-    A               :MSTORE(MEM:E)
-    E + B => E
-    $ => B          :MLOAD(memLength)
-    B - E           :JMPC(saveMemLength)
+    $ => B          :MLOAD(originCTX)       ;last ctx
+    B - 1           :JMPC(opRETURNend2)
+    CTX             :MSTORE(currentCTX)
+    $ => CTX        :MLOAD(originCTX)
+    $ => B          :MLOAD(retOffset)
+    $ => CTX        :MLOAD(currentCTX)
+
+opRETURN32:
+    C - 1           :JMPC(opRETURNend)
+    C - 32          :JMPC(opRETURNfinal)
+                    :CALL(MLOAD32)
+    E => D
+    $ => CTX        :MLOAD(originCTX)
+    B => E
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTORE32)
+    E => B
+    D => E
+    C - 32 => C
+    $ => CTX        :MLOAD(currentCTX)
+                    :JMP(opRETURN32)
+
+opRETURNfinal:
+                    :CALL(MLOADX)
+    $ => CTX        :MLOAD(originCTX)
+    B => E
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
+    $ => CTX        :MLOAD(currentCTX)
+
+opRETURNend:
+    $ => CTX        :MLOAD(originCTX)
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     1               :MSTORE(SP++)
+    $ => E          :MLOAD(lastMemLength)
+    $ => B          :MLOAD(memLength)
+    B - E           :JMPC(saveMemLength)
+    C - E           :JMPC(saveMemLength)
                     :JMP(readCode)
 
-opReturnEnd:
-    E + B => E
+opRETURNend2:
+    $ => E          :MLOAD(lastMemLength)
     $ => B          :MLOAD(memLength)
     B - E           :JMPC(saveMemLength)
                     :JMP(endCode)
 
 opRETURNdeploy:
-    GAS - 200 * B => GAS ;code_deposit_cost = 200 * returned_code_size
+    GAS - 200 * C => GAS ;code_deposit_cost = 200 * returned_code_size
                     :JMP(endCode)
 
 ;opDELEGATECALL:
