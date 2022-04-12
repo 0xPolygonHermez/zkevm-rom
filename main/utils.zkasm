@@ -1,5 +1,11 @@
 ; This file is WIP
 
+VAR GLOBAL auxA
+VAR GLOBAL auxB
+VAR GLOBAL auxC
+VAR GLOBAL auxD
+VAR GLOBAL auxE
+
 ; @info complement a 2 conversion
 ; @in A => number to convert
 ; @out A => number converted in ca2
@@ -14,17 +20,17 @@ endca2:
                     :RETURN
 
 ; @info copy MEM A to ctxB SP = 1024
+; TODO: copy + 32 bytes
 copySP:
     CTX             :MSTORE(currentCTX)
     1024 => SP                             ;destOffset = 0
     $ => CTX        :MLOAD(originCTX)
     $ => E          :MLOAD(argsOffsetCall) ;offset
     $ => C          :MLOAD(argsLengthCall) ;length
-
+ ;TODO:  UPDATE MEMORY
 copyInit:
     C - 1           :JMPC(copyEnd)
     $ => A          :MLOAD(MEM:E)
-    E + 1 => E
     $ => CTX        :MLOAD(currentCTX)
     A               :MSTORE(SP++)
     $ => CTX        :MLOAD(originCTX)
@@ -39,6 +45,7 @@ copyEnd:
 ; @in B => number
 ; @out A => bytes length
 getLenBytes:
+    C               :MSTORE(auxC)
     0 => C
     B => A
 
@@ -53,6 +60,171 @@ getLenBytesLoop:
 getLenEnd:
     C => A
                     :RETURN
+
+; @info save value to memory 32 bytes with offset
+; REQUIRE: set bytesToStore with value to use in MSTORE
+; @in E => offset
+; @out E => new offset
+
+VAR GLOBAL bytesToStore
+
+MSTORE32:
+    A               :MSTORE(auxA)
+    B               :MSTORE(auxB)
+    C               :MSTORE(auxC)
+    D               :MSTORE(auxD)
+    E               :MSTORE(auxE)
+    ${E%32} - 1     :JMPC(MSTORE322)
+    ${E%32} => C
+    ${(E/32)*32} => E
+    $ => A          :MLOAD(MEM:E)
+    32 - C => D
+    $ => A          :SHR
+    $ => A          :SHL
+    A => B
+    $ => A          :MLOAD(bytesToStore)
+    C => D
+    $ => A          :SHR
+    A + B           :MSTORE(MEM:E)
+    E + 32 => E                                    ;new offset
+    $ => A          :MLOAD(MEM:E)
+    C => D
+    $ => A          :SHL
+    $ => A          :SHR
+    A => B
+    $ => A          :MLOAD(bytesToStore)
+    32 - C => D
+    $ => A          :SHL
+    A + B           :MSTORE(MEM:E)
+    $ => E          :MLOAD(auxE)
+    E + 32 => E
+                    :JMP(MSTOREend)
+
+MSTORE322:
+    $ => A          :MLOAD(bytesToStore)
+    A               :MSTORE(MEM:E)
+    E + 32 => E
+                    :JMP(MSTOREend)
+
+; @info save value to memory < 32 bytes with offset
+; REQUIRE: set bytesToStore with value to use in MSTORE
+; @in E => offset
+; @in C => length
+; @out E => new offset
+
+MSTOREX:
+    A                           :MSTORE(auxA)
+    B                           :MSTORE(auxB)
+    C                           :MSTORE(auxC)
+    D                           :MSTORE(auxD)
+    32 - ${E%32} - C            :JMPC(MSTOREX2)
+    ${E%32} => D
+    ${(E/32)*32} => E
+    $ => A                      :MLOAD(bytesToStore)
+    $ => A                      :SHR
+    $ => B                      :SHL
+    $ => A                      :MLOAD(MEM:E)
+    32 - D => D
+    $ => A                      :SHR
+    $ => A                      :SHL
+    A + B                       :MSTORE(MEM:E)
+    E + C => E                                    ;new offset
+                                :JMP(MSTOREend)
+
+MSTOREX2:
+    ${E%32} => D
+    ${(E/32)*32} => E
+    $ => A                      :MLOAD(bytesToStore)
+    $ => B                      :SHR
+    $ => A                      :MLOAD(MEM:E)
+    32 - D => D
+    $ => A                      :SHR
+    $ => A                      :SHL
+    A + B                       :MSTORE(MEM:E)
+    E + 32 => E
+    $ => A                      :MLOAD(bytesToStore)
+    $ => B                      :SHL
+    $ => A                      :MLOAD(MEM:E)
+    C - D => D
+    $ => A                      :SHR
+    A + B                       :MSTORE(MEM:E)
+    E - 32 + C => E                                    ;new offset
+
+MSTOREend:
+    $ => A                      :MLOAD(auxA)
+    $ => B                      :MLOAD(auxB)
+    $ => C                      :MLOAD(auxC)
+    $ => D                      :MLOAD(auxD)
+                                :RETURN
+
+
+; @info get value from memory (32 bytes)
+; @in E => offset
+; @out A => value
+; @out E => new offset
+
+MLOAD32:
+    B               :MSTORE(auxB)
+    C               :MSTORE(auxC)
+    D               :MSTORE(auxD)
+    ${E%32} - 1     :JMPC(MLOAD322)
+    ${E%32} => C
+    ${(E/32)*32} => E
+    $ => A          :MLOAD(MEM:E)
+    C => D
+    $ => B          :SHL
+    32 - C => D
+    E + 32 => E                                    ;new offset
+    $ => A          :MLOAD(MEM:E)
+    $ => A          :SHR
+    A + B => A
+                    :JMP(MLOADend)
+
+MLOAD322:
+    $ => A          :MLOAD(MEM:E)
+    E + 32 => E                                     ;new offset
+                    :JMP(MLOADend)
+
+; @info get value from memory (32 bytes)
+; @in E => offset
+; @in C => length
+; @out A => value
+; @out E => new offset
+
+MLOADX:
+    B               :MSTORE(auxB)
+    C               :MSTORE(auxC)
+    D               :MSTORE(auxD)
+    32 - ${E%32} - C => D       :JMPC(MLOADX2)
+    ${E%32} => B
+    ${(E/32)*32} => E
+    $ => A                      :MLOAD(MEM:E)
+    32 - C => D
+    $ => A                      :SHR
+    $ => A                      :SHL
+    E + B => E                                    ;new offset
+                                :JMP(MLOADend)
+
+MLOADX2:
+    ${E%32} => D
+    ${(E/32)*32} => E
+    $ => A                  :MLOAD(MEM:E)
+    $ => B                  :SHL
+    E + 32 => E
+    $ => A                  :MLOAD(MEM:E)
+    C - 32 + D => D
+    32 - D => D
+    $ => A                  :SHR
+    32 - C => D
+    $ => A                  :SHL
+    A + B => A
+    E - 32 + C => E                                    ;new offset
+
+MLOADend:
+    $ => B                      :MLOAD(auxB)
+    $ => C                      :MLOAD(auxC)
+    $ => D                      :MLOAD(auxD)
+                                :RETURN
 
 ;copyInit:
 ;    C - 1           :JMPC(copyEnd)
