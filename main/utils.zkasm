@@ -27,15 +27,71 @@ copySP:
     $ => CTX        :MLOAD(originCTX)
     $ => E          :MLOAD(argsOffsetCall) ;offset
     $ => C          :MLOAD(argsLengthCall) ;length
- ;TODO:  UPDATE MEMORY
+    0 - ${E%32}     :JMPC(copyInit2)
+
 copyInit:
     C - 1           :JMPC(copyEnd)
+    C - 32          :JMPC(copyFinal)
     $ => A          :MLOAD(MEM:E)
+    E + 32 => E
     $ => CTX        :MLOAD(currentCTX)
     A               :MSTORE(SP++)
     $ => CTX        :MLOAD(originCTX)
     C - 32 => C
                     :JMP(copyInit)
+
+copyFinal:
+    $ => A          :MLOAD(MEM:E)
+    32 - C => D
+    $ => A          :SHR
+    $ => A          :SHL
+    $ => CTX        :MLOAD(currentCTX)
+    A               :MSTORE(SP++)
+                    :JMP(copyEnd)
+
+copyInit2:
+    C - 1           :JMPC(copyEnd)
+    C - 32          :JMPC(copyFinal2)
+    ${E%32} => D
+    ${(E/32)*32} => E
+    $ => A          :MLOAD(MEM:E)
+    $ => B          :SHL
+    32 - D => D
+    E + 32 => E
+    $ => A          :MLOAD(MEM:E)
+    $ => A          :SHR
+    $ => CTX        :MLOAD(currentCTX)
+    A + B           :MSTORE(SP++)
+    $ => CTX        :MLOAD(originCTX)
+    C - 32 => C
+                    :JMP(copyInit2)
+
+copyFinal2:
+    32 - ${E%32} - C => D       :JMPC(copyFinal22)
+    ${E%32} => B
+    ${(E/32)*32} => E
+    $ => A                      :MLOAD(MEM:E)
+    32 - C => D
+    $ => A                      :SHR
+    $ => A                      :SHL
+    $ => CTX                    :MLOAD(currentCTX)
+    A                           :MSTORE(SP++)
+                                :JMP(copyEnd)
+
+copyFinal22:
+    ${E%32} => D
+    ${(E/32)*32} => E
+    $ => A                  :MLOAD(MEM:E)
+    $ => B                  :SHL
+    E + 32 => E
+    $ => A                  :MLOAD(MEM:E)
+    C - 32 + D => D
+    32 - D => D
+    $ => A                  :SHR
+    32 - C => D
+    $ => A                  :SHL
+    $ => CTX                :MLOAD(currentCTX)
+    A + B                   :MSTORE(SP++)
 
 copyEnd:
     $ => CTX        :MLOAD(currentCTX)
