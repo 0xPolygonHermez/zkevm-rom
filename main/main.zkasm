@@ -4,9 +4,11 @@ start:
 ; First of all, load The call Data.  The first A value is forced with the hash of the TX.
         ${getGlobalHash()}                  :MSTORE(globalHash)                    ; In A register we have the TXHash
         ${getGlobalExitRoot()}              :MSTORE(globalExitRoot)
+        ${getOldStateRoot()}                :MSTORE(oldStateRoot)
 
         32 => D
-        ${getOldStateRoot()}=> A            :HASHW(0)
+        $ => A                              :MLOAD(oldStateRoot)
+        A                                   :HASHW(0)
         A => SR
 
         32 => D
@@ -32,7 +34,30 @@ start:
 
         ${getTimestamp()}                   :MSTORE(timestamp)
 
-        ${getTxsLen()}                      :MSTORE(txsListLength);
+        ${getTxsLen()}                      :MSTORE(txsListLength)
+
+        ; batch variables
+        0                                   :MSTORE(batchDifficulty)
+        30000000                            :MSTORE(batchGasLimit)
+
+
+
+;;;;;;;;;
+;; Set batch hash
+;;;;;;;;;
+        $ => E                              :MLOAD(lastHashIdUsed)
+        E+1 => E                            :MSTORE(lastHashIdUsed)
+        32 => D
+        $ => A                              :MLOAD(numBatch)
+        A - 1                               :HASHW(E)
+        0                                   :HASHW(E)                  ; Storage position of the batch hash
+                                            :HASHE(E)
+        $ => C                              :HASHR(E)
+
+        0 => A                                                         ; Address System contract 0x0000000000000000000000000000000000000000
+        3 => B
+        $ => D                              :MLOAD(oldStateRoot)
+        $ => SR                             :SSTORE                    ; Store 'oldStateRoot' in storage position 'keccak256(numBatch - 1, 0)'
 
 ;;;;;;;;;
 ;; Set global exit root
