@@ -1,10 +1,10 @@
 ; This file is WIP
 
-VAR GLOBAL auxA
-VAR GLOBAL auxB
-VAR GLOBAL auxC
-VAR GLOBAL auxD
-VAR GLOBAL auxE
+VAR GLOBAL tmpVarA
+VAR GLOBAL tmpVarB
+VAR GLOBAL tmpVarC
+VAR GLOBAL tmpVarD
+VAR GLOBAL tmpVarE
 
 ; @info complement a 2 conversion
 ; @in A => number to convert
@@ -101,7 +101,7 @@ copyEnd:
 ; @in B => number
 ; @out A => bytes length
 getLenBytes:
-    C               :MSTORE(auxC)
+    C               :MSTORE(tmpVarC)
     0 => C
     B => A
 
@@ -125,11 +125,11 @@ getLenEnd:
 VAR GLOBAL bytesToStore
 
 MSTORE32:
-    A               :MSTORE(auxA)
-    B               :MSTORE(auxB)
-    C               :MSTORE(auxC)
-    D               :MSTORE(auxD)
-    E               :MSTORE(auxE)
+    A               :MSTORE(tmpVarA)
+    B               :MSTORE(tmpVarB)
+    C               :MSTORE(tmpVarC)
+    D               :MSTORE(tmpVarD)
+    E               :MSTORE(tmpVarE)
     ${E%32} - 1     :JMPC(MSTORE322)
     ${E%32} => C
     ${(E/32)*32} => E
@@ -152,7 +152,7 @@ MSTORE32:
     32 - C => D
     $ => A          :SHL
     A + B           :MSTORE(MEM:E)
-    $ => E          :MLOAD(auxE)
+    $ => E          :MLOAD(tmpVarE)
     E + 32 => E
                     :JMP(MSTOREend)
 
@@ -169,21 +169,22 @@ MSTORE322:
 ; @out E => new offset
 
 MSTOREX:
-    A                           :MSTORE(auxA)
-    B                           :MSTORE(auxB)
-    C                           :MSTORE(auxC)
-    D                           :MSTORE(auxD)
+    A                           :MSTORE(tmpVarA)
+    B                           :MSTORE(tmpVarB)
+    C                           :MSTORE(tmpVarC)
+    D                           :MSTORE(tmpVarD)
+    E                           :MSTORE(tmpVarE)
     32 - ${E%32} - C            :JMPC(MSTOREX2)
     ${E%32} => D
     ${(E/32)*32} => E
     $ => A                      :MLOAD(bytesToStore)
-    $ => A                      :SHR
-    $ => B                      :SHL
+    $ => B                      :SHR
     $ => A                      :MLOAD(MEM:E)
     32 - D => D
     $ => A                      :SHR
     $ => A                      :SHL
     A + B                       :MSTORE(MEM:E)
+    $ => E                      :MLOAD(tmpVarE)
     E + C => E                                    ;new offset
                                 :JMP(MSTOREend)
 
@@ -204,13 +205,14 @@ MSTOREX2:
     C - D => D
     $ => A                      :SHR
     A + B                       :MSTORE(MEM:E)
-    E - 32 + C => E                                    ;new offset
+    $ => E                      :MLOAD(tmpVarE)
+    E + C => E                                    ;new offset
 
 MSTOREend:
-    $ => A                      :MLOAD(auxA)
-    $ => B                      :MLOAD(auxB)
-    $ => C                      :MLOAD(auxC)
-    $ => D                      :MLOAD(auxD)
+    $ => A                      :MLOAD(tmpVarA)
+    $ => B                      :MLOAD(tmpVarB)
+    $ => C                      :MLOAD(tmpVarC)
+    $ => D                      :MLOAD(tmpVarD)
                                 :RETURN
 
 
@@ -220,9 +222,9 @@ MSTOREend:
 ; @out E => new offset
 
 MLOAD32:
-    B               :MSTORE(auxB)
-    C               :MSTORE(auxC)
-    D               :MSTORE(auxD)
+    B               :MSTORE(tmpVarB)
+    C               :MSTORE(tmpVarC)
+    D               :MSTORE(tmpVarD)
     ${E%32} - 1     :JMPC(MLOAD322)
     ${E%32} => C
     ${(E/32)*32} => E
@@ -230,10 +232,11 @@ MLOAD32:
     C => D
     $ => B          :SHL
     32 - C => D
-    E + 32 => E                                    ;new offset
+    E + 32 => E
     $ => A          :MLOAD(MEM:E)
     $ => A          :SHR
     A + B => A
+    E + C => E                                      ;new offset
                     :JMP(MLOADend)
 
 MLOAD322:
@@ -248,17 +251,20 @@ MLOAD322:
 ; @out E => new offset
 
 MLOADX:
-    B               :MSTORE(auxB)
-    C               :MSTORE(auxC)
-    D               :MSTORE(auxD)
+    B               :MSTORE(tmpVarB)
+    C               :MSTORE(tmpVarC)
+    D               :MSTORE(tmpVarD)
+    E               :MSTORE(tmpVarE)
     32 - ${E%32} - C => D       :JMPC(MLOADX2)
     ${E%32} => B
     ${(E/32)*32} => E
     $ => A                      :MLOAD(MEM:E)
+    B => D
+    $ => A                      :SHL
     32 - C => D
     $ => A                      :SHR
     $ => A                      :SHL
-    E + B => E                                    ;new offset
+    E + B + C => E                                    ;new offset
                                 :JMP(MLOADend)
 
 MLOADX2:
@@ -274,61 +280,11 @@ MLOADX2:
     32 - C => D
     $ => A                  :SHL
     A + B => A
-    E - 32 + C => E                                    ;new offset
+    E                       :MLOAD(tmpVarE)
+    E + C => E                                    ;new offset
 
 MLOADend:
-    $ => B                      :MLOAD(auxB)
-    $ => C                      :MLOAD(auxC)
-    $ => D                      :MLOAD(auxD)
+    $ => B                      :MLOAD(tmpVarB)
+    $ => C                      :MLOAD(tmpVarC)
+    $ => D                      :MLOAD(tmpVarD)
                                 :RETURN
-
-;copyInit:
-;    C - 1           :JMPC(copyEnd)
-;    C - 32          :JMPC(copyFinal)
-;    ${B%32} => D
-;    1024 + ${B/32} => SP
-;    $ => A          :MLOAD(SP)
-;    $ => C          :SHL
-;    1024 + ${B/32} + 1 => SP
-;    32 - D => D
-;    $ => A          :MLOAD(SP)
-;    $ => A          :SHR
-;    $ => CTX        :MLOAD(currentCTX)
-;    1024 + E => SP
-;    A + C           :MSTORE(SP)
-;    E + 1 => E
-;    $ => CTX        :MLOAD(originCTX)
-;    $ => C          :MLOAD(argsLengthCall)   ;length
-;    C - 32 => C
-;    C               :MSTORE(argsLengthCall)
-;    B + 32 => B
-;                    :JMP(copyInit)
-;
-;copyFinal:
-;    ${B%32} => D
-;    1024 + ${B/32} => SP
-;    $ => A          :MLOAD(SP)
-;    $ => A          :SHL
-;    1024 + ${B/32} + 1 => SP
-;    C - 32 + D => D
-;    D               :JMPC(copyXor)
-;    A => C
-;    $ => A          :MLOAD(SP)
-;    $ => A          :SHR
-;    $ => CTX        :MLOAD(currentCTX)
-;    1024 + E => SP
-;    A + C           :MSTORE(SP)
-;    E + 1 => E
-;                    :JMP(copyEnd)
-;
-;copyXor:
-;    $ => CTX        :MLOAD(currentCTX)
-;    1024 + E => SP
-;    A               :MSTORE(SP)
-;
-;copyEnd:
-;    $ => CTX        :MLOAD(currentCTX)
-;    $ => E          :MLOAD(txNData)
-;    $ => B          :MLOAD(memLength)
-;    B - E           :JMPC(saveMemLength)
-;                    :RETURN

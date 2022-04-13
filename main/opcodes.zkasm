@@ -670,7 +670,20 @@ saveMemLength:
     GAS + 3*B + ${B*B/512} => GAS
                     :JMP(readCode)
 
-;opMSTORE8:
+opMSTORE8:
+    SP - 1 => SP
+    $ => E          :MLOAD(SP--)                ;offset
+    $ => A          :MLOAD(SP)                  ;value
+    1 => C
+    32 - C => D
+    $ => A          :SHL
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
+    GAS - 3 => GAS
+    $ => B          :MLOAD(memLength)
+    B - E           :JMPC(saveMemLength)
+                    :JMP(readCode)
+
 opSLOAD:
     SP - 1 => SP
     $ => C          :MLOAD(SP) ;key
