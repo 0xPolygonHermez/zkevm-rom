@@ -6,11 +6,11 @@ start:
         ${getGlobalExitRoot()}              :MSTORE(globalExitRoot)
 
         32 => D
-        ${getOldStateRoot()}=> A            :HASHW(0)
+        ${getOldStateRoot()}=> A            :HASHK(0)
         A => SR 
 
         32 => D
-        ${getOldLocalExitRoot()}  => A      :HASHW(0)
+        ${getOldLocalExitRoot()}  => A      :HASHK(0)
                                             :MSTORE(oldLocalExitRoot)
 
         ${getNewLocalExitRoot()}            :MSTORE(newLocalExitRoot)
@@ -25,7 +25,7 @@ start:
 
         ${getNumBatch()}                    :MSTORE(numBatch)
 
-        ${getTimestamp()}                    :MSTORE(timestamp)
+        ${getTimestamp()}                   :MSTORE(timestamp)
 
         ${getTxsLen()}                      :MSTORE(txsListLength);
 
@@ -68,6 +68,10 @@ processTxsEnd:
 ;;;;;;;;
 ; Get new hashId
 ;;;;;;;
+
+        HASHPOS                         :MSTORE(oldHashPos)
+        0 => HASHPOS      
+
         ; We get a new hashId
         $ => E                          :MLOAD(lastHashIdUsed)
         E+1 => E                        :MSTORE(lastHashIdUsed)
@@ -84,7 +88,7 @@ appendTxs:
         32 => D
         ${getTxs(p,D)} => A     
         $${p = p + D}
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         C + D => C
                                         :JMP(appendTxs)
 
@@ -92,7 +96,7 @@ endAppendTxs:
         B - C => D
         ${getTxs(p,D)} => A     
         $${ p = p + D}
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         C + D => C
 
 ;;;;;;;;;
@@ -106,43 +110,46 @@ endAppendTxs:
 ;;;;;;;;;
         32 => D
         $ => A                          :MLOAD(globalExitRoot)
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         8 => D
         $ => A                          :MLOAD(timestamp)
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         20 => D
         $ => A                          :MLOAD(sequencerAddr)
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         8 => D
         $ => A                          :MLOAD(chainId)
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         $ => A                          :MLOAD(numBatch)
-        A                               :HASHW(E)
-                                        :HASHE(E)
+        A                               :HASHK(E)
+        HASHPOS                         :HASHKLEN(E)
         $ => A                          :MLOAD(batchHashData)
-        $                               :HASHR(E), ASSERT
+        $                               :HASHKDIGEST(E), ASSERT
+
+        $ => HASHPOS                    :MLOAD(oldHashPos)
+
 
 ;;;;;;;
 ; Check Global Hash
 ;;;;;;;
 
         32 => D
-        SR                                      :HASHW(0)
+        SR                                      :HASHK(0)
 
         32 => D
         $ => A                                  :MLOAD(newLocalExitRoot)
-        A                                       :HASHW(0)
+        A                                       :HASHK(0)
 
         32 => D
         $ => A                                  :MLOAD(batchHashData)
-        A                                       :HASHW(0)
+        A                                       :HASHK(0)
 
-                                                :HASHE(0)
+        HASHPOS                                 :HASHKLEN(0)
 
         $ => A                                  :MLOAD(globalHash)
-        $                                       :HASHR(0), ASSERT
+        $                                       :HASHKDIGEST(0), ASSERT
 
-        0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR                 ; Set all registers to 0
+        0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR        ; Set all registers to 0
 
 longLoop:
         STEP-0x10000+40  : JMPC(longLoop2)

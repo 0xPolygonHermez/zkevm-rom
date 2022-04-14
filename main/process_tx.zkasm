@@ -1,6 +1,8 @@
 
 processTx:
 
+        HASHPOS                         :MSTORE(oldHashPos)
+        $ => HASHPOS                    :MLOAD(sigDataSize)
         ; We get a new hashId
         $ => E                          :MLOAD(lastHashIdUsed)
         E+1 => E                        :MSTORE(lastHashIdUsed)
@@ -13,7 +15,7 @@ processTx:
         1024 => SP
  
         ; Check the signature
-        $ => A                          :HASHR(E)
+        $ => A                          :HASHKDIGEST(E)
         $ => B                          :MLOAD(txR)
         $ => C                          :MLOAD(txS)
         $ => D                          :MLOAD(txV)
@@ -192,9 +194,10 @@ endCheckChainId:
 
 
 terminateTX:
-
+        $ => HASHPOS                    :MLOAD(oldHashPos)
                                         :JMP(processTxEnd)
 
 invalidTx:
         $ => SR                         :MLOAD(initSR)
+
                                         :JMP(terminateTX)
