@@ -810,8 +810,17 @@ opJUMPI:
     E => PC
                             :JMP(readCode)
 
-;opPC:
-;opMSIZE:
+opPC:
+GAS - 2 => GAS
+PC                 :MSTORE(SP++)
+                   :JMP(readCode)
+
+opMSIZE:
+GAS - 2 => GAS
+$ => A             :MLOAD(memLength)
+A                  :MSTORE(SP++)
+                   :JMP(readCode)
+
 opGAS:
     GAS - 2 => GAS
     GAS             :MSTORE(SP++)
@@ -1351,11 +1360,96 @@ opSWAP16:
     GAS-3 => GAS
                     :JMP(readCode)
 
-;opLOG0:
-;opLOG1:
-;opLOG2:
-;opLOG3:
-;opLOG4:
+; gas_cost = 375 + 375 * num_topics + 8 * data_size + mem_expansion_cost
+opLOG0:
+    SP - 1 => SP
+    $ => E              :MLOAD(SP--) ; offset
+    $ => C              :MLOAD(SP)   ; length
+    E + C                :MSTORE(lastMemLength)
+    0                   :MSTORE(numTopics)
+    GAS - 375 => GAS                 ; static gas
+    GAS - 8 * C => GAS               ; add gas depending on data bytes
+    $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
+    B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
+                        :JMP(opLOGLoop)
+
+opLOG1:
+    SP - 1 => SP
+    $ => E              :MLOAD(SP--) ; offset
+    $ => C              :MLOAD(SP)   ; length
+    E + C               :MSTORE(lastMemLength)
+    1                   :MSTORE(numTopics)
+    GAS - 375 => GAS                 ; static gas
+    GAS - 8 * C => GAS               ; add gas depending on data bytes
+    $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
+    B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
+                        :JMP(opLOGLoop)
+
+opLOG2:
+    SP - 1 => SP
+    $ => E              :MLOAD(SP--) ; offset
+    $ => C              :MLOAD(SP)   ; length
+    E + C               :MSTORE(lastMemLength)
+    2                   :MSTORE(numTopics)
+    GAS - 375 => GAS                 ; static gas
+    GAS - 8 * C => GAS               ; add gas depending on data bytes
+    $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
+    B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
+                        :JMP(opLOGLoop)
+
+opLOG3:
+    SP - 1 => SP
+    $ => E              :MLOAD(SP--) ; offset
+    $ => C              :MLOAD(SP)   ; length
+    E + C               :MSTORE(lastMemLength)
+    3                   :MSTORE(numTopics)
+    GAS - 375 => GAS                 ; static gas
+    GAS - 8 * C => GAS               ; add gas depending on data bytes
+    $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
+    B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
+                        :JMP(opLOGLoop)
+
+opLOG4:
+    SP - 1 => SP
+    $ => E              :MLOAD(SP--) ; offset
+    $ => C              :MLOAD(SP)   ; length
+    E + C               :MSTORE(lastMemLength)
+    4                   :MSTORE(numTopics)
+    GAS - 375 => GAS                 ; static gas
+    GAS - 8 * C => GAS               ; add gas depending on data bytes
+    $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
+    B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
+                        :JMP(opLOGLoop)
+
+opLOGLoop:
+    C - 1           :JMPC(opSaveTopicsInit)
+    C - 32          :JMPC(opLOGFinal)
+                    :CALL(MLOAD32)
+    ${storeLog(B, 0, A)} ; storeLog(indexLog, isTopic, bytesToStore)
+    C - 32 => C
+                    :JMP(opLOGLoop)
+
+opLOGFinal:
+                    :CALL(MLOADX)
+    ${storeLog(B, 0, A)}
+
+opSaveTopicsInit:
+    $ => A          :MLOAD(numTopics)
+
+opSaveTopicsLoop:
+    A - 1           :JMPC(opLOGend)
+    SP - 1 => SP
+    GAS - 375 => GAS
+    $ => C          :MLOAD(SP)   ; topicX
+    ${storeLog(B, 1, C)}     ; storeLog(indexLog, isTopic, bytesToStore)
+    A - 1 =>  A
+                    :JMP(opSaveTopicsLoop)
+
+opLOGend:
+    $ => E          :MLOAD(lastMemLength)
+    $ => B          :MLOAD(memLength)
+    B - E           :JMPC(saveMemLength)
+                    :JMP(readCode)
 
 ;opCREATE:
 
