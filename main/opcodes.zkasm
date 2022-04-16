@@ -48,7 +48,6 @@ opSUB:
     GAS-3 => GAS
                     :JMP(readCode)
 
-opSDIV: ; //TODO: implement SDiv
 opDIV:
     SP - 1 => SP
     $ => E          :MLOAD(SP--)
@@ -61,26 +60,35 @@ opDIV:
     GAS-5 => GAS
                     :JMP(readCode)
 
-; // TODO: ca2 if negative, div, toCa2 if different signs
-; opSDIV:
-;     SP - 1 => SP
-;     $ => A          :MLOAD(SP--)
-;     zkPC+1 => RR
-;                     :JMP(ca2)
-;     A => B
-;     $ => A          :MLOAD(SP)
-;     zkPC+1 => RR
-;                     :JMP(ca2)
-;     B => E
-;     ${E%A} => C
-;     ${E/A} => B
-;     0 => D
-;     E               :ARITH
-;     B               :MSTORE(SP++)
-;    GAS-5 => GAS
-;                    :JMP(readCode)
+opSDIV:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--)
+                    :CALL(abs)
+    A => E
+    B => C
+    $ => A          :MLOAD(SP)
+                    :CALL(abs)
 
-opSMOD: ; //TODO: implement SMOD
+    ${bitwise_xor(bitwise_xor(C, B), 1)} - 1 :JMPC(opSDIVNeg)  ;0 negative, 1 positive
+    ${E%A} => C
+    ${E/A} => B
+    0 => D
+    E               :ARITH
+    
+    B               :MSTORE(SP++)
+    GAS-5 => GAS
+                   :JMP(readCode)
+opSDIVNeg:
+    ${E%A} => C
+    ${E/A} => B
+    0 => D
+    E              :ARITH
+    B => A         
+                   :CALL(ca2)
+    A              :MSTORE(SP++)
+    GAS-5 => GAS
+                   :JMP(readCode)
+
 opMOD:
     SP - 1 => SP
     $ => E          :MLOAD(SP--)
@@ -93,16 +101,34 @@ opMOD:
     GAS-5 => GAS
                     :JMP(readCode)
 
-;opSMOD:
-;    $ => E          :MLOAD(0)
-;    $ => A          :MLOAD(1)
-;    ${E%A} => C
-;    ${E/A} => B
-;    0 => D
-;    E               :ARITH
-;    C               :MSTORE(0)
-;    GAS-5 => GAS
+opSMOD:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--)
+                    :CALL(abs)
+    A => E
+    B => C
+    $ => A          :MLOAD(SP)
+                    :CALL(abs)
 
+    ${bitwise_xor(C, 1)} - 1 :JMPC(opSMODNeg)  ; 0 negative, 1 positive
+
+    ${E%A} => C
+    ${E/A} => B
+    0 => D
+    E               :ARITH
+    C               :MSTORE(SP++)
+    GAS-5 => GAS
+                    :JMP(readCode)
+opSMODNeg:
+    ${E%A} => C
+    ${E/A} => B
+    0 => D
+    E               :ARITH
+    C => A         
+                    :CALL(ca2)
+    A               :MSTORE(SP++)
+    GAS-5 => GAS
+                    :JMP(readCode)
 opADDMOD:
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
