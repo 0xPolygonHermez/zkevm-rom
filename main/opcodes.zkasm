@@ -590,7 +590,23 @@ opEXTCODEHASHend:
     A               :MSTORE(SP++)
                     :JMP(readCode)
 
-;opBLOCKHASH:
+opBLOCKHASH:
+    SP - 1 => SP
+    $ => A          :MLOAD(SP)
+    $ => E          :MLOAD(lastHashIdUsed)
+    E+1 => E        :MSTORE(lastHashIdUsed)
+    32 => D
+    A               :HASHW(E)
+    0               :HASHW(E) ; Storage position of the batch hash
+                    :HASHE(E)
+    $ => C          :HASHR(E)
+    $ => A          :MLOAD(systemAddr)
+    3 => B
+    $ => E          :SLOAD
+    E               :MSTORE(SP++)
+    GAS-20 => GAS
+                    :JMP(readCode)
+
 opCOINBASE:
     $ => A          :MLOAD(sequencerAddr)
     A               :MSTORE(SP++)
