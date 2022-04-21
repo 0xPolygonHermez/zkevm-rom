@@ -1687,5 +1687,56 @@ opDELEGATECALLend:
 opREVERT:
                 :JMP(invalidTx)
 
-;opINVALID:
-;opSELFDESTRUCT":
+; // TODO: handle if depth is over 0
+opSELFDESTRUCT:
+    24000               :MSTORE(gasRefund)
+    GAS - 5000 => GAS
+
+    ; clean bytecode
+    $ => A              :MLOAD(txDestAddr)
+    2 => B
+    0 => C
+    0 => D
+    $ => SR             :SSTORE
+
+    ; get contract balance
+    0 => B,C
+    $ => E              :SLOAD
+
+    ; set contract balance to 0
+    $ => SR             :SSTORE
+    E => D              ; contract balance in D
+
+    ; read receiver
+    SP - 1 => SP
+    $ => A              :MLOAD(SP)
+
+    ; gas: check receiver is empty
+    A => E
+                        :CALL(ISEMPTY)
+    GAS - 25000 * E => GAS
+
+    ; gas: check touched address
+    ${touchedAddress(A,CTX)} => E
+    GAS - 2600 * E => GAS
+
+    ; read previous balance receiver
+    0 => B,C
+    $ => E              :SLOAD
+
+    ; compute new receiver balance
+    D => A
+    E => C
+    1 => B
+    0 => D
+    ${A+C} => D         :ARITH
+
+    ; transfer balance to receiver
+    $ => A                  :MLOAD(SP)
+    0 => B,C
+    $ => SR                 :SSTORE
+
+                            :JMP(endCode)
+
+opINVALID:
+    :JMP(endCode)
