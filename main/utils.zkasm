@@ -288,3 +288,43 @@ MLOADend:
     $ => C                      :MLOAD(tmpVarC)
     $ => D                      :MLOAD(tmpVarD)
                                 :RETURN
+
+; @info check account is empty ( balance == nonce == code == 0x )
+; @in E => address
+; @out E => isEmpty
+
+ISEMPTY:
+    A                           :MSTORE(tmpVarA)
+    B                           :MSTORE(tmpVarB)
+    C                           :MSTORE(tmpVarC)
+    D                           :MSTORE(tmpVarD)
+    ; read balance
+    E => A
+    0 => B,C
+    $ => D                      :SLOAD
+    ${comp_eq(D, 0)} - 1        :JMPC(ISEMPTYSet0)
+
+    ; read nonce
+    1 => B
+    $ => D                      :SLOAD
+    ${comp_eq(D, 0)} - 1        :JMPC(ISEMPTYSet0)
+
+    ; read bytecode
+    2 => B
+    $ => D                      :SLOAD
+    ${comp_eq(D, 0)} - 1        :JMPC(ISEMPTYSet0)
+
+ISEMPTYSet1:
+    1 => E
+                                :JMP(ISEMPTYEnd)
+
+ISEMPTYSet0:
+    0 => E
+                                :JMP(ISEMPTYEnd)
+
+ISEMPTYEnd:
+    $ => A                      :MLOAD(tmpVarA)
+    $ => B                      :MLOAD(tmpVarB)
+    $ => C                      :MLOAD(tmpVarC)
+    $ => D                      :MLOAD(tmpVarD)
+                                :RETURN
