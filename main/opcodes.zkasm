@@ -1,6 +1,15 @@
 INCLUDE "utils.zkasm"
 
 opSTOP:
+    $ => B          :MLOAD(originCTX)       ;last ctx
+    B - 1           :JMPC(opSTOPend)
+    B => CTX
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    1               :MSTORE(SP++)
+                    :JMP(readCode)
+
+opSTOPend:
                     :JMP(endCode)
 
 opADD:
@@ -712,6 +721,8 @@ opSLOAD:
                     :JMP(readCode)
 
 opSSTORE:
+    $ => A          :MLOAD(staticCall)
+    0 - A           :JMPC(invalidStaticTx)
     SP - 1 => SP
     $ => C          :MLOAD(SP--) ;key
     $ => D          :MLOAD(SP) ; new value
@@ -1378,10 +1389,12 @@ opSWAP16:
 
 ; gas_cost = 375 + 375 * num_topics + 8 * data_size + mem_expansion_cost
 opLOG0:
+    $ => A              :MLOAD(staticCall)
+    0 - A               :JMPC(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
-    E + C                :MSTORE(lastMemLength)
+    E + C               :MSTORE(lastMemLength)
     0                   :MSTORE(numTopics)
     GAS - 375 => GAS                 ; static gas
     GAS - 8 * C => GAS               ; add gas depending on data bytes
@@ -1390,6 +1403,8 @@ opLOG0:
                         :JMP(opLOGLoop)
 
 opLOG1:
+    $ => A              :MLOAD(staticCall)
+    0 - A               :JMPC(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
@@ -1402,6 +1417,8 @@ opLOG1:
                         :JMP(opLOGLoop)
 
 opLOG2:
+    $ => A              :MLOAD(staticCall)
+    0 - A               :JMPC(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
@@ -1414,6 +1431,8 @@ opLOG2:
                         :JMP(opLOGLoop)
 
 opLOG3:
+    $ => A              :MLOAD(staticCall)
+    0 - A               :JMPC(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
@@ -1426,6 +1445,8 @@ opLOG3:
                         :JMP(opLOGLoop)
 
 opLOG4:
+    $ => A              :MLOAD(staticCall)
+    0 - A               :JMPC(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
@@ -1468,6 +1489,8 @@ opLOGend:
                     :JMP(readCode)
 
 ;opCREATE:
+;$ => A             :MLOAD(staticCall)
+;0 - A              :JMPC(invalidStaticTx)
 
 opCALL:
     SP - 1 => SP
@@ -1478,6 +1501,11 @@ opCALL:
     A               :MSTORE(addrCall)
     $ => A          :MLOAD(SP--)
     A               :MSTORE(valueCall)
+    $ => B          :MLOAD(staticCall)
+    B - 1           :JMPC(opCALL2)
+    0 - A           :JMPC(invalidStaticTx)
+
+opCALL2:
     $ => A          :MLOAD(SP--)
     A               :MSTORE(argsOffsetCall)
     $ => A          :MLOAD(SP--)
@@ -1508,7 +1536,7 @@ opCALL:
     GAS-100-D*2500 => GAS
     $ => A          :MLOAD(valueCall)
     A               :MSTORE(txValue)
-    A - 1           :JMPC(opCALLend)
+    0 - ${comp_eq(0, A)} :JMPC(opCALLend)
     GAS - 9000 => GAS
     ; if is_empty(target_addr) (forcing a new account to be created)
     ; GAS - 25000 => GAS
@@ -1682,13 +1710,72 @@ opDELEGATECALLend:
 ;    B - X           :JMPC(saveMemLength)
                     :JMP(txType)
 ;opCREATE2:
-;opSTATICCALL:
+;$ => A             :MLOAD(staticCall)
+;0 - A              :JMPC(invalidStaticTx)
+
+opSTATICCALL:
+    SP - 1 => SP
+    CTX             :MSTORE(originAuxCTX)
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(gasCall)
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(addrCall)
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(argsOffsetCall)
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(argsLengthCall)
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(retOffset)
+    $ => A          :MLOAD(SP)
+    A               :MSTORE(retLength)
+    $ => B          :MLOAD(txDestAddr)
+    $ => D          :MLOAD(txSrcOriginAddr)
+    SP              :MSTORE(lastSP)
+    PC              :MSTORE(lastPC)
+    ;change new CTX
+    $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
+    A+1 => CTX      :MSTORE(lastCtxUsed)
+    $ => A          :MLOAD(originAuxCTX)
+    A               :MSTORE(originCTX)
+    0               :MSTORE(txValue)
+    1               :MSTORE(staticCall)
+    B               :MSTORE(txSrcAddr)
+    D               :MSTORE(txSrcOriginAddr)
+    ${copyTouchedAddress(A,CTX)}
+    $ => A          :MLOAD(gasCall)
+    A => GAS
+    $ => A          :MLOAD(addrCall)
+    A               :MSTORE(txDestAddr)
+    A               :MSTORE(storageAddr)
+    ${touchedAddress(A,CTX)} => D
+    ;gas_cost = base_gas + gas_sent_with_call
+    GAS-100-D*2500 => GAS
+    GAS             :MSTORE(remainingGas)
+    ; TODO: check gas_sent_with_call
+    $ => A          :MLOAD(argsLengthCall)
+    A               :MSTORE(txNData)
+                    :CALL(copySP)
+; TODO: memory?
+;    $ => B          :MLOAD(memLength)
+;    B - X           :JMPC(saveMemLength)
+                    :JMP(txType)
 
 opREVERT:
-                :JMP(invalidTx)
+    $ => B          :MLOAD(originCTX)       ;last ctx
+    B - 1           :JMPC(opREVERTend)
+    B => CTX
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    0               :MSTORE(SP++)
+                    :JMP(readCode)
+
+opREVERTend:
+                    :JMP(invalidTx)
 
 ; // TODO: handle if depth is over 0
 opSELFDESTRUCT:
+    $ => A              :MLOAD(staticCall)
+    0 - A               :JMPC(invalidStaticTx)
     24000               :MSTORE(gasRefund)
     GAS - 5000 => GAS
 
@@ -1740,3 +1827,22 @@ opSELFDESTRUCT:
 
 opINVALID:
     :JMP(endCode)
+
+invalidStaticTx:
+    GAS - ${GAS/64} => A
+    $ => B          :MLOAD(gasCall)
+    ${comp_lt(A,B)} => D
+    0 - D           :JMPC(gasSentWithCallA)
+    GAS - B => GAS
+                    :JMP(invalidStaticTxEnd)
+
+gasSentWithCallA:
+    GAS - A => GAS
+
+invalidStaticTxEnd:
+    ;GAS + 3 => GAS
+    $ => CTX        :MLOAD(originCTX)       ;last ctx
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    1               :MSTORE(SP++)
+                    :JMP(readCode)

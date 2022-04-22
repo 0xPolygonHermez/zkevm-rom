@@ -19,11 +19,6 @@ processTx:
         A                               :MSTORE(txSrcAddr)
         A                               :MSTORE(txSrcOriginAddr)
 
-;;;;;;;;;
-;; Store init state
-;;;;;;;;;
-
-        SR                              :MSTORE(initSR)
 
 ;;;;;;;;
 ; Check chainID --> //TODO: chainID is defined as 64 bits which does not fit in the Field. If we consider just 63 bits it could be done directly (A - B), saving the EQ comaprison
@@ -62,8 +57,13 @@ endCheckChainId:
         E => A
         1 => B                                                                                  ; Constant for nonce
         0 => C
-        $   => SR                       :SSTORE                                                 ; Store the nonce plus one
+        $ => SR                         :SSTORE                                                 ; Store the nonce plus one
 
+;;;;;;;;;
+;; Store init state
+;;;;;;;;;
+
+        SR                              :MSTORE(initSR)
 
 ;;;;;;;;
 ; Buy Gas
@@ -347,5 +347,11 @@ terminateTX:
                                         :JMP(processTxEnd)
 
 invalidTx:
+        $ => A                          :MLOAD(originCTX)
+        0 - A                           :JMPC(invalidTxOrigin)
         $ => SR                         :MLOAD(initSR)
                                         :JMP(terminateTX)
+
+invalidTxOrigin:
+        A => CTX
+                                        :JMP(invalidTx)
