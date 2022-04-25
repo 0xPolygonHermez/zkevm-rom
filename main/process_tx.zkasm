@@ -155,14 +155,15 @@ checkTxType:
         D + 1 => D
                                         :JMP(checkTxType)
 
-
-
 getContractAddress:
         ; We get a new hashId
         $ => E                          :MLOAD(lastHashIdUsed)
         E+1 => E                        :MSTORE(lastHashIdUsed)
-        $ => A                          :MLOAD(txSrcOriginAddr)
+        $ => A                          :MLOAD(create2)
+        0 - A                           :JMPC(create2)
+        $ => A                          :MLOAD(txSrcAddr)
         $ => B                          :MLOAD(txNonce)
+        B - 0x80                        :JMPC(nonce1byte)
         $ => C                          :MLOAD(lengthNonce)
         1 => D
         0xc0 + 22 + C                   :HASHW(E) ; 1 byte length address, 20 bytes address, 1 bytes length nonce = 22 bytes
@@ -171,11 +172,72 @@ getContractAddress:
         A                               :HASHW(E)
         1 => D
         0x80 + C                        :HASHW(E)
-        C - 1                           :JMPC(endContractAddress)
         C => D
         B                               :HASHW(E)
+                                        :JMP(endContractAddress)
+
+nonce1byte:
+        1 => D
+        0xc0 + 22                       :HASHW(E) ; 1 byte length address, 20 bytes address, 1 bytes length nonce = 22 bytes
+        0x94                            :HASHW(E)
+        20 => D
+        A                               :HASHW(E)
+        1 => D
+        B - 1                           :JMPC(nonce0)
+        B                               :HASHW(E)
+                                        :JMP(endContractAddress)
+
+nonce0:
+        0x80                            :HASHW(E)
 
 endContractAddress:
+                                        :HASHE(E)
+        $ => A                          :HASHR(E)
+        12 => D
+        $ => A                          :SHL ; // TODO: Could be replaced by a bitwise and: ${bitwise_and(A, 2**160 - 1)
+        $ => A                          :SHR
+        A                               :MSTORE(createContractAddress)
+                                        :JMP(deploy)
+
+create2:
+        $ => C                          :MLOAD(txNData)
+        ${(C+31)/32} => A
+        GAS - 6*A => GAS
+        1024 => SP
+                                        :JMP(loopCreate2)
+
+loopCreate2:
+        C - 1                           :JMPC(create2end)
+        C - 32                          :JMPC(endloopCreate2)
+        $ => A                          :MLOAD(SP++)
+        32 => D
+        A                               :HASHW(E)
+        C - 32 => C
+                                        :JMP(loopCreate2)
+
+endloopCreate2:
+        $ => A                          :MLOAD(SP)
+        32 - C => D
+        $ => A                          :SHR
+        C => D
+        A                               :HASHW(E)
+
+create2end:
+                                        :HASHE(E)
+        $ => C                          :HASHR(E)
+        $ => E                          :MLOAD(lastHashIdUsed)
+        E+1 => E                        :MSTORE(lastHashIdUsed)
+        ;keccak256( 0xff ++ address ++ salt ++ keccak256(init_code))[12:]
+        1 => D
+        0xff                            :HASHW(E)
+        20 => D
+        $ => A                          :MLOAD(txSrcAddr)
+        A                               :HASHW(E)
+        $ => B                          :MLOAD(salt)
+        32 => D
+        B                               :HASHW(E)
+        32 => D
+        C                               :HASHW(E)
                                         :HASHE(E)
         $ => A                          :HASHR(E)
         12 => D
@@ -239,6 +301,8 @@ endDeploy:
         0 => C
         1 => D
         $ => SR                         :SSTORE
+
+        ;TODO: deploy with value
 
         ${getHashBytecode(A)} => D
         2 => B
