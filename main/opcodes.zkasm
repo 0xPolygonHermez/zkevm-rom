@@ -263,8 +263,47 @@ opSHL:  ; //TODO: SHL byte by byte working fine. Not working when shifting bits.
 
 ;opSAR:
 
-;opSHA3:
-;   GAS - 30 - 6*data_size_words - mem_expansion_cost
+
+opSHA3:
+    SP - 1 => SP
+    $ => E          :MLOAD(SP--) ; offset
+    $ => C          :MLOAD(SP) ; length
+    E + C           :MSTORE(lastMemLength)
+    ; gas
+    GAS - 30 => GAS ; gas static = 30
+    GAS - ${6*((C+31)/32)} => GAS ; dynamic_gas = dynamic_gas = 6 * minimum_word_size + memory_expansion_cost
+    ; new hash id
+    $ => B           :MLOAD(lastHashIdUsed)
+    B + 1 => B       :MSTORE(lastHashIdUsed)
+    32 => D
+
+opSHA3Loop:
+    C - 1           :JMPC(opSHA3End)
+    C - 32          :JMPC(opSHA3Final)
+                    :CALL(MLOAD32)
+    E => B
+    $ => E          :MLOAD(lastHashIdUsed)
+    A               :HASHW(E)
+    B => E
+    C - 32 => C
+                    :JMP(opSHA3Loop)
+opSHA3Final:
+                    :CALL(MLOADX)
+    32 - C => D
+    $ => A          :SHR
+    $ => E          :MLOAD(lastHashIdUsed)
+    C => D
+    A               :HASHW(E)
+
+opSHA3End:
+    $ => E          :MLOAD(lastHashIdUsed)
+                    :HASHE(E)
+    $ => A          :HASHR(E)
+    A               :MSTORE(SP++)
+    $ => E          :MLOAD(lastMemLength)
+    $ => B          :MLOAD(memLength)
+    B - E           :JMPC(saveMemLength)
+                    :JMP(readCode)
 
 opADDRESS:
     $ => A          :MLOAD(txIsCreateContract)
