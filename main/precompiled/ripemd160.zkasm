@@ -1,1 +1,29 @@
 RIPEMD160:
+    ; read data stored in SP + 1024
+    $ => B                              :MLOAD(txNData) ; bytes to read
+    GAS - 600 => GAS ; gas static = 600
+    GAS - ${120*((B+31)/32)} => GAS ; dynamic_gas = 120 * data_word_size, data_word_size = (data_size + 31) / 32
+    1024 => SP
+
+RIPEMD160LoopData: ; set array of bytes in RIPEMD160
+    B - 1                               :JMPC(RIPEMD160DigestReturn)
+    B - 32                              :JMPC(RIPEMD160EndLoopData)
+    $ => A                              :MLOAD(SP++)
+    ${precompiled_ripemd160_add(A, 32)}
+    B - 32 => B
+                                        :JMP(RIPEMD160LoopData)
+RIPEMD160EndLoopData:
+    $ => A                              :MLOAD(SP)
+    32 - B => D
+    $ => A                              :SHR
+    ${precompiled_ripemd160_add(A, B)}
+
+RIPEMD160DigestReturn: ; digest hash and prepare return
+    ${precompiled_ripemd160_digest()}
+    ${precompiled_ripemd160_read()} => A
+    $ => CTX                            :MLOAD(originCTX)
+    $ => E                              :MLOAD(retOffset)
+    ; $ => C                              :MLOAD(retLength) ; always 32
+    A                                   :MSTORE(bytesToStore)
+                                        :CALL(MSTORE32)
+                                        :JMP(preEnd)
