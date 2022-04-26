@@ -1522,6 +1522,8 @@ opCREATE:
     A                   :MSTORE(lengthNonce)
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txNData)
+    $ => A              :MLOAD(valueCall)
+    A                   :MSTORE(txValue)
 ; TODO: memory?
 ;    $ => B          :MLOAD(memLength)
 ;    B - X           :JMPC(saveMemLength)
@@ -1723,6 +1725,38 @@ opRETURNcreate:
     0 => C
     $ => SR                         :SSTORE
 
+    $ => B                          :MLOAD(txValue)
+    0 - ${comp_eq(B,0)}             :JMPC(opRETURNcreateEnd)
+
+; Decrement original balance
+    $ => A                          :MLOAD(txSrcAddr)
+    0 => B,C
+    $ => E                          :SLOAD                                                  ; Original Balance in E
+    $ => C                          :MLOAD(txValue)                                         ; A = E - C
+    ${E-C} => A
+    31 => D
+    $ => B                          :SHR
+    0x7F - B                        :JMPC(invalidTx)                                        ; If A is a negative value --> invalidTx
+    1 => B
+    0 => D
+    E                               :ARITH                                                  ; originalBalance -value in A
+    A => D                                                                                  ; originalBalance -value in D
+    $ => A                          :MLOAD(txSrcAddr)
+    0 => B,C
+    $ => SR                         :SSTORE
+ ; Increment destination balance
+    $ => A                          :MLOAD(createContractAddress)
+    0 => B,C
+    $ => C                          :SLOAD                                                  ; Original Balance in E
+    $ => A                          :MLOAD(txValue)                                         ; E = A + C
+    1 => B
+    0 => D
+    ${A+C} => D                     :ARITH                                                  ; originalBalance + value in D
+    $ => A                          :MLOAD(createContractAddress)
+    0 => B,C
+    $ => SR                         :SSTORE
+
+opRETURNcreateEnd:
     $ => B          :MLOAD(originCTX)       ;last ctx
     B => CTX
     $ => SP         :MLOAD(lastSP)
@@ -1817,6 +1851,8 @@ opCREATE2:
     A                   :MSTORE(lengthNonce)
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txNData)
+    $ => A              :MLOAD(valueCall)
+    A                   :MSTORE(txValue)
 ; TODO: memory?
 ;    $ => B          :MLOAD(memLength)
 ;    B - X           :JMPC(saveMemLength)
