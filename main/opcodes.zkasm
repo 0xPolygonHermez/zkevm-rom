@@ -167,8 +167,23 @@ opEXP:
     GAS-10-50*A => GAS
                     :JMP(readCode)
 
-;opSIGNEXTEND:
-;   GAS-5 => GAS
+opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/vm/src/evm/opcodes/functions.ts#L193
+   SP - 1 => SP
+   $ => A          :MLOAD(SP--)
+   $ => B          :MLOAD(SP)
+   ${comp_lt(A, 31)} - 1  :JMPC(opSIGNEXTENDEnd) 
+   ${exp(2, A * 8 + 7)} => C ; signBit
+   ${comp_gt(bitwise_and(C, B) , 0)} - 1 :JMPC(opSIGNEXTENDPositive) ; 0 if negative, -1 if positive
+   ${bitwise_or(B, bitwise_not(C - 1))} => B
+                  :JMP(opSIGNEXTENDEnd)
+
+opSIGNEXTENDPositive:
+    ${bitwise_and(B, C - 1)} => B
+
+opSIGNEXTENDEnd:
+    B               :MSTORE(SP++)
+    GAS-5 => GAS
+                    :JMP(readCode)
 
 set0:
     0               :MSTORE(SP++)
@@ -201,7 +216,7 @@ opSGT:
     $ => B              :MLOAD(SP)
     GAS-3 => GAS
     ${B - A} => A
-   ${comp_gt(A, 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)}   :MSTORE(SP++)
+    ${comp_gt(A, 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)}   :MSTORE(SP++)
                         :JMP(readCode)
 opGT:
     SP - 1 => SP
@@ -210,24 +225,6 @@ opGT:
     GAS-3 => GAS
     ${comp_gt(A, B)}    :MSTORE(SP++)
                         :JMP(readCode)
-
-; opSLT:
-;    SP - 1 => SP
-;    $ => A          :MLOAD(SP--)
-;    31 => D
-;    $ => B          :SHR
-;    B - 0x7f        :JMPC(opSLT1) // TODO: Check ca2 conversion by substracting 2**256 instead of (XOR + 1)
-;    A - 2**256 => A               // Does not work, CONST > Field Element
-
-; TODO: missing complement2 conversion
-;opSGT:
-;    SP - 1 => SP
-;    $ => A          :MLOAD(SP--)
-;    31 => D
-;    $ => B          :SHR
-;    B - 0x7f        :JMPC(opSGT1)
-;    A - 2**256 => A
-
 opEQ:
     SP - 1 => SP
     $ => A              :MLOAD(SP--)
@@ -288,6 +285,9 @@ opSHR:  ; //TODO: SHR byte by byte working fine. Not working when shifting bits.
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
     ${D/8} => D
+    ${comp_gt(D, 32)} => B
+    ${B * 32 + bitwise_xor(B, 1) * D} => D
+
     $ => A          :MLOAD(SP)
     $ => A          :SHR
     A               :MSTORE(SP++)
@@ -298,13 +298,31 @@ opSHL:  ; //TODO: SHL byte by byte working fine. Not working when shifting bits.
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
     ${D/8} => D
+    ${comp_gt(D, 32)} => B
+    ${B * 32 + bitwise_xor(B, 1) * D} => D
+
     $ => A          :MLOAD(SP)
     $ => A          :SHL
     A               :MSTORE(SP++)
     GAS-3 => GAS
                     :JMP(readCode)
 
-;opSAR:
+; https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/vm/src/evm/opcodes/functions.ts#L342
+opSAR:
+    SP - 1 => SP
+    $ => D          :MLOAD(SP--)
+    ${D/8} => D
+    ${comp_gt(D, 32)} => B
+    ${B * 32 + bitwise_xor(B, 1) * D} => D
+    
+    $ => A          :MLOAD(SP)
+                    :CALL(abs)
+                    ; if more than 32 set to 32
+    $ => A          :SHR
+    ${bitwise_xor(B, 1)} - 1 :JMPC(opSARNeg)  ; 0 negative, 1 positive
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
 
 
 opSHA3:
@@ -347,6 +365,14 @@ opSHA3End:
     $ => B          :MLOAD(memLength)
     B - E           :JMPC(saveMemLength)
                     :JMP(readCode)
+opSARNeg:
+    ${comp_gt(1, A) + A} => A
+                    :CALL(ca2)
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
+;opKECCAK256:
+;   GAS - 30 - 6*data_size_words - mem_expansion_cost
 
 opADDRESS:
     $ => A          :MLOAD(txIsCreateContract)
