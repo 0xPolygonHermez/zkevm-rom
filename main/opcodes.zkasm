@@ -4,6 +4,8 @@ opSTOP:
     $ => B          :MLOAD(originCTX)       ;last ctx
     B - 1           :JMPC(opSTOPend)
     B => CTX
+    $ => B          :MLOAD(gasCTX)
+    GAS + B => GAS
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     1               :MSTORE(SP++)
@@ -1497,6 +1499,8 @@ opCALL:
     CTX             :MSTORE(originAuxCTX)
     $ => A          :MLOAD(SP--)
     A               :MSTORE(gasCall)
+    GAS - A         :MSTORE(gasCTX)
+    A => GAS
     $ => A          :MLOAD(SP--)
     A               :MSTORE(addrCall)
     $ => A          :MLOAD(SP--)
@@ -1526,8 +1530,6 @@ opCALL2:
     B               :MSTORE(txSrcAddr)
     D               :MSTORE(txSrcOriginAddr)
     ${copyTouchedAddress(A,CTX)}
-    $ => A          :MLOAD(gasCall)
-    A => GAS
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
     A               :MSTORE(storageAddr)
@@ -1556,6 +1558,8 @@ opCALLCODE:
     CTX             :MSTORE(originAuxCTX)
     $ => A          :MLOAD(SP--)
     A               :MSTORE(gasCall)
+    GAS - A         :MSTORE(gasCTX)
+    A => GAS
     $ => A          :MLOAD(SP--)
     A               :MSTORE(addrCall)
     $ => A          :MLOAD(SP--)
@@ -1583,8 +1587,6 @@ opCALLCODE:
     E               :MSTORE(storageAddr)
     D               :MSTORE(txSrcOriginAddr)
     ${copyTouchedAddress(A,CTX)}
-    $ => A          :MLOAD(gasCall)
-    A => GAS
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
     ${touchedAddress(A,CTX)} => D
@@ -1616,6 +1618,8 @@ opRETURN:
     B - 1           :JMPC(opRETURNend2)
     CTX             :MSTORE(currentCTX)
     $ => CTX        :MLOAD(originCTX)
+    $ => B          :MLOAD(gasCTX)
+    B + GAS => GAS
     $ => B          :MLOAD(retOffset)
     $ => CTX        :MLOAD(currentCTX)
 
@@ -1667,6 +1671,8 @@ opDELEGATECALL:
     CTX             :MSTORE(originAuxCTX)
     $ => A          :MLOAD(SP--)
     A               :MSTORE(gasCall)
+    GAS - A         :MSTORE(gasCTX)
+    A => GAS
     $ => A          :MLOAD(SP--)
     A               :MSTORE(addrCall)
     $ => A          :MLOAD(SP--)
@@ -1693,8 +1699,6 @@ opDELEGATECALL:
     D               :MSTORE(txSrcOriginAddr)
     ${copyTouchedAddress(A,CTX)}
     B               :MSTORE(txValue)
-    $ => A          :MLOAD(gasCall)
-    A => GAS
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
     ${touchedAddress(A,CTX)} => D
@@ -1718,6 +1722,8 @@ opSTATICCALL:
     CTX             :MSTORE(originAuxCTX)
     $ => A          :MLOAD(SP--)
     A               :MSTORE(gasCall)
+    GAS - A         :MSTORE(gasCTX)
+    A => GAS
     $ => A          :MLOAD(SP--)
     A               :MSTORE(addrCall)
     $ => A          :MLOAD(SP--)
@@ -1742,8 +1748,6 @@ opSTATICCALL:
     B               :MSTORE(txSrcAddr)
     D               :MSTORE(txSrcOriginAddr)
     ${copyTouchedAddress(A,CTX)}
-    $ => A          :MLOAD(gasCall)
-    A => GAS
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
     A               :MSTORE(storageAddr)
