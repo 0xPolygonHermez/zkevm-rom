@@ -331,3 +331,29 @@ ISEMPTYEnd:
     $ => C                      :MLOAD(tmpVarC)
     $ => D                      :MLOAD(tmpVarD)
                                 :RETURN
+
+gasSpendCallError:
+    ; save tmp vars
+    A                       :MSTORE(tmpVarA)
+    B                       :MSTORE(tmpVarB)
+    C                       :MSTORE(tmpVarC)
+    D                       :MSTORE(tmpVarD)
+    E                       :MSTORE(tmpVarE)
+
+    ; compute all_but_one_64th gas
+    GAS - ${GAS/64} => A
+    $ => B                  :MLOAD(gasCall)
+    ; gas_sent_with_call = min(requested_gas, all_but_one_64th)
+    ${comp_lt(A,B)} => D
+    0 - D                   :JMPC(gasSpendCallErrorEnd)
+    ; gas to substract
+    B => A
+
+gasSpendCallErrorEnd:
+    GAS - A => GAS
+    $ => A                  :MLOAD(tmpVarA)
+    $ => B                  :MLOAD(tmpVarB)
+    $ => C                  :MLOAD(tmpVarC)
+    $ => D                  :MLOAD(tmpVarD)
+    $ => E                  :MLOAD(tmpVarE)
+                            :RETURN
