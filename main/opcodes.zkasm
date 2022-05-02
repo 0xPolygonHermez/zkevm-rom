@@ -1575,8 +1575,6 @@ opCALL:
     CTX             :MSTORE(originAuxCTX)
     $ => A          :MLOAD(SP--)
     A               :MSTORE(gasCall)
-    GAS - A         :MSTORE(gasCTX)
-    A => GAS
     $ => A          :MLOAD(SP--)
     A               :MSTORE(addrCall)
     $ => A          :MLOAD(SP--)
@@ -1601,6 +1599,7 @@ opCALL2:
     ;change new CTX
     $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
     A+1 => CTX      :MSTORE(lastCtxUsed)
+    CTX             :MSTORE(currentCTX)
     $ => A          :MLOAD(originAuxCTX)
     A               :MSTORE(originCTX)
     B               :MSTORE(txSrcAddr)
@@ -1618,9 +1617,13 @@ opCALL2:
     GAS - 9000 => GAS
     ; if is_empty(target_addr) (forcing a new account to be created)
     ; GAS - 25000 => GAS
-    ; TODO: check gas_sent_with_call
 
 opCALLend:
+                    :CALL(gasSpendCallError)
+    $ => CTX        :MLOAD(originCTX)
+    GAS - A         :MSTORE(gasCTX)
+    $ => CTX        :MLOAD(currentCTX)
+    A => GAS
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txNData)
     $ => E          :MLOAD(argsOffsetCall) ;offset
@@ -1636,8 +1639,6 @@ opCALLCODE:
     CTX             :MSTORE(originAuxCTX)
     $ => A          :MLOAD(SP--)
     A               :MSTORE(gasCall)
-    GAS - A         :MSTORE(gasCTX)
-    A => GAS
     $ => A          :MLOAD(SP--)
     A               :MSTORE(addrCall)
     $ => A          :MLOAD(SP--)
@@ -1659,6 +1660,7 @@ opCALLCODE:
     ;change new CTX
     $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
     A+1 => CTX      :MSTORE(lastCtxUsed)
+    CTX             :MSTORE(currentCTX)
     $ => A          :MLOAD(originAuxCTX)
     A               :MSTORE(originCTX)
     B               :MSTORE(txSrcAddr)
@@ -1677,6 +1679,11 @@ opCALLCODE:
     ; TODO: check gas_sent_with_call
 
 opCALLCODEend:
+                    :CALL(gasSpendCallError)
+    $ => CTX        :MLOAD(originCTX)
+    GAS - A         :MSTORE(gasCTX)
+    $ => CTX        :MLOAD(currentCTX)
+    A => GAS
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txNData)
     $ => E          :MLOAD(argsOffsetCall) ;offset
@@ -1812,8 +1819,6 @@ opDELEGATECALL:
     CTX             :MSTORE(originAuxCTX)
     $ => A          :MLOAD(SP--)
     A               :MSTORE(gasCall)
-    GAS - A         :MSTORE(gasCTX)
-    A => GAS
     $ => A          :MLOAD(SP--)
     A               :MSTORE(addrCall)
     $ => A          :MLOAD(SP--)
@@ -1833,6 +1838,7 @@ opDELEGATECALL:
     ;change new CTX
     $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
     A+1 => CTX      :MSTORE(lastCtxUsed)
+    CTX             :MSTORE(currentCTX)
     $ => A          :MLOAD(originAuxCTX)
     A               :MSTORE(originCTX)
     C               :MSTORE(txSrcAddr)
@@ -1845,7 +1851,11 @@ opDELEGATECALL:
     ${touchedAddress(A,CTX)} => D
     ;gas_cost = base_gas + gas_sent_with_call
     GAS-100-D*2500 => GAS
-    ; TODO: check gas_sent_with_call
+                    :CALL(gasSpendCallError)
+    $ => CTX        :MLOAD(originCTX)
+    GAS - A         :MSTORE(gasCTX)
+    $ => CTX        :MLOAD(currentCTX)
+    A => GAS
 
 opDELEGATECALLend:
     $ => A          :MLOAD(argsLengthCall)
@@ -1906,8 +1916,6 @@ opSTATICCALL:
     CTX             :MSTORE(originAuxCTX)
     $ => A          :MLOAD(SP--)
     A               :MSTORE(gasCall)
-    GAS - A         :MSTORE(gasCTX)
-    A => GAS
     $ => A          :MLOAD(SP--)
     A               :MSTORE(addrCall)
     $ => A          :MLOAD(SP--)
@@ -1925,6 +1933,7 @@ opSTATICCALL:
     ;change new CTX
     $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
     A+1 => CTX      :MSTORE(lastCtxUsed)
+    CTX             :MSTORE(currentCTX)
     $ => A          :MLOAD(originAuxCTX)
     A               :MSTORE(originCTX)
     0               :MSTORE(txValue)
@@ -1938,7 +1947,11 @@ opSTATICCALL:
     ${touchedAddress(A,CTX)} => D
     ;gas_cost = base_gas + gas_sent_with_call
     GAS-100-D*2500 => GAS
-    GAS             :MSTORE(remainingGas)
+                    :CALL(gasSpendCallError)
+    $ => CTX        :MLOAD(originCTX)
+    GAS - A         :MSTORE(gasCTX)
+    $ => CTX        :MLOAD(currentCTX)
+    A => GAS
     ; TODO: check gas_sent_with_call
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txNData)
@@ -2019,20 +2032,9 @@ opINVALID:
     :JMP(endCode)
 
 invalidStaticTx:
-    GAS - ${GAS/64} => A
-    $ => B          :MLOAD(gasCall)
-    ${comp_lt(A,B)} => D
-    0 - D           :JMPC(gasSentWithCallA)
-    GAS - B => GAS
-                    :JMP(invalidStaticTxEnd)
-
-gasSentWithCallA:
-    GAS - A => GAS
-
-invalidStaticTxEnd:
-    ;TODO: + 3 (????)
-    ;GAS + 3 => GAS
     $ => CTX        :MLOAD(originCTX)       ;last ctx
+    $ => A          :MLOAD(gasCTX)
+    A => GAS
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     1               :MSTORE(SP++)
