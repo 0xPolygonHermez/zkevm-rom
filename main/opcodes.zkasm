@@ -2096,10 +2096,16 @@ opSELFDESTRUCT:
                             :JMP(endCode)
 
 opINVALID:
+    ; Equivalent to REVERT with 0,0 as stack parameters
     ; Remaining gas is consumed
-    0 => GAS
-    ; Abort execution
-                            :JMP(endCode)
+    $ => GAS        :MLOAD(gasCTX)
+    CTX - 1         :JMPC(opINVALIDend)
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+                    :JMP(readCode)
+
+opINVALIDend:
+                    :JMP(endCode)
 
 invalidStaticTx:
     $ => CTX        :MLOAD(originCTX)       ;last ctx
