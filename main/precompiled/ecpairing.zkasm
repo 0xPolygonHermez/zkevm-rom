@@ -1,0 +1,27 @@
+ECPAIRING:
+    $ => CTX                :MLOAD(originCTX)
+    $ => C                  :MLOAD(argsLengthCall)
+    ;ASSERT C % 192 == 0
+    ${C%192} => A
+    ${comp_eq(A, 0)} - 1    :JMPC(ECPAIRINGend)
+    $ => E                  :MLOAD(argsOffsetCall)
+
+ECPAIRINGadd:
+    C - 1                   :JMPC(ECPAIRINGpairing)
+                            :CALL(MLOAD32)
+    ${precompiled_ecPairing_add(A)}
+    C - 32 => C
+                            :JMP(ECPAIRINGadd)
+
+ECPAIRINGpairing:
+    ${precompiled_ecPairing_pairing()} => A
+    $ => E                  :MLOAD(retOffset)
+    A                       :MSTORE(bytesToStore)
+                            :CALL(MSTORE32)
+    $ => C                  :MLOAD(argsLengthCall)
+    ${C/192} => A
+    GAS - 34000*A - 45000 => GAS
+                            :JMP(preEnd)
+
+ECPAIRINGend:
+                            :JMP(preEndFail)

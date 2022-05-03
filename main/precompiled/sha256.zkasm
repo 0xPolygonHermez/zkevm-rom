@@ -1,0 +1,30 @@
+SHA256:
+    ; read data stored in SP + 1024
+    $ => B                              :MLOAD(txNData) ; bytes to read
+    GAS - 60 => GAS ; gas static = 60
+    GAS - ${12*((B+31)/32)} => GAS ; dynamic_gas = 12 * data_word_size, data_word_size = (data_size + 31) / 32
+    1024 => SP
+
+SHA256LoopData: ; set array of bytes in sha256
+    B - 1                               :JMPC(SHA256DigestReturn)
+    B - 32                              :JMPC(SHA256EndLoopData)
+    $ => A                              :MLOAD(SP++)
+    ${precompiled_sha256_add(A, 32)}
+    B - 32 => B
+                                        :JMP(SHA256LoopData)
+SHA256EndLoopData:
+    $ => A                              :MLOAD(SP)
+    32 - B => D
+    $ => A                              :SHR
+    ${precompiled_sha256_add(A, B)}
+
+SHA256DigestReturn: ; digest hash and prepare return
+    ${precompiled_sha256_digest()}
+    ${precompiled_sha256_read()} => A
+    $ => CTX                            :MLOAD(originCTX)
+    $ => E                              :MLOAD(retOffset)
+    ; $ => C                              :MLOAD(retLength) ; always 32
+    A                                   :MSTORE(bytesToStore)
+                                        :CALL(MSTORE32)
+                                        :JMP(preEnd)
+; TODO: Padding is done in the executor. Maybe we should add byte by byte instead of X bytes and pad

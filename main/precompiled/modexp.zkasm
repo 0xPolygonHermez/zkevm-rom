@@ -1,0 +1,75 @@
+VAR CTX Bsize
+VAR CTX Esize
+VAR CTX Msize
+VAR CTX exp
+;TODO: incorrect inputs (argslength < 32 + 32 + 32 + lenB + lenE + lenM)
+;TODO: size > 32
+MODEXP:
+    $ => C          :MLOAD(argsLengthCall)
+    $ => CTX        :MLOAD(originCTX)
+    $ => B          :MLOAD(retOffset)
+    $ => E          :MLOAD(argsOffsetCall)
+                    :CALL(MLOAD32)
+    A               :MSTORE(Bsize)
+                    :CALL(MLOAD32)
+    A               :MSTORE(Esize)
+                    :CALL(MLOAD32)
+    A               :MSTORE(Msize)
+    $ => C          :MLOAD(Bsize)
+                    :CALL(MLOADX)
+    A => B
+    $ => C          :MLOAD(Esize)
+                    :CALL(MLOADX)
+    A               :MSTORE(exp)
+    A => D
+    $ => C          :MLOAD(Msize)
+                    :CALL(MLOADX)
+    ${exp(B,D)} => B
+    ${B%A} => A
+    C => D
+    $ => E          :MLOAD(retOffset)
+    $ => C          :MLOAD(retLength)
+    ;ASSERT C == D
+    ;Result of the computation, with the same number of bytes as M
+    32 - D => D
+    $ => A          :SHL
+    A               :MSTORE(bytesToStore)
+    C - 32          :JMPC(MODEXPstoreX)
+                    :CALL(MSTORE32)
+                    :JMP(MODEXPgas)
+
+MODEXPstoreX:
+                    :CALL(MSTOREX)
+
+MODEXPgas:
+    $ => A              :MLOAD(Bsize)
+    $ => B              :MLOAD(Msize)
+    ${comp_gt(B,A)} - 1 :JMPC(MODEXPgas2)
+    B => A
+
+MODEXPgas2:
+    0 => D ;iteration_count
+    ${(A+7)/8} => A ;words
+    ${exp(A,2)} => A ;multiplication_complexity
+    $ => B              :MLOAD(Esize)
+    $ => C              :MLOAD(exp)
+    B - 32              :JMPC(MODEXPgas3)
+    ;TODO +32 bytes
+                        :JMP(MODEXPgas4)
+
+MODEXPgas3:
+    0 - ${comp_eq(C,0)} :JMPC(MODEXPgas4)
+    8*B - 1 => D ;iteration_count
+
+MODEXPgas4:
+    ${comp_gt(1,D)} - 1 :JMPC(MODEXPgasEnd)
+    1 => D ;iteration_count
+
+MODEXPgasEnd:
+    ${A*D/3} => A ;multiplication_complexity * iteration_count / 3
+    ${comp_gt(200,A)} - 1 :JMPC(MODEXPend)
+    200 => A
+
+MODEXPend:
+    GAS - A => GAS
+                        :JMP(preEnd)

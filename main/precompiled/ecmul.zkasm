@@ -1,0 +1,27 @@
+ECMUL:
+    $ => CTX                :MLOAD(originCTX)
+    $ => C                  :MLOAD(argsLengthCall)
+    ;ASSERT C == 32*3 bytes
+    ${comp_eq(C, 96)} - 1  :JMPC(ECMULend)
+    $ => C                  :MLOAD(retLength)
+    ;ASSERT C == 32*2 bytes
+    ${comp_eq(C, 64)} - 1  :JMPC(ECMULend)
+    $ => E                  :MLOAD(argsOffsetCall)
+                            :CALL(MLOAD32)
+    A => C
+                            :CALL(MLOAD32)
+    A => B
+                            :CALL(MLOAD32)
+    $ => E                  :MLOAD(retOffset)
+    ${precompiled_ecMul_mul(C,B,A)}
+    ${precompiled_ecMul_result0()} => A
+    A                       :MSTORE(bytesToStore)
+                            :CALL(MSTORE32)
+    ${precompiled_ecMul_result1()} => A
+    A                       :MSTORE(bytesToStore)
+                            :CALL(MSTORE32)
+    GAS - 6000 => GAS
+                            :JMP(preEnd)
+
+ECMULend:
+                            :JMP(preEndFail)
