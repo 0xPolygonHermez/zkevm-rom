@@ -1488,9 +1488,46 @@ opLOGend:
     B - E           :JMPC(saveMemLength)
                     :JMP(readCode)
 
-;opCREATE:
-;$ => A             :MLOAD(staticCall)
-;0 - A              :JMPC(invalidStaticTx)
+opCREATE:
+    $ => A              :MLOAD(staticCall)
+    0 - A               :JMPC(invalidStaticTx)
+    SP - 1 => SP
+    $ => A              :MLOAD(SP--)    ;value
+    A                   :MSTORE(valueCall)
+    $ => E              :MLOAD(SP--)    ;offset
+    E                   :MSTORE(argsOffsetCall)
+    $ => C              :MLOAD(SP)      ;length
+    C                   :MSTORE(argsLengthCall)
+    CTX                 :MSTORE(originAuxCTX)
+    $ => B              :MLOAD(txDestAddr)
+    GAS => C
+    SP                  :MSTORE(lastSP)
+    PC                  :MSTORE(lastPC)
+    ;change new CTX
+    $ => A              :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
+    A+1 => CTX          :MSTORE(lastCtxUsed)
+    1                   :MSTORE(txIsCreateContract)
+    $ => A              :MLOAD(originAuxCTX)
+    A                   :MSTORE(originCTX)
+    B                   :MSTORE(txSrcAddr)
+    B                   :MSTORE(txSrcOriginAddr)
+    C => GAS
+                        :CALL(copySP)
+    B => A
+    1 => B                                                                                  ; Constant for nonce
+    0 => C                                                                                  ; 3rd parameter does not apply to nonce
+    $ => B              :SLOAD
+    B                   :MSTORE(txNonce)
+                        :CALL(getLenBytes)
+    A                   :MSTORE(lengthNonce)
+    $ => A              :MLOAD(argsLengthCall)
+    A                   :MSTORE(txNData)
+    $ => A              :MLOAD(valueCall)
+    A                   :MSTORE(txValue)
+; TODO: memory?
+;    $ => B          :MLOAD(memLength)
+;    B - X           :JMPC(saveMemLength)
+                        :JMP(txType)
 
 opCALL:
     SP - 1 => SP
@@ -1545,6 +1582,8 @@ opCALL2:
 opCALLend:
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txNData)
+    $ => E          :MLOAD(argsOffsetCall) ;offset
+    $ => C          :MLOAD(argsLengthCall) ;length
                     :CALL(copySP)
 ; TODO: memory?
 ;    $ => B          :MLOAD(memLength)
@@ -1599,6 +1638,8 @@ opCALLCODE:
 opCALLCODEend:
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txNData)
+    $ => E          :MLOAD(argsOffsetCall) ;offset
+    $ => C          :MLOAD(argsLengthCall) ;length
                     :CALL(copySP)
 ;    $ => B          :MLOAD(memLength)
 ;    B - X           :JMPC(saveMemLength)
@@ -1660,7 +1701,68 @@ opRETURNend2:
 
 opRETURNdeploy:
     GAS - 200 * C => GAS ;code_deposit_cost = 200 * returned_code_size
+    $ => B          :MLOAD(originCTX)       ;last ctx
+    0 - B           :JMPC(opRETURNcreate)
                     :JMP(endCode)
+
+opRETURNcreate:
+    $ => A          :MLOAD(txSrcAddr)
+    $ => D          :MLOAD(txNonce)
+    D + 1 => D
+    1 => B
+    0 => C
+    $ => SR         :SSTORE
+    ; Update contract SR
+    $ => A          :MLOAD(createContractAddress)
+    1 => B                                                                                  ; Constant for nonce
+    0 => C
+    1 => D
+    $ => SR         :SSTORE
+
+    ;TODO: deploy with value
+    ${getHashBytecode(A)} => D
+    2 => B
+    0 => C
+    $ => SR                         :SSTORE
+
+    $ => B                          :MLOAD(txValue)
+    0 - ${comp_eq(B,0)}             :JMPC(opRETURNcreateEnd)
+
+; Decrement original balance
+    $ => A                          :MLOAD(txSrcAddr)
+    0 => B,C
+    $ => E                          :SLOAD                                                  ; Original Balance in E
+    $ => C                          :MLOAD(txValue)                                         ; A = E - C
+    ${E-C} => A
+    31 => D
+    $ => B                          :SHR
+    0x7F - B                        :JMPC(invalidTx)                                        ; If A is a negative value --> invalidTx
+    1 => B
+    0 => D
+    E                               :ARITH                                                  ; originalBalance -value in A
+    A => D                                                                                  ; originalBalance -value in D
+    $ => A                          :MLOAD(txSrcAddr)
+    0 => B,C
+    $ => SR                         :SSTORE
+ ; Increment destination balance
+    $ => A                          :MLOAD(createContractAddress)
+    0 => B,C
+    $ => C                          :SLOAD                                                  ; Original Balance in E
+    $ => A                          :MLOAD(txValue)                                         ; E = A + C
+    1 => B
+    0 => D
+    ${A+C} => D                     :ARITH                                                  ; originalBalance + value in D
+    $ => A                          :MLOAD(createContractAddress)
+    0 => B,C
+    $ => SR                         :SSTORE
+
+opRETURNcreateEnd:
+    $ => B          :MLOAD(originCTX)       ;last ctx
+    B => CTX
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    A               :MSTORE(SP++)
+                    :JMP(readCode)
 
 opDELEGATECALL:
     SP - 1 => SP
@@ -1705,13 +1807,56 @@ opDELEGATECALL:
 opDELEGATECALLend:
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txNData)
+    $ => E          :MLOAD(argsOffsetCall) ;offset
+    $ => C          :MLOAD(argsLengthCall) ;length
                     :CALL(copySP)
 ;    $ => B          :MLOAD(memLength)
 ;    B - X           :JMPC(saveMemLength)
                     :JMP(txType)
-;opCREATE2:
-;$ => A             :MLOAD(staticCall)
-;0 - A              :JMPC(invalidStaticTx)
+
+opCREATE2:
+    $ => A              :MLOAD(staticCall)
+    0 - A               :JMPC(invalidStaticTx)
+    SP - 1 => SP
+    $ => A              :MLOAD(SP--)    ;value
+    A                   :MSTORE(valueCall)
+    $ => E              :MLOAD(SP--)    ;offset
+    E                   :MSTORE(argsOffsetCall)
+    $ => C              :MLOAD(SP--)      ;length
+    C                   :MSTORE(argsLengthCall)
+    $ => D              :MLOAD(SP)    ;salt
+    CTX                 :MSTORE(originAuxCTX)
+    $ => B              :MLOAD(txDestAddr)
+    GAS => C
+    SP                  :MSTORE(lastSP)
+    PC                  :MSTORE(lastPC)
+    ;change new CTX
+    $ => A              :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system 
+    A+1 => CTX          :MSTORE(lastCtxUsed)
+    1                   :MSTORE(txIsCreateContract)
+    1                   :MSTORE(create2)
+    D                   :MSTORE(salt)
+    $ => A              :MLOAD(originAuxCTX)
+    A                   :MSTORE(originCTX)
+    B                   :MSTORE(txSrcAddr)
+    B                   :MSTORE(txSrcOriginAddr)
+    C => GAS
+                        :CALL(copySP)
+    B => A
+    1 => B                                                                                  ; Constant for nonce
+    0 => C                                                                                  ; 3rd parameter does not apply to nonce
+    $ => B              :SLOAD
+    B                   :MSTORE(txNonce)
+                        :CALL(getLenBytes)
+    A                   :MSTORE(lengthNonce)
+    $ => A              :MLOAD(argsLengthCall)
+    A                   :MSTORE(txNData)
+    $ => A              :MLOAD(valueCall)
+    A                   :MSTORE(txValue)
+; TODO: memory?
+;    $ => B          :MLOAD(memLength)
+;    B - X           :JMPC(saveMemLength)
+                        :JMP(txType)
 
 opSTATICCALL:
     SP - 1 => SP
@@ -1754,6 +1899,8 @@ opSTATICCALL:
     ; TODO: check gas_sent_with_call
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txNData)
+    $ => E          :MLOAD(argsOffsetCall) ;offset
+    $ => C          :MLOAD(argsLengthCall) ;length
                     :CALL(copySP)
 ; TODO: memory?
 ;    $ => B          :MLOAD(memLength)
