@@ -700,7 +700,7 @@ opEXTCODEHASHinit:
     32 => D
     C - 1           :JMPC(opEXTCODEHASHend)
     C - 32          :JMPC(opEXTCODEHASHfinal)
-    ${getBytecode(A,p,D)} => B
+    ${getBytecode(A,p,D)} => B ; //TODO: add state machine :READ_BYTECODE(A, P)
     B               :HASHW(E)
     C - D => C
     $${p = p + D}
@@ -717,9 +717,10 @@ opEXTCODEHASHend:
     A               :MSTORE(SP++)
                     :JMP(readCode)
 
+; // TODO: check batch_number !exist --> return 0
 opBLOCKHASH:
     SP - 1 => SP
-    $ => A          :MLOAD(SP)
+    $ => A          :MLOAD(SP) ; batch number
     $ => E          :MLOAD(lastHashIdUsed)
     E+1 => E        :MSTORE(lastHashIdUsed)
     32 => D
@@ -771,6 +772,7 @@ opCHAINID:
     GAS-2 => GAS
                     :JMP(readCode)
 
+; // TODO: check delegate call
 opSELFBALANCE:
     $ => A          :MLOAD(txDestAddr)
     0 => B,C
@@ -860,7 +862,6 @@ opSSTOREinit:
     $ => SR         :MLOAD(initSR)
     $ => B          :SLOAD ;origin value
     $ => SR         :MLOAD(auxSR)
-    ; TODO: check touched key / addr
     ${touchedStorageSlots(A,C,CTX)} => A
     GAS - A*2100 => GAS
     ${comp_eq(E, D)} - 1 :JMPC(opSSTOREdif)
@@ -939,23 +940,26 @@ opSSTOREsr:
     $ => SR         :SSTORE
                     :JMP(readCode)
 
+; // TODO: Check error: addrOp("E") == 5B (JUMPDEST)
 opJUMP:
     SP - 1 => SP
-    $ => E          :MLOAD(SP)
+    $ => E          :MLOAD(SP) ; //TODO: $ => PC
     E => PC
     GAS - 8 => GAS
                     :JMP(readCode)
 
+; // TODO: Check error: addrOp("E") == 5B (JUMPDEST)
 opJUMPI:
     SP - 2 => SP
     $ => B                  :MLOAD(SP)
     GAS - 10 => GAS
     ${comp_gt(B, 0)} - 1    :JMPC(readCode)
     SP + 1 => SP
-    $ => E                  :MLOAD(SP--)
+    $ => E                  :MLOAD(SP--) ; //TODO: $ => PC
     E => PC
                             :JMP(readCode)
 
+; // TODO: check in YUL
 opPC:
 GAS - 2 => GAS
 PC                 :MSTORE(SP++)
@@ -985,8 +989,8 @@ opAuxPUSHA:
 
 opAuxPUSHB:
     SP                          :MSTORE(SPw)
-    $ => SP                     :MLOAD(SPr)
-    ${PC/32} => A
+    $ => SP                     :MLOAD(SPr) ; SPr == 1024
+    ${PC/32} => A               ; //TODO: ARITH
     SP + A => SP
     ${PC%32} => C
     A - ${(PC+D)/32}            :JMPC(opAuxPUSHC)
@@ -1506,6 +1510,7 @@ opSWAP16:
     GAS-3 => GAS
                     :JMP(readCode)
 
+; // TODO: save logs in memory and consolidate them once the tx is succesfull
 ; gas_cost = 375 + 375 * num_topics + 8 * data_size + mem_expansion_cost
 opLOG0:
     $ => A              :MLOAD(staticCall)
@@ -1675,7 +1680,7 @@ opCALL2:
     $ => A          :MLOAD(SP--)
     A               :MSTORE(retOffset)
     $ => A          :MLOAD(SP)
-    A               :MSTORE(retLength) ; TODO should not be the same memory region
+    A               :MSTORE(retLength) ; //TODO: should not be the same memory region
     $ => B          :MLOAD(txDestAddr)
     $ => D          :MLOAD(txSrcOriginAddr)
     SP              :MSTORE(lastSP)
@@ -1688,7 +1693,9 @@ opCALL2:
     A               :MSTORE(originCTX)
     B               :MSTORE(txSrcAddr)
     D               :MSTORE(txSrcOriginAddr)
-    ${copyTouchedAddress(A,CTX)}
+    ${copyTouchedAddress(A,CTX)} ; // TODO: Check security copy same addresses
+    ; // TODO: copyTouchedAddress once the depth CTX is returned
+    ; // TODO: subcontext ?
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
     A               :MSTORE(storageAddr)
@@ -1699,11 +1706,12 @@ opCALL2:
     A               :MSTORE(txValue)
     0 - ${comp_eq(0, A)} :JMPC(opCALLend)
     GAS - 9000 => GAS
+    ; // TODO: usage of ISEMPTY and add 25000 if needed
     ; if is_empty(target_addr) (forcing a new account to be created)
     ; GAS - 25000 => GAS
 
 opCALLend:
-                    :CALL(gasSpendCallError)
+                    :CALL(gasSpendCallError) ;// TODO: renaming "computeGasSendCall"
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     $ => CTX        :MLOAD(currentCTX)
@@ -1711,9 +1719,9 @@ opCALLend:
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txNData)
     $ => E          :MLOAD(argsOffsetCall) ;offset
-    $ => C          :MLOAD(argsLengthCall) ;length
+    $ => C          :MLOAD(argsLengthCall) ;length ; // TODO: duplicate MLOAD
                     :CALL(copySP)
-; TODO: memory?
+; TODO: memory? should be done before
 ;    $ => B          :MLOAD(memLength)
 ;    B - X           :JMPC(saveMemLength)
                     :JMP(txType)
