@@ -9,7 +9,7 @@ VAR GLOBAL tmpVarE
 ; @info Get absolute value and sign
 ; @in A => number to convert
 ; @out A => Absolut value of A
-; @out B => Sign of A
+; @out B => Sign of A [1 if negative, 0 positive]
 abs:
     ${comp_gt(A, 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)} => B
      B - 1          :JMPC(endca2) ; no conversion if positive number
@@ -19,7 +19,7 @@ abs:
 ; @out A => number converted in ca2
 ca2:
     ${bitwise_xor(A, 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)} => A
-    ${A + 1} => A    
+    ${A + 1} => A // ; TODO: ARITH
 endca2:
                     :RETURN
 
@@ -234,14 +234,14 @@ MLOAD32:
     D               :MSTORE(tmpVarD)
     ${E%32} - 1     :JMPC(MLOAD322)
     ${E%32} => C
-    ${(E/32)*32} => E
+    ${(E/32)*32} => E  ; // TODO: ARITH
     $ => A          :MLOAD(MEM:E)
     C => D
-    $ => B          :SHL
+    $ => B          :SHL // TODO: Mask instead of shift
     32 - C => D
     E + 32 => E
     $ => A          :MLOAD(MEM:E)
-    $ => A          :SHR
+    $ => A          :SHR // TODO: Mask instead of shift
     A + B => A
     E + C => E                                      ;new offset
                     :JMP(MLOADend)
@@ -261,7 +261,7 @@ MLOADX:
     B               :MSTORE(tmpVarB)
     C               :MSTORE(tmpVarC)
     D               :MSTORE(tmpVarD)
-    E               :MSTORE(tmpVarE)
+    E               :MSTORE(tmpVarE) ; // TODO: remove
     32 - ${E%32} - C => D       :JMPC(MLOADX2)
     ${E%32} => B
     ${(E/32)*32} => E
