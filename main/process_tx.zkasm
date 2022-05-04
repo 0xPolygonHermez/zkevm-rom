@@ -19,13 +19,14 @@ processTx:
         $ => A                          :ECRECOVER
         A                               :MSTORE(txSrcAddr)
         A                               :MSTORE(txSrcOriginAddr)
-
+        ; TODO: bad signature ==> jump next txs
 ;;;;;;;;;
 ;; Store init state
 ;;;;;;;;;
 
         SR                              :MSTORE(initSR)
 
+; TODO: Intrinsic checks ==> jump to next transaction, maintain SR
 ;;;;;;;;
 ; Check chainID --> //TODO: chainID is defined as 64 bits which does not fit in the Field. If we consider just 63 bits it could be done directly (A - B), saving the EQ comaprison
 ;;;;;;;;
@@ -42,6 +43,7 @@ check_defaultChainId:
 
 endCheckChainId:
 
+; //TODO: move touchedAddress after intrinsic checks
 ;;;;;;;;
 ; Touched Addresses
 ;;;;;;;;
@@ -93,6 +95,9 @@ endCheckChainId:
         0 => B,C
         $ => SR                         :SSTORE
 
+        ; TODO: check intrinsic --> value + gas
+        ; TODO: substract gas ==> initSR
+        ; TODO: create, do not have value
 ;;;;;;;;;
 ;; Store init state
 ;;;;;;;;;
@@ -103,14 +108,14 @@ endCheckChainId:
 ;;;;;;;;
 ; Set the gas
 ;;;;;;;;
-
+        ; // TODO: move at the beggining
         $ => GAS                        :MLOAD(txGas)
         GAS - 21000 => GAS
 
 ;;;;;;;;
 ; Gas calldata
 ;;;;;;;;
-        $ => A                          :MLOAD(txNData)
+        $ => A                          :MLOAD(txNData) ; //TODO: renaming. Bytes calldata
         A - 1                           :JMPC(txType)
         0 => D
         -1 => C
@@ -122,8 +127,9 @@ addGas:
                                         :JMP(loopBytes)
 loopBytes:
         A - ${C*32} - D - 1             :JMPC(txType)
+        ; TODO: ARITH
         32 - D - 1                      :JMPC(addGas)
-        $ => B                          :MLOAD(SP)
+        $ => B                          :MLOAD(SP) ; TODO: mask to get byte per byte
         ${getByte(B,D)} => B
         D + 1 => D
         B - 1                           :JMPC(add4Gas)
@@ -153,7 +159,7 @@ txType:
 
 checkTxType:
         32 - D                          :JMPC(moveBalances)
-        ${getByte(A,D)} => B
+        ${getByte(A,D)} => B    ; // TODO: comparison with 0
         0 - B                           :JMPC(callContract)
         D + 1 => D
                                         :JMP(checkTxType)
@@ -162,7 +168,7 @@ getContractAddress:
         ; We get a new hashId
         $ => E                          :MLOAD(lastHashIdUsed)
         E+1 => E                        :MSTORE(lastHashIdUsed)
-        $ => A                          :MLOAD(create2)
+        $ => A                          :MLOAD(create2) ; TODO: renamig isCreate2
         0 - A                           :JMPC(create2)
         $ => A                          :MLOAD(txSrcAddr)
         $ => B                          :MLOAD(txNonce)
@@ -200,11 +206,13 @@ endContractAddress:
         $ => A                          :SHL ; // TODO: Could be replaced by a bitwise and: ${bitwise_and(A, 2**160 - 1)
         $ => A                          :SHR
         A                               :MSTORE(createContractAddress)
+        ; TODO: Check nonce != 0 OR already_bytecode ==> same behaviour as fail constructor
+        ; TODO: check CREATE or deployment with constructor reverted
                                         :JMP(deploy)
 
 create2:
         $ => C                          :MLOAD(txNData)
-        ${(C+31)/32} => A
+        ${(C+31)/32} => A ; // TODO: ARITH
         GAS - 6*A => GAS
         1024 => SP
                                         :JMP(loopCreate2)
@@ -221,7 +229,7 @@ loopCreate2:
 endloopCreate2:
         $ => A                          :MLOAD(SP)
         32 - C => D
-        $ => A                          :SHR
+        $ => A                          :SHR ; //TODO: mask, division
         C => D
         A                               :HASHW(E)
 
@@ -261,6 +269,7 @@ readDeployBytecode:
         $ => SP                         :MLOAD(SPr)
         SP + ${PC/32} => SP
         ${PC%32} => C
+        ; // TODO: ARITH
         $ => B                          :MLOAD(txNData)
         B - PC                          :JMPC(endDeploy)
         $ => A                          :MLOAD(SP)
@@ -281,12 +290,12 @@ readByteCode:
         0 => C
         $ => A                          :SLOAD
         ${getBytecodeLength(A)} => B
-        B - PC                          :JMPC(endByteCode)
+        B - PC                          :JMPC(endByteCode) ; // TODO: should be removed
         ${getBytecode(A,PC)} => B
         ${addrOp(B)} => RR
         PC + 1 => PC
                                         :JMP(RR)
-
+        ; // TODO: check PC opcode in YUL
 readCode:
         $ => A                          :MLOAD(txIsCreateContract)
         0 - A                           :JMPC(readDeployBytecode)
@@ -298,6 +307,7 @@ endCode:
                                         :JMP(endByteCode)
 
 endDeploy:
+        ; TODO:: increase nonce before reading the contructor opcodes
         ; Update contract nonce
         $ => A                          :MLOAD(createContractAddress)
         1 => B                                                                                  ; Constant for nonce
@@ -306,8 +316,8 @@ endDeploy:
         $ => SR                         :SSTORE
         ;if txValue != 0 --> move balance to contractAddress
         A                               :MSTORE(txDestAddr)
-
-        ${getHashBytecode(A)} => D
+        ; TODO: same as nonce, should be done before
+        ${getHashBytecode(A)} => D ; TODO: chain poseidon to compute hashBytecode. Jordi checks
         2 => B
         0 => C
         $ => SR                         :SSTORE
@@ -317,7 +327,7 @@ endByteCode:
 moveBalances:
 
 ;;;;;;;;
-; evmCALL (Move Balances)
+; evmCALL (Move Balances) ; TODO: move balances before processing
 ;;;;;;;;
 
         ; Decrement original balance
@@ -418,10 +428,10 @@ refundGas:
 terminateTX:
 
                                         :JMP(processTxEnd)
-
+; TODO: should be an invalid intrinsic txs and (revert, out-of-gas, assert, invalid opcode )
 invalidTx:
         $ => A                          :MLOAD(originCTX)
-        0 - A                           :JMPC(invalidTxOrigin)
+        0 - A                           :JMPC(invalidTxOrigin) ; TODO:: invalid call with depth > 0
         $ => SR                         :MLOAD(initSR)
                                         :JMP(terminateTX)
 

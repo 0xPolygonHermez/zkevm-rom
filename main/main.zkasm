@@ -11,7 +11,7 @@ start:
         A                                   :HASHW(0)
         A => SR
 
-        32 => D
+        32 => D ; //TODO: opt. no need set D to 32
         ${getOldLocalExitRoot()}  => A      :HASHW(0)
                                             :MSTORE(oldLocalExitRoot)
 
@@ -25,19 +25,19 @@ start:
 
         1000                                :MSTORE(defaultChainId)    ; Hardcoded default chain id
         0                                   :MSTORE(systemAddr)        ; Hardcoded default system address
-
+        ; // TODO: 0x0000000000000...000n --> different file
         ;100                                 :MSTORE(SLOAD_GAS)
         ;20000                               :MSTORE(SSTORE_SET_GAS)
         ;2900                                :MSTORE(SSTORE_RESET_GAS)
         ;15000                               :MSTORE(SSTORE_CLEARS_SCHEDULE)
-
+        ; // TODO: set gas vars in a different file a a parameters
         ${getNumBatch()}                    :MSTORE(numBatch)
 
         ${getTimestamp()}                   :MSTORE(timestamp)
 
         ${getTxsLen()}                      :MSTORE(txsListLength)
 
-        ; batch variables
+        ; batch variables TODO: ne file constants.zkasm
         0                                   :MSTORE(batchDifficulty)
         30000000                            :MSTORE(batchGasLimit)
 
@@ -48,7 +48,7 @@ start:
 ;;;;;;;;;
         $ => E                              :MLOAD(lastHashIdUsed)
         E+1 => E                            :MSTORE(lastHashIdUsed)
-        32 => D
+        32 => D ; //TODO: opt. no need set D to 32
         $ => A                              :MLOAD(numBatch)
         A - 1                               :HASHW(E)
         0                                   :HASHW(E)                  ; Storage position of the batch hash
@@ -72,7 +72,8 @@ start:
                                             :HASHE(E)
         $ => C                              :HASHR(E)                  ; Storage position of the current global exit root
 
-        ${getGlobalExitRootManagerAddr()}  => A
+        ${getGlobalExitRootManagerAddr()}  => A ;// TODO: constant
+        ; TODO: Constants in ZKASM compiler. such as: LEAF_TYPE_STO
         3 => B
         $ => D                              :MLOAD(globalExitRoot)
         $ => SR                             :SSTORE
@@ -80,7 +81,7 @@ start:
 ;;;;;;;;;
 ;; Prepare transaction loop
 ;;;;;;;;;
-        E                                   :MSTORE(lastTxHashId)
+        E                                   :MSTORE(lastTxHashId) ; //TODO: explanation variable
         $ => A                              :MLOAD(lastCtxUsed)
         A                                   :MSTORE(ctxTxToUse)
 
@@ -91,7 +92,7 @@ txLoopRLP:
         A+1 => CTX      :MSTORE(lastCtxUsed)
 
         $ => A          :MLOAD(txsListLength)
-        $ => C          :MLOAD(batchL2DataRead)
+        $ => C          :MLOAD(batchL2DataRead) ; TODO: renaming
         C - A           :JMPC(loadTx_rlp)
                         :JMP(endCheckRLP)
 
@@ -131,7 +132,7 @@ processTxsEnd:
         E+1 => E                        :MSTORE(lastHashIdUsed)
 
 ;;;;;;;;;
-;; Append TXs
+;; Append TXs ; TODO: pointer depends on RLP loop
 ;;;;;;;;;
         $ => B                          :MLOAD(txsListLength)
         0 => C
