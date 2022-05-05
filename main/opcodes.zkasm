@@ -2066,15 +2066,21 @@ opSTATICCALL3:
                     :JMP(txType)
 
 opREVERT:
-    $ => B          :MLOAD(originCTX)       ;last ctx
-    B - 1           :JMPC(opREVERTend)
-    B => CTX
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--) ;offset
+    $ => B          :MLOAD(SP) ; length
+    $ => C          :MLOAD(originCTX)       ;last ctx
+    C - 1           :JMPC(opREVERTend)
+    C => CTX
+    $ => C          :MLOAD(gasCTX)
+    GAS + C => GAS
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     0               :MSTORE(SP++)
                     :JMP(readCode)
 
 opREVERTend:
+    $ => SR         :MLOAD(initSR)
                     :JMP(endCode)
 
 ; // TODO: handle if depth is over 0
