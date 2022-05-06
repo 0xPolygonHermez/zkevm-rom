@@ -2139,13 +2139,18 @@ opSELFDESTRUCT:
 opINVALID:
     ; Equivalent to REVERT with 0,0 as stack parameters
     ; Remaining gas is consumed
-    $ => GAS        :MLOAD(gasCTX)
-    CTX - 1         :JMPC(opINVALIDend)
+    0 => GAS
+    ; if main context, halt execution
+    $ => B          :MLOAD(originCTX)       ;last ctx
+    B - 1           :JMPC(opINVALIDend)
+    ; Decrease context and continue execution
+    B => CTX
+    ; Set values from source context, no need to refund GAS because is 0
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
                     :JMP(readCode)
-
 opINVALIDend:
+    ; TODO: should revert to initSR
                     :JMP(endCode)
 
 invalidStaticTx:
