@@ -796,11 +796,7 @@ opMSTORE:                                       ;MSTORE 32 bytes
                     :JMP(readCode)
 
 saveMemLength:
-    E               :MSTORE(memLength)
-    ${(E+31)/32} => A
-    ${(B+31)/32} => B
-    GAS - 3*A - ${A*A/512} => GAS
-    GAS + 3*B + ${B*B/512} => GAS
+                    :CALL(saveMem)
                     :JMP(readCode)
 
 opMSTORE8:
@@ -1653,12 +1649,23 @@ opCALL:
 opCALL2:
     $ => A          :MLOAD(SP--)
     A               :MSTORE(argsOffsetCall)
-    $ => A          :MLOAD(SP--)
-    A               :MSTORE(argsLengthCall)
+    $ => B          :MLOAD(SP--)
+    B               :MSTORE(argsLengthCall)
+    A + B => E
     $ => A          :MLOAD(SP--)
     A               :MSTORE(retOffset)
-    $ => A          :MLOAD(SP)
-    A               :MSTORE(retLength) ; TODO should not be the same memory region
+    $ => B          :MLOAD(SP)
+    B               :MSTORE(retLength)
+    A + B => D
+    ${comp_lt(E,D)} - 1 :JMPC(opCALL3)
+    D => E
+
+opCALL3:
+    $ => B          :MLOAD(memLength)
+    E - B           :JMPC(opCALL4)
+                    :CALL(saveMem)
+
+opCALL4:
     $ => B          :MLOAD(txDestAddr)
     $ => D          :MLOAD(txSrcOriginAddr)
     SP              :MSTORE(lastSP)
@@ -1696,9 +1703,6 @@ opCALLend:
     $ => E          :MLOAD(argsOffsetCall) ;offset
     $ => C          :MLOAD(argsLengthCall) ;length
                     :CALL(copySP)
-; TODO: memory?
-;    $ => B          :MLOAD(memLength)
-;    B - X           :JMPC(saveMemLength)
                     :JMP(txType)
 
 opCALLCODE:
@@ -1712,12 +1716,23 @@ opCALLCODE:
     A               :MSTORE(valueCall)
     $ => A          :MLOAD(SP--)
     A               :MSTORE(argsOffsetCall)
-    $ => A          :MLOAD(SP--)
-    A               :MSTORE(argsLengthCall)
+    $ => B          :MLOAD(SP--)
+    B               :MSTORE(argsLengthCall)
+    A + B => E
     $ => A          :MLOAD(SP--)
     A               :MSTORE(retOffset)
-    $ => A          :MLOAD(SP)
-    A               :MSTORE(retLength)
+    $ => B          :MLOAD(SP)
+    B               :MSTORE(retLength)
+    A + B => D
+    ${comp_lt(E,D)} - 1 :JMPC(opCALLCODE2)
+    D => E
+
+opCALLCODE2:
+    $ => B          :MLOAD(memLength)
+    E - B           :JMPC(opCALLCODE3)
+                    :CALL(saveMem)
+
+opCALLCODE3:
     $ => B          :MLOAD(txDestAddr)
     $ => C          :MLOAD(txSrcAddr)
     $ => D          :MLOAD(txSrcOriginAddr)
@@ -1756,8 +1771,6 @@ opCALLCODEend:
     $ => E          :MLOAD(argsOffsetCall) ;offset
     $ => C          :MLOAD(argsLengthCall) ;length
                     :CALL(copySP)
-;    $ => B          :MLOAD(memLength)
-;    B - X           :JMPC(saveMemLength)
                     :JMP(txType)
 
 ;TODO RETURN + 32 bytes
@@ -1890,12 +1903,23 @@ opDELEGATECALL:
     A               :MSTORE(addrCall)
     $ => A          :MLOAD(SP--)
     A               :MSTORE(argsOffsetCall)
-    $ => A          :MLOAD(SP--)
-    A               :MSTORE(argsLengthCall)
+    $ => B          :MLOAD(SP--)
+    B               :MSTORE(argsLengthCall)
+    A + B => E
     $ => A          :MLOAD(SP--)
     A               :MSTORE(retOffset)
-    $ => A          :MLOAD(SP)
-    A               :MSTORE(retLength)
+    $ => B          :MLOAD(SP)
+    B               :MSTORE(retLength)
+    A + B => D
+    ${comp_lt(E,D)} - 1 :JMPC(opDELEGATECALL2)
+    D => E
+
+opDELEGATECALL2:
+    $ => B          :MLOAD(memLength)
+    E - B           :JMPC(opDELEGATECALL3)
+                    :CALL(saveMem)
+
+opDELEGATECALL3:
     $ => B          :MLOAD(txValue)
     $ => C          :MLOAD(txSrcAddr)
     $ => D          :MLOAD(txSrcOriginAddr)
@@ -1987,12 +2011,23 @@ opSTATICCALL:
     A               :MSTORE(addrCall)
     $ => A          :MLOAD(SP--)
     A               :MSTORE(argsOffsetCall)
-    $ => A          :MLOAD(SP--)
-    A               :MSTORE(argsLengthCall)
+    $ => B          :MLOAD(SP--)
+    B               :MSTORE(argsLengthCall)
+    A + B => E
     $ => A          :MLOAD(SP--)
     A               :MSTORE(retOffset)
-    $ => A          :MLOAD(SP)
-    A               :MSTORE(retLength)
+    $ => B          :MLOAD(SP)
+    B               :MSTORE(retLength)
+    A + B => D
+    ${comp_lt(E,D)} - 1 :JMPC(opSTATICCALL2)
+    D => E
+
+opSTATICCALL2:
+    $ => B          :MLOAD(memLength)
+    E - B           :JMPC(opSTATICCALL3)
+                    :CALL(saveMem)
+
+opSTATICCALL3:
     $ => B          :MLOAD(txDestAddr)
     $ => D          :MLOAD(txSrcOriginAddr)
     SP              :MSTORE(lastSP)
@@ -2031,15 +2066,21 @@ opSTATICCALL:
                     :JMP(txType)
 
 opREVERT:
-    $ => B          :MLOAD(originCTX)       ;last ctx
-    B - 1           :JMPC(opREVERTend)
-    B => CTX
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--) ;offset
+    $ => B          :MLOAD(SP) ; length
+    $ => C          :MLOAD(originCTX)       ;last ctx
+    C - 1           :JMPC(opREVERTend)
+    C => CTX
+    $ => C          :MLOAD(gasCTX)
+    GAS + C => GAS
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     0               :MSTORE(SP++)
                     :JMP(readCode)
 
 opREVERTend:
+    $ => SR         :MLOAD(initSR)
                     :JMP(endCode)
 
 ; // TODO: handle if depth is over 0
