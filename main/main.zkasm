@@ -11,7 +11,6 @@ start:
         A                                   :HASHW(0)
         A => SR
 
-        32 => D ; //TODO: opt. no need set D to 32
         ${getOldLocalExitRoot()}  => A      :HASHW(0)
                                             :MSTORE(oldLocalExitRoot)
 
@@ -35,7 +34,7 @@ start:
 
         ${getTimestamp()}                   :MSTORE(timestamp)
 
-        ${getTxsLen()}                      :MSTORE(txsListLength)
+        ${getTxsLen()}                      :MSTORE(batchL2DataLength)
 
         ; batch variables TODO: ne file constants.zkasm
         0                                   :MSTORE(batchDifficulty)
@@ -81,7 +80,8 @@ start:
 ;;;;;;;;;
 ;; Prepare transaction loop
 ;;;;;;;;;
-        E                                   :MSTORE(lastTxHashId) ; //TODO: explanation variable
+        ; Store the lastHashIdUsed at lastTxHashId variable. We need this variable to know where to read the hash for each transaction at process_tx flow
+        E                                   :MSTORE(lastTxHashId)
         $ => A                              :MLOAD(lastCtxUsed)
         A                                   :MSTORE(ctxTxToUse)
 
@@ -91,8 +91,8 @@ txLoopRLP:
         $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
         A+1 => CTX      :MSTORE(lastCtxUsed)
 
-        $ => A          :MLOAD(txsListLength)
-        $ => C          :MLOAD(batchL2DataRead) ; TODO: renaming
+        $ => A          :MLOAD(batchL2DataLength)
+        $ => C          :MLOAD(batchL2DataParsed)
         C - A           :JMPC(loadTx_rlp)
                         :JMP(endCheckRLP)
 
@@ -134,7 +134,7 @@ processTxsEnd:
 ;;;;;;;;;
 ;; Append TXs ; TODO: pointer depends on RLP loop
 ;;;;;;;;;
-        $ => B                          :MLOAD(txsListLength)
+        $ => B                          :MLOAD(batchL2DataLength)
         0 => C
         $${p = 0}
 
@@ -158,7 +158,7 @@ endAppendTxs:
 ;; Txs Size Verification
 ;;;;;;;;;
         C => A
-        $                               :MLOAD(txsListLength), ASSERT
+        $                               :MLOAD(batchL2DataLength), ASSERT
 
 ;;;;;;;;;
 ;; Check batchHashData

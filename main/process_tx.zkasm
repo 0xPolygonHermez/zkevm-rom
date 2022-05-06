@@ -115,7 +115,7 @@ endCheckChainId:
 ;;;;;;;;
 ; Gas calldata
 ;;;;;;;;
-        $ => A                          :MLOAD(txNData) ; //TODO: renaming. Bytes calldata
+        $ => A                          :MLOAD(txCalldataLen)
         A - 1                           :JMPC(txType)
         0 => D
         -1 => C
@@ -146,7 +146,7 @@ txType:
 ;;;;;;;;;;
 ;;;;; Tx type
 ;;;;;;;;;;
-        $ => A                          :MLOAD(txIsCreateContract)
+        $ => A                          :MLOAD(isCreateContract)
         0 - A                           :JMPC(getContractAddress)
         $ => A                          :MLOAD(txDestAddr)
         ${touchedAddress(A,CTX)}
@@ -169,7 +169,7 @@ getContractAddress:
         ; We get a new hashId
         $ => E                          :MLOAD(lastHashIdUsed)
         E+1 => E                        :MSTORE(lastHashIdUsed)
-        $ => A                          :MLOAD(create2) ; TODO: renamig isCreate2
+        $ => A                          :MLOAD(isCreate2)
         0 - A                           :JMPC(create2)
         $ => A                          :MLOAD(txSrcAddr)
         $ => B                          :MLOAD(txNonce)
@@ -212,7 +212,7 @@ endContractAddress:
                                         :JMP(deploy)
 
 create2:
-        $ => C                          :MLOAD(txNData)
+        $ => C                          :MLOAD(txCalldataLen)
         ${(C+31)/32} => A ; // TODO: ARITH
         GAS - 6*A => GAS
         1024 => SP
@@ -271,7 +271,7 @@ readDeployBytecode:
         SP + ${PC/32} => SP
         ${PC%32} => C
         ; // TODO: ARITH
-        $ => B                          :MLOAD(txNData)
+        $ => B                          :MLOAD(txCalldataLen)
         B - PC                          :JMPC(endDeploy)
         $ => A                          :MLOAD(SP)
         $ => SP                         :MLOAD(SPw)
@@ -298,12 +298,12 @@ readByteCode:
                                         :JMP(RR)
         ; // TODO: check PC opcode in YUL
 readCode:
-        $ => A                          :MLOAD(txIsCreateContract)
+        $ => A                          :MLOAD(isCreateContract)
         0 - A                           :JMPC(readDeployBytecode)
                                         :JMP(readByteCode)
 
 endCode:
-        $ => A                          :MLOAD(txIsCreateContract)
+        $ => A                          :MLOAD(isCreateContract)
         0 - A                           :JMPC(endDeploy)
                                         :JMP(endByteCode)
 

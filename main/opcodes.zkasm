@@ -149,12 +149,12 @@ opMULMOD:
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
     $ => B          :MLOAD(SP--)
-    ${A*B} => E //TODO: ARITH
+    ${A*B} => E ;//TODO: ARITH
     $ => A          :MLOAD(SP)
     ${E%A} => C
     ${E/A} => B
     0 => D
-    E               :ARITH //TODO: Check residu
+    E               :ARITH ;//TODO: Check residu
     C               :MSTORE(SP++)
     GAS-8 => GAS
                     :JMP(readCode)
@@ -317,7 +317,7 @@ opSHL:  ; //TODO: SHL byte by byte working fine. Not working when shifting bits.
 opSAR:
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
-    ${D/8} => D // TODO: ARITH
+    ${D/8} => D ;// TODO: ARITH
     ${comp_gt(D, 32)} => B
     ${B * 32 + bitwise_xor(B, 1) * D} => D
 
@@ -380,7 +380,7 @@ opSHA3End:
 
 ; // TODO: check opcode with DelegateCall (storage or implementation address)
 opADDRESS:
-    $ => A          :MLOAD(txIsCreateContract)
+    $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPC(opADDRESSdeploy)
     $ => A          :MLOAD(txDestAddr)
                     :JMP(opADDRESSend)
@@ -451,7 +451,7 @@ opCALLDATALOAD2:
                     :JMP(readCode)
 
 opCALLDATASIZE:
-    $ => B          :MLOAD(txNData)
+    $ => B          :MLOAD(txCalldataLen)
     B               :MSTORE(SP++)
     GAS-2 => GAS
                     :JMP(readCode)
@@ -525,8 +525,8 @@ opCALLDATACOPYend:
 
 ; missing verification --> hash table needed
 opCODESIZE:
-    $ => A          :MLOAD(txIsCreateContract)
-    0 - A           :JMPC(oopCODESIZEdep)
+    $ => A          :MLOAD(isCreateContract)
+    0 - A           :JMPC(opCODESIZEdep)
     $ => A          :MLOAD(txDestAddr)
     2 => B
     0 => C
@@ -536,14 +536,14 @@ opCODESIZE:
     GAS-2 => GAS
                     :JMP(readCode)
 
-oopCODESIZEdep: ;//TODO: create/create2, constructor parameters, initBytcode vs deployed Bytecode
-    $ => B          :MLOAD(txNData)
+opCODESIZEdep: ;//TODO: create/create2, constructor parameters, initBytcode vs deployed Bytecode
+    $ => B          :MLOAD(txCalldataLen)
     B               :MSTORE(SP++)
     GAS-2 => GAS
                     :JMP(readCode)
 
 opCODECOPY:
-    $ => A          :MLOAD(txIsCreateContract)
+    $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPC(opCALLDATACOPY) ; //TODO:
     $ => A          :MLOAD(txDestAddr) ; //TODO: delegate call ?
     2 => B
@@ -717,10 +717,16 @@ opEXTCODEHASHend:
     A               :MSTORE(SP++)
                     :JMP(readCode)
 
-; // TODO: check batch_number !exist --> return 0
 opBLOCKHASH:
     SP - 1 => SP
+    GAS-20 => GAS
     $ => A          :MLOAD(SP) ; batch number
+    
+    ; Check batch number is lt current batch number, else return 0
+    $ => B          :MLOAD(numBatch)
+    B - A - 1       :JMPC(opBLOCKHASHzero)
+    
+    ; Create key for the batch hash mapping key
     $ => E          :MLOAD(lastHashIdUsed)
     E+1 => E        :MSTORE(lastHashIdUsed)
     32 => D
@@ -728,11 +734,20 @@ opBLOCKHASH:
     0               :HASHW(E) ; Storage position of the batch hash
                     :HASHE(E)
     $ => C          :HASHR(E)
+
+    ; Load value from hashed key
     $ => A          :MLOAD(systemAddr)
+    ; Set B to 3 to load from storage of address stored in A
     3 => B
     $ => E          :SLOAD
+
+    ; Store result value in the stack
     E               :MSTORE(SP++)
-    GAS-20 => GAS
+                    :JMP(readCode)
+
+; Handle when is asking for the hash of a not computed batch, return 0                   
+opBLOCKHASHzero:
+    0               :MSTORE(SP++)
                     :JMP(readCode)
 
 opCOINBASE:
@@ -838,12 +853,12 @@ opSLOAD:
                     :JMP(readCode)
 
 opSSTORE:
-    $ => A          :MLOAD(staticCall)
+    $ => A          :MLOAD(iSstaticCall)
     0 - A           :JMPC(invalidStaticTx)
     SP - 1 => SP
     $ => C          :MLOAD(SP--) ;key
     $ => D          :MLOAD(SP) ; new value
-    $ => A          :MLOAD(txIsCreateContract)
+    $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPC(deploymentSSTORE)
     $ => A          :MLOAD(storageAddr)
                     :JMP(opSSTOREinit)
@@ -923,7 +938,7 @@ opSSTOREdifB:
                     :JMP(opSSTOREend)
 
 opSSTOREend:
-    $ => A          :MLOAD(txIsCreateContract)
+    $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPC(mloadContract)
     $ => A          :MLOAD(storageAddr)
                     :JMP(opSSTOREsr)
@@ -1015,193 +1030,193 @@ opAuxPUSHC:
 
 opPUSH1:
     1 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH2:
     2 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH3:
     3 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH4:
     4 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH5:
     5 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH6:
     6 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH7:
     7 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH8:
     8 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH9:
     9 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH10:
     10 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH11:
     11 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH12:
     12 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH13:
     13 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH14:
     14 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH15:
     15 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH16:
     16 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH17:
     17 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH18:
     18 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH19:
     19 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH20:
     20 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH21:
     21 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH22:
     22 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH23:
     23 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH24:
     24 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH25:
     25 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH26:
     26 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH27:
     27 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH28:
     28 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH29:
     29 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH30:
     30 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH31:
     31 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH32:
     32 => D
-    $ => B                          :MLOAD(txIsCreateContract)
+    $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPC(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
@@ -1509,7 +1524,7 @@ opSWAP16:
 ; // TODO: save logs in memory and consolidate them once the tx is succesfull
 ; gas_cost = 375 + 375 * num_topics + 8 * data_size + mem_expansion_cost
 opLOG0:
-    $ => A              :MLOAD(staticCall)
+    $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPC(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
@@ -1523,7 +1538,7 @@ opLOG0:
                         :JMP(opLOGLoop)
 
 opLOG1:
-    $ => A              :MLOAD(staticCall)
+    $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPC(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
@@ -1537,7 +1552,7 @@ opLOG1:
                         :JMP(opLOGLoop)
 
 opLOG2:
-    $ => A              :MLOAD(staticCall)
+    $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPC(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
@@ -1551,7 +1566,7 @@ opLOG2:
                         :JMP(opLOGLoop)
 
 opLOG3:
-    $ => A              :MLOAD(staticCall)
+    $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPC(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
@@ -1565,7 +1580,7 @@ opLOG3:
                         :JMP(opLOGLoop)
 
 opLOG4:
-    $ => A              :MLOAD(staticCall)
+    $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPC(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
@@ -1611,7 +1626,7 @@ opLOGend:
 ; // TODO Check with DElEGATE CALL txDestAddr/txSrcAddr ( same as other calls)
 ; // TODO check revert create
 opCREATE:
-    $ => A              :MLOAD(staticCall)
+    $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPC(invalidStaticTx)
     SP - 1 => SP
     $ => A              :MLOAD(SP--)    ;value
@@ -1628,7 +1643,7 @@ opCREATE:
     ;change new CTX
     $ => A              :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
     A+1 => CTX          :MSTORE(lastCtxUsed)
-    1                   :MSTORE(txIsCreateContract)
+    1                   :MSTORE(isCreateContract)
     $ => A              :MLOAD(originAuxCTX)
     A                   :MSTORE(originCTX)
     B                   :MSTORE(txSrcAddr)
@@ -1644,7 +1659,7 @@ opCREATE:
                         :CALL(getLenBytes)
     A                   :MSTORE(lengthNonce)
     $ => A              :MLOAD(argsLengthCall)
-    A                   :MSTORE(txNData)
+    A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
     A                   :MSTORE(txValue)
 ; TODO: memory?
@@ -1671,7 +1686,7 @@ opCALL:
     A               :MSTORE(addrCall)
     $ => A          :MLOAD(SP--)
     A               :MSTORE(valueCall)
-    $ => B          :MLOAD(staticCall) ; TODO isStaticCall
+    $ => B          :MLOAD(iSstaticCall) ; TODO isStaticCall
     B - 1           :JMPC(opCALL2)
     0 - A           :JMPC(invalidStaticTx)
 
@@ -1725,13 +1740,13 @@ opCALL4:
     ; GAS - 25000 => GAS
 
 opCALLend:
-                    :CALL(gasSpendCallError) ;// TODO: renaming "computeGasSendCall"
+                    :CALL(computeGasSendCall)
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     $ => CTX        :MLOAD(currentCTX)
     A => GAS
     $ => A          :MLOAD(argsLengthCall)
-    A               :MSTORE(txNData)
+    A               :MSTORE(txCalldataLen)
     $ => E          :MLOAD(argsOffsetCall) ;offset
     $ => C          :MLOAD(argsLengthCall) ;length ; // TODO: duplicate MLOAD
                     :CALL(copySP)
@@ -1796,13 +1811,13 @@ opCALLCODE3:
     ; TODO: check gas_sent_with_call
 
 opCALLCODEend:
-                    :CALL(gasSpendCallError)
+                    :CALL(computeGasSendCall)
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     $ => CTX        :MLOAD(currentCTX)
     A => GAS
     $ => A          :MLOAD(argsLengthCall)
-    A               :MSTORE(txNData)
+    A               :MSTORE(txCalldataLen)
     $ => E          :MLOAD(argsOffsetCall) ;offset
     $ => C          :MLOAD(argsLengthCall) ;length
                     :CALL(copySP)
@@ -1815,7 +1830,7 @@ opRETURN:
     $ => E          :MLOAD(SP--) ;offset
     $ => C          :MLOAD(SP)   ;length
     E+C             :MSTORE(lastMemLength)
-    $ => D          :MLOAD(txIsCreateContract)
+    $ => D          :MLOAD(isCreateContract)
     0 - D           :JMPC(opRETURNdeploy)
     $ => B          :MLOAD(originCTX)       ;last ctx
     B - 1           :JMPC(opRETURNend2)
@@ -1984,7 +1999,7 @@ opDELEGATECALL3:
     ${touchedAddress(A,CTX)} => D
     ;gas_cost = base_gas + gas_sent_with_call
     GAS-100-D*2500 => GAS
-                    :CALL(gasSpendCallError)
+                    :CALL(computeGasSendCall)
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     $ => CTX        :MLOAD(currentCTX)
@@ -1992,7 +2007,7 @@ opDELEGATECALL3:
 
 opDELEGATECALLend:
     $ => A          :MLOAD(argsLengthCall)
-    A               :MSTORE(txNData)
+    A               :MSTORE(txCalldataLen)
     $ => E          :MLOAD(argsOffsetCall) ;offset
     $ => C          :MLOAD(argsLengthCall) ;length
                     :CALL(copySP)
@@ -2003,7 +2018,7 @@ opDELEGATECALLend:
 ; // TODO Check with DElEGATE CALL txDestAddr/txSrcAddr ( same as other calls)
 ; // TODO check revert create
 opCREATE2:
-    $ => A              :MLOAD(staticCall)
+    $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPC(invalidStaticTx)
     SP - 1 => SP
     $ => A              :MLOAD(SP--)    ;value
@@ -2021,8 +2036,8 @@ opCREATE2:
     ;change new CTX
     $ => A              :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
     A+1 => CTX          :MSTORE(lastCtxUsed)
-    1                   :MSTORE(txIsCreateContract)
-    1                   :MSTORE(create2)
+    1                   :MSTORE(isCreateContract)
+    1                   :MSTORE(isCreate2)
     D                   :MSTORE(salt)
     $ => A              :MLOAD(originAuxCTX)
     A                   :MSTORE(originCTX)
@@ -2039,7 +2054,7 @@ opCREATE2:
                         :CALL(getLenBytes)
     A                   :MSTORE(lengthNonce)
     $ => A              :MLOAD(argsLengthCall)
-    A                   :MSTORE(txNData)
+    A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
     A                   :MSTORE(txValue)
 ; TODO: memory?
@@ -2085,7 +2100,7 @@ opSTATICCALL3:
     $ => A          :MLOAD(originAuxCTX)
     A               :MSTORE(originCTX)
     0               :MSTORE(txValue)
-    1               :MSTORE(staticCall)
+    1               :MSTORE(iSstaticCall)
     B               :MSTORE(txSrcAddr)
     D               :MSTORE(txSrcOriginAddr)
     ${copyTouchedAddress(A,CTX)}
@@ -2095,14 +2110,14 @@ opSTATICCALL3:
     ${touchedAddress(A,CTX)} => D
     ;gas_cost = base_gas + gas_sent_with_call
     GAS-100-D*2500 => GAS
-                    :CALL(gasSpendCallError)
+                    :CALL(computeGasSendCall)
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     $ => CTX        :MLOAD(currentCTX)
     A => GAS
     ; TODO: check gas_sent_with_call
     $ => A          :MLOAD(argsLengthCall)
-    A               :MSTORE(txNData)
+    A               :MSTORE(txCalldataLen)
     $ => E          :MLOAD(argsOffsetCall) ;offset
     $ => C          :MLOAD(argsLengthCall) ;length
                     :CALL(copySP)
@@ -2137,7 +2152,7 @@ opREVERTend:
 ; DelegateCAll + selfdestruct, should destro the caller bytecode
 ; Test selfDestruct: sent value to another contract
 opSELFDESTRUCT:
-    $ => A              :MLOAD(staticCall)
+    $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPC(invalidStaticTx)
     24000               :MSTORE(gasRefund)
     GAS - 5000 => GAS
