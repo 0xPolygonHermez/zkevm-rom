@@ -8,11 +8,11 @@ start:
 
         32 => D
         $ => A                              :MLOAD(oldStateRoot)
-        A                                   :HASHW(0)
+        A                                   :HASHK(0)
         A => SR
 
         32 => D
-        ${getOldLocalExitRoot()}  => A      :HASHW(0)
+        ${getOldLocalExitRoot()}  => A      :HASHK(0)
                                             :MSTORE(oldLocalExitRoot)
 
         ${getNewLocalExitRoot()}            :MSTORE(newLocalExitRoot)
@@ -46,14 +46,19 @@ start:
 ;;;;;;;;;
 ;; Set batch hash
 ;;;;;;;;;
+        ; Save the position of the last hash (oldHashPos --> VAR GLOBAL)
+        HASHPOS                             :MSTORE(oldHashPos)
+        ; A new hash with position 0 is started
+        0 => HASHPOS
+
         $ => E                              :MLOAD(lastHashIdUsed)
         E+1 => E                            :MSTORE(lastHashIdUsed)
         32 => D
         $ => A                              :MLOAD(numBatch)
-        A - 1                               :HASHW(E)
-        0                                   :HASHW(E)                  ; Storage position of the batch hash
-                                            :HASHE(E)
-        $ => C                              :HASHR(E)
+        A - 1                               :HASHK(E)
+        0                                   :HASHK(E)                  ; Storage position of the batch hash
+        HASHPOS                             :HASHKLEN(E)
+        $ => C                              :HASHKDIGEST(E)
 
         $ => A                              :MLOAD(systemAddr)
         3 => B
@@ -63,14 +68,17 @@ start:
 ;;;;;;;;;
 ;; Set global exit root
 ;;;;;;;;;
+        ; A new hash with position 0 is started
+        0 => HASHPOS
+
         $ => E                              :MLOAD(lastHashIdUsed)
         E+1 => E                            :MSTORE(lastHashIdUsed)
         32 => D
         $ => A                              :MLOAD(numBatch)
-        A                                   :HASHW(E)
-        0                                   :HASHW(E)                  ; Storage position of the global exit root map
-                                            :HASHE(E)
-        $ => C                              :HASHR(E)                  ; Storage position of the current global exit root
+        A                                   :HASHK(E)
+        0                                   :HASHK(E)                  ; Storage position of the global exit root map
+        HASHPOS                             :HASHKLEN(E)
+        $ => C                              :HASHKDIGEST(E)            ; Storage position of the current global exit root
 
         ${getGlobalExitRootManagerAddr()}  => A
         3 => B
@@ -80,6 +88,7 @@ start:
 ;;;;;;;;;
 ;; Prepare transaction loop
 ;;;;;;;;;
+        $ => HASHPOS                        :MLOAD(oldHashPos)
         E                                   :MSTORE(lastTxHashId)
         $ => A                              :MLOAD(lastCtxUsed)
         A                                   :MSTORE(ctxTxToUse)
@@ -126,6 +135,10 @@ processTxsEnd:
 ;;;;;;;;
 ; Get new hashId
 ;;;;;;;
+        HASHPOS                         :MSTORE(oldHashPos)
+        ; A new hash with position 0 is started
+        0 => HASHPOS
+
         ; We get a new hashId
         $ => E                          :MLOAD(lastHashIdUsed)
         E+1 => E                        :MSTORE(lastHashIdUsed)
@@ -142,7 +155,7 @@ appendTxs:
         32 => D
         ${getTxs(p,D)} => A
         $${p = p + D}
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         C + D => C
                                         :JMP(appendTxs)
 
@@ -150,7 +163,7 @@ endAppendTxs:
         B - C => D
         ${getTxs(p,D)} => A
         $${ p = p + D}
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         C + D => C
 
 ;;;;;;;;;
@@ -164,41 +177,44 @@ endAppendTxs:
 ;;;;;;;;;
         32 => D
         $ => A                          :MLOAD(globalExitRoot)
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         8 => D
         $ => A                          :MLOAD(timestamp)
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         20 => D
         $ => A                          :MLOAD(sequencerAddr)
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         8 => D
         $ => A                          :MLOAD(chainId)
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         $ => A                          :MLOAD(numBatch)
-        A                               :HASHW(E)
-                                        :HASHE(E)
+        A                               :HASHK(E)
+        HASHPOS                         :HASHKLEN(E)
         $ => A                          :MLOAD(batchHashData)
-        $                               :HASHR(E), ASSERT
+        $                               :HASHKDIGEST(E), ASSERT
 
 ;;;;;;;
 ; Check Global Hash
 ;;;;;;;
 
+        ; Get position of the previous hash
+        $ => HASHPOS                    :MLOAD(oldHashPos)
+
         32 => D
-        SR                                      :HASHW(0)
+        SR                              :HASHK(0)
 
-        $ => A                                  :MLOAD(newLocalExitRoot)
-        A                                       :HASHW(0)
+        $ => A                          :MLOAD(newLocalExitRoot)
+        A                               :HASHK(0)
 
-        $ => A                                  :MLOAD(batchHashData)
-        A                                       :HASHW(0)
+        $ => A                          :MLOAD(batchHashData)
+        A                               :HASHK(0)
 
-                                                :HASHE(0)
+        HASHPOS                         :HASHKLEN(0)
 
-        $ => A                                  :MLOAD(globalHash)
-        $                                       :HASHR(0), ASSERT
+        $ => A                          :MLOAD(globalHash)
+        $                               :HASHKDIGEST(0), ASSERT
 
-        0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR                 ; Set all registers to 0
+        0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR                 ; Set all registers to 0
 
 longLoop:
         STEP-0x10000+40  : JMPC(longLoop2)
