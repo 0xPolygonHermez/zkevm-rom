@@ -337,6 +337,8 @@ opSHA3:
     $ => B           :MLOAD(lastHashIdUsed)
     B + 1 => B       :MSTORE(lastHashIdUsed)
     32 => D
+    ; A new hash with position 0 is started
+    0 => HASHPOS
 
 opSHA3Loop:
     C - 1           :JMPC(opSHA3End)
@@ -344,7 +346,7 @@ opSHA3Loop:
                     :CALL(MLOAD32)
     E => B
     $ => E          :MLOAD(lastHashIdUsed)
-    A               :HASHW(E)
+    A               :HASHK(E)
     B => E
     C - 32 => C
                     :JMP(opSHA3Loop)
@@ -354,12 +356,12 @@ opSHA3Final:
     $ => A          :SHR
     $ => E          :MLOAD(lastHashIdUsed)
     C => D
-    A               :HASHW(E)
+    A               :HASHK(E)
 
 opSHA3End:
     $ => E          :MLOAD(lastHashIdUsed)
-                    :HASHE(E)
-    $ => A          :HASHR(E)
+    HASHPOS         :HASHKLEN(E)
+    $ => A          :HASHKDIGEST(E)
     A               :MSTORE(SP++)
     $ => E          :MLOAD(lastMemLength)
     $ => B          :MLOAD(memLength)
@@ -685,13 +687,15 @@ opEXTCODEHASH:
     ${getBytecodeLength(A)} => C
     $ => E           :MLOAD(lastHashIdUsed)
     E+1 => E         :MSTORE(lastHashIdUsed)
+    ; A new hash with position 0 is started
+    0 => HASHPOS
 
 opEXTCODEHASHinit:
     32 => D
     C - 1           :JMPC(opEXTCODEHASHend)
     C - 32          :JMPC(opEXTCODEHASHfinal)
     ${getBytecode(A,p,D)} => B
-    B               :HASHW(E)
+    B               :HASHK(E)
     C - D => C
     $${p = p + D}
                     :JMP(opEXTCODEHASHinit)
@@ -699,11 +703,11 @@ opEXTCODEHASHinit:
 opEXTCODEHASHfinal:
     C => D
     ${getBytecode(A,p,C)} => B
-    B               :HASHW(E)
+    B               :HASHK(E)
 
 opEXTCODEHASHend:
-                    :HASHE(E)
-    $ => A          :HASHR(E)
+    HASHPOS         :HASHKLEN(E)
+    $ => A          :HASHKDIGEST(E)
     A               :MSTORE(SP++)
                     :JMP(readCode)
 
@@ -712,11 +716,13 @@ opBLOCKHASH:
     $ => A          :MLOAD(SP)
     $ => E          :MLOAD(lastHashIdUsed)
     E+1 => E        :MSTORE(lastHashIdUsed)
+    ; A new hash with position 0 is started
+    0 => HASHPOS
     32 => D
-    A               :HASHW(E)
-    0               :HASHW(E) ; Storage position of the batch hash
-                    :HASHE(E)
-    $ => C          :HASHR(E)
+    A               :HASHK(E)
+    0               :HASHK(E) ; Storage position of the batch hash
+    HASHPOS         :HASHKLEN(E)
+    $ => C          :HASHKDIGEST(E)
     $ => A          :MLOAD(systemAddr)
     3 => B
     $ => E          :SLOAD

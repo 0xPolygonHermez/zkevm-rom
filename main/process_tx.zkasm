@@ -1,7 +1,13 @@
 INCLUDE "precompiled/selector.zkasm"
 
 processTx:
+        ; I think it is not necessary to save hashpos in this file.
+        ; hashpos is not needed to get hashkdigest
 
+        ; Save the position of the last hash (oldHashPos --> VAR GLOBAL)
+        HASHPOS                         :MSTORE(oldHashPos)
+        ; Get sigDataSize (VAR CTX)
+        $ => HASHPOS                    :MLOAD(sigDataSize)
         ; We get a new hashId
         $ => E                          :MLOAD(lastTxHashId)
         E+1 => E                        :MSTORE(lastTxHashId)
@@ -12,7 +18,7 @@ processTx:
 ;;;;;;;;;
 
         ; Check the signature
-        $ => A                          :HASHR(E)
+        $ => A                          :HASHKDIGEST(E)
         $ => B                          :MLOAD(txR)
         $ => C                          :MLOAD(txS)
         $ => D                          :MLOAD(txV)
@@ -159,6 +165,8 @@ checkTxType:
                                         :JMP(checkTxType)
 
 getContractAddress:
+        ; A new hash with position 0 is started
+        0 => HASHPOS
         ; We get a new hashId
         $ => E                          :MLOAD(lastHashIdUsed)
         E+1 => E                        :MSTORE(lastHashIdUsed)
@@ -169,33 +177,33 @@ getContractAddress:
         B - 0x80                        :JMPC(nonce1byte)
         $ => C                          :MLOAD(lengthNonce)
         1 => D
-        0xc0 + 22 + C                   :HASHW(E) ; 1 byte length address, 20 bytes address, 1 bytes length nonce = 22 bytes
-        0x94                            :HASHW(E)
+        0xc0 + 22 + C                   :HASHK(E) ; 1 byte length address, 20 bytes address, 1 bytes length nonce = 22 bytes
+        0x94                            :HASHK(E)
         20 => D
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         1 => D
-        0x80 + C                        :HASHW(E)
+        0x80 + C                        :HASHK(E)
         C => D
-        B                               :HASHW(E)
+        B                               :HASHK(E)
                                         :JMP(endContractAddress)
 
 nonce1byte:
         1 => D
-        0xc0 + 22                       :HASHW(E) ; 1 byte length address, 20 bytes address, 1 bytes length nonce = 22 bytes
-        0x94                            :HASHW(E)
+        0xc0 + 22                       :HASHK(E) ; 1 byte length address, 20 bytes address, 1 bytes length nonce = 22 bytes
+        0x94                            :HASHK(E)
         20 => D
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         1 => D
         B - 1                           :JMPC(nonce0)
-        B                               :HASHW(E)
+        B                               :HASHK(E)
                                         :JMP(endContractAddress)
 
 nonce0:
-        0x80                            :HASHW(E)
+        0x80                            :HASHK(E)
 
 endContractAddress:
-                                        :HASHE(E)
-        $ => A                          :HASHR(E)
+        HASHPOS                         :HASHKLEN(E)
+        $ => A                          :HASHKDIGEST(E)
         12 => D
         $ => A                          :SHL ; // TODO: Could be replaced by a bitwise and: ${bitwise_and(A, 2**160 - 1)
         $ => A                          :SHR
@@ -214,7 +222,7 @@ loopCreate2:
         C - 32                          :JMPC(endloopCreate2)
         $ => A                          :MLOAD(SP++)
         32 => D
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         C - 32 => C
                                         :JMP(loopCreate2)
 
@@ -223,26 +231,26 @@ endloopCreate2:
         32 - C => D
         $ => A                          :SHR
         C => D
-        A                               :HASHW(E)
+        A                               :HASHK(E)
 
 create2end:
-                                        :HASHE(E)
-        $ => C                          :HASHR(E)
+        HASHPOS                         :HASHKLEN(E)
+        $ => A                          :HASHKDIGEST(E)
         $ => E                          :MLOAD(lastHashIdUsed)
         E+1 => E                        :MSTORE(lastHashIdUsed)
         ;keccak256( 0xff ++ address ++ salt ++ keccak256(init_code))[12:]
         1 => D
-        0xff                            :HASHW(E)
+        0xff                            :HASHK(E)
         20 => D
         $ => A                          :MLOAD(txSrcAddr)
-        A                               :HASHW(E)
+        A                               :HASHK(E)
         $ => B                          :MLOAD(salt)
         32 => D
-        B                               :HASHW(E)
+        B                               :HASHK(E)
         32 => D
-        C                               :HASHW(E)
-                                        :HASHE(E)
-        $ => A                          :HASHR(E)
+        C                               :HASHK(E)
+        HASHPOS                         :HASHKLEN(E)
+        $ => A                          :HASHKDIGEST(E)
         12 => D
         $ => A                          :SHL ; // TODO: Could be replaced by a bitwise and: ${bitwise_and(A, 2**160 - 1)
         $ => A                          :SHR
@@ -416,7 +424,8 @@ refundGas:
 
 
 terminateTX:
-
+        ; Get oldHashPos (saved at the beginning of this file)
+        $ => HASHPOS                    :MLOAD(oldHashPos)
                                         :JMP(processTxEnd)
 
 invalidTx:
