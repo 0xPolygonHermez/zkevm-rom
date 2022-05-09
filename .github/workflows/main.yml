@@ -1,0 +1,44 @@
+# This workflow will do a clean install of node dependencies, build the source code and run tests across different versions of node
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
+
+name: Main CI
+
+on:
+  push:
+    branches: [develop, feature/github-action]
+  pull_request:
+    branches: [develop, opcodes]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set int-bot SSH key
+        run: |
+          touch /tmp/ssh-key
+          echo "${{ secrets.INT_BOT_SSH_KEY }}" > /tmp/ssh-key
+          chmod 400 /tmp/ssh-key
+          eval "$(ssh-agent -s)"
+          ssh-add /tmp/ssh-key
+      - name: Run test vectors
+        run: |
+          eval "$(ssh-agent -s)"
+          ssh-add /tmp/ssh-key
+          npm i && npm run build
+          cd ..
+          git clone -b develop git@github.com:hermeznetwork/zkvmpil.git
+          git clone git@github.com/hermeznetwork/test-vectors
+          git clone -b opcodes git@github.com/hermeznetwork/zkproverjs
+          cd zkvmpil && npm i && npm run build && cd ..
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: run test-vectors
+        run: |
+          npm i
+          cd tools/run-test
+          node run-inputs.js -f ../../../test-vectors/inputs-executor/calldata/ -r ../../../zkrom/build/rom.json -p ../../../zkvmpil/build/zkevm.pil.json
