@@ -59,8 +59,15 @@ nonceREAD:
         A                               :HASHK(E)    ; Main Hash
         C + D => C
         A - 0x80                        :JMPC(endNonce)
+        A - 0x81                        :JMPC(nonce0)
         A - 0x89                        :JMPC(shortNonce)
                                         :JMP(invalidTxRLP)
+
+nonce0:
+        0                               :MSTORE(lengthNonce)
+        0 => A
+                                        :JMP(endNonce)
+
 shortNonce:
         A - 0x80 => D
         D                               :MSTORE(lengthNonce)
@@ -92,10 +99,17 @@ gasPriceREAD:
         C + D => C
 
         A - 0x80                        :JMPC(endGasPrice)
+        A - 0x81                        :JMPC(gasPrice0)
         A - 0xa1                        :JMPC(shortGasPrice)
                                         :JMP(invalidTxRLP)
+
+gasPrice0:
+        0 => A
+                                        :JMP(endGasPrice)
+
 shortGasPrice:
         A - 0x80 => D
+        D - 1                           :JMPC(endGasPrice)
         $ => A                          :MLOAD(txsListLength)
         $ => B                          :MLOAD(batchL2DataRead)
         A - B - C - D                   :JMPC(invalidTxRLP)
@@ -124,10 +138,16 @@ gasREAD:
         A                               :HASHK(E)    ; Main Hash
         C + D => C
         A - 0x80                        :JMPC(endGas)
+        A - 0x81                        :JMPC(gas0)
         A - 0xa1                        :JMPC(shortGas)
                                         :JMP(invalidTxRLP)
+
+gas0:
+        0 => A                          :JMPC(endGas)
+
 shortGas:
         A - 0x80 => D
+        D - 1                           :JMPC(endGas)
         $ => A                          :MLOAD(txsListLength)
         $ => B                          :MLOAD(batchL2DataRead)
         A - B - C - D                   :JMPC(invalidTxRLP)
@@ -195,10 +215,17 @@ valueREAD:
         C + D => C
 
         A - 0x80                        :JMPC(endValue)
+        A - 0x81                        :JMPC(value0)
         A - 0xa1                        :JMPC(shortValue)
                                         :JMP(invalidTxRLP)
+
+value0:
+        0 => A
+                                        :JMPC(endValue)
+
 shortValue:
         A - 0x80 => D
+        D - 1                           :JMPC(endValue)
         $ => A                          :MLOAD(txsListLength)
         $ => B                          :MLOAD(batchL2DataRead)
         A - B - C - D                   :JMPC(invalidTxRLP)
@@ -303,10 +330,17 @@ chainREAD:
         A                               :HASHK(E)    ; Main Hash
         C+D => C
         A - 0x80                        :JMPC(endChainId)
+        A - 0x81                        :JMPC(chanId0)
         A - 0x89                        :JMPC(shortChainId)
                                         :JMP(invalidTxRLP)
+
+chanId0:
+        0 => A
+                                        :JMPC(endChainId)
+
 shortChainId:
         A - 0x80 => D
+        D - 1                           :JMPC(endChainId)
         $ => A                          :MLOAD(txsListLength)
         $ => B                          :MLOAD(batchL2DataRead)
         A - B - C - D                   :JMPC(invalidTxRLP)
