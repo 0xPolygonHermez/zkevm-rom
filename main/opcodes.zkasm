@@ -276,33 +276,25 @@ opBYTE:
     $ => B                  :MLOAD(SP--)
     $ => A                  :MLOAD(SP)
     31 - B => D
-    $ => B                  :SHR
+    ${A >> (D*8)} => B
     GAS-3 => GAS
     ${bitwise_and(B, 255)}  :MSTORE(SP++)
                             :JMP(readCode)
 
-opSHR:  ; //TODO: SHR byte by byte working fine. Not working when shifting bits. Could be done by: [B / 2**(A%8)] or SHR bits directly
+opSHR:
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
-    ${D/8} => D
-    ${comp_gt(D, 32)} => B
-    ${B * 32 + bitwise_xor(B, 1) * D} => D
-
     $ => A          :MLOAD(SP)
-    $ => A          :SHR
+    ${A >> D} => A
     A               :MSTORE(SP++)
     GAS-3 => GAS
                     :JMP(readCode)
 
-opSHL:  ; //TODO: SHL byte by byte working fine. Not working when shifting bits. Could be done by: [B / 2**(A%8)] or SHR bits directly
+opSHL:
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
-    ${D/8} => D
-    ${comp_gt(D, 32)} => B
-    ${B * 32 + bitwise_xor(B, 1) * D} => D
-
     $ => A          :MLOAD(SP)
-    $ => A          :SHL
+    ${A << D} => A
     A               :MSTORE(SP++)
     GAS-3 => GAS
                     :JMP(readCode)
@@ -311,14 +303,10 @@ opSHL:  ; //TODO: SHL byte by byte working fine. Not working when shifting bits.
 opSAR:
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
-    ${D/8} => D
-    ${comp_gt(D, 32)} => B
-    ${B * 32 + bitwise_xor(B, 1) * D} => D
-    
     $ => A          :MLOAD(SP)
                     :CALL(abs)
                     ; if more than 32 set to 32
-    $ => A          :SHR
+    ${A >> D} => A
     ${bitwise_xor(B, 1)} - 1 :JMPC(opSARNeg)  ; 0 negative, 1 positive
     A               :MSTORE(SP++)
     GAS-3 => GAS
@@ -353,7 +341,7 @@ opSHA3Loop:
 opSHA3Final:
                     :CALL(MLOADX)
     32 - C => D
-    $ => A          :SHR
+    ${A >> (D*8)} => A
     $ => E          :MLOAD(lastHashIdUsed)
     C => D
     A               :HASHK(E)
@@ -435,10 +423,10 @@ opCALLDATALOAD2:
     A => D
     1024 + B => SP
     $ => A          :MLOAD(SP++)
-    $ => B          :SHL
+    ${A << (D*8)} => B
     32 - D => D
     $ => A          :MLOAD(SP)
-    $ => A          :SHR
+    ${A >> (D*8)} => A
     C => SP
     B + A           :MSTORE(SP++)
     GAS - 3 => GAS
@@ -467,11 +455,11 @@ opCALLDATACOPYinit:
     ${B%32} => D
     1024 + ${B/32} => SP
     $ => A          :MLOAD(SP)
-    $ => C          :SHL
+    ${A << (D*8)} => C
     1024 + ${B/32} + 1 => SP
     32 - D => D
     $ => A          :MLOAD(SP)
-    $ => A          :SHR
+    ${A >> (D*8)} => A
     A + C           :MSTORE(bytesToStore)
                     :CALL(MSTORE32)
     $ => SP         :MLOAD(SPw)
@@ -485,7 +473,7 @@ opCALLDATACOPYfinal:
     ${B%32} => D
     1024 + ${B/32} => SP
     $ => A          :MLOAD(SP)
-    $ => A          :SHL
+    ${A << (D*8)} => A
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP)   ;length
     1024 + ${B/32} + 1 => SP
@@ -494,9 +482,9 @@ opCALLDATACOPYfinal:
     A => B
     $ => A          :MLOAD(SP)
     32 - D => D
-    $ => A          :SHR
+    ${A >> (D*8)} => A
     32 - C => D
-    $ => A          :SHL
+    ${A << (D*8)} => A
     B + A => A
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
@@ -504,8 +492,8 @@ opCALLDATACOPYfinal:
 
 opCALLDATACOPYxor:
     32 - C => D
-    $ => A          :SHR
-    $ => A          :SHL
+    ${A >> (D*8)} => A
+    ${A << (D*8)} => A
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
 
@@ -563,7 +551,7 @@ opCODECOPYinit:
 opCODECOPYfinal:
     ${getBytecode(A,B,C)} => A
     32 - C  => D
-    $ => A          :SHL
+    ${A << (D*8)} => A
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
 
@@ -618,7 +606,7 @@ opEXTCODECOPYinit:
 opEXTCODECOPYfinal:
     ${getBytecode(A,B,C)} => A
     32 - C  => D
-    $ => A          :SHL
+    ${A << (D*8)} => A
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
 
@@ -809,7 +797,7 @@ opMSTORE8:
     $ => A          :MLOAD(SP)                  ;value
     1 => C
     32 - C => D
-    $ => A          :SHL
+    ${A << (D*8)} => A
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
     GAS - 3 => GAS
@@ -996,7 +984,7 @@ opAuxPUSHC:
     D - E => D
     $ => B                      :MLOAD(SP)
     ${getByte(B,C,D)} => B
-    $ => A                      :SHR
+    ${A >> (D*8)} => A
     $ => SP                     :MLOAD(SPw)
     A + B                       :MSTORE(SP++)
     GAS-3 => GAS
@@ -1869,7 +1857,7 @@ opRETURNcreate:
     $ => C                          :MLOAD(txValue)                                         ; A = E - C
     ${E-C} => A
     31 => D
-    $ => B                          :SHR
+    ${A >> (D*8)} => B
     0x7F - B                        :JMPC(invalidTx)                                        ; If A is a negative value --> invalidTx
     1 => B
     0 => D
