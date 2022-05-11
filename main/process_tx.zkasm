@@ -87,7 +87,7 @@ endCheckChainId:
         D => C                                                                                  ; A = E - C
         ${E-C} => A
         31 => D
-        $ => B                          :SHR                                                   ; //TODO: Could be replaces by: ${bitwise_and(A, 2**255)} + [ ${comp_eq(A, 0x80)} or (0x7F - B)]
+        ${A >> (D*8)} => B                                                                     ; //TODO: Could be replaces by: ${bitwise_and(A, 2**255)} + [ ${comp_eq(A, 0x80)} or (0x7F - B)]
         0x7F - B                        :JMPC(invalidTx)                                       ; If A is a negative value --> invalidTx
         1 => B
         0 => D
@@ -206,7 +206,7 @@ endContractAddress:
         $ => A                          :HASHKDIGEST(E)
         12 => D
         $ => A                          :SHL ; // TODO: Could be replaced by a bitwise and: ${bitwise_and(A, 2**160 - 1)
-        $ => A                          :SHR
+        ${A >> (D*8)} => A
         A                               :MSTORE(createContractAddress)
                                         :JMP(deploy)
 
@@ -229,7 +229,7 @@ loopCreate2:
 endloopCreate2:
         $ => A                          :MLOAD(SP)
         32 - C => D
-        $ => A                          :SHR
+        ${A >> (D*8)} => A
         C => D
         A                               :HASHK(E)
 
@@ -255,7 +255,7 @@ create2end:
         $ => A                          :HASHKDIGEST(E)
         12 => D
         $ => A                          :SHL ; // TODO: Could be replaced by a bitwise and: ${bitwise_and(A, 2**160 - 1)
-        $ => A                          :SHR
+        ${A >> (D*8)} => A
         A                               :MSTORE(createContractAddress)
 
 deploy:
@@ -337,7 +337,7 @@ moveBalances:
         $ => C                          :MLOAD(txValue)                                         ; A = E - C
         ${E-C} => A
         31 => D
-        $ => B                          :SHR
+        ${A >> (D*8)} => B
         0x7F - B                        :JMPC(invalidTx)                                        ; If A is a negative value --> invalidTx
         1 => B
         0 => D
