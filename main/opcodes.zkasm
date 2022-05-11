@@ -20,9 +20,12 @@ opADD:
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
     $ => C          :MLOAD(SP)
-    1 => B
-    0 => D
-    ${A+C} => E     :ARITH
+
+    ; Add operation with Arith
+    A               :MSTORE(arithA)
+    C               :MSTORE(arithB)
+                    :CALL(addARITH)
+    $ => E          :MLOAD(arithRes1)
     E               :MSTORE(SP++)
     GAS-3 => GAS
                     :JMP(readCode)
@@ -31,9 +34,11 @@ opMUL:
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
     $ => B          :MLOAD(SP)
-    0 => C
-    0 => D
-    ${A*B} => E     :ARITH
+    ; Mul operation with Arith
+    A               :MSTORE(arithA)
+    B               :MSTORE(arithB)
+                    :CALL(mulARITH)
+    $ => E          :MLOAD(arithRes1)
     E               :MSTORE(SP++)
     GAS-5 => GAS
                     :JMP(readCode)
@@ -42,10 +47,11 @@ opSUB:
     SP - 1 => SP
     $ => E          :MLOAD(SP--)
     $ => C          :MLOAD(SP)
-    1 => B
-    0 => D
-    ${E-C} => A
-    E               :ARITH
+    ; Sub operation with Arith
+    E               :MSTORE(arithA)
+    C               :MSTORE(arithB)
+                    :CALL(subARITH)
+    $ => A          :MLOAD(arithRes1)
     A               :MSTORE(SP++)
     GAS-3 => GAS
                     :JMP(readCode)
@@ -54,10 +60,11 @@ opDIV:
     SP - 1 => SP
     $ => E          :MLOAD(SP--)
     $ => A          :MLOAD(SP)
-    ${E%A} => C
-    ${E/A} => B
-    0 => D
-    E               :ARITH ; TODO: Add --> LT(Residu < numToDiv)
+    ; Div operation with Arith
+    E               :MSTORE(arithA)
+    A               :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => B          :MLOAD(arithRes1)
     B               :MSTORE(SP++)
     GAS-5 => GAS
                     :JMP(readCode)
@@ -70,22 +77,24 @@ opSDIV:
     B => C
     $ => A          :MLOAD(SP)
                     :CALL(abs)
-    ; //TODO: save contraints
+    ; //TODO: save constrains
     ${bitwise_xor(bitwise_xor(C, B), 1)} - 1 :JMPC(opSDIVNeg)  ;0 negative, 1 positive
-    ${E%A} => C
-    ${E/A} => B
-    0 => D
-    E               :ARITH ; TODO: Add --> LT(Residu < numToDiv)
-
+    ; Div operation with Arith
+    E               :MSTORE(arithA)
+    A               :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => B          :MLOAD(arithRes1)
     B               :MSTORE(SP++)
     GAS-5 => GAS
                    :JMP(readCode)
+                   
 opSDIVNeg:
-    ${E%A} => C
-    ${E/A} => B
-    0 => D
-    E              :ARITH ; TODO: Add --> LT(Residu < numToDiv)
-    B => A
+    ; Div operation with Arith
+    E               :MSTORE(arithA)
+    A               :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => A          :MLOAD(arithRes1)
+
                    :CALL(ca2)
     A              :MSTORE(SP++)
     GAS-5 => GAS
@@ -95,10 +104,11 @@ opMOD:
     SP - 1 => SP
     $ => E          :MLOAD(SP--)
     $ => A          :MLOAD(SP)
-    ${E%A} => C
-    ${E/A} => B
-    0 => D
-    E               :ARITH
+    ; Mod operation with Arith
+    E               :MSTORE(arithA)
+    A               :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => C          :MLOAD(arithRes2)
     C               :MSTORE(SP++)
     GAS-5 => GAS
                     :JMP(readCode)
@@ -114,33 +124,41 @@ opSMOD:
 
     ${bitwise_xor(C, 1)} - 1 :JMPC(opSMODNeg)  ; 0 negative, 1 positive
 
-    ${E%A} => C
-    ${E/A} => B
-    0 => D
-    E               :ARITH
+    ; Div operation with Arith
+    E               :MSTORE(arithA)
+    A               :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => C          :MLOAD(arithRes2)
     C               :MSTORE(SP++)
     GAS-5 => GAS
                     :JMP(readCode)
+
 opSMODNeg:
-    ${E%A} => C
-    ${E/A} => B
-    0 => D
-    E               :ARITH
-    C => A
+    ; Div operation with Arith
+    E               :MSTORE(arithA)
+    A               :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => A          :MLOAD(arithRes2)
                     :CALL(ca2)
     A               :MSTORE(SP++)
     GAS-5 => GAS
                     :JMP(readCode)
+
 opADDMOD:
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
     $ => B          :MLOAD(SP--)
-    ${A+B} => E ; //TODO: ARITH
+    ; Add operation with Arith
+    A               :MSTORE(arithA)
+    B               :MSTORE(arithB)
+                    :CALL(addARITH)
+    $ => E          :MLOAD(arithRes1)
     $ => A          :MLOAD(SP)
-    ${E%A} => C
-    ${E/A} => B
-    0 => D
-    E               :ARITH ; //TODO: Check residu
+    ; Div operation with Arith
+    E               :MSTORE(arithA)
+    A               :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => C          :MLOAD(arithRes2)
     C               :MSTORE(SP++)
     GAS-8 => GAS
                     :JMP(readCode)
@@ -149,12 +167,17 @@ opMULMOD:
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
     $ => B          :MLOAD(SP--)
-    ${A*B} => E ;//TODO: ARITH
+    ; Mul operation with Arith
+    A               :MSTORE(arithA)
+    B               :MSTORE(arithB)
+                    :CALL(mulARITH)
+    $ => E          :MLOAD(arithRes1) 
     $ => A          :MLOAD(SP)
-    ${E%A} => C
-    ${E/A} => B
-    0 => D
-    E               :ARITH ;//TODO: Check residu
+    ; Div operation with Arith
+    E               :MSTORE(arithA)
+    A               :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => C          :MLOAD(arithRes2)
     C               :MSTORE(SP++)
     GAS-8 => GAS
                     :JMP(readCode)
@@ -174,13 +197,23 @@ opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-mon
    $ => A          :MLOAD(SP--)
    $ => B          :MLOAD(SP)
    ${comp_lt(A, 31)} - 1  :JMPC(opSIGNEXTENDEnd)
-   ${exp(2, A * 8 + 7)} => C ; signBit ; // TODO: ARITH
+   ; Add operation with Arith
+   ${A * 8}         :MSTORE(arithA)
+   7                :MSTORE(arithB)
+                    :CALL(addARITH)
+   $ => A           :MLOAD(arithRes1)
+   ${exp(2, A)} => C ; signBit
    ${comp_gt(bitwise_and(C, B) , 0)} - 1 :JMPC(opSIGNEXTENDPositive) ; 0 if negative, -1 if positive
    ${bitwise_or(B, bitwise_not(C - 1))} => B
                   :JMP(opSIGNEXTENDEnd)
 
 opSIGNEXTENDPositive:
-    ${bitwise_and(B, C - 1)} => B ; // TODO: ARITH
+    ; Sub operation with Arith
+    C               :MSTORE(arithA)
+    1               :MSTORE(arithB)
+                    :CALL(subARITH)
+    $ => A          :MLOAD(arithRes1)
+    ${bitwise_and(B, A)} => B
 
 opSIGNEXTENDEnd:
     B               :MSTORE(SP++)
@@ -198,12 +231,14 @@ set1:
 
 opSLT:
     SP - 1 => SP
-    $ => A              :MLOAD(SP--)
-    $ => B              :MLOAD(SP)
+    $ => E          :MLOAD(SP--)
+    $ => C          :MLOAD(SP)
+    1 => B
+    0 => D
+    ${E-C} => A
+    ;E               :ARITH
     GAS-3 => GAS
-    ${A - B} => A
     ${comp_gt(A, 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)} :MSTORE(SP++)
-
                         :JMP(readCode)
 opLT:
     SP - 1 => SP
@@ -215,10 +250,13 @@ opLT:
 
 opSGT:
     SP - 1 => SP
-    $ => A              :MLOAD(SP--)
-    $ => B              :MLOAD(SP)
+    $ => C          :MLOAD(SP--)
+    $ => E          :MLOAD(SP)
+    1 => B
+    0 => D
+    ${E-C} => A
+    ;E               :ARITH
     GAS-3 => GAS
-    ${B - A} => A
     ${comp_gt(A, 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)}   :MSTORE(SP++)
                         :JMP(readCode)
 opGT:
@@ -287,8 +325,14 @@ opBYTE:
 ; TODO: Adapt to division
 opSHR:  ; //TODO: SHR byte by byte working fine. Not working when shifting bits. Could be done by: [B / 2**(A%8)] or SHR bits directly
     SP - 1 => SP
-    $ => D          :MLOAD(SP--)
-    ${D/8} => D
+    $ => E          :MLOAD(SP--)
+    ; Div operation with Arith
+    E               :MSTORE(arithA)
+    8               :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => D          :MLOAD(arithRes1)
+    $ => C          :MLOAD(arithRes2)
+
     ${comp_gt(D, 32)} => B
     ${B * 32 + bitwise_xor(B, 1) * D} => D
 
@@ -301,8 +345,13 @@ opSHR:  ; //TODO: SHR byte by byte working fine. Not working when shifting bits.
 ; TODO: Adapt to multiplication
 opSHL:  ; //TODO: SHL byte by byte working fine. Not working when shifting bits. Could be done by: [B / 2**(A%8)] or SHR bits directly
     SP - 1 => SP
-    $ => D          :MLOAD(SP--)
-    ${D/8} => D
+    $ => E          :MLOAD(SP--)
+    ; Div operation with Arith
+    E               :MSTORE(arithA)
+    8               :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => D          :MLOAD(arithRes1)
+    $ => C          :MLOAD(arithRes2)
     ${comp_gt(D, 32)} => B
     ${B * 32 + bitwise_xor(B, 1) * D} => D
 
@@ -316,8 +365,12 @@ opSHL:  ; //TODO: SHL byte by byte working fine. Not working when shifting bits.
 ; https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/vm/src/evm/opcodes/functions.ts#L342
 opSAR:
     SP - 1 => SP
-    $ => D          :MLOAD(SP--)
-    ${D/8} => D ;// TODO: ARITH
+    $ => E          :MLOAD(SP--)
+    ; Div operation with Arith
+    E               :MSTORE(arithA)
+    8               :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => D          :MLOAD(arithRes1)
     ${comp_gt(D, 32)} => B
     ${B * 32 + bitwise_xor(B, 1) * D} => D
 
@@ -331,7 +384,12 @@ opSAR:
                     :JMP(readCode)
 
 opSARNeg:
-    ${comp_gt(1, A) + A} => A ; TODO: add comments + ARITH
+    ; Add operation with Arith
+    ${comp_gt(1, A)}:MSTORE(arithA)
+    A               :MSTORE(arithB)
+                    :CALL(addARITH)
+    $ => A          :MLOAD(arithRes1)
+    ; TODO: add comments
                     :CALL(ca2)
     A               :MSTORE(SP++)
     GAS-3 => GAS
@@ -344,7 +402,21 @@ opSHA3:
     E + C           :MSTORE(lastMemLength)
     ; gas
     GAS - 30 => GAS ; gas static = 30
-    GAS - ${6*((C+31)/32)} => GAS ; dynamic_gas = dynamic_gas = 6 * minimum_word_size + memory_expansion_cost ; TODO: ARITH
+    ; Div operation with Arith
+    ;${6*((C+31)/32)}
+    C+31 => A
+    ;(C+31)/32
+    A               :MSTORE(arithA)
+    32              :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => A          :MLOAD(arithRes1)
+    ; Mul operation with Arith
+    ; 6*((C+31)/32)
+    6               :MSTORE(arithA)
+    A               :MSTORE(arithB)
+                    :CALL(mulARITH)
+    $ => A          :MLOAD(arithRes1)
+    GAS - A => GAS  ; dynamic_gas = dynamic_gas = 6 * minimum_word_size + memory_expansion_cost
     ; new hash id
     $ => B           :MLOAD(lastHashIdUsed)
     B + 1 => B       :MSTORE(lastHashIdUsed)
@@ -424,9 +496,13 @@ opCALLVALUE:
 ; // TODO: Check when a contract is deployed with CREATE
 opCALLDATALOAD:
     SP - 1 => SP
-    $ => A          :MLOAD(SP)
-    ${A/32} => B
-    ${A%32} => A ; //TODO: ARITH
+    $ => E          :MLOAD(SP)
+    ; Div operation with Arith
+    E               :MSTORE(arithA)
+    32              :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => B          :MLOAD(arithRes1)
+    $ => A          :MLOAD(arithRes2)
     0 - A           :JMPC(opCALLDATALOAD2)
     SP => C
     1024 + B => SP
@@ -471,11 +547,16 @@ opCALLDATACOPY:
 opCALLDATACOPYinit:
     C - 1           :JMPC(opCALLDATACOPYend)
     C - 32          :JMPC(opCALLDATACOPYfinal)
-    ${B%32} => D
-    1024 + ${B/32} => SP
+    B               :MSTORE(arithA)
+    32              :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => D          :MLOAD(arithRes2)            
+    $ => A          :MLOAD(arithRes1)    
+    1024 + A => SP
     $ => A          :MLOAD(SP)
     $ => C          :SHL
-    1024 + ${B/32} + 1 => SP
+    $ => A          :MLOAD(arithRes1) 
+    1024 + A + 1 => SP
     32 - D => D
     $ => A          :MLOAD(SP)
     $ => A          :SHR
@@ -653,7 +734,20 @@ opRETURNDATACOPY:
     B + C => B                              ;RETURNDATA[offset:offset+length]
     $ => C          :MLOAD(SP)              ;length - length return data
     GAS - 3 => GAS
-    GAS - ${3*((C+31)/32)} => GAS ; // TODO: ARITH
+    ;${3*((C+31)/32)}
+    C+31 => A
+    ;(C+31)/32
+    A               :MSTORE(arithA)
+    32              :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => A          :MLOAD(arithRes1)
+    ; Mul operation with Arith
+    ; 3*((C+31)/32)
+    3               :MSTORE(arithA)
+    A               :MSTORE(arithB)
+                    :CALL(mulARITH)
+    $ => A          :MLOAD(arithRes1)
+    GAS - A => GAS 
     B + C           :MSTORE(lastMemLength)
 
 opRETURNDATACOPYinit:
@@ -1001,9 +1095,13 @@ opAuxPUSHA:
 opAuxPUSHB:
     SP                          :MSTORE(SPw)
     $ => SP                     :MLOAD(SPr) ; SPr == 1024
-    ${PC/32} => A               ; //TODO: ARITH
+    ; Div operation with Arith
+    PC              :MSTORE(arithA)
+    32              :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => A          :MLOAD(arithRes1)
+    $ => C          :MLOAD(arithRes2)
     SP + A => SP
-    ${PC%32} => C
     A - ${(PC+D)/32}            :JMPC(opAuxPUSHC)
     $ => A                      :MLOAD(SP)
     $ => SP                     :MLOAD(SPw)
@@ -1920,25 +2018,32 @@ opRETURNcreate:
     0 => B,C
     $ => E                          :SLOAD                                                  ; Original Balance in E
     $ => C                          :MLOAD(txValue)                                         ; A = E - C
-    ${E-C} => A
+    ; Sub operation with Arith
+    E               :MSTORE(arithA)
+    C               :MSTORE(arithB)
+                    :CALL(subARITH)
+    $ => A          :MLOAD(arithRes1)
+
     31 => D
     $ => B                          :SHR
     0x7F - B                        :JMPC(invalidTx)                                        ; If A is a negative value --> invalidTx
     1 => B
     0 => D
-    E                               :ARITH                                                  ; originalBalance -value in A
     A => D                                                                                  ; originalBalance -value in D
     $ => A                          :MLOAD(txSrcAddr)
     0 => B,C
     $ => SR                         :SSTORE
- ; Increment destination balance
+    ; Increment destination balance
     $ => A                          :MLOAD(createContractAddress)
     0 => B,C
-    $ => C                          :SLOAD                                                  ; Original Balance in E
-    $ => A                          :MLOAD(txValue)                                         ; E = A + C
-    1 => B
-    0 => D
-    ${A+C} => D                     :ARITH                                                  ; originalBalance + value in D
+    $ => C                          :SLOAD      ; Original Balance in E
+    $ => A                          :MLOAD(txValue)
+    ; Add operation with Arith
+    A               :MSTORE(arithA)
+    C               :MSTORE(arithB)
+                    :CALL(addARITH)
+    $ => D          :MLOAD(arithRes1) ; originalBalance + value in D
+
     $ => A                          :MLOAD(createContractAddress)
     0 => B,C
     $ => SR                         :SSTORE
@@ -2190,11 +2295,11 @@ opSELFDESTRUCT:
     $ => E              :SLOAD
 
     ; compute new receiver balance
-    D => A
-    E => C
-    1 => B
-    0 => D
-    ${A+C} => D         :ARITH
+    ; Add operation with Arith
+    D               :MSTORE(arithA)
+    E               :MSTORE(arithB)
+                    :CALL(addARITH)
+    $ => D          :MLOAD(arithRes1)
 
     ; transfer balance to receiver
     $ => A                  :MLOAD(SP)

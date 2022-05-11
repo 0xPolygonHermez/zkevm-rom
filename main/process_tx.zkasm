@@ -72,15 +72,18 @@ endCheckChainId:
 ;;;;;;;;
 
         $ => A                          :MLOAD(txGas)                                           ; Multiplies the txGas amd the txGasPrice
-        $ => B                          :MLOAD(txGasPrice)
-        0 => C
-        0 => D                                                                                  ; Forces no overflow
-        ${A*B} => D                     :ARITH                                                                                  ; gas*gasPrice in D
+        $ => B                          :MLOAD(txGasPrice)                                                                                ; gas*gasPrice in D
+        ; Mul operation with Arith
+        A               :MSTORE(arithA)
+        B               :MSTORE(arithB)
+                        :CALL(mulARITH)
+        $ => D          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
         $ => E                          :SLOAD                                                  ; Original Balance in E
-        D => C                                                                                  ; A = E - C
+        D => C
+                                                                                          ; A = E - C
         ${E-C} => A
         31 => D
         $ => B                          :SHR                                                   ; //TODO: Could be replaces by: ${bitwise_and(A, 2**255)} + [ ${comp_eq(A, 0x80)} or (0x7F - B)]
@@ -89,7 +92,7 @@ endCheckChainId:
         0 => D
         E                                :ARITH                                                 ; originalBalance -gas*gasPrice in A
 
-        A => D                                                                                  ; originalBalance -gas*gasPrice in D
+        A => D                  
 
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
@@ -126,8 +129,13 @@ addGas:
         1024 + C => SP
                                         :JMP(loopBytes)
 loopBytes:
-        A - ${C*32} - D - 1             :JMPC(txType)
-        ; TODO: ARITH
+        ; Mul operation with Arith
+        C               :MSTORE(arithA)
+        32              :MSTORE(arithB)
+                        :CALL(mulARITH)
+        $ => B          :MLOAD(arithRes1)
+
+        A - B - D - 1             :JMPC(txType)
         32 - D - 1                      :JMPC(addGas)
         $ => B                          :MLOAD(SP) ; TODO: mask to get byte per byte
         ${getByte(B,D)} => B
@@ -213,7 +221,14 @@ endContractAddress:
 
 create2:
         $ => C                          :MLOAD(txCalldataLen)
-        ${(C+31)/32} => A ; // TODO: ARITH
+        
+        ${(C+31)/32} => A
+        ; Div operation with Arith
+        ${C+31}         :MSTORE(arithA)
+        32              :MSTORE(arithB)
+                        :CALL(divARITH)
+        $ => A          :MLOAD(arithRes1)
+
         GAS - 6*A => GAS
         1024 => SP
                                         :JMP(loopCreate2)
@@ -268,9 +283,15 @@ deploy:
 readDeployBytecode:
         SP                              :MSTORE(SPw)
         $ => SP                         :MLOAD(SPr)
-        SP + ${PC/32} => SP
-        ${PC%32} => C
-        ; // TODO: ARITH
+        ; Div operation with Arith
+        PC               :MSTORE(arithA)
+        32               :MSTORE(arithB)
+                        :CALL(divARITH)
+        $ => A          :MLOAD(arithRes1)
+        $ => C          :MLOAD(arithRes2)
+
+        SP + A => SP
+
         $ => B                          :MLOAD(txCalldataLen)
         B - PC                          :JMPC(endDeploy)
         $ => A                          :MLOAD(SP)
@@ -337,16 +358,18 @@ moveBalances:
         0 => B,C
         $ => E                          :SLOAD                                                  ; Original Balance in E
         $ => C                          :MLOAD(txValue)                                         ; A = E - C
-        ${E-C} => A
+        ; Sub operation with Arith
+        E               :MSTORE(arithA)
+        C               :MSTORE(arithB)
+                        :CALL(subARITH)
+        $ => A          :MLOAD(arithRes1)
+
         31 => D
         $ => B                          :SHR
         0x7F - B                        :JMPC(invalidTx)                                        ; If A is a negative value --> invalidTx
         1 => B
         0 => D
-        E                               :ARITH                                                  ; originalBalance -value in A
-
         A => D                                                                                  ; originalBalance -value in D
-
         $ => A                          :MLOAD(txSrcAddr)
         0 => B,C
         $ => SR                         :SSTORE
@@ -355,11 +378,12 @@ moveBalances:
         $ => A                          :MLOAD(txDestAddr)
         0 => B,C
         $ => C                          :SLOAD                                                  ; Original Balance in E
-
         $ => A                          :MLOAD(txValue)                                         ; E = A + C
-        1 => B
-        0 => D
-        ${A+C} => D                     :ARITH                                                  ; originalBalance + value in D
+        ; Add operation with Arith
+        A               :MSTORE(arithA)
+        C               :MSTORE(arithB)
+                        :CALL(addARITH)
+        $ => D          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txDestAddr)
         0 => B,C
@@ -376,7 +400,11 @@ moveBalances:
         B - 1                           :JMPC(refundGas)
         $ => A                          :MLOAD(txGas)
         A - GAS => A
-        ${A/2} => A                     ; // TODO: Missing :ARITH, could be done by :SHR one bit
+        ; Div operation with Arith
+        A               :MSTORE(arithA)
+        2               :MSTORE(arithB)
+                        :CALL(divARITH)
+        $ => A          :MLOAD(arithRes1)
         A - B                           :JMPC(refundGas)
         B => A
 
@@ -384,18 +412,21 @@ refundGas:
         GAS + A => GAS
         GAS => A
         $ => B                          :MLOAD(txGasPrice)
-        0 => C
-        0 => D                                                                                  ; Forces no overflow
-        ${A*B} => D                     :ARITH                                                  ; valueToReturn in D
+        ;Mul operation with Arith
+        A               :MSTORE(arithA)
+        B               :MSTORE(arithB)
+                        :CALL(mulARITH)
+        $ => D          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
         $ => A                          :SLOAD                                                  ; Original Balance in A
 
-        1 => B
-        D => C
-        0 => D
-        ${A+C} => D                     :ARITH                                                  ; New Balance in D
+        ; Add operation with Arith
+        A               :MSTORE(arithA)
+        D               :MSTORE(arithB)
+                        :CALL(addARITH)
+        $ => D          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
@@ -408,20 +439,21 @@ refundGas:
         $ => A                          :MLOAD(txGas)                                           ; Multiplies the txGas amd the txGasPrice
         A - GAS => A                                                                            ; A = txGas -GAS
 
-        $ => B                          :MLOAD(txGasPrice)
-        0 => C
-        0 => D                                                                                  ; Forces no overflow
-        ${A*B} => D                     :ARITH                                                  ; value to pay the sequencer in D
+        $ => B                          :MLOAD(txGasPrice)                                               ; value to pay the sequencer in D
+        ; Mul operation with Arith
+        A               :MSTORE(arithA)
+        B               :MSTORE(arithB)
+                        :CALL(mulARITH)
+        $ => D          :MLOAD(arithRes1)
 
-        $ => A                          :MLOAD(sequencerAddr)
+        $ => A          :MLOAD(sequencerAddr)
         0 => B,C
-        $ => A                          :SLOAD                                                  ; Original Balance in A
-
-        1 => B
-        D => C
-        0 => D
-        ${A+C} => D                     :ARITH                                                   ; New Balance in D
-
+        $ => A          :SLOAD                                                  ; Original Balance in A
+        ; Add operation with Arith
+        A               :MSTORE(arithA)
+        D               :MSTORE(arithB)
+                        :CALL(addARITH)
+        $ => D          :MLOAD(arithRes1)
         $ => A                          :MLOAD(sequencerAddr)
         0 => B,C
         $ => SR                         :SSTORE
