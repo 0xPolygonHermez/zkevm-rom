@@ -44,32 +44,42 @@ MODEXPstoreX:
 MODEXPgas:
     $ => A              :MLOAD(Bsize)
     $ => B              :MLOAD(Msize)
-    ${comp_gt(B,A)} - 1 :JMPC(MODEXPgas2)
+    $ => D              :LT
+    D - 1               :JMPC(MODEXPgas2)
     B => A
 
 MODEXPgas2:
     0 => D ;iteration_count
     ${(A+7)/8} => A ;words
     ${exp(A,2)} => A ;multiplication_complexity
-    $ => B              :MLOAD(Esize)
-    $ => C              :MLOAD(exp)
-    B - 32              :JMPC(MODEXPgas3)
+    A                   :MSTORE(tmpVarA)
+    $ => C              :MLOAD(Esize)
+    $ => B              :MLOAD(exp)
+    C - 32              :JMPC(MODEXPgas3)
     ;TODO +32 bytes
                         :JMP(MODEXPgas4)
 
 MODEXPgas3:
-    0 - ${comp_eq(C,0)} :JMPC(MODEXPgas4)
-    8*B - 1 => D ;iteration_count
+    0 => A
+    $ => A              :EQ
+    0 - A               :JMPC(MODEXPgas4)
+    8*C - 1 => D ;iteration_count
 
 MODEXPgas4:
-    ${comp_gt(1,D)} - 1 :JMPC(MODEXPgasEnd)
+    1 => A
+    D => B
+    $ => A              :GT
+    A - 1               :JMPC(MODEXPgasEnd)
     1 => D ;iteration_count
 
 MODEXPgasEnd:
-    ${A*D/3} => A ;multiplication_complexity * iteration_count / 3
-    ${comp_gt(200,A)} - 1 :JMPC(MODEXPend)
+    $ => A              :MLOAD(tmpVarA)
+    ${A*D/3} => B ;multiplication_complexity * iteration_count / 3
     200 => A
+    $ => A              :GT
+    A - 1               :JMPC(MODEXPend)
+    200 => B
 
 MODEXPend:
-    GAS - A => GAS
+    GAS - B => GAS
                         :JMP(preEnd)

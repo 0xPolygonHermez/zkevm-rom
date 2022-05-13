@@ -68,13 +68,17 @@ opSDIV:
     B => C
     $ => A          :MLOAD(SP)
                     :CALL(abs)
-
-    ${bitwise_xor(bitwise_xor(C, B), 1)} - 1 :JMPC(opSDIVNeg)  ;0 negative, 1 positive
+    A               :MSTORE(tmpVarA)
+    C => A
+    $ => A          :XOR
+    1 => B
+    $ => B          :XOR
+    $ => A          :MLOAD(tmpVarA)
+    B - 1           :JMPC(opSDIVNeg) ;0 negative, 1 positive
     ${E%A} => C
     ${E/A} => B
     0 => D
     E               :ARITH
-    
     B               :MSTORE(SP++)
     GAS-5 => GAS
                    :JMP(readCode)
@@ -109,9 +113,12 @@ opSMOD:
     B => C
     $ => A          :MLOAD(SP)
                     :CALL(abs)
-
-    ${bitwise_xor(C, 1)} - 1 :JMPC(opSMODNeg)  ; 0 negative, 1 positive
-
+    A               :MSTORE(tmpVarA)
+    C => A
+    1 => B
+    $ => B          :XOR
+    $ => A          :MLOAD(tmpVarA)
+    B - 1           :JMPC(opSMODNeg)  ; 0 negative, 1 positive
     ${E%A} => C
     ${E/A} => B
     0 => D
@@ -168,20 +175,32 @@ opEXP:
                     :JMP(readCode)
 
 opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/vm/src/evm/opcodes/functions.ts#L193
-   SP - 1 => SP
-   $ => A          :MLOAD(SP--)
-   $ => B          :MLOAD(SP)
-   ${comp_lt(A, 31)} - 1  :JMPC(opSIGNEXTENDEnd) 
-   ${exp(2, A * 8 + 7)} => C ; signBit
-   ${comp_gt(bitwise_and(C, B) , 0)} - 1 :JMPC(opSIGNEXTENDPositive) ; 0 if negative, -1 if positive
-   ${bitwise_or(B, bitwise_not(C - 1))} => B
-                  :JMP(opSIGNEXTENDEnd)
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--)
+    $ => D          :MLOAD(SP)
+    31 => B
+    $ => B          :LT
+    B - 1           :JMPC(opSIGNEXTENDEnd)
+    D => B
+    ${exp(2, A * 8 + 7)} => C ; signBit
+    C => A
+    $ => A          :AND
+    0 => B
+    $ => A          :GT
+    A - 1           :JMPC(opSIGNEXTENDPositive) ; 0 if negative, -1 if positive
+    C - 1 => A
+    $ => B          :NOT
+    D => A
+    $ => D          :OR
+                    :JMP(opSIGNEXTENDEnd)
 
 opSIGNEXTENDPositive:
-    ${bitwise_and(B, C - 1)} => B
+    C - 1 => B
+    D => A
+    $ => D          :AND
 
 opSIGNEXTENDEnd:
-    B               :MSTORE(SP++)
+    D               :MSTORE(SP++)
     GAS-5 => GAS
                     :JMP(readCode)
 
@@ -198,16 +217,14 @@ opSLT:
     $ => A              :MLOAD(SP--)
     $ => B              :MLOAD(SP)
     GAS-3 => GAS
-    ${A - B} => A
-    ${comp_gt(A, 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)} :MSTORE(SP++)
-
+    $                   :SLT,MSTORE(SP++)
                         :JMP(readCode)
 opLT:
     SP - 1 => SP
     $ => A              :MLOAD(SP--)
     $ => B              :MLOAD(SP)
     GAS-3 => GAS
-    ${comp_lt(A, B)}    :MSTORE(SP++)
+    $                   :LT,MSTORE(SP++)
                         :JMP(readCode)
 
 opSGT: 
@@ -215,29 +232,28 @@ opSGT:
     $ => A              :MLOAD(SP--)
     $ => B              :MLOAD(SP)
     GAS-3 => GAS
-    ${B - A} => A
-    ${comp_gt(A, 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)}   :MSTORE(SP++)
+    $                   :SGT,MSTORE(SP++)
                         :JMP(readCode)
 opGT:
     SP - 1 => SP
     $ => A              :MLOAD(SP--)
     $ => B              :MLOAD(SP)
     GAS-3 => GAS
-    ${comp_gt(A, B)}    :MSTORE(SP++)
+    $                   :GT,MSTORE(SP++)
                         :JMP(readCode)
 opEQ:
     SP - 1 => SP
     $ => A              :MLOAD(SP--)
     $ => B              :MLOAD(SP)
     GAS-3 => GAS
-    ${comp_eq(A, B)}    :MSTORE(SP++)
+    $                   :EQ,MSTORE(SP++)
                         :JMP(readCode)
 
 opISZERO:
     SP - 1 => SP
     $ => A              :MLOAD(SP)
     GAS-3 => GAS
-    ${comp_eq(A, 0)}    :MSTORE(SP++)
+    $                   :ISZERO,MSTORE(SP++)
                         :JMP(readCode)
 
 opAND:
@@ -245,7 +261,7 @@ opAND:
     $ => A                  :MLOAD(SP--)
     $ => B                  :MLOAD(SP)
     GAS-3 => GAS
-    ${bitwise_and(A, B)}    :MSTORE(SP++)
+    $                       :AND,MSTORE(SP++)
                             :JMP(readCode)
 
 opOR:
@@ -253,7 +269,7 @@ opOR:
     $ => A                  :MLOAD(SP--)
     $ => B                  :MLOAD(SP)
     GAS-3 => GAS
-    ${bitwise_or(A, B)}     :MSTORE(SP++)
+    $                       :OR,MSTORE(SP++)
                             :JMP(readCode)
 
 opXOR:
@@ -261,14 +277,14 @@ opXOR:
     $ => A                  :MLOAD(SP--)
     $ => B                  :MLOAD(SP)
     GAS-3 => GAS
-    ${bitwise_xor(A, B)}    :MSTORE(SP++)
+    $                       :XOR,MSTORE(SP++)
                             :JMP(readCode)
 
 opNOT:
     SP - 1 => SP
     $ => A                  :MLOAD(SP)
     GAS-3 => GAS
-    ${bitwise_not(A)}       :MSTORE(SP++)
+    $                       :NOT,MSTORE(SP++)
                             :JMP(readCode)
 
 opBYTE:
@@ -278,7 +294,9 @@ opBYTE:
     31 - B => D
     ${A >> (D*8)} => B
     GAS-3 => GAS
-    ${bitwise_and(B, 255)}  :MSTORE(SP++)
+    B => A
+    255 => B
+    $                       :AND,MSTORE(SP++)
                             :JMP(readCode)
 
 opSHR:
@@ -303,15 +321,34 @@ opSHL:
 opSAR:
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
+    ${D/8} => D
+    D => A
+    32 => B
+    $ => A          :GT
+    1 => B
+    $ => B          :XOR
+    ${A * 32 + B * D} => D
     $ => A          :MLOAD(SP)
                     :CALL(abs)
                     ; if more than 32 set to 32
-    ${A >> D} => A
-    ${bitwise_xor(B, 1)} - 1 :JMPC(opSARNeg)  ; 0 negative, 1 positive
-    A               :MSTORE(SP++)
+    ${A >> (D*8)} => C
+    B => A
+    1 => B
+    $ => B          :XOR
+    B - 1           :JMPC(opSARNeg)  ; 0 negative, 1 positive
+    C               :MSTORE(SP++)
     GAS-3 => GAS
                     :JMP(readCode)
 
+opSARNeg:
+    C => B
+    1 => A
+    $ => A          :GT
+    ${A + B} => A
+                    :CALL(ca2)
+    A               :MSTORE(SP++)
+    GAS-3 => GAS
+                    :JMP(readCode)
 
 opSHA3:
     SP - 1 => SP
@@ -354,12 +391,6 @@ opSHA3End:
     $ => E          :MLOAD(lastMemLength)
     $ => B          :MLOAD(memLength)
     B - E           :JMPC(saveMemLength)
-                    :JMP(readCode)
-opSARNeg:
-    ${comp_gt(1, A) + A} => A
-                    :CALL(ca2)
-    A               :MSTORE(SP++)
-    GAS-3 => GAS
                     :JMP(readCode)
 
 opADDRESS:
@@ -821,6 +852,7 @@ opSSTORE:
     0 - A           :JMPC(invalidStaticTx)
     SP - 1 => SP
     $ => C          :MLOAD(SP--) ;key
+    C               :MSTORE(tmpVarC)
     $ => D          :MLOAD(SP) ; new value
     $ => A          :MLOAD(txIsCreateContract)
     0 - A           :JMPC(deploymentSSTORE)
@@ -839,17 +871,27 @@ opSSTOREinit:
     $ => SR         :MLOAD(auxSR)
     ; TODO: check touched key / addr
     ${touchedStorageSlots(A,C,CTX)} => A
+    B => C           ;origin value
     GAS - A*2100 => GAS
-    ${comp_eq(E, D)} - 1 :JMPC(opSSTOREdif)
+    E => A
+    D => B
+    $ => A          :EQ
+    A - 1           :JMPC(opSSTOREdif)
     ;if new_val == current_val
     GAS - 100 => GAS
                     :JMP(opSSTOREend)
 
 opSSTOREdif:
     ;if new_val != current_val
-    ${comp_eq(B, E)} - 1 :JMPC(opSSTOREdifA)
+    C => A
+    E => B
+    $ => A          :EQ
+    A - 1           :JMPC(opSSTOREdifA)
     ;if current_val == orig_val
-    ${comp_eq(0, B)} - 1 :JMPC(opSSTOREdifB)
+    0 => A
+    C => B
+    $ => A          :EQ
+    A - 1           :JMPC(opSSTOREdifB)
     ;if origin_val == 0
     GAS - 20000 => GAS
                     :JMP(opSSTOREend)
@@ -857,16 +899,22 @@ opSSTOREdif:
 opSSTOREdifA:
     ;if current_val != orig_val
     GAS - 100 => GAS
-
-opSSTOREdifAA:
-    ${comp_eq(0, B)} - 1 :JMPC(opSSTOREdifA1)
+    0 => A
+    C => B
+    $ => A          :EQ
+    A - 1           :JMPC(opSSTOREdifA1)
     ;if origin_value == 0
-                    :JMP(opSSTOREdifAB)
 
 opSSTOREdifAB:
-    ${comp_eq(D, B)} - 1 :JMPC(opSSTOREend)
+    ;if origin_value == 0
+    D => A
+    C => B
+    $ => A          :EQ
+    A - 1           :JMPC(opSSTOREend)
     ;if new_val == orig_val
-    ${comp_eq(0, B)} - 1 :JMPC(opSSTOREdifA2)
+    0 => A
+    $ => A          :EQ
+    A - 1           :JMPC(opSSTOREdifA2)
     ;if orig_val == 0
     $ => A          :MLOAD(gasRefund)
     A + 19900 => A  :MSTORE(gasRefund)
@@ -874,14 +922,20 @@ opSSTOREdifAB:
 
 opSSTOREdifA1:
     ;if orig_val != 0
-    ${comp_eq(0, E)} - 1 :JMPC(opSSTOREdifA12)
+    0 => A
+    E => B
+    $ => A          :EQ
+    A - 1           :JMPC(opSSTOREdifA12)
     ;if current_val == 0
     $ => A          :MLOAD(gasRefund)
     A - 15000 => A  :MSTORE(gasRefund)
                     :JMP(opSSTOREdifAB)
 opSSTOREdifA12:
     ;if current_val != 0
-    ${comp_eq(0, D)} - 1 :JMPC(opSSTOREdifAB)
+    0 => A
+    D => B
+    $ => A          :EQ
+    A - 1           :JMPC(opSSTOREdifAB)
     ;if new_val == 0
     $ => A          :MLOAD(gasRefund)
     A + 15000 => A  :MSTORE(gasRefund)
@@ -896,7 +950,10 @@ opSSTOREdifA2:
 opSSTOREdifB:
     ;if orig_val != 0
     GAS - 2900 => GAS
-    ${comp_eq(0, D)} - 1 :JMPC(opSSTOREend)
+    0 => A
+    D => B
+    $ => A          :EQ
+    A - 1           :JMPC(opSSTOREend)
     ;if new_val == 0
     $ => A          :MLOAD(gasRefund)
     A + 15000 => A  :MSTORE(gasRefund)
@@ -913,6 +970,7 @@ mloadContract:
 
 opSSTOREsr:
     3 => B
+    $ => C          :MLOAD(tmpVarC)
     $ => SR         :SSTORE
                     :JMP(readCode)
 
@@ -925,24 +983,26 @@ opJUMP:
 
 opJUMPI:
     SP - 2 => SP
-    $ => B                  :MLOAD(SP)
+    $ => A                  :MLOAD(SP)
     GAS - 10 => GAS
-    ${comp_gt(B, 0)} - 1    :JMPC(readCode)
+    0 => B
+    $ => A                  :GT
+    A - 1                   :JMPC(readCode)
     SP + 1 => SP
     $ => E                  :MLOAD(SP--)
     E => PC
                             :JMP(readCode)
 
 opPC:
-GAS - 2 => GAS
-PC                 :MSTORE(SP++)
-                   :JMP(readCode)
+    GAS - 2 => GAS
+    PC                 :MSTORE(SP++)
+                    :JMP(readCode)
 
 opMSIZE:
-GAS - 2 => GAS
-$ => A             :MLOAD(memLength)
-A                  :MSTORE(SP++)
-                   :JMP(readCode)
+    GAS - 2 => GAS
+    $ => A             :MLOAD(memLength)
+    A                  :MSTORE(SP++)
+                    :JMP(readCode)
 
 opGAS:
     GAS - 2 => GAS
@@ -1643,16 +1703,18 @@ opCALL2:
     A               :MSTORE(argsOffsetCall)
     $ => B          :MLOAD(SP--)
     B               :MSTORE(argsLengthCall)
-    A + B => E
-    $ => A          :MLOAD(SP--)
-    A               :MSTORE(retOffset)
+    ${A + B} => A
+    $ => C          :MLOAD(SP--)
+    C               :MSTORE(retOffset)
     $ => B          :MLOAD(SP)
     B               :MSTORE(retLength)
-    A + B => D
-    ${comp_lt(E,D)} - 1 :JMPC(opCALL3)
-    D => E
+    ${C + B} => B
+    $ => C          :LT
+    C - 1           :JMPC(opCALL3)
+    B => A
 
 opCALL3:
+    A => E
     $ => B          :MLOAD(memLength)
     E - B           :JMPC(opCALL4)
                     :CALL(saveMem)
@@ -1679,7 +1741,9 @@ opCALL4:
     GAS-100-D*2500 => GAS
     $ => A          :MLOAD(valueCall)
     A               :MSTORE(txValue)
-    0 - ${comp_eq(0, A)} :JMPC(opCALLend)
+    0 => B
+    $ => B          :EQ
+    0 - B           :JMPC(opCALLend)
     GAS - 9000 => GAS
     ; if is_empty(target_addr) (forcing a new account to be created)
     ; GAS - 25000 => GAS
@@ -1710,16 +1774,18 @@ opCALLCODE:
     A               :MSTORE(argsOffsetCall)
     $ => B          :MLOAD(SP--)
     B               :MSTORE(argsLengthCall)
-    A + B => E
-    $ => A          :MLOAD(SP--)
-    A               :MSTORE(retOffset)
+    ${A + B} => A
+    $ => C          :MLOAD(SP--)
+    C               :MSTORE(retOffset)
     $ => B          :MLOAD(SP)
     B               :MSTORE(retLength)
-    A + B => D
-    ${comp_lt(E,D)} - 1 :JMPC(opCALLCODE2)
-    D => E
+    ${C + B} => B
+    $ => C          :LT
+    C - 1           :JMPC(opCALLCODE2)
+    B => A
 
 opCALLCODE2:
+    A => E
     $ => B          :MLOAD(memLength)
     E - B           :JMPC(opCALLCODE3)
                     :CALL(saveMem)
@@ -1848,7 +1914,9 @@ opRETURNcreate:
     $ => SR                         :SSTORE
 
     $ => B                          :MLOAD(txValue)
-    0 - ${comp_eq(B,0)}             :JMPC(opRETURNcreateEnd)
+    0 => A
+    $ => A                          :EQ
+    0 - A                           :JMPC(opRETURNcreateEnd)
 
 ; Decrement original balance
     $ => A                          :MLOAD(txSrcAddr)
@@ -1879,6 +1947,7 @@ opRETURNcreate:
     $ => SR                         :SSTORE
 
 opRETURNcreateEnd:
+    $ => A          :MLOAD(createContractAddress)
     $ => B          :MLOAD(originCTX)       ;last ctx
     B => CTX
     $ => SP         :MLOAD(lastSP)
@@ -1897,16 +1966,18 @@ opDELEGATECALL:
     A               :MSTORE(argsOffsetCall)
     $ => B          :MLOAD(SP--)
     B               :MSTORE(argsLengthCall)
-    A + B => E
-    $ => A          :MLOAD(SP--)
-    A               :MSTORE(retOffset)
+    ${A + B} => A
+    $ => C          :MLOAD(SP--)
+    C               :MSTORE(retOffset)
     $ => B          :MLOAD(SP)
     B               :MSTORE(retLength)
-    A + B => D
-    ${comp_lt(E,D)} - 1 :JMPC(opDELEGATECALL2)
-    D => E
+    ${C + B} => B
+    $ => C          :LT
+    C - 1           :JMPC(opDELEGATECALL2)
+    B => A
 
 opDELEGATECALL2:
+    A => E
     $ => B          :MLOAD(memLength)
     E - B           :JMPC(opDELEGATECALL3)
                     :CALL(saveMem)
@@ -2005,16 +2076,18 @@ opSTATICCALL:
     A               :MSTORE(argsOffsetCall)
     $ => B          :MLOAD(SP--)
     B               :MSTORE(argsLengthCall)
-    A + B => E
-    $ => A          :MLOAD(SP--)
-    A               :MSTORE(retOffset)
+    ${A + B} => A
+    $ => C          :MLOAD(SP--)
+    C               :MSTORE(retOffset)
     $ => B          :MLOAD(SP)
     B               :MSTORE(retLength)
-    A + B => D
-    ${comp_lt(E,D)} - 1 :JMPC(opSTATICCALL2)
-    D => E
+    ${C + B} => B
+    $ => C          :LT
+    C - 1           :JMPC(opSTATICCALL2)
+    B => A
 
 opSTATICCALL2:
+    A => E
     $ => B          :MLOAD(memLength)
     E - B           :JMPC(opSTATICCALL3)
                     :CALL(saveMem)
@@ -2046,15 +2119,11 @@ opSTATICCALL3:
     GAS - A         :MSTORE(gasCTX)
     $ => CTX        :MLOAD(currentCTX)
     A => GAS
-    ; TODO: check gas_sent_with_call
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txNData)
     $ => E          :MLOAD(argsOffsetCall) ;offset
     $ => C          :MLOAD(argsLengthCall) ;length
                     :CALL(copySP)
-; TODO: memory?
-;    $ => B          :MLOAD(memLength)
-;    B - X           :JMPC(saveMemLength)
                     :JMP(txType)
 
 opREVERT:
