@@ -72,6 +72,8 @@ endCheckChainId:
 ;;;;;;;;
 
         $ => A                          :MLOAD(txGas)                                           ; Multiplies the txGas amd the txGasPrice
+        ${comp_gt(A,20999)} - 1         :JMPC(invalidTx)                                        ; Gas should be 21000 or more
+
         $ => B                          :MLOAD(txGasPrice)
         0 => C
         0 => D                                                                                  ; Forces no overflow
@@ -99,16 +101,16 @@ endCheckChainId:
         ; TODO: substract gas ==> initSR
         ; TODO: create, do not have value
 ;;;;;;;;;
-;; Store init state
+;; Store init state after invalid transaction checks
 ;;;;;;;;;
 
         SR                              :MSTORE(initSR)
-
 
 ;;;;;;;;
 ; Set the gas
 ;;;;;;;;
         ; // TODO: move at the beggining
+        ; // TODO Should check GAS underflow
         $ => GAS                        :MLOAD(txGas)
         GAS - 21000 => GAS
 
@@ -432,11 +434,5 @@ terminateTX:
                                         :JMP(processTxEnd)
 ; TODO: should be an invalid intrinsic txs and (revert, out-of-gas, assert, invalid opcode )
 invalidTx:
-        $ => A                          :MLOAD(originCTX)
-        0 - A                           :JMPC(invalidTxOrigin) ; TODO:: invalid call with depth > 0
         $ => SR                         :MLOAD(initSR)
                                         :JMP(terminateTX)
-
-invalidTxOrigin:
-        A => CTX
-                                        :JMP(invalidTx)

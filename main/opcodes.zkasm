@@ -871,6 +871,7 @@ opSSTOREinit:
     $ => E          :SLOAD ;current value
     SR              :MSTORE(auxSR)
     $ => SR         :MLOAD(initSR)
+    ; TODO this should be updated, this should be initial SR (global variable) and another for the current initSR of CTX
     $ => B          :SLOAD ;origin value
     $ => SR         :MLOAD(auxSR)
     ${touchedStorageSlots(A,C,CTX)} => A
@@ -1648,6 +1649,7 @@ opCREATE:
     A                   :MSTORE(originCTX)
     B                   :MSTORE(txSrcAddr)
     B                   :MSTORE(txSrcOriginAddr)
+    SR                  :MSTORE(initSR)
     ; TODO is not encesesaary to load and store GAS, bc is global var
     C => GAS            
                         :CALL(copySP)
@@ -1695,18 +1697,18 @@ opCALL2:
     A               :MSTORE(argsOffsetCall)
     $ => B          :MLOAD(SP--)
     B               :MSTORE(argsLengthCall)
-    A + B => E
+    A + B => E      ; last memory pointer call
     $ => A          :MLOAD(SP--)
     A               :MSTORE(retOffset)
     $ => B          :MLOAD(SP)
     B               :MSTORE(retLength)
-    A + B => D
+    A + B => D      ; last memory pointer return
     ${comp_lt(E,D)} - 1 :JMPC(opCALL3)
     D => E
 
 opCALL3:
     $ => B          :MLOAD(memLength)
-    E - B           :JMPC(opCALL4)
+    E - B           :JMPC(opCALL4) ; last memory pointer - currentMemLen
                     :CALL(saveMem)
 
 opCALL4:
@@ -1722,6 +1724,7 @@ opCALL4:
     A               :MSTORE(originCTX)
     B               :MSTORE(txSrcAddr)
     D               :MSTORE(txSrcOriginAddr)
+    SR              :MSTORE(initSR)
     ${copyTouchedAddress(A,CTX)} ; // TODO: Check security copy same addresses
     ; // TODO: copyTouchedAddress once the depth CTX is returned
     ; // TODO: subcontext ?
@@ -1797,6 +1800,7 @@ opCALLCODE3:
     B               :MSTORE(txSrcAddr)
     E               :MSTORE(storageAddr)
     D               :MSTORE(txSrcOriginAddr)
+    SR              :MSTORE(initSR)
     ${copyTouchedAddress(A,CTX)}
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
@@ -1924,6 +1928,7 @@ opRETURNcreate:
     31 => D
     $ => B                          :SHR
     0x7F - B                        :JMPC(invalidTx)                                        ; If A is a negative value --> invalidTx
+    ; TODO should not be invalid tx, should be revert
     1 => B
     0 => D
     E                               :ARITH                                                  ; originalBalance -value in A
@@ -1992,6 +1997,7 @@ opDELEGATECALL3:
     C               :MSTORE(txSrcAddr)
     E               :MSTORE(storageAddr)
     D               :MSTORE(txSrcOriginAddr)
+    SR              :MSTORE(initSR)
     ${copyTouchedAddress(A,CTX)}
     B               :MSTORE(txValue)
     $ => A          :MLOAD(addrCall)
@@ -2043,6 +2049,7 @@ opCREATE2:
     A                   :MSTORE(originCTX)
     B                   :MSTORE(txSrcAddr)
     B                   :MSTORE(txSrcOriginAddr)
+    SR                  :MSTORE(initSR)
     ; TODO is not encesesaary to load and store GAS, bc is global var
     C => GAS
                         :CALL(copySP)
@@ -2103,6 +2110,7 @@ opSTATICCALL3:
     1               :MSTORE(iSstaticCall)
     B               :MSTORE(txSrcAddr)
     D               :MSTORE(txSrcOriginAddr)
+    SR              :MSTORE(initSR)
     ${copyTouchedAddress(A,CTX)}
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
@@ -2131,6 +2139,7 @@ opSTATICCALL3:
 ; TODO logs, creates (shpoudl revert the call also?), calls(back to initSR)
 ; TODO initSR
 opREVERT:
+    $ => SR         :MLOAD(initSR)
     SP - 1 => SP
     $ => A          :MLOAD(SP--) ;offset
     $ => B          :MLOAD(SP) ; length
@@ -2145,7 +2154,6 @@ opREVERT:
                     :JMP(readCode)
 
 opREVERTend:
-    $ => SR         :MLOAD(initSR)
                     :JMP(endCode)
 
 ; // TODO: handle if depth is over 0
