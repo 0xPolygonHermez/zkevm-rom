@@ -11,7 +11,6 @@ start:
         A                                   :HASHK(0)
         A => SR
 
-        32 => D
         ${getOldLocalExitRoot()}  => A      :HASHK(0)
                                             :MSTORE(oldLocalExitRoot)
 
@@ -25,19 +24,19 @@ start:
 
         1000                                :MSTORE(defaultChainId)    ; Hardcoded default chain id
         0                                   :MSTORE(systemAddr)        ; Hardcoded default system address
-
+        ; // TODO: 0x0000000000000...000n --> different file
         ;100                                 :MSTORE(SLOAD_GAS)
         ;20000                               :MSTORE(SSTORE_SET_GAS)
         ;2900                                :MSTORE(SSTORE_RESET_GAS)
         ;15000                               :MSTORE(SSTORE_CLEARS_SCHEDULE)
-
+        ; // TODO: set gas vars in a different file a a parameters
         ${getNumBatch()}                    :MSTORE(numBatch)
 
         ${getTimestamp()}                   :MSTORE(timestamp)
 
-        ${getTxsLen()}                      :MSTORE(txsListLength)
+        ${getTxsLen()}                      :MSTORE(batchL2DataLength)
 
-        ; batch variables
+        ; batch variables TODO: ne file constants.zkasm
         0                                   :MSTORE(batchDifficulty)
         30000000                            :MSTORE(batchGasLimit)
 
@@ -53,7 +52,7 @@ start:
 
         $ => E                              :MLOAD(lastHashIdUsed)
         E+1 => E                            :MSTORE(lastHashIdUsed)
-        32 => D
+        32 => D ; //TODO: opt. no need set D to 32
         $ => A                              :MLOAD(numBatch)
         A - 1                               :HASHK(E)
         0                                   :HASHK(E)                  ; Storage position of the batch hash
@@ -80,7 +79,8 @@ start:
         HASHPOS                             :HASHKLEN(E)
         $ => C                              :HASHKDIGEST(E)            ; Storage position of the current global exit root
 
-        ${getGlobalExitRootManagerAddr()}  => A
+        ${getGlobalExitRootManagerAddr()}  => A ;// TODO: constant
+        ; TODO: Constants in ZKASM compiler. such as: LEAF_TYPE_STO
         3 => B
         $ => D                              :MLOAD(globalExitRoot)
         $ => SR                             :SSTORE
@@ -89,7 +89,8 @@ start:
 ;; Prepare transaction loop
 ;;;;;;;;;
         $ => HASHPOS                        :MLOAD(oldHashPos)
-        E                                   :MSTORE(lastTxHashId)
+        ; Store the lastHashIdUsed at lastTxHashId variable. We need this variable to know where to read the hash for each transaction at process_tx flow
+        E                                   :MSTORE(lastTxHashId) ; //TODO: explanation variable
         $ => A                              :MLOAD(lastCtxUsed)
         A                                   :MSTORE(ctxTxToUse)
 
@@ -99,8 +100,8 @@ txLoopRLP:
         $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
         A+1 => CTX      :MSTORE(lastCtxUsed)
 
-        $ => A          :MLOAD(txsListLength)
-        $ => C          :MLOAD(batchL2DataRead)
+        $ => A          :MLOAD(batchL2DataLength)
+        $ => C          :MLOAD(batchL2DataParsed)
         C - A           :JMPC(loadTx_rlp)
                         :JMP(endCheckRLP)
 
@@ -144,9 +145,9 @@ processTxsEnd:
         E+1 => E                        :MSTORE(lastHashIdUsed)
 
 ;;;;;;;;;
-;; Append TXs
+;; Append TXs ; TODO: pointer depends on RLP loop
 ;;;;;;;;;
-        $ => B                          :MLOAD(txsListLength)
+        $ => B                          :MLOAD(batchL2DataLength)
         0 => C
         $${p = 0}
 
@@ -173,7 +174,7 @@ endAppendTxs:
 ;; Txs Size Verification
 ;;;;;;;;;
         C => A
-        $                               :MLOAD(txsListLength), ASSERT
+        $                               :MLOAD(batchL2DataLength), ASSERT
 
 ;;;;;;;;;
 ;; Check batchHashData

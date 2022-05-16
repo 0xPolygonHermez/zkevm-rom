@@ -25,13 +25,14 @@ processTx:
         $ => A                          :ECRECOVER
         A                               :MSTORE(txSrcAddr)
         A                               :MSTORE(txSrcOriginAddr)
-
+        ; TODO: bad signature ==> jump next txs
 ;;;;;;;;;
 ;; Store init state
 ;;;;;;;;;
 
         SR                              :MSTORE(initSR)
 
+; TODO: Intrinsic checks ==> jump to next transaction, maintain SR
 ;;;;;;;;
 ; Check chainID --> //TODO: chainID is defined as 64 bits which does not fit in the Field. If we consider just 63 bits it could be done directly (A - B), saving the EQ comaprison
 ;;;;;;;;
@@ -48,6 +49,7 @@ check_defaultChainId:
 
 endCheckChainId:
 
+; //TODO: move touchedAddress after intrinsic checks
 ;;;;;;;;
 ; Touched Addresses
 ;;;;;;;;
@@ -77,15 +79,18 @@ endCheckChainId:
 ;;;;;;;;
 
         $ => A                          :MLOAD(txGas)                                           ; Multiplies the txGas amd the txGasPrice
-        $ => B                          :MLOAD(txGasPrice)
-        0 => C
-        0 => D                                                                                  ; Forces no overflow
-        ${A*B} => D                     :ARITH                                                                                  ; gas*gasPrice in D
+        $ => B                          :MLOAD(txGasPrice)                                                                                ; gas*gasPrice in D
+        ; Mul operation with Arith
+        A               :MSTORE(arithA)
+        B               :MSTORE(arithB)
+                        :CALL(mulARITH)
+        $ => D          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
         $ => E                          :SLOAD                                                  ; Original Balance in E
-        D => C                                                                                  ; A = E - C
+        D => C
+                                                                                          ; A = E - C
         ${E-C} => A
         31 => D
         ${A >> (D*8)} => B                                                                     ; //TODO: Could be replaces by: ${bitwise_and(A, 2**255)} + [ ${comp_eq(A, 0x80)} or (0x7F - B)]
@@ -94,12 +99,15 @@ endCheckChainId:
         0 => D
         E                                :ARITH                                                 ; originalBalance -gas*gasPrice in A
 
-        A => D                                                                                  ; originalBalance -gas*gasPrice in D
+        A => D                  
 
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
         $ => SR                         :SSTORE
 
+        ; TODO: check intrinsic --> value + gas
+        ; TODO: substract gas ==> initSR
+        ; TODO: create, do not have value
 ;;;;;;;;;
 ;; Store init state
 ;;;;;;;;;
@@ -110,14 +118,14 @@ endCheckChainId:
 ;;;;;;;;
 ; Set the gas
 ;;;;;;;;
-
+        ; // TODO: move at the beggining
         $ => GAS                        :MLOAD(txGas)
         GAS - 21000 => GAS
 
 ;;;;;;;;
 ; Gas calldata
 ;;;;;;;;
-        $ => A                          :MLOAD(txNData)
+        $ => A                          :MLOAD(txCalldataLen)
         A - 1                           :JMPC(txType)
         0 => D
         -1 => C
@@ -128,9 +136,15 @@ addGas:
         1024 + C => SP
                                         :JMP(loopBytes)
 loopBytes:
-        A - ${C*32} - D - 1             :JMPC(txType)
+        ; Mul operation with Arith
+        C               :MSTORE(arithA)
+        32              :MSTORE(arithB)
+                        :CALL(mulARITH)
+        $ => B          :MLOAD(arithRes1)
+
+        A - B - D - 1             :JMPC(txType)
         32 - D - 1                      :JMPC(addGas)
-        $ => B                          :MLOAD(SP)
+        $ => B                          :MLOAD(SP) ; TODO: mask to get byte per byte
         ${getByte(B,D)} => B
         D + 1 => D
         B - 1                           :JMPC(add4Gas)
@@ -147,10 +161,11 @@ txType:
 ;;;;;;;;;;
 ;;;;; Tx type
 ;;;;;;;;;;
-        $ => A                          :MLOAD(txIsCreateContract)
+        $ => A                          :MLOAD(isCreateContract)
         0 - A                           :JMPC(getContractAddress)
         $ => A                          :MLOAD(txDestAddr)
         ${touchedAddress(A,CTX)}
+        ; // TODO: check "0x000..000" when coming from a CALL
         10 => B
         $ => B                          :LT
         0 - B                           :JMPC(selectorPrecompiled) ; precompiled smart contracts
@@ -161,7 +176,7 @@ txType:
 
 checkTxType:
         32 - D                          :JMPC(moveBalances)
-        ${getByte(A,D)} => B
+        ${getByte(A,D)} => B    ; // TODO: comparison with 0
         0 - B                           :JMPC(callContract)
         D + 1 => D
                                         :JMP(checkTxType)
@@ -172,7 +187,7 @@ getContractAddress:
         ; We get a new hashId
         $ => E                          :MLOAD(lastHashIdUsed)
         E+1 => E                        :MSTORE(lastHashIdUsed)
-        $ => A                          :MLOAD(create2)
+        $ => A                          :MLOAD(isCreate2)
         0 - A                           :JMPC(create2)
         $ => A                          :MLOAD(txSrcAddr)
         $ => B                          :MLOAD(txNonce)
@@ -210,11 +225,20 @@ endContractAddress:
         ${A << (D*8)} => A
         ${A >> (D*8)} => A
         A                               :MSTORE(createContractAddress)
+        ; TODO: Check nonce != 0 OR already_bytecode ==> same behaviour as fail constructor
+        ; TODO: check CREATE or deployment with constructor reverted
                                         :JMP(deploy)
 
 create2:
-        $ => C                          :MLOAD(txNData)
+        $ => C                          :MLOAD(txCalldataLen)
+        
         ${(C+31)/32} => A
+        ; Div operation with Arith
+        ${C+31}         :MSTORE(arithA)
+        32              :MSTORE(arithB)
+                        :CALL(divARITH)
+        $ => A          :MLOAD(arithRes1)
+
         GAS - 6*A => GAS
         1024 => SP
                                         :JMP(loopCreate2)
@@ -271,9 +295,16 @@ deploy:
 readDeployBytecode:
         SP                              :MSTORE(SPw)
         $ => SP                         :MLOAD(SPr)
-        SP + ${PC/32} => SP
-        ${PC%32} => C
-        $ => B                          :MLOAD(txNData)
+        ; Div operation with Arith
+        PC               :MSTORE(arithA)
+        32               :MSTORE(arithB)
+                        :CALL(divARITH)
+        $ => A          :MLOAD(arithRes1)
+        $ => C          :MLOAD(arithRes2)
+
+        SP + A => SP
+
+        $ => B                          :MLOAD(txCalldataLen)
         B - PC                          :JMPC(endDeploy)
         $ => A                          :MLOAD(SP)
         $ => SP                         :MLOAD(SPw)
@@ -293,23 +324,24 @@ readByteCode:
         0 => C
         $ => A                          :SLOAD
         ${getBytecodeLength(A)} => B
-        B - PC                          :JMPC(endByteCode)
+        B - PC                          :JMPC(endByteCode) ; // TODO: should be removed
         ${getBytecode(A,PC)} => B
         ${addrOp(B)} => RR
         PC + 1 => PC
                                         :JMP(RR)
-
+        ; // TODO: check PC opcode in YUL
 readCode:
-        $ => A                          :MLOAD(txIsCreateContract)
+        $ => A                          :MLOAD(isCreateContract)
         0 - A                           :JMPC(readDeployBytecode)
                                         :JMP(readByteCode)
 
 endCode:
-        $ => A                          :MLOAD(txIsCreateContract)
+        $ => A                          :MLOAD(isCreateContract)
         0 - A                           :JMPC(endDeploy)
                                         :JMP(endByteCode)
 
 endDeploy:
+        ; TODO:: increase nonce before reading the contructor opcodes
         ; Update contract nonce
         $ => A                          :MLOAD(createContractAddress)
         1 => B                                                                                  ; Constant for nonce
@@ -318,8 +350,9 @@ endDeploy:
         $ => SR                         :SSTORE
         ;if txValue != 0 --> move balance to contractAddress
         A                               :MSTORE(txDestAddr)
-
-        ${getHashBytecode(A)} => D
+        ; TODO: same as nonce, should be done before
+        ; TODO zkasm should calculate the deployed bytecode
+        ${getHashBytecode(A)} => D ; TODO: chain poseidon to compute hashBytecode. Jordi checks
         2 => B
         0 => C
         $ => SR                         :SSTORE
@@ -329,7 +362,7 @@ endByteCode:
 moveBalances:
 
 ;;;;;;;;
-; evmCALL (Move Balances)
+; evmCALL (Move Balances) ; TODO: move balances before processing
 ;;;;;;;;
 
         ; Decrement original balance
@@ -337,16 +370,18 @@ moveBalances:
         0 => B,C
         $ => E                          :SLOAD                                                  ; Original Balance in E
         $ => C                          :MLOAD(txValue)                                         ; A = E - C
-        ${E-C} => A
+        ; Sub operation with Arith
+        E               :MSTORE(arithA)
+        C               :MSTORE(arithB)
+                        :CALL(subARITH)
+        $ => A          :MLOAD(arithRes1)
+
         31 => D
         ${A >> (D*8)} => B
         0x7F - B                        :JMPC(invalidTx)                                        ; If A is a negative value --> invalidTx
         1 => B
         0 => D
-        E                               :ARITH                                                  ; originalBalance -value in A
-
         A => D                                                                                  ; originalBalance -value in D
-
         $ => A                          :MLOAD(txSrcAddr)
         0 => B,C
         $ => SR                         :SSTORE
@@ -355,11 +390,12 @@ moveBalances:
         $ => A                          :MLOAD(txDestAddr)
         0 => B,C
         $ => C                          :SLOAD                                                  ; Original Balance in E
-
         $ => A                          :MLOAD(txValue)                                         ; E = A + C
-        1 => B
-        0 => D
-        ${A+C} => D                     :ARITH                                                  ; originalBalance + value in D
+        ; Add operation with Arith
+        A               :MSTORE(arithA)
+        C               :MSTORE(arithB)
+                        :CALL(addARITH)
+        $ => D          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txDestAddr)
         0 => B,C
@@ -376,7 +412,11 @@ moveBalances:
         B - 1                           :JMPC(refundGas)
         $ => A                          :MLOAD(txGas)
         A - GAS => A
-        ${A/2} => A                     ; // TODO: Missing :ARITH, could be done by :SHR one bit
+        ; Div operation with Arith
+        A               :MSTORE(arithA)
+        2               :MSTORE(arithB)
+                        :CALL(divARITH)
+        $ => A          :MLOAD(arithRes1)
         A - B                           :JMPC(refundGas)
         B => A
 
@@ -384,18 +424,21 @@ refundGas:
         GAS + A => GAS
         GAS => A
         $ => B                          :MLOAD(txGasPrice)
-        0 => C
-        0 => D                                                                                  ; Forces no overflow
-        ${A*B} => D                     :ARITH                                                  ; valueToReturn in D
+        ;Mul operation with Arith
+        A               :MSTORE(arithA)
+        B               :MSTORE(arithB)
+                        :CALL(mulARITH)
+        $ => D          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
         $ => A                          :SLOAD                                                  ; Original Balance in A
 
-        1 => B
-        D => C
-        0 => D
-        ${A+C} => D                     :ARITH                                                  ; New Balance in D
+        ; Add operation with Arith
+        A               :MSTORE(arithA)
+        D               :MSTORE(arithB)
+                        :CALL(addARITH)
+        $ => D          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
@@ -408,20 +451,21 @@ refundGas:
         $ => A                          :MLOAD(txGas)                                           ; Multiplies the txGas amd the txGasPrice
         A - GAS => A                                                                            ; A = txGas -GAS
 
-        $ => B                          :MLOAD(txGasPrice)
-        0 => C
-        0 => D                                                                                  ; Forces no overflow
-        ${A*B} => D                     :ARITH                                                  ; value to pay the sequencer in D
+        $ => B                          :MLOAD(txGasPrice)                                               ; value to pay the sequencer in D
+        ; Mul operation with Arith
+        A               :MSTORE(arithA)
+        B               :MSTORE(arithB)
+                        :CALL(mulARITH)
+        $ => D          :MLOAD(arithRes1)
 
-        $ => A                          :MLOAD(sequencerAddr)
+        $ => A          :MLOAD(sequencerAddr)
         0 => B,C
-        $ => A                          :SLOAD                                                  ; Original Balance in A
-
-        1 => B
-        D => C
-        0 => D
-        ${A+C} => D                     :ARITH                                                   ; New Balance in D
-
+        $ => A          :SLOAD                                                  ; Original Balance in A
+        ; Add operation with Arith
+        A               :MSTORE(arithA)
+        D               :MSTORE(arithB)
+                        :CALL(addARITH)
+        $ => D          :MLOAD(arithRes1)
         $ => A                          :MLOAD(sequencerAddr)
         0 => B,C
         $ => SR                         :SSTORE
@@ -431,10 +475,10 @@ terminateTX:
         ; Get oldHashPos (saved at the beginning of this file)
         $ => HASHPOS                    :MLOAD(oldHashPos)
                                         :JMP(processTxEnd)
-
+; TODO: should be an invalid intrinsic txs and (revert, out-of-gas, assert, invalid opcode )
 invalidTx:
         $ => A                          :MLOAD(originCTX)
-        0 - A                           :JMPC(invalidTxOrigin)
+        0 - A                           :JMPC(invalidTxOrigin) ; TODO:: invalid call with depth > 0
         $ => SR                         :MLOAD(initSR)
 
                                         :JMP(terminateTX)
