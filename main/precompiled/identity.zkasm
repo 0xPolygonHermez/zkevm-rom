@@ -1,0 +1,29 @@
+IDENTITY:
+    GAS - 15 => GAS
+    $ => C          :MLOAD(argsLengthCall)
+    ${(C+31)/32} => A
+    GAS - 3*A => GAS
+    CTX             :MSTORE(currentCTX)
+    $ => CTX        :MLOAD(originCTX)
+    $ => B          :MLOAD(retOffset)
+    $ => E          :MLOAD(argsOffsetCall)
+
+IDENTITY32:
+    C - 1           :JMPC(preEnd)
+    C - 32          :JMPC(IDENTITYfinal)
+                    :CALL(MLOAD32)
+    E => D
+    B => E
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTORE32)
+    E => B
+    D => E
+    C - 32 => C
+                    :JMP(IDENTITY32)
+
+IDENTITYfinal:
+                    :CALL(MLOADX)
+    B => E
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
+                    :JMP(preEnd)

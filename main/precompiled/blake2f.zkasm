@@ -1,0 +1,40 @@
+BLAKE2F:
+    GAS => D
+    ; read data stored in SP + 1024
+    $ => B                              :MLOAD(txNData) ; bytes to read
+    213 => A
+    $ => A                              :EQ
+    A - 1                               :JMPC(BLAKE2Fend)
+    1024 => SP
+
+BLAKE2FLoopData:
+    B - 1                               :JMPC(BLAKE2FLoopData)
+    B - 32                              :JMPC(BLAKE2FEndLoopData)
+    $ => A                              :MLOAD(SP++)
+    ${precompiled_blake2f_add(A, 32)}
+    B - 32 => B
+                                        :JMP(BLAKE2FLoopData)
+BLAKE2FEndLoopData:
+    $ => A                              :MLOAD(SP)
+    32 - B => D
+    ${A >> (D*8)} => A
+    ${precompiled_blake2f_add(A, B)}
+
+BLAKE2FDigestReturn:
+    ${precompiled_blake2f_digest()} => C
+    GAS - C => GAS
+    GAS => D
+    ${precompiled_blake2f_read(0)} => A
+    ${precompiled_blake2f_read(1)} => B
+    $ => CTX                            :MLOAD(originCTX)
+    $ => E                              :MLOAD(retOffset)
+    ; $ => C                              :MLOAD(retLength) ; always 64
+    A                                   :MSTORE(bytesToStore)
+                                        :CALL(MSTORE32)
+    B                                   :MSTORE(bytesToStore)
+                                        :CALL(MSTORE32)
+                                        :JMP(preEnd)
+
+BLAKE2Fend:
+    $ => CTX                            :MLOAD(originCTX)
+                                        :JMP(preEndFail)

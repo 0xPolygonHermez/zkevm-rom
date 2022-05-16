@@ -1,0 +1,38 @@
+funcECRECOVER:
+    GAS - 3000 => GAS ; gas static = 3000
+    ; read data stored in SP + 1024
+    ; hash [32 bytes], v [32 bytes], r [32 bytes], s [32 bytes]
+    1024 => SP
+    $ => E                              :MLOAD(SP++) ; hash
+    $ => A                              :MLOAD(SP++) ; v
+    ; check v range [27, 28]
+    27 => B
+    $ => B                              :LT
+    0 - B                               :JMPC(endECRECOVER)
+    28 => B
+    $ => B                              :GT
+    0 - B                               :JMPC(endECRECOVER)
+    A => D
+    E => A
+    $ => B                              :MLOAD(SP++) ; r
+    ; check r range [0, secp256k1n]
+    ;0 - ${comp_gt(B, 115792089237316195423570985008687907852837564279074904382605163141518161494337)} :JMPC(endECRECOVER)
+    $ => C                              :MLOAD(SP) ; s
+    ; check s range [0, secp256k1n/2 + 1]
+    ;0 - ${comp_gt(C, 57896044618658097711785492504343953926418782139537452191302581570759080747169)}  :JMPC(endECRECOVER)
+    ; compute ecrecover
+    $ => A                              :ECRECOVER
+    0 => B
+    $ => B                              :EQ
+    0 - B                               :JMPC(endECRECOVER)
+    ; prepare return data
+    $ => CTX                            :MLOAD(originCTX)
+    $ => E                              :MLOAD(retOffset)
+    ; $ => C                            :MLOAD(retLength) ; always 32
+    A                                   :MSTORE(bytesToStore)
+                                        :CALL(MSTORE32)
+                                        :JMP(preEnd)
+
+endECRECOVER:
+    $ => CTX                            :MLOAD(originCTX)
+                                        :JMP(preEnd)
