@@ -9,6 +9,7 @@ loadTx_rlp:
         ; We get a new hashId
         $ => E                          :MLOAD(lastHashIdUsed)
         E+1 => E                        :MSTORE(lastHashIdUsed)
+        ; Pointer to next RLP bytes to read
         0 => C
 
 
@@ -17,8 +18,8 @@ loadTx_rlp:
 ;;;;;;;;;
 
         1 => D
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -29,8 +30,8 @@ loadTx_rlp:
 
 longList:
         A - 0xf7 => D
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -41,7 +42,7 @@ shortList:
         A - 0xc0 => A
 
 endList:
-        A + C                           :MSTORE(txListLength)
+        A + C                           :MSTORE(txRLPLength)
 
 
 ;;;;;;;;;
@@ -51,8 +52,8 @@ endList:
 
 nonceREAD:
         1 => D
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -71,8 +72,8 @@ nonce0:
 shortNonce:
         A - 0x80 => D
         D                               :MSTORE(lengthNonce)
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -90,8 +91,8 @@ endNonce:
 
 gasPriceREAD:
         1 => D
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -110,8 +111,8 @@ gasPrice0:
 shortGasPrice:
         A - 0x80 => D
         D - 1                           :JMPC(endGasPrice)
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -130,8 +131,8 @@ endGasPrice:
 
 gasREAD:
         1 => D
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -148,8 +149,8 @@ gas0:
 shortGas:
         A - 0x80 => D
         D - 1                           :JMPC(endGas)
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -166,8 +167,8 @@ endGas:
 
 toREAD:
         1 => D
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -181,13 +182,13 @@ toREAD:
 
 
 noTo:
-        1                               :MSTORE(txIsCreateContract)
+        1                               :MSTORE(isCreateContract)
                                         :JMP(endTo)
 
 shortTo:
         A - 0x80 => D
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -206,8 +207,8 @@ endTo:
 
 valueREAD:
         1 => D
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -226,8 +227,8 @@ value0:
 shortValue:
         A - 0x80 => D
         D - 1                           :JMPC(endValue)
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -246,8 +247,8 @@ endValue:
 dataREAD:
         1 => D
         1024 => SP
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -260,33 +261,33 @@ dataREAD:
                                         :JMP(invalidTxRLP)
 
 veryShortData:
-        1                               :MSTORE(txNData)
+        1                               :MSTORE(txCalldataLen)
         31 => D
         ${A << (D*8)} => A
         A                               :MSTORE(SP++)
                                         :JMP(endData)
 
 shortData:
-        A - 0x80 => B                   :MSTORE(txNData)
+        A - 0x80 => B                   :MSTORE(txCalldataLen)
                                         :JMP(readData)
 
 longData:
         A - 0xb7 => D
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
         A                               :HASHK(E)    ; Main Hash
         C+D => C
-        A => B                          :MSTORE(txNData)
+        A => B                          :MSTORE(txCalldataLen)
 
 readData:
         32 => D
         B - D                           :JMPC(readDataFinal)
         B - D                           :MSTORE(txDataRead)
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -300,8 +301,8 @@ readData:
 readDataFinal:
         B - 1                           :JMPC(endData)
         B => D
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -322,8 +323,8 @@ endData:
 
 chainREAD:
         1 => D
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -341,8 +342,8 @@ chanId0:
 shortChainId:
         A - 0x80 => D
         D - 1                           :JMPC(endChainId)
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -357,12 +358,12 @@ endChainId:
 ;;;;;;;;;
 
         2 => D
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
-        A - 0x8080                      :JMPC(invalidTxRLP)
+        A - 0x8080                      :JMPC(invalidTxRLP) ; // TODO: ${comp_eq(A, 0x8080)}
         0x8080 - A                      :JMPC(invalidTxRLP)
         A                               :HASHK(E)
         C+D => C
@@ -371,9 +372,9 @@ endChainId:
 ;; Size Verification
 ;;;;;;;;;
         C  => A
-        $  => B                         :MLOAD(txListLength)
+        $  => B                         :MLOAD(txRLPLength)
         A - B                           :JMPC(invalidTxRLP)
-        B - A                           :JMPC(invalidTxRLP)
+        B - A                           :JMPC(invalidTxRLP) ; // TODO: ${comp_eq(A, 0x8080)}
         ; check ctx.hashK[addr].data.length == HASHPOS and ctx.hashK[addr].digest = keccak256(data)
         HASHPOS                         :HASHKLEN(E)
 
@@ -383,8 +384,8 @@ endChainId:
 
 rREADTx:
         32 => D
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -397,8 +398,8 @@ rREADTx:
 
 sREADTx:
         32 => D
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -411,8 +412,8 @@ sREADTx:
 
 vREADTx:
         1 => D
-        $ => A                          :MLOAD(txsListLength)
-        $ => B                          :MLOAD(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
@@ -422,8 +423,8 @@ vREADTx:
 ;;;;;;;;;
 ;; Update bytes read and txs to be processed
 ;;;;;;;;;
-        $ => A                          :MLOAD(batchL2DataRead)
-        A + C => A                      :MSTORE(batchL2DataRead)
+        $ => A                          :MLOAD(batchL2DataParsed)
+        A + C => A                      :MSTORE(batchL2DataParsed)
         $ => A                          :MLOAD(pendingTxs)
         A + 1 => A                      :MSTORE(pendingTxs)
         ; Save sigDataSize (sigDataSize --> VAR CTX)
