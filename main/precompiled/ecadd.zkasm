@@ -1,0 +1,33 @@
+ECADD:
+    $ => CTX                :MLOAD(originCTX)
+    $ => A                  :MLOAD(argsLengthCall)
+    ;ASSERT A == 32*4 bytes
+    128 => B
+    $ => B                  :EQ
+    B - 1                   :JMPC(ECADDend)
+    $ => A                  :MLOAD(retLength)
+    ;ASSERT A == 32*2 bytes
+    64 => B
+    $ => B                  :EQ
+    B - 1                   :JMPC(ECADDend)
+    $ => E                  :MLOAD(argsOffsetCall)
+                            :CALL(MLOAD32)
+    A => D
+                            :CALL(MLOAD32)
+    A => C
+                            :CALL(MLOAD32)
+    A => B
+                            :CALL(MLOAD32)
+    $ => E                  :MLOAD(retOffset)
+    ${precompiled_ecAdd_add(D,C,B,A)}
+    ${precompiled_ecAdd_result0()} => A
+    A                       :MSTORE(bytesToStore)
+                            :CALL(MSTORE32)
+    ${precompiled_ecAdd_result1()} => A
+    A                       :MSTORE(bytesToStore)
+                            :CALL(MSTORE32)
+    GAS - 150 => GAS
+                            :JMP(preEnd)
+
+ECADDend:
+                            :JMP(preEndFail)
