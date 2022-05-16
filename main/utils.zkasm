@@ -9,7 +9,7 @@ VAR GLOBAL tmpVarE
 ; @info Get absolute value and sign
 ; @in A => number to convert
 ; @out A => Absolut value of A
-; @out B => Sign of A
+; @out B => Sign of A [1 if negative, 0 positive]
 abs:
     ${comp_gt(A, 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)} => B
      B - 1          :JMPC(endca2) ; no conversion if positive number
@@ -19,7 +19,7 @@ abs:
 ; @out A => number converted in ca2
 ca2:
     ${bitwise_xor(A, 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)} => A
-    ${A + 1} => A    
+    ${A + 1} => A ; TODO: ARITH
 endca2:
                     :RETURN
 
@@ -29,7 +29,7 @@ copySP:
     CTX             :MSTORE(currentCTX)
     1024 => SP                             ;destOffset = 0
     $ => CTX        :MLOAD(originCTX)
-    $ => E          :MLOAD(argsOffsetCall) ;offset
+    $ => E          :MLOAD(argsOffsetCall)
     $ => C          :MLOAD(argsLengthCall) ;length
     0 - ${E%32}     :JMPC(copyInit2)
 
@@ -234,14 +234,14 @@ MLOAD32:
     D               :MSTORE(tmpVarD)
     ${E%32} - 1     :JMPC(MLOAD322)
     ${E%32} => C
-    ${(E/32)*32} => E
+    ${(E/32)*32} => E  ; // TODO: ARITH
     $ => A          :MLOAD(MEM:E)
     C => D
-    $ => B          :SHL
+    $ => B          :SHL ;// TODO: Mask instead of shift
     32 - C => D
     E + 32 => E
     $ => A          :MLOAD(MEM:E)
-    $ => A          :SHR
+    $ => A          :SHR ;// TODO: Mask instead of shift
     A + B => A
     E + C => E                                      ;new offset
                     :JMP(MLOADend)
@@ -336,8 +336,8 @@ ISEMPTYEnd:
     $ => D                      :MLOAD(tmpVarD)
                                 :RETURN
 
-; @out A => min(requested_gas, all_but_one_64th)
-gasSpendCallError:
+; @out A => min( requested_gas , all_but_one_64th(63/64) )
+computeGasSendCall:
     ; save tmp vars
     B                       :MSTORE(tmpVarB)
     C                       :MSTORE(tmpVarC)
@@ -349,11 +349,11 @@ gasSpendCallError:
     $ => B                  :MLOAD(gasCall)
     ; gas_sent_with_call = min(requested_gas, all_but_one_64th)
     ${comp_lt(A,B)} => D
-    0 - D                   :JMPC(gasSpendCallErrorEnd)
+    0 - D                   :JMPC(computeGasSendCallEnd)
     ; gas to substract
     B => A
 
-gasSpendCallErrorEnd:
+computeGasSendCallEnd:
     $ => B                  :MLOAD(tmpVarB)
     $ => C                  :MLOAD(tmpVarC)
     $ => D                  :MLOAD(tmpVarD)
