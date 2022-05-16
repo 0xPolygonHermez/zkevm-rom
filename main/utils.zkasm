@@ -5,11 +5,16 @@ VAR GLOBAL tmpVarB
 VAR GLOBAL tmpVarC
 VAR GLOBAL tmpVarD
 VAR GLOBAL tmpVarE
+VAR GLOBAL arithA
+VAR GLOBAL arithB
+VAR GLOBAL arithRes1
+VAR GLOBAL arithRes2
+VAR GLOBAL tmpZkPC
 
 ; @info Get absolute value and sign
 ; @in A => number to convert
 ; @out A => Absolut value of A
-; @out B => Sign of A
+; @out B => Sign of A [1 if negative, 0 positive]
 abs:
     0 => B
     $               :SLT, JMPC(absIsNeg)
@@ -28,7 +33,7 @@ copySP:
     CTX             :MSTORE(currentCTX)
     1024 => SP                             ;destOffset = 0
     $ => CTX        :MLOAD(originCTX)
-    $ => E          :MLOAD(argsOffsetCall) ;offset
+    $ => E          :MLOAD(argsOffsetCall)
     $ => C          :MLOAD(argsLengthCall) ;length
     0 - ${E%32}     :JMPN(copyInit2)
 
@@ -232,9 +237,27 @@ MLOAD32:
     B               :MSTORE(tmpVarB)
     C               :MSTORE(tmpVarC)
     D               :MSTORE(tmpVarD)
-    ${E%32} - 1     :JMPN(MLOAD322)
-    ${E%32} => C
-    ${(E/32)*32} => E
+    
+    32 => A
+    ${E%A} => C
+    ${E/A} => B
+    0 => D
+    E               :ARITH 
+
+    C - 1     :JMPC(MLOAD322)
+    ; ${(E/32)*32} => E - floor E
+    ${E%A} => C
+    ${E/A} => B
+    0 => D
+    E               :ARITH 
+
+    C               :MSTORE(tmpVarA)
+    0 => C
+    ${A*B} => E     :ARITH
+    $ => C          :MLOAD(tmpVarA)
+
+;TODO: Add --> LT(Residu < numToDiv)
+
     $ => A          :MLOAD(MEM:E)
     C => D
     ${A << (D*8)} => B
@@ -343,8 +366,8 @@ ISEMPTYEnd:
     $ => D                      :MLOAD(tmpVarD)
                                 :RETURN
 
-; @out A => min(requested_gas, all_but_one_64th)
-gasSpendCallError:
+; @out A => min( requested_gas , all_but_one_64th(63/64) )
+computeGasSendCall:
     ; save tmp vars
     B                       :MSTORE(tmpVarB)
     C                       :MSTORE(tmpVarC)
@@ -356,11 +379,11 @@ gasSpendCallError:
     $ => B                  :MLOAD(gasCall)
     ; gas_sent_with_call = min(requested_gas, all_but_one_64th)
     $ => D                  :LT
-    0 - D                   :JMPN(gasSpendCallErrorEnd)
+    0 - D                   :JMPC(computeGasSendCallEnd)
     ; gas to substract
     B => A
 
-gasSpendCallErrorEnd:
+computeGasSendCallEnd:
     $ => B                  :MLOAD(tmpVarB)
     $ => C                  :MLOAD(tmpVarC)
     $ => D                  :MLOAD(tmpVarD)
@@ -379,3 +402,88 @@ saveMem:
     $ => A                      :MLOAD(tmpVarA)
     $ => B                      :MLOAD(tmpVarB)
                                 :RETURN
+addARITH:
+
+    RR              :MSTORE(tmpZkPC)
+    zkPC+1 => RR    :JMP(storeTmp)
+
+    $ => A          :MLOAD(arithA)
+    $ => C          :MLOAD(arithB)
+    1 => B
+    0 => D
+    ${A+C} => E     :ARITH
+
+    E              :MSTORE(arithRes1)
+
+    zkPC+1 => RR    :JMP(loadTmp)
+    $ => RR         :MLOAD(tmpZkPC)
+                    :JMP(RR)
+
+subARITH:
+
+    RR              :MSTORE(tmpZkPC)
+    zkPC+1 => RR    :JMP(storeTmp)
+
+    $ => E          :MLOAD(arithA)
+    $ => C          :MLOAD(arithB)
+    1 => B
+    0 => D
+    ${E-C} => A
+    E                :ARITH
+
+    A                :MSTORE(arithRes1)
+
+    zkPC+1 => RR    :JMP(loadTmp)
+    $ => RR         :MLOAD(tmpZkPC)
+                    :JMP(RR)
+
+mulARITH:
+
+    RR              :MSTORE(tmpZkPC)
+    zkPC+1 => RR    :JMP(storeTmp)
+
+    $ => A          :MLOAD(arithA)
+    $ => B          :MLOAD(arithB)
+    0 => C
+    0 => D
+    ${A*B} => E     :ARITH
+
+    E              :MSTORE(arithRes1)
+
+    zkPC+1 => RR    :JMP(loadTmp)
+    $ => RR         :MLOAD(tmpZkPC)
+                    :JMP(RR)
+
+divARITH:
+
+    RR              :MSTORE(tmpZkPC)
+    zkPC+1 => RR    :JMP(storeTmp)
+
+    $ => E          :MLOAD(arithA)
+    $ => A          :MLOAD(arithB)
+    ${E%A} => C
+    ${E/A} => B
+    0 => D
+    E               :ARITH ;TODO: Add --> LT(Residu < numToDiv)
+
+    B               :MSTORE(arithRes1)
+    C               :MSTORE(arithRes2)
+
+    zkPC+1 => RR    :JMP(loadTmp)
+    $ => RR         :MLOAD(tmpZkPC)
+                    :JMP(RR)
+
+loadTmp:
+    $ => A                  :MLOAD(tmpVarA)
+    $ => B                  :MLOAD(tmpVarB)
+    $ => C                  :MLOAD(tmpVarC)
+    $ => D                  :MLOAD(tmpVarD)
+    $ => E                  :MLOAD(tmpVarE)
+                            :JMP(RR)
+storeTmp:
+    A                   :MSTORE(tmpVarA)
+    B                   :MSTORE(tmpVarB)
+    C                   :MSTORE(tmpVarC)
+    D                   :MSTORE(tmpVarD)
+    E                   :MSTORE(tmpVarE)
+                        :JMP(RR)
