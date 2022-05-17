@@ -1,3 +1,4 @@
+INCLUDE "map-opcodes.zkasm"
 INCLUDE "precompiled/selector.zkasm"
 
 processTx:
@@ -45,7 +46,7 @@ processTx:
         C - 1                           :JMPN(check_defaultChainId)                             ; If A != B --> check defaultChainId
                                         :JMP(endCheckChainId)                                   ; If A == B --> endCheckChainId
 check_defaultChainId:
-        $ => B                          :MLOAD(defaultChainId)                                  ; B: defaultChainId, A: chainId tx
+        %DEFAULT_SEQ_CHAINID => B       ; B: defaultChainId, A: chainId tx
         $ => C                          :EQ
         C - 1                           :JMPN(invalidTx)                                        ; If A != B --> invalid transaction
                                         :JMP(endCheckChainId)                                   ; If A == B --> endCheckChainId
@@ -310,9 +311,9 @@ readDeployBytecode:
         $ => A                          :MLOAD(SP)
         $ => SP                         :MLOAD(SPw)
         ${getByte(A,C)} => B
-        ${addrOp(B)} => RR
+        B => RR
         PC + 1 => PC
-                                        :JMP(RR)
+                                        :JMP(@mapping_opcodes + RR)
 
 callContract:
         0 => PC
@@ -327,10 +328,10 @@ readByteCode:
         ${getBytecodeLength(A)} => B
         B - PC                          :JMPN(endByteCode) ; // TODO: should be removed
         ${getBytecode(A,PC)} => B
-        ${addrOp(B)} => RR
+        B => RR
         PC + 1 => PC
-                                        :JMP(RR)
-        ; // TODO: check PC opcode in YUL
+                                        :JMP(@mapping_opcodes + RR)
+
 readCode:
         $ => A                          :MLOAD(isCreateContract)
         0 - A                           :JMPN(readDeployBytecode)
