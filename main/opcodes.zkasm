@@ -292,9 +292,8 @@ opBYTE:
     $ => B                  :MLOAD(SP--)
     $ => A                  :MLOAD(SP)
     31 - B => D
-    ${A >> (D*8)} => B
+                            :CALL(SHRarith)
     GAS-3 => GAS
-    B => A
     255 => B
     $                       :AND,MSTORE(SP++)
                             :JMP(readCode)
@@ -303,7 +302,14 @@ opSHR:
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
     $ => A          :MLOAD(SP)
+    A => E
+    ${exp(2,D)} => B
+    ${B-1} => B
+    $ => C          :AND
+    ${exp(2,D)} => B
     ${A >> D} => A
+    0 => D
+    E               :ARITH
     A               :MSTORE(SP++)
     GAS-3 => GAS
                     :JMP(readCode)
@@ -331,7 +337,8 @@ opSAR:
     $ => A          :MLOAD(SP)
                     :CALL(abs)
                     ; if more than 32 set to 32
-    ${A >> (D*8)} => C
+                    :CALL(SHRarith)
+    A => C
     B => A
     1 => B
     $ => B          :XOR
@@ -378,7 +385,7 @@ opSHA3Loop:
 opSHA3Final:
                     :CALL(MLOADX)
     32 - C => D
-    ${A >> (D*8)} => A
+                    :CALL(SHRarith)
     $ => E          :MLOAD(lastHashIdUsed)
     C => D
     A               :HASHK(E)
@@ -457,7 +464,7 @@ opCALLDATALOAD2:
     ${A << (D*8)} => B
     32 - D => D
     $ => A          :MLOAD(SP)
-    ${A >> (D*8)} => A
+                    :CALL(SHRarith)
     C => SP
     B + A           :MSTORE(SP++)
     GAS - 3 => GAS
@@ -490,7 +497,7 @@ opCALLDATACOPYinit:
     1024 + ${B/32} + 1 => SP
     32 - D => D
     $ => A          :MLOAD(SP)
-    ${A >> (D*8)} => A
+                    :CALL(SHRarith)
     A + C           :MSTORE(bytesToStore)
                     :CALL(MSTORE32)
     $ => SP         :MLOAD(SPw)
@@ -513,7 +520,7 @@ opCALLDATACOPYfinal:
     A => B
     $ => A          :MLOAD(SP)
     32 - D => D
-    ${A >> (D*8)} => A
+                    :CALL(SHRarith)
     32 - C => D
     ${A << (D*8)} => A
     B + A => A
@@ -523,7 +530,7 @@ opCALLDATACOPYfinal:
 
 opCALLDATACOPYxor:
     32 - C => D
-    ${A >> (D*8)} => A
+                    :CALL(SHRarith)
     ${A << (D*8)} => A
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
@@ -1044,7 +1051,7 @@ opAuxPUSHC:
     D - E => D
     $ => B                      :MLOAD(SP)
     ${getByte(B,C,D)} => B
-    ${A >> (D*8)} => A
+                                :CALL(SHRarith)
     $ => SP                     :MLOAD(SPw)
     A + B                       :MSTORE(SP++)
     GAS-3 => GAS
