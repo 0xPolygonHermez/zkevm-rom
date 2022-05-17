@@ -76,18 +76,12 @@ endCheckChainId:
 
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
-        $ => E                          :SLOAD                                                  ; Original Balance in E
-        E                               :MSTORE(initSrcOriginBalance)
-        D => C                                                                                  ; A = E - C
-        ${E-C} => A
-        31 => D
-        $ => B                          :SHR
-        0x7F - B                        :JMPC(invalidTx)                                       ; If A is a negative value --> invalidTx
-        1 => B
-        0 => D
-        E                                :ARITH                                                 ; originalBalance -gas*gasPrice in A
-
-        A => D                                                                                  ; originalBalance -gas*gasPrice in D
+        $ => A                          :SLOAD                                                  ; Original Balance in E
+        A                               :MSTORE(initSrcOriginBalance)
+        D => B                                                                                  ; A = E - C
+        $ => C                          :LT 
+        -C                              :JMPC(invalidTx)
+        $ => D                          :SUB
 
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
@@ -108,18 +102,12 @@ endCheckChainId:
         ; Decrement original balance
         $ => A                          :MLOAD(txSrcAddr)
         0 => B,C
-        $ => E                          :SLOAD                                                  ; Original Balance in E
-        E                               :MSTORE(initSrcBalance)
-        $ => C                          :MLOAD(txValue)                                         ; A = E - C
-        ${E-C} => A
-        31 => D
-        $ => B                          :SHR
-        0x7F - B                        :JMPC(invalidTx)                                        ; If A is a negative value --> invalidTx
-        1 => B 
-        0 => D
-        E                               :ARITH                                                  ; originalBalance -value in A
-
-        A => D                                                                                  ; originalBalance -value in D
+        $ => A                          :SLOAD                                                  ; Original Balance in E
+        A                               :MSTORE(initSrcBalance)
+        $ => B                          :MLOAD(txValue)                                         ; A = E - C
+        $ => C                          :LT
+        -C                              :JMPC(invalidTx)
+        $ => D                          :SUB
 
         $ => A                          :MLOAD(txSrcAddr)
         0 => B,C
