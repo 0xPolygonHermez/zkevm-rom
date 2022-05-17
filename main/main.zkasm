@@ -3,6 +3,8 @@ INCLUDE "vars.zkasm"
 start:
 ; First of all, load The call Data.  The first A value is forced with the hash of the TX.
         ${getGlobalHash()}                  :MSTORE(globalHash)                    ; In A register we have the TXHash
+        STEP => A
+        1                                   :ASSERT                                ; Ensure it is the begining of the execution
         ${getGlobalExitRoot()}              :MSTORE(globalExitRoot)
         ${getOldStateRoot()}                :MSTORE(oldStateRoot)
 
@@ -219,48 +221,8 @@ endAppendTxs:
 
         0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR                 ; Set all registers to 0
 
-longLoop:
-        STEP-0x10000+40  : JMPC(longLoop2)
-                        : JMP(finalLoop)
-longLoop2:
-        0
-        0
-        0
-        0       ; 4
-        0
-        0
-        0
-        0       ; 8
-        0
-        0
-        0
-        0       ; 12
-        0
-        0
-        0
-        0       ; 16
-        0
-        0
-        0
-        0       ; 20
-        0
-        0
-        0
-        0       ; 24
-        0
-        0
-        0
-        0       ; 28
-        0
-        0
-        0
-        0       : JMP(longLoop) ; 32
-
-
-finalLoop:
-;        STEP-0x800000+2  : JMPC(finalLoop)  ; 2**23
-        STEP-0x10000+2  : JMPC(finalLoop)
-
+finalWait:
+        ${beforeLast()}  : JMPC(finalWait)
                          : JMP(start)
 
 INCLUDE "loadtx_rlp.zkasm"
