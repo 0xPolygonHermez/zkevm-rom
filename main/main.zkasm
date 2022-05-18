@@ -104,7 +104,7 @@ txLoopRLP:
 
         $ => A          :MLOAD(batchL2DataLength)
         $ => C          :MLOAD(batchL2DataParsed)
-        C - A           :JMPC(loadTx_rlp)
+        C - A           :JMPN(loadTx_rlp)
                         :JMP(endCheckRLP)
 
 endCheckRLP:
@@ -113,7 +113,7 @@ endCheckRLP:
 txLoop:
         $ => A          :MLOAD(pendingTxs)
         A-1 =>  A       :MSTORE(pendingTxs)
-        A               :JMPC(processTxsEnd)
+        A               :JMPN(processTxsEnd)
 
         $ => A          :MLOAD(ctxTxToUse)                        ; Set the CTX and store in system
         A+1 => CTX      :MSTORE(ctxTxToUse)
@@ -154,7 +154,7 @@ processTxsEnd:
         $${p = 0}
 
 appendTxs:
-        B - C - 32                      :JMPC(finalAppendTxs)
+        B - C - 32                      :JMPN(finalAppendTxs)
         32 => D
         ${getTxs(p,D)} => A
         $${p = p + D}
@@ -164,7 +164,7 @@ appendTxs:
 
 finalAppendTxs:
         B - C => D
-        D - 1                           :JMPC(endAppendTxs)
+        D - 1                           :JMPN(endAppendTxs)
         ${getTxs(p,D)} => A
         $${ p = p + D}
         A                               :HASHK(E)
@@ -223,7 +223,7 @@ endAppendTxs:
         0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR                 ; Set all registers to 0
 
 finalWait:
-        ${beforeLast()}  : JMPC(finalWait)
+        ${beforeLast()}  : JMPN(finalWait)
                          : JMP(start)
 
 INCLUDE "loadtx_rlp.zkasm"

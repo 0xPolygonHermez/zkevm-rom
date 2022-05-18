@@ -39,12 +39,12 @@ processTx:
         $ => A                          :MLOAD(txChainId)                                       ; A: chainId tx
         $ => B                          :MLOAD(chainId)                                         ; B: chainId
         $ => C                          :EQ
-        C - 1                           :JMPC(check_defaultChainId)                             ; If A != B --> check defaultChainId
+        C - 1                           :JMPN(check_defaultChainId)                             ; If A != B --> check defaultChainId
                                         :JMP(endCheckChainId)                                   ; If A == B --> endCheckChainId
 check_defaultChainId:
         $ => B                          :MLOAD(defaultChainId)                                  ; B: defaultChainId, A: chainId tx
         $ => C                          :EQ
-        C - 1                           :JMPC(invalidTx)                                        ; If A != B --> invalid transaction
+        C - 1                           :JMPN(invalidTx)                                        ; If A != B --> invalid transaction
                                         :JMP(endCheckChainId)                                   ; If A == B --> endCheckChainId
 
 endCheckChainId:
@@ -66,7 +66,7 @@ endCheckChainId:
         $ => A                          :SLOAD                                                  ; Load the nonce to A and C from storage
         $ => B                          :MLOAD(txNonce)
         $ => C                          :EQ
-        C - 1                           :JMPC(invalidTx)                                        ; Compare "nonce storage" (A) and "nonce tx" (B). If A != B --> invalidTx
+        C - 1                           :JMPN(invalidTx)                                        ; Compare "nonce storage" (A) and "nonce tx" (B). If A != B --> invalidTx
         B                               :ASSERT                                                 ; sanity check
         A+1 => D                                                                                ; Set to A the current address
         E => A
@@ -94,7 +94,7 @@ endCheckChainId:
         ${E-C} => A
         31 => D
         ${A >> (D*8)} => B                                                                     ; //TODO: Could be replaces by: ${bitwise_and(A, 2**255)} + [ ${comp_eq(A, 0x80)} or (0x7F - B)]
-        0x7F - B                        :JMPC(invalidTx)                                       ; If A is a negative value --> invalidTx
+        0x7F - B                        :JMPN(invalidTx)                                       ; If A is a negative value --> invalidTx
         1 => B
         0 => D
         E                                :ARITH                                                 ; originalBalance -gas*gasPrice in A
@@ -126,7 +126,7 @@ endCheckChainId:
 ; Gas calldata
 ;;;;;;;;
         $ => A                          :MLOAD(txCalldataLen)
-        A - 1                           :JMPC(txType)
+        A - 1                           :JMPN(txType)
         0 => D
         -1 => C
 
@@ -142,12 +142,12 @@ loopBytes:
                         :CALL(mulARITH)
         $ => B          :MLOAD(arithRes1)
 
-        A - B - D - 1             :JMPC(txType)
-        32 - D - 1                      :JMPC(addGas)
+        A - B - D - 1             :JMPN(txType)
+        32 - D - 1                      :JMPN(addGas)
         $ => B                          :MLOAD(SP) ; TODO: mask to get byte per byte
         ${getByte(B,D)} => B
         D + 1 => D
-        B - 1                           :JMPC(add4Gas)
+        B - 1                           :JMPN(add4Gas)
                                         :JMP(add16Gas)
 
 add4Gas:
@@ -162,22 +162,22 @@ txType:
 ;;;;; Tx type
 ;;;;;;;;;;
         $ => A                          :MLOAD(isCreateContract)
-        0 - A                           :JMPC(getContractAddress)
+        0 - A                           :JMPN(getContractAddress)
         $ => A                          :MLOAD(txDestAddr)
         ${touchedAddress(A,CTX)}
         ; // TODO: check "0x000..000" when coming from a CALL
         10 => B
         $ => B                          :LT
-        0 - B                           :JMPC(selectorPrecompiled) ; precompiled smart contracts
+        0 - B                           :JMPN(selectorPrecompiled) ; precompiled smart contracts
         2 => B
         0 => C
         $ => A                          :SLOAD
         0 => D
 
 checkTxType:
-        32 - D                          :JMPC(moveBalances)
+        32 - D                          :JMPN(moveBalances)
         ${getByte(A,D)} => B    ; // TODO: comparison with 0
-        0 - B                           :JMPC(callContract)
+        0 - B                           :JMPN(callContract)
         D + 1 => D
                                         :JMP(checkTxType)
 
@@ -188,10 +188,10 @@ getContractAddress:
         $ => E                          :MLOAD(lastHashIdUsed)
         E+1 => E                        :MSTORE(lastHashIdUsed)
         $ => A                          :MLOAD(isCreate2)
-        0 - A                           :JMPC(create2)
+        0 - A                           :JMPN(create2)
         $ => A                          :MLOAD(txSrcAddr)
         $ => B                          :MLOAD(txNonce)
-        B - 0x80                        :JMPC(nonce1byte)
+        B - 0x80                        :JMPN(nonce1byte)
         $ => C                          :MLOAD(lengthNonce)
         1 => D
         0xc0 + 22 + C                   :HASHK(E) ; 1 byte length address, 20 bytes address, 1 bytes length nonce = 22 bytes
@@ -211,7 +211,7 @@ nonce1byte:
         20 => D
         A                               :HASHK(E)
         1 => D
-        B - 1                           :JMPC(nonceIs0)
+        B - 1                           :JMPN(nonceIs0)
         B                               :HASHK(E)
                                         :JMP(endContractAddress)
 
@@ -244,8 +244,8 @@ create2:
                                         :JMP(loopCreate2)
 
 loopCreate2:
-        C - 1                           :JMPC(create2end)
-        C - 32                          :JMPC(endloopCreate2)
+        C - 1                           :JMPN(create2end)
+        C - 32                          :JMPN(endloopCreate2)
         $ => A                          :MLOAD(SP++)
         32 => D
         A                               :HASHK(E)
@@ -305,7 +305,7 @@ readDeployBytecode:
         SP + A => SP
 
         $ => B                          :MLOAD(txCalldataLen)
-        B - PC                          :JMPC(endDeploy)
+        B - PC                          :JMPN(endDeploy)
         $ => A                          :MLOAD(SP)
         $ => SP                         :MLOAD(SPw)
         ${getByte(A,C)} => B
@@ -324,7 +324,7 @@ readByteCode:
         0 => C
         $ => A                          :SLOAD
         ${getBytecodeLength(A)} => B
-        B - PC                          :JMPC(endByteCode) ; // TODO: should be removed
+        B - PC                          :JMPN(endByteCode) ; // TODO: should be removed
         ${getBytecode(A,PC)} => B
         ${addrOp(B)} => RR
         PC + 1 => PC
@@ -332,12 +332,12 @@ readByteCode:
         ; // TODO: check PC opcode in YUL
 readCode:
         $ => A                          :MLOAD(isCreateContract)
-        0 - A                           :JMPC(readDeployBytecode)
+        0 - A                           :JMPN(readDeployBytecode)
                                         :JMP(readByteCode)
 
 endCode:
         $ => A                          :MLOAD(isCreateContract)
-        0 - A                           :JMPC(endDeploy)
+        0 - A                           :JMPN(endDeploy)
                                         :JMP(endByteCode)
 
 endDeploy:
@@ -378,7 +378,7 @@ moveBalances:
 
         31 => D
         ${A >> (D*8)} => B
-        0x7F - B                        :JMPC(invalidTx)                                        ; If A is a negative value --> invalidTx
+        0x7F - B                        :JMPN(invalidTx)                                        ; If A is a negative value --> invalidTx
         1 => B
         0 => D
         A => D                                                                                  ; originalBalance -value in D
@@ -409,7 +409,7 @@ moveBalances:
 
         0 => A
         $ => B                          :MLOAD(gasRefund)
-        B - 1                           :JMPC(refundGas)
+        B - 1                           :JMPN(refundGas)
         $ => A                          :MLOAD(txGas)
         A - GAS => A
         ; Div operation with Arith
@@ -417,7 +417,7 @@ moveBalances:
         2               :MSTORE(arithB)
                         :CALL(divARITH)
         $ => A          :MLOAD(arithRes1)
-        A - B                           :JMPC(refundGas)
+        A - B                           :JMPN(refundGas)
         B => A
 
 refundGas:
@@ -478,7 +478,7 @@ terminateTX:
 ; TODO: should be an invalid intrinsic txs and (revert, out-of-gas, assert, invalid opcode )
 invalidTx:
         $ => A                          :MLOAD(originCTX)
-        0 - A                           :JMPC(invalidTxOrigin) ; TODO:: invalid call with depth > 0
+        0 - A                           :JMPN(invalidTxOrigin) ; TODO:: invalid call with depth > 0
         $ => SR                         :MLOAD(initSR)
 
                                         :JMP(terminateTX)
