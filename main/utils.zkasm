@@ -515,28 +515,52 @@ storeTmp:
                         :JMP(RR)
 
 ;@in A - (A >> D)
-;@in D - (A >> D)
+;@in D - (A >> D) D bytes
 ;@out A -  A >> D => A
 SHRarith:
     B                       :MSTORE(tmpVarB2)
     C                       :MSTORE(tmpVarC2)
     D                       :MSTORE(tmpVarD2)
     E                       :MSTORE(tmpVarE2)
+    A => E
+    D => A
+    8 => B
+    0 => C
+    0 => D
+    ${A*B} => D             :ARITH
+    E => A
+                            :JMP(SHRarithinit)
+
+;@in A - (A >> D)
+;@in D - (A >> D) D bits
+;@out A -  A >> D => A
+SHRarithBit:
+    B                       :MSTORE(tmpVarB2)
+    C                       :MSTORE(tmpVarC2)
+    D                       :MSTORE(tmpVarD2)
+    E                       :MSTORE(tmpVarE2)
+
+SHRarithinit:
     0 => B
     $ => B                  :EQ
     0 - B                   :JMPC(SHRarithfinal)
     A => E
-    ${exp(2,D*8)} => B
+    D => A
+    255 => B
+    $ => B                  :GT
+    0 - B                   :JMPC(SHRarith0)
+    E => A
+    ${exp(2,D)} => B
     ${B-1} => B
     $ => C                  :AND
-    ${exp(2,D*8)} => B
-    0 => A
-    $ => B                  :EQ
-    0 - B                   :JMPC(SHRarithfinal)
-    ${exp(2,D*8)} => B
+    ${exp(2,D)} => B
     ${E/B} => A
     0 => D
     E                       :ARITH
+                            :JMP(SHRarithfinal)
+
+SHRarith0:
+    0 => A
 
 SHRarithfinal:
     $ => B                      :MLOAD(tmpVarB2)
@@ -546,7 +570,7 @@ SHRarithfinal:
                                 :JMP(RR)
 
 ;@in A - (A << D)
-;@in D - (A << D)
+;@in D - (A << D) D bytes
 ;@out A -  A << D => A
 SHLarith:
     B                       :MSTORE(tmpVarB2)
@@ -554,19 +578,37 @@ SHLarith:
     D                       :MSTORE(tmpVarD2)
     E                       :MSTORE(tmpVarE2)
     A => E
+    D => A
+    8 => B
+    0 => C
+    0 => D
+    ${A*B} => D             :ARITH
+    E => A
+                            :JMP(SHLarithinit)
+;@in A - (A << D)
+;@in D - (A << D) D bits
+;@out A -  A << D => A
+SHLarithBit:
+    B                       :MSTORE(tmpVarB2)
+    C                       :MSTORE(tmpVarC2)
+    D                       :MSTORE(tmpVarD2)
+    E                       :MSTORE(tmpVarE2)
+
+SHLarithinit:
+    A => E
     0 => A
     D => B
     $ => B                  :EQ
     0 - B                   :JMPC(SHLarithfinal)
     E => A
-    ${exp(2,D*8)} => B
+    ${exp(2,D)} => B
     ${A*B} => E
-    32 - D => D             :JMPC(SHLarith0)
-    ${exp(2,D*8)} => B
+    256 - D => D             :JMPC(SHLarith0)
+    ${exp(2,D)} => B
     ${B-1} => B
     $ => C                  :GT
-    32 - D => D
-    ${exp(2,D*8)} => B
+    256 - D => D
+    ${exp(2,D)} => B
     0 - C                   :JMPC(SHLarithBig)
     0 => D,C
     E                       :ARITH
@@ -577,8 +619,8 @@ SHLarith0:
                             :JMP(SHLarithfinal)
 
 SHLarithBig:
-    32 - D => D
-    ${exp(2,D*8)} => D
+    256 - D => D
+    ${exp(2,D)} => D
     ${A/D} => D
     0 => C
     E                       :ARITH
