@@ -83,7 +83,7 @@ opSDIV:
     1 => B
     $ => B          :XOR
     $ => A          :MLOAD(tmpVarA)
-    B - 1           :JMPC(opSDIVNeg) ;0 negative, 1 positive
+    B - 1           :JMPN(opSDIVNeg) ;0 negative, 1 positive
     ; Div operation with Arith
     E               :MSTORE(arithA)
     A               :MSTORE(arithB)
@@ -131,7 +131,7 @@ opSMOD:
     1 => B
     $ => B          :XOR
     $ => A          :MLOAD(tmpVarA)
-    B - 1           :JMPC(opSMODNeg)  ; 0 negative, 1 positive
+    B - 1           :JMPN(opSMODNeg)  ; 0 negative, 1 positive
     ; Div operation with Arith
     E               :MSTORE(arithA)
     A               :MSTORE(arithB)
@@ -452,7 +452,7 @@ opSHA3End:
 ; // TODO: check opcode with DelegateCall (storage or implementation address)
 opADDRESS:
     $ => A          :MLOAD(isCreateContract)
-    0 - A           :JMPC(opADDRESSdeploy)
+    0 - A           :JMPN(opADDRESSdeploy)
     $ => A          :MLOAD(txDestAddr)
                     :JMP(opADDRESSend)
 
@@ -502,7 +502,7 @@ opCALLDATALOAD:
                     :CALL(divARITH)
     $ => B          :MLOAD(arithRes1)
     $ => A          :MLOAD(arithRes2)
-    0 - A           :JMPC(opCALLDATALOAD2)
+    0 - A           :JMPN(opCALLDATALOAD2)
     SP => C
     1024 + B => SP
     $ => B          :MLOAD(SP)
@@ -544,8 +544,8 @@ opCALLDATACOPY:
                     :JMP(opCALLDATACOPYinit)
 
 opCALLDATACOPYinit:
-    C - 1           :JMPC(opCALLDATACOPYend)
-    C - 32          :JMPC(opCALLDATACOPYfinal)
+    C - 1           :JMPN(opCALLDATACOPYend)
+    C - 32          :JMPN(opCALLDATACOPYfinal)
     B               :MSTORE(arithA)
     32              :MSTORE(arithB)
                     :CALL(divARITH)
@@ -606,7 +606,7 @@ opCALLDATACOPYend:
 ; missing verification --> hash table needed
 opCODESIZE:
     $ => A          :MLOAD(isCreateContract)
-    0 - A           :JMPC(opCODESIZEdep)
+    0 - A           :JMPN(opCODESIZEdep)
     $ => A          :MLOAD(txDestAddr)
     2 => B
     0 => C
@@ -624,7 +624,7 @@ opCODESIZEdep: ;//TODO: create/create2, constructor parameters, initBytcode vs d
 
 opCODECOPY:
     $ => A          :MLOAD(isCreateContract)
-    0 - A           :JMPC(opCALLDATACOPY) ; //TODO:
+    0 - A           :JMPN(opCALLDATACOPY) ; //TODO:
     $ => A          :MLOAD(txDestAddr) ; //TODO: delegate call ?
     2 => B
     0 => C
@@ -793,8 +793,8 @@ opEXTCODEHASH:
 
 opEXTCODEHASHinit:
     32 => D
-    C - 1           :JMPC(opEXTCODEHASHend)
-    C - 32          :JMPC(opEXTCODEHASHfinal)
+    C - 1           :JMPN(opEXTCODEHASHend)
+    C - 32          :JMPN(opEXTCODEHASHfinal)
     ${getBytecode(A,p,D)} => B ; //TODO: add state machine :READ_BYTECODE(A, P)
     B               :HASHK(E)
     C - D => C
@@ -819,7 +819,7 @@ opBLOCKHASH:
     
     ; Check batch number is lt current batch number, else return 0
     $ => B          :MLOAD(numBatch)
-    B - A - 1       :JMPC(opBLOCKHASHzero)
+    B - A - 1       :JMPN(opBLOCKHASHzero)
     
     ; Create key for the batch hash mapping key
     $ => E          :MLOAD(lastHashIdUsed)
@@ -950,13 +950,13 @@ opSLOAD:
 
 opSSTORE:
     $ => A          :MLOAD(iSstaticCall)
-    0 - A           :JMPC(invalidStaticTx)
+    0 - A           :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => C          :MLOAD(SP--) ;key
     C               :MSTORE(tmpVarC)
     $ => D          :MLOAD(SP) ; new value
     $ => A          :MLOAD(isCreateContract)
-    0 - A           :JMPC(deploymentSSTORE)
+    0 - A           :JMPN(deploymentSSTORE)
     $ => A          :MLOAD(storageAddr)
                     :JMP(opSSTOREinit)
 
@@ -1061,7 +1061,7 @@ opSSTOREdifB:
 
 opSSTOREend:
     $ => A          :MLOAD(isCreateContract)
-    0 - A           :JMPC(mloadContract)
+    0 - A           :JMPN(mloadContract)
     $ => A          :MLOAD(storageAddr)
                     :JMP(opSSTOREsr)
 
@@ -1133,7 +1133,7 @@ opAuxPUSHB:
     $ => A          :MLOAD(arithRes1)
     $ => C          :MLOAD(arithRes2)
     SP + A => SP
-    A - ${(PC+D)/32}            :JMPC(opAuxPUSHC)
+    A - ${(PC+D)/32}            :JMPN(opAuxPUSHC)
     $ => A                      :MLOAD(SP)
     $ => SP                     :MLOAD(SPw)
     ${getByte(A,C,D)} => B
@@ -1160,193 +1160,193 @@ opAuxPUSHC:
 opPUSH1:
     1 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH2:
     2 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH3:
     3 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH4:
     4 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH5:
     5 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH6:
     6 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH7:
     7 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH8:
     8 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH9:
     9 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH10:
     10 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH11:
     11 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH12:
     12 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH13:
     13 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH14:
     14 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH15:
     15 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH16:
     16 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH17:
     17 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH18:
     18 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH19:
     19 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH20:
     20 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH21:
     21 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH22:
     22 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH23:
     23 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH24:
     24 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH25:
     25 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH26:
     26 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH27:
     27 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH28:
     28 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH29:
     29 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH30:
     30 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH31:
     31 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH32:
     32 => D
     $ => B                          :MLOAD(isCreateContract)
-    0 - B                           :JMPC(opAuxPUSHB)
+    0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opDUP1:
@@ -1654,7 +1654,7 @@ opSWAP16:
 ; gas_cost = 375 + 375 * num_topics + 8 * data_size + mem_expansion_cost
 opLOG0:
     $ => A              :MLOAD(iSstaticCall)
-    0 - A               :JMPC(invalidStaticTx)
+    0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
@@ -1668,7 +1668,7 @@ opLOG0:
 
 opLOG1:
     $ => A              :MLOAD(iSstaticCall)
-    0 - A               :JMPC(invalidStaticTx)
+    0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
@@ -1682,7 +1682,7 @@ opLOG1:
 
 opLOG2:
     $ => A              :MLOAD(iSstaticCall)
-    0 - A               :JMPC(invalidStaticTx)
+    0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
@@ -1696,7 +1696,7 @@ opLOG2:
 
 opLOG3:
     $ => A              :MLOAD(iSstaticCall)
-    0 - A               :JMPC(invalidStaticTx)
+    0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
@@ -1710,7 +1710,7 @@ opLOG3:
 
 opLOG4:
     $ => A              :MLOAD(iSstaticCall)
-    0 - A               :JMPC(invalidStaticTx)
+    0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
@@ -1756,7 +1756,7 @@ opLOGend:
 ; // TODO check revert create
 opCREATE:
     $ => A              :MLOAD(iSstaticCall)
-    0 - A               :JMPC(invalidStaticTx)
+    0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => A              :MLOAD(SP--)    ;value
     A                   :MSTORE(valueCall)
@@ -1816,8 +1816,8 @@ opCALL:
     $ => A          :MLOAD(SP--)
     A               :MSTORE(valueCall)
     $ => B          :MLOAD(iSstaticCall) ; TODO isStaticCall
-    B - 1           :JMPC(opCALL2)
-    0 - A           :JMPC(invalidStaticTx)
+    B - 1           :JMPN(opCALL2)
+    0 - A           :JMPN(invalidStaticTx)
 
 opCALL2:
     $ => A          :MLOAD(SP--)
@@ -1940,7 +1940,7 @@ opCALLCODE3:
     GAS-100-D*2500 => GAS
     $ => A          :MLOAD(valueCall)
     A               :MSTORE(txValue)
-    A - 1           :JMPC(opCALLCODEend)
+    A - 1           :JMPN(opCALLCODEend)
     ; Substract gas if the call has value
     GAS - 9000 => GAS
     ; TODO: check gas_sent_with_call
@@ -1966,7 +1966,7 @@ opRETURN:
     $ => C          :MLOAD(SP)   ;length
     E+C             :MSTORE(lastMemLength)
     $ => D          :MLOAD(isCreateContract)
-    0 - D           :JMPC(opRETURNdeploy)
+    0 - D           :JMPN(opRETURNdeploy)
     $ => B          :MLOAD(originCTX)       ;last ctx
     B - 1           :JMPN(opRETURNend2)
     CTX             :MSTORE(currentCTX)
@@ -2166,7 +2166,7 @@ opDELEGATECALLend:
 ; // TODO check revert create
 opCREATE2:
     $ => A              :MLOAD(iSstaticCall)
-    0 - A               :JMPC(invalidStaticTx)
+    0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => A              :MLOAD(SP--)    ;value
     A                   :MSTORE(valueCall)
@@ -2298,7 +2298,7 @@ opREVERTend:
 ; Test selfDestruct: sent value to another contract
 opSELFDESTRUCT:
     $ => A              :MLOAD(iSstaticCall)
-    0 - A               :JMPC(invalidStaticTx)
+    0 - A               :JMPN(invalidStaticTx)
     24000               :MSTORE(gasRefund)
     GAS - 5000 => GAS
 
@@ -2355,7 +2355,7 @@ opINVALID:
     0 => GAS
     ; if main context, halt execution
     $ => B          :MLOAD(originCTX)       ;last ctx
-    B - 1           :JMPC(opINVALIDend)
+    B - 1           :JMPN(opINVALIDend)
     ; Decrease context and continue execution
     B => CTX
     ; Set values from source context, no need to refund GAS because is 0

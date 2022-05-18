@@ -249,7 +249,7 @@ MLOAD32:
     0 => D
     E               :ARITH 
 
-    C - 1     :JMPC(MLOAD322)
+    C - 1     :JMPN(MLOAD322)
     ; ${(E/32)*32} => E - floor E
     ${E%A} => C
     ${E/A} => B
@@ -384,7 +384,7 @@ computeGasSendCall:
     $ => B                  :MLOAD(gasCall)
     ; gas_sent_with_call = min(requested_gas, all_but_one_64th)
     $ => D                  :LT
-    0 - D                   :JMPC(computeGasSendCallEnd)
+    0 - D                   :JMPN(computeGasSendCallEnd)
     ; gas to substract
     B => A
 
@@ -413,10 +413,8 @@ addARITH:
     zkPC+1 => RR    :JMP(storeTmp)
 
     $ => A          :MLOAD(arithA)
-    $ => C          :MLOAD(arithB)
-    1 => B
-    0 => D
-    ${A+C} => E     :ARITH
+    $ => B          :MLOAD(arithB)
+    $ => E          :ADD
 
     E              :MSTORE(arithRes1)
 
@@ -429,12 +427,9 @@ subARITH:
     RR              :MSTORE(tmpZkPC)
     zkPC+1 => RR    :JMP(storeTmp)
 
-    $ => E          :MLOAD(arithA)
-    $ => C          :MLOAD(arithB)
-    1 => B
-    0 => D
-    ${E-C} => A
-    E                :ARITH
+    $ => A          :MLOAD(arithA)
+    $ => B          :MLOAD(arithB)
+    $ => A          :SUB
 
     A                :MSTORE(arithRes1)
 
