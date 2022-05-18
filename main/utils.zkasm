@@ -13,7 +13,7 @@ VAR GLOBAL tmpVarE
 abs:
     57896044618658097711785492504343953926634992332820282019728792003956564819967n => B
     $ => B          :GT
-    B - 1           :JMPC(endca2) ; no conversion if positive number
+    B - 1           :JMPN(endca2) ; no conversion if positive number
                     :JMP(ca2)
 ; @info complement a 2 conversion
 ; @in A => number to convert
@@ -35,11 +35,11 @@ copySP:
     $ => CTX        :MLOAD(originCTX)
     $ => E          :MLOAD(argsOffsetCall) ;offset
     $ => C          :MLOAD(argsLengthCall) ;length
-    0 - ${E%32}     :JMPC(copyInit2)
+    0 - ${E%32}     :JMPN(copyInit2)
 
 copyInit:
-    C - 1           :JMPC(copyEnd)
-    C - 32          :JMPC(copyFinal)
+    C - 1           :JMPN(copyEnd)
+    C - 32          :JMPN(copyFinal)
     $ => A          :MLOAD(MEM:E)
     E + 32 => E
     $ => CTX        :MLOAD(currentCTX)
@@ -58,8 +58,8 @@ copyFinal:
                     :JMP(copyEnd)
 
 copyInit2:
-    C - 1           :JMPC(copyEnd)
-    C - 32          :JMPC(copyFinal2)
+    C - 1           :JMPN(copyEnd)
+    C - 32          :JMPN(copyFinal2)
     ${E%32} => D
     ${(E/32)*32} => E
     $ => A          :MLOAD(MEM:E)
@@ -75,7 +75,7 @@ copyInit2:
                     :JMP(copyInit2)
 
 copyFinal2:
-    32 - ${E%32} - C => D       :JMPC(copyFinal22)
+    32 - ${E%32} - C => D       :JMPN(copyFinal22)
     ${E%32} => B
     ${(E/32)*32} => E
     $ => A                      :MLOAD(MEM:E)
@@ -117,7 +117,7 @@ getLenBytes:
 getLenBytesLoop:
     0 => B
     $ => B          :EQ
-    0 - B           :JMPC(getLenEnd)
+    0 - B           :JMPN(getLenEnd)
     1 => D
     ${A >> (D*8)} => A
     C + 1 => C
@@ -142,7 +142,7 @@ MSTORE32:
     C               :MSTORE(tmpVarC)
     D               :MSTORE(tmpVarD)
     E               :MSTORE(tmpVarE)
-    ${E%32} - 1     :JMPC(MSTORE322)
+    ${E%32} - 1     :JMPN(MSTORE322)
     ${E%32} => C
     ${(E/32)*32} => E
     $ => A          :MLOAD(MEM:E)
@@ -186,7 +186,7 @@ MSTOREX:
     C                           :MSTORE(tmpVarC)
     D                           :MSTORE(tmpVarD)
     E                           :MSTORE(tmpVarE)
-    32 - ${E%32} - C            :JMPC(MSTOREX2)
+    32 - ${E%32} - C            :JMPN(MSTOREX2)
     ${E%32} => D
     ${(E/32)*32} => E
     $ => A                      :MLOAD(bytesToStore)
@@ -237,7 +237,7 @@ MLOAD32:
     B               :MSTORE(tmpVarB)
     C               :MSTORE(tmpVarC)
     D               :MSTORE(tmpVarD)
-    ${E%32} - 1     :JMPC(MLOAD322)
+    ${E%32} - 1     :JMPN(MLOAD322)
     ${E%32} => C
     ${(E/32)*32} => E
     $ => A          :MLOAD(MEM:E)
@@ -267,7 +267,7 @@ MLOADX:
     C               :MSTORE(tmpVarC)
     D               :MSTORE(tmpVarD)
     E               :MSTORE(tmpVarE)
-    32 - ${E%32} - C => D       :JMPC(MLOADX2)
+    32 - ${E%32} - C => D       :JMPN(MLOADX2)
     ${E%32} => B
     ${(E/32)*32} => E
     $ => A                      :MLOAD(MEM:E)
@@ -315,7 +315,7 @@ ISEMPTY:
     0 => B,C
     $ => A                      :SLOAD
     $ => A                      :EQ
-    A - 1                       :JMPC(ISEMPTYSet0)
+    A - 1                       :JMPN(ISEMPTYSet0)
 
     ; read nonce
     E => A
@@ -323,7 +323,7 @@ ISEMPTY:
     $ => A                      :SLOAD
     0 => B
     $ => A                      :EQ
-    A - 1                       :JMPC(ISEMPTYSet0)
+    A - 1                       :JMPN(ISEMPTYSet0)
 
     ; read bytecode
     E => A
@@ -331,7 +331,7 @@ ISEMPTY:
     $ => A                      :SLOAD
     0 => B
     $ => A                      :EQ
-    A - 1                       :JMPC(ISEMPTYSet0)
+    A - 1                       :JMPN(ISEMPTYSet0)
 
 ISEMPTYSet1:
     1 => E
@@ -361,7 +361,7 @@ gasSpendCallError:
     $ => B                  :MLOAD(gasCall)
     ; gas_sent_with_call = min(requested_gas, all_but_one_64th)
     $ => D                  :LT
-    0 - D                   :JMPC(gasSpendCallErrorEnd)
+    0 - D                   :JMPN(gasSpendCallErrorEnd)
     ; gas to substract
     B => A
 
