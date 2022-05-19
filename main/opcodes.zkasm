@@ -324,9 +324,8 @@ opBYTE:
     $ => B                  :MLOAD(SP--)
     $ => A                  :MLOAD(SP)
     31 - B => D
-    ${A >> (D*8)} => B
+                            :CALL(SHRarith)
     GAS-3 => GAS
-    B => A
     255 => B
     $                       :AND,MSTORE(SP++)
                             :JMP(readCode)
@@ -335,7 +334,7 @@ opSHR:
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
     $ => A          :MLOAD(SP)
-    ${A >> D} => A
+                    :CALL(SHRarithBit)
     A               :MSTORE(SP++)
     GAS-3 => GAS
                     :JMP(readCode)
@@ -344,7 +343,7 @@ opSHL:
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
     $ => A          :MLOAD(SP)
-    ${A << D} => A
+                    :CALL(SHLarithBit)
     A               :MSTORE(SP++)
     GAS-3 => GAS
                     :JMP(readCode)
@@ -368,7 +367,8 @@ opSAR:
     $ => A          :MLOAD(SP)
                     :CALL(abs)
                     ; if more than 32 set to 32
-    ${A >> (D*8)} => C
+                    :CALL(SHRarith)
+    A => C
     B => A
     1 => B
     $ => B          :XOR
@@ -434,7 +434,7 @@ opSHA3Loop:
 opSHA3Final:
                     :CALL(MLOADX)
     32 - C => D
-    ${A >> (D*8)} => A
+                    :CALL(SHRarith)
     $ => E          :MLOAD(lastHashIdUsed)
     C => D
     A               :HASHK(E)
@@ -516,10 +516,11 @@ opCALLDATALOAD2:
     A => D
     1024 + B => SP
     $ => A          :MLOAD(SP++)
-    ${A << (D*8)} => B
+                    :CALL(SHLarith)
+    A => B
     32 - D => D
     $ => A          :MLOAD(SP)
-    ${A >> (D*8)} => A
+                    :CALL(SHRarith)
     C => SP
     B + A           :MSTORE(SP++)
     GAS - 3 => GAS
@@ -553,12 +554,13 @@ opCALLDATACOPYinit:
     $ => A          :MLOAD(arithRes1)    
     1024 + A => SP
     $ => A          :MLOAD(SP)
-    ${A << (D*8)} => C
+                    :CALL(SHLarith)
+    A => C
     $ => A          :MLOAD(arithRes1) 
     1024 + A + 1 => SP
     32 - D => D
     $ => A          :MLOAD(SP)
-    ${A >> (D*8)} => A
+                    :CALL(SHRarith)
     A + C           :MSTORE(bytesToStore)
                     :CALL(MSTORE32)
     $ => SP         :MLOAD(SPw)
@@ -572,7 +574,7 @@ opCALLDATACOPYfinal:
     ${B%32} => D
     1024 + ${B/32} => SP
     $ => A          :MLOAD(SP)
-    ${A << (D*8)} => A
+                    :CALL(SHLarith)
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP)   ;length
     1024 + ${B/32} + 1 => SP
@@ -581,9 +583,9 @@ opCALLDATACOPYfinal:
     A => B
     $ => A          :MLOAD(SP)
     32 - D => D
-    ${A >> (D*8)} => A
+                    :CALL(SHRarith)
     32 - C => D
-    ${A << (D*8)} => A
+                    :CALL(SHLarith)
     B + A => A
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
@@ -591,8 +593,8 @@ opCALLDATACOPYfinal:
 
 opCALLDATACOPYxor:
     32 - C => D
-    ${A >> (D*8)} => A
-    ${A << (D*8)} => A
+                    :CALL(SHRarith)
+                    :CALL(SHLarith)
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
 
@@ -650,7 +652,7 @@ opCODECOPYinit:
 opCODECOPYfinal:
     ${getBytecode(A,B,C)} => A
     32 - C  => D
-    ${A << (D*8)} => A
+                    :CALL(SHLarith)
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
 
@@ -705,7 +707,7 @@ opEXTCODECOPYinit:
 opEXTCODECOPYfinal:
     ${getBytecode(A,B,C)} => A
     32 - C  => D
-    ${A << (D*8)} => A
+                    :CALL(SHLarith)
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
 
@@ -929,7 +931,7 @@ opMSTORE8:
     $ => A          :MLOAD(SP)                  ;value
     1 => C
     32 - C => D
-    ${A << (D*8)} => A
+                    :CALL(SHLarith)
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
     GAS - 3 => GAS
@@ -1151,7 +1153,7 @@ opAuxPUSHC:
     D - E => D
     $ => B                      :MLOAD(SP)
     ${getByte(B,C,D)} => B
-    ${A >> (D*8)} => A
+                                :CALL(SHRarith)
     $ => SP                     :MLOAD(SPw)
     A + B                       :MSTORE(SP++)
     GAS-3 => GAS
