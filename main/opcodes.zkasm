@@ -87,8 +87,8 @@ opSDIVNeg:
     ${E/A} => B
     0 => D
     E              :ARITH
-    B => A         
-                   :CALL(ca2)
+    0 => A
+    $ => A         :SUB
     A              :MSTORE(SP++)
     GAS-5 => GAS
                    :JMP(readCode)
@@ -131,8 +131,9 @@ opSMODNeg:
     ${E/A} => B
     0 => D
     E               :ARITH
-    C => A         
-                    :CALL(ca2)
+    C => B
+    0 => A
+    $ => A         :SUB
     A               :MSTORE(SP++)
     GAS-5 => GAS
                     :JMP(readCode)
@@ -184,12 +185,13 @@ opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-mon
     D => B
     ${exp(2, A * 8 + 7)} => C ; signBit
     C => A
-    $ => A          :AND
-    0 => B
-    $ => A          :GT
+    $ => B          :AND
+    0 => A
+    $ => A          :LT
     A - 1           :JMPN(opSIGNEXTENDPositive) ; 0 if negative, -1 if positive
     C - 1 => A
-    $ => B          :NOT
+    0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn => B
+    $ => B          :XOR
     D => A
     $ => D          :OR
                     :JMP(opSIGNEXTENDEnd)
@@ -229,17 +231,17 @@ opLT:
 
 opSGT: 
     SP - 1 => SP
-    $ => A              :MLOAD(SP--)
-    $ => B              :MLOAD(SP)
+    $ => B              :MLOAD(SP--)
+    $ => A              :MLOAD(SP)
     GAS-3 => GAS
-    $                   :SGT,MSTORE(SP++)
+    $                   :SLT,MSTORE(SP++)
                         :JMP(readCode)
 opGT:
     SP - 1 => SP
-    $ => A              :MLOAD(SP--)
-    $ => B              :MLOAD(SP)
+    $ => B              :MLOAD(SP--)
+    $ => A              :MLOAD(SP)
     GAS-3 => GAS
-    $                   :GT,MSTORE(SP++)
+    $                   :LT,MSTORE(SP++)
                         :JMP(readCode)
 opEQ:
     SP - 1 => SP
@@ -253,7 +255,8 @@ opISZERO:
     SP - 1 => SP
     $ => A              :MLOAD(SP)
     GAS-3 => GAS
-    $                   :ISZERO,MSTORE(SP++)
+    0 => B
+    $                   :EQ,MSTORE(SP++)
                         :JMP(readCode)
 
 opAND:
@@ -284,7 +287,8 @@ opNOT:
     SP - 1 => SP
     $ => A                  :MLOAD(SP)
     GAS-3 => GAS
-    $                       :NOT,MSTORE(SP++)
+    0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn => B
+    $                       :XOR,MSTORE(SP++)
                             :JMP(readCode)
 
 opBYTE:
@@ -322,9 +326,9 @@ opSAR:
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
     ${D/8} => D
-    D => A
-    32 => B
-    $ => A          :GT
+    D => B
+    32 => A
+    $ => A          :LT
     1 => B
     $ => B          :XOR
     ${A * 32 + B * D} => D
@@ -341,11 +345,12 @@ opSAR:
                     :JMP(readCode)
 
 opSARNeg:
-    C => B
-    1 => A
-    $ => A          :GT
-    ${A + B} => A
-                    :CALL(ca2)
+    C => A
+    1 => B
+    $ => A          :LT
+    ${A + B} => B                   ; TODO: This is UNSAFE
+    0 => A
+    $ => A         :SUB
     A               :MSTORE(SP++)
     GAS-3 => GAS
                     :JMP(readCode)
@@ -983,10 +988,10 @@ opJUMP:
 
 opJUMPI:
     SP - 2 => SP
-    $ => A                  :MLOAD(SP)
+    $ => B                  :MLOAD(SP)
     GAS - 10 => GAS
-    0 => B
-    $ => A                  :GT
+    0 => A
+    $ => A                  :LT
     A - 1                   :JMPN(readCode)
     SP + 1 => SP
     $ => E                  :MLOAD(SP--)
