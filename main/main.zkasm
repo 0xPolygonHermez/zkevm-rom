@@ -91,6 +91,9 @@ start:
 ;; Prepare transaction loop
 ;;;;;;;;;
         $ => HASHPOS                        :MLOAD(oldHashPos)
+        E+1 => E                            :MSTORE(lastHashIdUsed)
+        0                                   :MSTORE(batchHashPos)
+        E                                   :MSTORE(batchHashDataId)
         ; Store the lastHashIdUsed at lastTxHashId variable. We need this variable to know where to read the hash for each transaction at process_tx flow
         E                                   :MSTORE(lastTxHashId) ; //TODO: explanation variable
         $ => A                              :MLOAD(lastCtxUsed)
@@ -134,53 +137,18 @@ processTxsEnd:
         $ => A                          :SLOAD
         $                               :MLOAD(newLocalExitRoot), ASSERT
 
-
-;;;;;;;;
-; Get new hashId
-;;;;;;;
-        HASHPOS                         :MSTORE(oldHashPos)
-        ; A new hash with position 0 is started
-        0 => HASHPOS
-
-        ; We get a new hashId
-        $ => E                          :MLOAD(lastHashIdUsed)
-        E+1 => E                        :MSTORE(lastHashIdUsed)
-
-;;;;;;;;;
-;; Append TXs ; TODO: pointer depends on RLP loop
-;;;;;;;;;
-        $ => B                          :MLOAD(batchL2DataLength)
-        0 => C
-        $${p = 0}
-
-appendTxs:
-        B - C - 32                      :JMPC(finalAppendTxs)
-        32 => D
-        ${getTxs(p,D)} => A
-        $${p = p + D}
-        A                               :HASHK(E)
-        C + D => C
-                                        :JMP(appendTxs)
-
-finalAppendTxs:
-        B - C => D
-        D - 1                           :JMPC(endAppendTxs)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)
-        C + D => C
-
-endAppendTxs:
-
 ;;;;;;;;;
 ;; Txs Size Verification
 ;;;;;;;;;
-        C => A
+        $ => A                          :MLOAD(batchHashPos)
         $                               :MLOAD(batchL2DataLength), ASSERT
 
 ;;;;;;;;;
 ;; Check batchHashData
 ;;;;;;;;;
+        A => HASHPOS
+        $ => E                          :MLOAD(batchHashDataId)
+
         32 => D
         $ => A                          :MLOAD(globalExitRoot)
         A                               :HASHK(E)
