@@ -2057,20 +2057,11 @@ opRETURNcreate:
 ; Decrement original balance
     $ => A                          :MLOAD(txSrcAddr)
     0 => B,C
-    $ => E                          :SLOAD                                                  ; Original Balance in E
-    $ => C                          :MLOAD(txValue)                                         ; A = E - C
-    ; Sub operation with Arith
-    E               :MSTORE(arithA)
-    C               :MSTORE(arithB)
-                    :CALL(subARITH)
-    $ => A          :MLOAD(arithRes1)
-
-    31 => D
-    ${A >> (D*8)} => B
-    0x7F - B                        :JMPC(invalidTx)                                        ; If A is a negative value --> invalidTx
-    1 => B
-    0 => D
-    A => D                                                                                  ; originalBalance -value in D
+    $ => A                          :SLOAD                                                  ; Original Balance in E
+    $ => B                          :MLOAD(txValue)                                         ; A = E - C
+    $ => C                          :LT
+    0 - C                           :JMPC(invalidTx)
+    $ => D                          :SUB                                                    ; originalBalance -value in D
     $ => A                          :MLOAD(txSrcAddr)
     0 => B,C
     $ => SR                         :SSTORE

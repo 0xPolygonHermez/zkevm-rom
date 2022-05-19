@@ -377,11 +377,11 @@ endChainId:
         A - B - C - D                   :JMPC(invalidTxRLP)
         ${getTxs(p,D)} => A
         $${ p = p + D}
-        A - 0x8080                      :JMPC(invalidTxRLP) ; // TODO: ${comp_eq(A, 0x8080)}
-        0x8080 - A                      :JMPC(invalidTxRLP)
         A                               :HASHK(E)
         C+D => C
                                         :CALL(addBatchHashData)
+        A - 0x8080                      :JMPC(invalidTxRLP) ; // TODO: ${comp_eq(A, 0x8080)}
+        0x8080 - A                      :JMPC(invalidTxRLP)
 
 ;;;;;;;;;
 ;; Size Verification
@@ -451,14 +451,41 @@ vREADTx:
         $ => HASHPOS                    :MLOAD(oldHashPos)
                                         :JMP(txLoopRLP)
 
-invalidTxRLP:
-                                        :JMP(processTxsEnd)
-
 addBatchHashData:
-    $ => HASHPOS                :MLOAD(batchHashPos)
-    $ => E                      :MLOAD(batchHashDataId)
-    A                           :HASHK(E)
-    HASHPOS                     :MSTORE(batchHashPos)
-    C => HASHPOS
-    $ => E                      :MLOAD(lastHashIdUsed)
-                                :RETURN
+        $ => HASHPOS                    :MLOAD(batchHashPos)
+        $ => E                          :MLOAD(batchHashDataId)
+        A                               :HASHK(E)
+        HASHPOS                         :MSTORE(batchHashPos)
+        C => HASHPOS
+        $ => E                          :MLOAD(lastHashIdUsed)
+                                        :RETURN
+
+invalidTxRLP:
+;;;;;;;;;
+;; Append TXs
+;;;;;;;;;
+        $ => B                          :MLOAD(batchL2DataLength)
+        $ => C                          :MLOAD(batchHashPos)
+        $ => HASHPOS                    :MLOAD(batchHashPos)
+        $ => E                          :MLOAD(batchHashDataId)
+
+appendTxs:
+        B - C - 32                      :JMPC(finalAppendTxs)
+        32 => D
+        ${getTxs(p,D)} => A
+        $${p = p + D}
+        A                               :HASHK(E)
+        C + D => C
+                                        :JMP(appendTxs)
+
+finalAppendTxs:
+        B - C => D
+        D - 1                           :JMPC(endAppendTxs)
+        ${getTxs(p,D)} => A
+        $${ p = p + D}
+        A                               :HASHK(E)
+        C + D => C
+
+endAppendTxs:
+        HASHPOS                         :MSTORE(batchHashPos)
+                                        :JMP(processTxsEnd)
