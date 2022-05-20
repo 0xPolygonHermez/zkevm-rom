@@ -47,12 +47,13 @@ start:
         %STATE_ROOT_STORAGE_POS             :HASHK(E)                  ; Storage position of the batch hash
         HASHPOS                             :HASHKLEN(E)
         $ => C                              :HASHKDIGEST(E)
+        ${eventLog(onStartBatch, C)}
 
         %ADDRESS_SYSTEM => A
         %SMT_KEY_SC_STORAGE => B
         $ => D                              :MLOAD(oldStateRoot)
         $ => SR                             :SSTORE                    ; Store 'oldStateRoot' in storage position 'keccak256(numBatch - 1, 0)'
-
+        
 ;;;;;;;;;
 ;; Set global exit root
 ;;;;;;;;;
@@ -109,6 +110,7 @@ txLoop:
                         :JMP(processTx)
 
 processTxEnd:
+        ${eventLog(onFinishTx)}
                         :JMP(txLoop)
 
 processTxsEnd:
@@ -172,6 +174,7 @@ processTxsEnd:
 
         $ => A                          :MLOAD(globalHash)
         $                               :HASHKDIGEST(0), ASSERT
+        ${eventLog(onFinishBatch)}
 
         0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR                 ; Set all registers to 0
 
