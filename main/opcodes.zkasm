@@ -462,7 +462,7 @@ opADDRESSend:
 opBALANCE:
     SP - 1 => SP
     $ => A          :MLOAD(SP)
-    0 => B,C
+    0 => B,C        ; balance smt key
     $ => D          :SLOAD
     D               :MSTORE(SP++)
     ${touchedAddress(A,CTX)} => D
@@ -605,7 +605,7 @@ opCODESIZE:
     $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPN(opCODESIZEdep)
     $ => A          :MLOAD(txDestAddr)
-    2 => B
+    %SMT_KEY_SC_CODE => B
     0 => C
     $ => A          :SLOAD
     ${getBytecodeLength(A)} => B
@@ -623,7 +623,7 @@ opCODECOPY:
     $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPN(opCALLDATACOPY) ; //TODO:
     $ => A          :MLOAD(txDestAddr) ; //TODO: delegate call ?
-    2 => B
+    %SMT_KEY_SC_CODE => B
     0 => C
     $ => A          :SLOAD
     SP - 1 => SP
@@ -667,7 +667,7 @@ opEXTCODESIZE: ; // TODO: check precompiled? should return 0?
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     ${touchedAddress(A,CTX)} => D
-    2 => B
+    %SMT_KEY_SC_CODE => B
     0 => C
     $ => A          :SLOAD
     ${getBytecodeLength(A)} => B
@@ -679,7 +679,7 @@ opEXTCODECOPY: ; // TODO: check precompiled?
     SP - 1 => SP
     $ => A          :MLOAD(SP--) ;addr
     ${touchedAddress(A,CTX)} => D
-    2 => B
+    %SMT_KEY_SC_CODE => B
     0 => C
     $ => A          :SLOAD       ;hash
     $ => E          :MLOAD(SP--) ;destOffset; memory offset
@@ -778,7 +778,7 @@ opEXTCODEHASH:
     $ => A          :MLOAD(SP)
     ${touchedAddress(A,CTX)} => D
     GAS-100-D*2500 => GAS
-    2 => B
+    %SMT_KEY_SC_CODE => B
     0 => C
     $ => A          :SLOAD
     $${p = 0}
@@ -831,7 +831,7 @@ opBLOCKHASH:
     ; Load value from hashed key
     %ADDRESS_SYSTEM => A
     ; Set B to 3 to load from storage of address stored in A
-    3 => B
+    %SMT_KEY_SC_STORAGE => B
     $ => E          :SLOAD
 
     ; Store result value in the stack
@@ -863,16 +863,16 @@ opNUMBER:
                     :JMP(readCode)
 
 opDIFFICULTY:
-    $ => A         :MLOAD(batchDifficulty)
-    A               :MSTORE(SP++)
+    %BATCH_DIFFICULTY => A
+    A                       :MSTORE(SP++)
     GAS-2 => GAS
-                    :JMP(readCode)
+                            :JMP(readCode)
 
 opGASLIMIT:
-    $ => A          :MLOAD(batchGasLimit)
-    A               :MSTORE(SP++)
+    %BATCH_GAS_LIMIT => A
+    A                       :MSTORE(SP++)
     GAS-2 => GAS
-                    :JMP(readCode)
+                            :JMP(readCode)
 
 opCHAINID:
     %DEFAULT_SEQ_CHAINID => A
@@ -883,7 +883,7 @@ opCHAINID:
 ; // TODO: check delegate call
 opSELFBALANCE:
     $ => A          :MLOAD(txDestAddr)
-    0 => B,C
+    0 => B,C        ; balance key smt
     $ => D          :SLOAD
     D               :MSTORE(SP++)
     GAS-5 => GAS
@@ -938,11 +938,11 @@ opSLOAD:
     SP - 1 => SP
     $ => C          :MLOAD(SP) ;key
     $ => A          :MLOAD(storageAddr)
-    3 => B
+    %SMT_KEY_SC_STORAGE => B
     $ => E          :SLOAD ;current value
     E               :MSTORE(SP++)
     ${touchedStorageSlots(A,C,CTX)} => A
-    GAS - 100 - A*2000 => GAS
+    GAS - %SLOAD_GAS - A*2000 => GAS
                     :JMP(readCode)
 
 opSSTORE:
@@ -961,7 +961,7 @@ deploymentSSTORE:
     $ => A          :MLOAD(createContractAddress)
 
 opSSTOREinit:
-    3 => B
+    %SMT_KEY_SC_STORAGE => B
     $ => E          :SLOAD ;current value
     SR              :MSTORE(auxSR)
     $ => SR         :MLOAD(initSR)
@@ -990,7 +990,7 @@ opSSTOREdif:
     $ => A          :EQ
     A - 1           :JMPN(opSSTOREdifB)
     ;if origin_val == 0
-    GAS - 20000 => GAS
+    GAS - %SSTORE_SET_GAS => GAS
                     :JMP(opSSTOREend)
 
 opSSTOREdifA:
@@ -1025,7 +1025,7 @@ opSSTOREdifA1:
     A - 1           :JMPN(opSSTOREdifA12)
     ;if current_val == 0
     $ => A          :MLOAD(gasRefund)
-    A - 15000 => A  :MSTORE(gasRefund)
+    A - %SSTORE_CLEARS_SCHEDULE => A  :MSTORE(gasRefund)
                     :JMP(opSSTOREdifAB)
 opSSTOREdifA12:
     ;if current_val != 0
@@ -1035,7 +1035,7 @@ opSSTOREdifA12:
     A - 1           :JMPN(opSSTOREdifAB)
     ;if new_val == 0
     $ => A          :MLOAD(gasRefund)
-    A + 15000 => A  :MSTORE(gasRefund)
+    A + %SSTORE_CLEARS_SCHEDULE => A  :MSTORE(gasRefund)
                     :JMP(opSSTOREdifAB)
 
 opSSTOREdifA2:
@@ -1046,14 +1046,14 @@ opSSTOREdifA2:
 
 opSSTOREdifB:
     ;if orig_val != 0
-    GAS - 2900 => GAS
+    GAS - %SSTORE_RESET_GAS => GAS
     0 => A
     D => B
     $ => A          :EQ
     A - 1           :JMPN(opSSTOREend)
     ;if new_val == 0
     $ => A          :MLOAD(gasRefund)
-    A + 15000 => A  :MSTORE(gasRefund)
+    A + %SSTORE_CLEARS_SCHEDULE => A  :MSTORE(gasRefund)
                     :JMP(opSSTOREend)
 
 opSSTOREend:
@@ -1066,7 +1066,7 @@ mloadContract:
     $ => A          :MLOAD(createContractAddress)
 
 opSSTOREsr:
-    3 => B
+    %SMT_KEY_SC_STORAGE => B
     $ => C          :MLOAD(tmpVarC)
     $ => SR         :SSTORE
                     :JMP(readCode)
@@ -1775,10 +1775,10 @@ opCREATE:
     B                   :MSTORE(txSrcAddr)
     B                   :MSTORE(txSrcOriginAddr)
     ; TODO is not encesesaary to load and store GAS, bc is global var
-    C => GAS            
+    C => GAS
                         :CALL(copySP)
     B => A
-    1 => B                                                                                  ; Constant for nonce
+    %SMT_KEY_NONCE => B                                                                                  ; Constant for nonce
     0 => C                                                                                  ; 3rd parameter does not apply to nonce
     $ => B              :SLOAD
     B                   :MSTORE(txNonce)
@@ -2028,19 +2028,19 @@ opRETURNcreate:
     $ => A          :MLOAD(txSrcAddr)
     $ => D          :MLOAD(txNonce)
     D + 1 => D
-    1 => B
+    %SMT_KEY_NONCE => B
     0 => C
     $ => SR         :SSTORE
     ; Update contract SR
     $ => A          :MLOAD(createContractAddress)
-    1 => B                                                                                  ; Constant for nonce
+    %SMT_KEY_NONCE => B                                                                                  ; Constant for nonce
     0 => C
     1 => D
     $ => SR         :SSTORE
 
     ;TODO: deploy with value
     ${getHashBytecode(A)} => D
-    2 => B
+    %SMT_KEY_SC_CODE => B
     0 => C
     $ => SR                         :SSTORE
 
@@ -2051,18 +2051,18 @@ opRETURNcreate:
 
 ; Decrement original balance
     $ => A                          :MLOAD(txSrcAddr)
-    0 => B,C
+    0 => B,C                        ; balance key smt
     $ => A                          :SLOAD                                                  ; Original Balance in E
     $ => B                          :MLOAD(txValue)                                         ; A = E - C
     $ => C                          :LT
     0 - C                           :JMPN(invalidTx)
     $ => D                          :SUB                                                    ; originalBalance -value in D
     $ => A                          :MLOAD(txSrcAddr)
-    0 => B,C
+    0 => B,C                                                                                ; balance key smt
     $ => SR                         :SSTORE
     ; Increment destination balance
     $ => A                          :MLOAD(createContractAddress)
-    0 => B,C
+    0 => B,C                        ; balance key smt
     $ => C                          :SLOAD      ; Original Balance in E
     $ => A                          :MLOAD(txValue)
     ; Add operation with Arith
@@ -2072,7 +2072,7 @@ opRETURNcreate:
     $ => D          :MLOAD(arithRes1) ; originalBalance + value in D
 
     $ => A                          :MLOAD(createContractAddress)
-    0 => B,C
+    0 => B,C                        ; balance key smt
     $ => SR                         :SSTORE
 
 opRETURNcreateEnd:
@@ -2182,7 +2182,7 @@ opCREATE2:
     C => GAS
                         :CALL(copySP)
     B => A
-    1 => B                                                                                  ; Constant for nonce
+    %SMT_KEY_NONCE => B
     0 => C                                                                                  ; 3rd parameter does not apply to nonce
     $ => B              :SLOAD
     B                   :MSTORE(txNonce)
@@ -2292,13 +2292,13 @@ opSELFDESTRUCT:
 
     ; clean bytecode
     $ => A              :MLOAD(txDestAddr)
-    2 => B
+    %SMT_KEY_SC_CODE => B
     0 => C
     0 => D
     $ => SR             :SSTORE
 
     ; get contract balance
-    0 => B,C
+    0 => B,C            ; balance key smt
     $ => E              :SLOAD
 
     ; set contract balance to 0
@@ -2319,7 +2319,7 @@ opSELFDESTRUCT:
     GAS - 2600 * E => GAS
 
     ; read previous balance receiver
-    0 => B,C
+    0 => B,C            ; balance key smt
     $ => E              :SLOAD
 
     ; compute new receiver balance
@@ -2331,7 +2331,7 @@ opSELFDESTRUCT:
 
     ; transfer balance to receiver
     $ => A                  :MLOAD(SP)
-    0 => B,C
+    0 => B,C                ; balance key smt
     $ => SR                 :SSTORE
 
                             :JMP(endCode)

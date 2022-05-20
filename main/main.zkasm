@@ -31,12 +31,6 @@ start:
 
         ${getTxsLen()}                      :MSTORE(batchL2DataLength)
 
-        ; batch variables TODO: ne file constants.zkasm
-        0                                   :MSTORE(batchDifficulty)
-        30000000                            :MSTORE(batchGasLimit)
-
-
-
 ;;;;;;;;;
 ;; Set batch hash
 ;;;;;;;;;
@@ -50,12 +44,12 @@ start:
         32 => D ; //TODO: opt. no need set D to 32
         $ => A                              :MLOAD(numBatch)
         A - 1                               :HASHK(E)
-        0                                   :HASHK(E)                  ; Storage position of the batch hash
+        %STATE_ROOT_STORAGE_POS             :HASHK(E)                  ; Storage position of the batch hash
         HASHPOS                             :HASHKLEN(E)
         $ => C                              :HASHKDIGEST(E)
 
         %ADDRESS_SYSTEM => A
-        3 => B
+        %SMT_KEY_SC_STORAGE => B
         $ => D                              :MLOAD(oldStateRoot)
         $ => SR                             :SSTORE                    ; Store 'oldStateRoot' in storage position 'keccak256(numBatch - 1, 0)'
 
@@ -70,13 +64,12 @@ start:
         32 => D
         $ => A                              :MLOAD(numBatch)
         A                                   :HASHK(E)
-        0                                   :HASHK(E)                  ; Storage position of the global exit root map
+        %GLOBAL_EXIT_ROOT_STORAGE_POS       :HASHK(E)                  ; Storage position of the global exit root map
         HASHPOS                             :HASHKLEN(E)
         $ => C                              :HASHKDIGEST(E)            ; Storage position of the current global exit root
 
-        ${getGlobalExitRootManagerAddr()}  => A ;// TODO: constant
-        ; TODO: Constants in ZKASM compiler. such as: LEAF_TYPE_STO
-        3 => B
+        %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2 => A
+        %SMT_KEY_SC_STORAGE => B
         $ => D                              :MLOAD(globalExitRoot)
         $ => SR                             :SSTORE
 
@@ -124,9 +117,9 @@ processTxsEnd:
 ;;;;;;;;;
 ;; Assert local exit root
 ;;;;;;;;;
-        ${getGlobalExitRootManagerAddr()}  => A
-        3 => B
-        1 => C                                                         ; Storage position of the local exit root
+        %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2  => A
+        %SMT_KEY_SC_STORAGE => B
+        %LOCAL_EXIT_ROOT_STORAGE_POS => C                         ; Storage position of the local exit root
         $ => A                          :SLOAD
         $                               :MLOAD(newLocalExitRoot), ASSERT
 
