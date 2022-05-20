@@ -2,11 +2,6 @@ INCLUDE "map-opcodes.zkasm"
 INCLUDE "precompiled/selector.zkasm"
 
 processTx:
-        ; I think it is not necessary to save hashpos in this file.
-        ; hashpos is not needed to get hashkdigest
-
-        ; Save the position of the last hash (oldHashPos --> VAR GLOBAL)
-        HASHPOS                         :MSTORE(oldHashPos)
         ; Get sigDataSize (VAR CTX)
         $ => HASHPOS                    :MLOAD(sigDataSize)
         ; We get a new hashId
@@ -26,8 +21,7 @@ processTx:
         $ => A                          :ECRECOVER
         ; Check result is non-zero
         0 => B
-        $ => B                          :EQ
-        -B                              :JMPN(invalidTx)
+        $                               :EQ,JMPC(invalidTx)
         A                               :MSTORE(txSrcAddr)
         A                               :MSTORE(txSrcOriginAddr)
 
@@ -42,14 +36,12 @@ processTx:
 ;;;;;;;;
         $ => A                          :MLOAD(txChainId)                                       ; A: chainId tx
         $ => B                          :MLOAD(chainId)                                         ; B: chainId
-        $ => C                          :EQ
-        C - 1                           :JMPN(check_defaultChainId)                             ; If A != B --> check defaultChainId
-                                        :JMP(endCheckChainId)                                   ; If A == B --> endCheckChainId
+        $                               :EQ,JMPC(endCheckChainId)                               ; If A == B --> endCheckChainId
+        ; If A != B --> check defaultChainId
 check_defaultChainId:
         %DEFAULT_SEQ_CHAINID => B       ; B: defaultChainId, A: chainId tx
-        $ => C                          :EQ
-        C - 1                           :JMPN(invalidTx)                                        ; If A != B --> invalid transaction
-                                        :JMP(endCheckChainId)                                   ; If A == B --> endCheckChainId
+        $                               :EQ,JMPC(endCheckChainId)                               ; If A == B --> endCheckChainId
+                                        :JMPN(invalidTx)                                    ; If A == B --> endCheckChainId
 
 endCheckChainId:
 
@@ -83,26 +75,24 @@ endCheckChainId:
 ;;;;;;;;
 
         $ => A                          :MLOAD(txGas)                   ; Multiplies the txGas amd the txGasPrice
-        $ => B                          :MLOAD(txGasPrice)              ; gas*gasPrice in D
+        $ => B                          :MLOAD(txGasPrice)
         ; Mul operation with Arith
         A                               :MSTORE(arithA)
         B                               :MSTORE(arithB)
                                         :CALL(mulARITH)
-        $ => D                          :MLOAD(arithRes1)
+        $ => D                          :MLOAD(arithRes1)               ; gas*gasPrice in D
 
-        $ => A          :MLOAD(txSrcOriginAddr)
+        $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C                                                        ; balance key smt
-        $ => A                          :SLOAD                                                  ; Original Balance in E
+        $ => A                          :SLOAD                          ; Original Balance in A
         D => B
         ; Balance - intrinsic_gas
-        $ => C          :LT
-        0 - C           :JMPN(invalidTx)
-        $ => D          :SUB
+        $                               :LT,JMPC(invalidTx)
+        $ => D                          :SUB                            ; balance - instrinsic_gas in D
         D => A
-        $ => B          :MLOAD(txValue)
+        $ => B                          :MLOAD(txValue)
         ; Balance - intrinsic_gas - value 
-        $ => C          :LT
-        0 - C           :JMPN(invalidTx)                               ; If A is a negative value --> invalidTx
+        $                               :LT,JMPC(invalidTx)             ; If A is a negative value --> invalidTx
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C                        ; bakance key smt
         $ => SR                         :SSTORE
@@ -114,7 +104,6 @@ endCheckChainId:
 
         SR                              :MSTORE(initSR)
 
-
 ;;;;;;;;
 ; Set the gas
 ;;;;;;;;
@@ -125,7 +114,8 @@ endCheckChainId:
 ; Gas calldata
 ;;;;;;;;
         $ => A                          :MLOAD(txCalldataLen)
-        A - 1                           :JMPN(txType)
+        0 => B
+        $                               :EQ,JMPC(txType)
         0 => D
         -1 => C
 
@@ -136,10 +126,10 @@ addGas:
                                         :JMP(loopBytes)
 loopBytes:
         ; Mul operation with Arith
-        C               :MSTORE(arithA)
-        32              :MSTORE(arithB)
-                        :CALL(mulARITH)
-        $ => B          :MLOAD(arithRes1)
+        C                               :MSTORE(arithA)
+        32                              :MSTORE(arithB)
+                                        :CALL(mulARITH)
+        $ => B                          :MLOAD(arithRes1)
 
         A - B - D - 1                   :JMPN(txType)
         32 - D - 1                      :JMPN(addGas)
@@ -172,16 +162,14 @@ txType:
         ${touchedAddress(A,CTX)}
         ; // TODO: check "0x000..000" when coming from a CALL
         10 => B
-        $ => B                          :LT
-        0 - B                           :JMPN(selectorPrecompiled) ; precompiled smart contracts
+        $                               :LT,JMPC(selectorPrecompiled) ; precompiled smart contracts
         ; Check if destination address has bytecode to process the tx as a transaction or a call
         %SMT_KEY_SC_CODE => B
         0 => C
         $ => B                          :SLOAD
         0 => A
-        $ => B                          :LT
-        -B                              :JMPN(callContract)
-                                        :JMP(moveBalances)
+        $                               :EQ,JMPC(moveBalances)
+                                        :JMP(callContract)
 
 getContractAddress:
         ; A new hash with position 0 is started
@@ -372,23 +360,22 @@ moveBalances:
         0 => B,C                                                                                ; balance key smt
         $ => A                          :SLOAD                                                  ; Original Balance in E
         $ => B                          :MLOAD(txValue)                                         ; A = E - C
-        $ => C                          :LT
-        0 - C                           :JMPN(invalidTx)
+        $                               :LT,JMPC(invalidTx)
         $ => D                          :SUB                                                    ; originalBalance -value in D
         $ => A                          :MLOAD(txSrcAddr)
-        0 => B,C                        ; balance key smt
+        0 => B                                                                                  ; balance key smt
         $ => SR                         :SSTORE
 
         ; Increment destination balance
         $ => A                          :MLOAD(txDestAddr)
-        0 => B,C                                                                                ; balance key smt
+        0 => B                                                                                  ; balance key smt
         $ => C                          :SLOAD                                                  ; Original Balance in E
         $ => A                          :MLOAD(txValue)                                         ; E = A + C
         ; Add operation with Arith
-        A               :MSTORE(arithA)
-        C               :MSTORE(arithB)
-                        :CALL(addARITH)
-        $ => D          :MLOAD(arithRes1)
+        A                               :MSTORE(arithA)
+        C                               :MSTORE(arithB)
+                                        :CALL(addARITH)
+        $ => D                          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txDestAddr)
         0 => B,C                        ; balance key smt
@@ -465,8 +452,6 @@ refundGas:
 
 
 terminateTX:
-        ; Get oldHashPos (saved at the beginning of this file)
-        $ => HASHPOS                    :MLOAD(oldHashPos)
                                         :JMP(processTxEnd)
 ; TODO: should be an invalid intrinsic txs and (revert, out-of-gas, assert, invalid opcode )
 invalidTx:

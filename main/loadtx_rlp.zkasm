@@ -1,8 +1,5 @@
 
 loadTx_rlp:
-
-        ; Save the position of the last hash (oldHashPos --> VAR GLOBAL)
-        HASHPOS                         :MSTORE(oldHashPos)
         ; A new hash with position 0 is started
         0 => HASHPOS
 
@@ -18,26 +15,14 @@ loadTx_rlp:
 ;;;;;;;;;
 
         1 => D
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C + D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         A - 0xc0                        :JMPN(invalidTxRLP)
         A - 0xf8                        :JMPN(shortList)
 
 longList:
         A - 0xf7 => D
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C + D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
                                         :JMP(endList)
 shortList:
@@ -54,13 +39,7 @@ endList:
 
 nonceREAD:
         1 => D
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C + D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(endNonce)
         A - 0x81                        :JMPN(nonce0)
@@ -75,13 +54,7 @@ nonce0:
 shortNonce:
         A - 0x80 => D
         D                               :MSTORE(lengthNonce)
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C + D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
 
 endNonce:
@@ -95,13 +68,7 @@ endNonce:
 
 gasPriceREAD:
         1 => D
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C + D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(endGasPrice)
         A - 0x81                        :JMPN(gasPrice0)
@@ -115,13 +82,7 @@ gasPrice0:
 shortGasPrice:
         A - 0x80 => D
         D - 1                           :JMPN(endGasPrice)
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C+D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
 
 endGasPrice:
@@ -135,13 +96,7 @@ endGasPrice:
 
 gasREAD:
         1 => D
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C + D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(endGas)
         A - 0x81                        :JMPN(gas0)
@@ -154,13 +109,7 @@ gas0:
 shortGas:
         A - 0x80 => D
         D - 1                           :JMPN(endGas)
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C+D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
 
 endGas:
@@ -173,13 +122,7 @@ endGas:
 
 toREAD:
         1 => D
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C + D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(invalidTxRLP)
         A - 0x81                        :JMPN(noTo)
@@ -194,13 +137,7 @@ noTo:
 
 shortTo:
         A - 0x80 => D
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C + D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         A                               :MSTORE(txDestAddr)
         A                               :MSTORE(storageAddr)
@@ -215,13 +152,7 @@ endTo:
 
 valueREAD:
         1 => D
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C + D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(endValue)
         A - 0x81                        :JMPN(value0)
@@ -235,13 +166,7 @@ value0:
 shortValue:
         A - 0x80 => D
         D - 1                           :JMPN(endValue)
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C + D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
 
 
@@ -256,13 +181,7 @@ endValue:
 dataREAD:
         1 => D
         1024 => SP
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C + D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(veryShortData)
         A - 0x81                        :JMPN(endData)
@@ -283,13 +202,7 @@ shortData:
 
 longData:
         A - 0xb7 => D
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C+D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         A => B                          :MSTORE(txCalldataLen)
 
@@ -297,13 +210,7 @@ readData:
         32 => D
         B - D                           :JMPN(readDataFinal)
         B - D                           :MSTORE(txDataRead)
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C + D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         A                               :MSTORE(SP++)
         $ => B                          :MLOAD(txDataRead)
@@ -313,13 +220,7 @@ readData:
 readDataFinal:
         B - 1                           :JMPN(endData)
         B => D
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C + D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         32-D => D
                                         :CALL(SHLarith)
@@ -335,13 +236,7 @@ endData:
 
 chainREAD:
         1 => D
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C+D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(endChainId)
         A - 0x81                        :JMPN(chanId0)
@@ -355,13 +250,7 @@ chanId0:
 shortChainId:
         A - 0x80 => D
         D - 1                           :JMPN(endChainId)
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)    ; Main Hash
-        C+D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
 
 endChainId:
@@ -372,20 +261,16 @@ endChainId:
 ;;;;;;;;;
 
         2 => D
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
-        A                               :HASHK(E)
-        C+D => C
+                                        :CALL(addHashTx)
                                         :CALL(addBatchHashData)
-        A - 0x8080                      :JMPN(invalidTxRLP) ; // TODO: ${comp_eq(A, 0x8080)}
-        0x8080 - A                      :JMPN(invalidTxRLP)
+        0x8080 => B
+        $                               :EQ,JMPC(sizeVerification)
+                                        :JMP(invalidTxRLP)
 
 ;;;;;;;;;
 ;; Size Verification
 ;;;;;;;;;
+sizeVerification:
         C  => A
         $  => B                         :MLOAD(txRLPLength)
         A - B                           :JMPN(invalidTxRLP)
@@ -399,11 +284,7 @@ endChainId:
 
 rREADTx:
         32 => D
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
+                                        :CALL(getTxBytes)
         A                               :MSTORE(txR)
         C+D => C
                                         :CALL(addBatchHashData)
@@ -414,11 +295,7 @@ rREADTx:
 
 sREADTx:
         32 => D
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
+                                        :CALL(getTxBytes)
         A                               :MSTORE(txS)
         C+D => C
                                         :CALL(addBatchHashData)
@@ -429,11 +306,7 @@ sREADTx:
 
 vREADTx:
         1 => D
-        $ => A                          :MLOAD(batchL2DataLength)
-        $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${ p = p + D}
+                                        :CALL(getTxBytes)
         A                               :MSTORE(txV)
         C+D => C
                                         :CALL(addBatchHashData)
@@ -447,8 +320,6 @@ vREADTx:
         A + 1 => A                      :MSTORE(pendingTxs)
         ; Save sigDataSize (sigDataSize --> VAR CTX)
         HASHPOS                         :MSTORE(sigDataSize)
-        ; Get oldHashPos (saved at the beginning of this file)
-        $ => HASHPOS                    :MLOAD(oldHashPos)
                                         :JMP(txLoopRLP)
 
 addBatchHashData:
@@ -458,6 +329,24 @@ addBatchHashData:
         HASHPOS                         :MSTORE(batchHashPos)
         C => HASHPOS
         $ => E                          :MLOAD(lastHashIdUsed)
+                                        :RETURN
+
+getTxBytes:
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
+        A - B - C - D                   :JMPN(invalidTxRLP)
+        ${getTxs(p,D)} => A
+        $${ p = p + D}
+                                        :RETURN
+
+addHashTx:
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
+        A - B - C - D                   :JMPN(invalidTxRLP)
+        ${getTxs(p,D)} => A
+        $${ p = p + D}
+        A                               :HASHK(E)
+        C + D => C
                                         :RETURN
 
 invalidTxRLP:
