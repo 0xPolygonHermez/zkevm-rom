@@ -1,3 +1,4 @@
+INCLUDE "map-opcodes.zkasm"
 INCLUDE "precompiled/selector.zkasm"
 
 processTx:
@@ -45,7 +46,7 @@ processTx:
         C - 1                           :JMPN(check_defaultChainId)                             ; If A != B --> check defaultChainId
                                         :JMP(endCheckChainId)                                   ; If A == B --> endCheckChainId
 check_defaultChainId:
-        $ => B                          :MLOAD(defaultChainId)                                  ; B: defaultChainId, A: chainId tx
+        %DEFAULT_SEQ_CHAINID => B       ; B: defaultChainId, A: chainId tx
         $ => C                          :EQ
         C - 1                           :JMPN(invalidTx)                                        ; If A != B --> invalid transaction
                                         :JMP(endCheckChainId)                                   ; If A == B --> endCheckChainId
@@ -64,7 +65,7 @@ endCheckChainId:
 ;;;;;;;;
 
         $ => A, E                       :MLOAD(txSrcOriginAddr)                                 ; Address of the origin to A and E
-        1 => B                                                                                  ; Constant for nonce
+        %SMT_KEY_NONCE => B
         0 => C                                                                                  ; 3rd parameter does not apply to nonce
         $ => A                          :SLOAD                                                  ; Load the nonce to A and C from storage
         $ => B                          :MLOAD(txNonce)
@@ -73,7 +74,7 @@ endCheckChainId:
         B                               :ASSERT                                                 ; sanity check
         A+1 => D                                                                                ; Set to A the current address
         E => A
-        1 => B                                                                                  ; Constant for nonce
+        %SMT_KEY_NONCE => B
         0 => C
         $ => SR                         :SSTORE                                                 ; Store the nonce plus one
 
@@ -90,7 +91,7 @@ endCheckChainId:
         $ => D                          :MLOAD(arithRes1)
 
         $ => A          :MLOAD(txSrcOriginAddr)
-        0 => B,C
+        0 => B,C                                                        ; balance key smt
         $ => A                          :SLOAD                                                  ; Original Balance in E
         D => B
         ; Balance - intrinsic_gas
@@ -103,7 +104,7 @@ endCheckChainId:
         $ => C          :LT
         0 - C           :JMPN(invalidTx)                               ; If A is a negative value --> invalidTx
         $ => A                          :MLOAD(txSrcOriginAddr)
-        0 => B,C
+        0 => B,C                        ; bakance key smt
         $ => SR                         :SSTORE
 
         ; TODO: create, do not have value
@@ -174,7 +175,7 @@ txType:
         $ => B                          :LT
         0 - B                           :JMPN(selectorPrecompiled) ; precompiled smart contracts
         ; Check if destination address has bytecode to process the tx as a transaction or a call
-        2 => B
+        %SMT_KEY_SC_CODE => B
         0 => C
         $ => B                          :SLOAD
         0 => A
@@ -310,9 +311,9 @@ readDeployBytecode:
         $ => A                          :MLOAD(SP)
         $ => SP                         :MLOAD(SPw)
         ${getByte(A,C)} => B
-        ${addrOp(B)} => RR
+        B => RR
         PC + 1 => PC
-                                        :JMP(RR)
+                                        :JMP(@mapping_opcodes + RR)
 
 callContract:
         0 => PC
@@ -321,16 +322,16 @@ callContract:
 
 readByteCode:
         $ => A                          :MLOAD(txDestAddr)
-        2 => B
+        %SMT_KEY_SC_CODE => B
         0 => C
         $ => A                          :SLOAD
         ${getBytecodeLength(A)} => B
         B - PC                          :JMPN(endByteCode) ; // TODO: should be removed
         ${getBytecode(A,PC)} => B
-        ${addrOp(B)} => RR
+        B => RR
         PC + 1 => PC
-                                        :JMP(RR)
-        ; // TODO: check PC opcode in YUL
+                                        :JMP(@mapping_opcodes + RR)
+
 readCode:
         $ => A                          :MLOAD(isCreateContract)
         0 - A                           :JMPN(readDeployBytecode)
@@ -345,7 +346,7 @@ endDeploy:
         ; TODO:: increase nonce before reading the contructor opcodes
         ; Update contract nonce
         $ => A                          :MLOAD(createContractAddress)
-        1 => B                                                                                  ; Constant for nonce
+        %SMT_KEY_NONCE => B                                                                                  ; Constant for nonce
         0 => C
         1 => D
         $ => SR                         :SSTORE
@@ -354,7 +355,7 @@ endDeploy:
         ; TODO: same as nonce, should be done before
         ; TODO zkasm should calculate the deployed bytecode
         ${getHashBytecode(A)} => D ; TODO: chain poseidon to compute hashBytecode. Jordi checks
-        2 => B
+        %SMT_KEY_SC_CODE => B
         0 => C
         $ => SR                         :SSTORE
 
@@ -368,19 +369,19 @@ moveBalances:
 
         ; Decrement original balance
         $ => A                          :MLOAD(txSrcAddr)
-        0 => B,C
+        0 => B,C                                                                                ; balance key smt
         $ => A                          :SLOAD                                                  ; Original Balance in E
         $ => B                          :MLOAD(txValue)                                         ; A = E - C
         $ => C                          :LT
         0 - C                           :JMPN(invalidTx)
         $ => D                          :SUB                                                    ; originalBalance -value in D
         $ => A                          :MLOAD(txSrcAddr)
-        0 => B,C
+        0 => B,C                        ; balance key smt
         $ => SR                         :SSTORE
 
         ; Increment destination balance
         $ => A                          :MLOAD(txDestAddr)
-        0 => B,C
+        0 => B,C                                                                                ; balance key smt
         $ => C                          :SLOAD                                                  ; Original Balance in E
         $ => A                          :MLOAD(txValue)                                         ; E = A + C
         ; Add operation with Arith
@@ -390,7 +391,7 @@ moveBalances:
         $ => D          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txDestAddr)
-        0 => B,C
+        0 => B,C                        ; balance key smt
         $ => SR                         :SSTORE
 
 
@@ -423,7 +424,7 @@ refundGas:
         $ => D          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txSrcOriginAddr)
-        0 => B,C
+        0 => B,C                                                                                ; balance key smt
         $ => A                          :SLOAD                                                  ; Original Balance in A
 
         ; Add operation with Arith
@@ -433,7 +434,7 @@ refundGas:
         $ => D          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txSrcOriginAddr)
-        0 => B,C
+        0 => B,C                        ; balance key smt
         $ => SR                         :SSTORE
 
 ;;;;;;;;
@@ -451,7 +452,7 @@ refundGas:
         $ => D          :MLOAD(arithRes1)
 
         $ => A          :MLOAD(sequencerAddr)
-        0 => B,C
+        0 => B,C                                                                ; Balance key smt
         $ => A          :SLOAD                                                  ; Original Balance in A
         ; Add operation with Arith
         A               :MSTORE(arithA)
@@ -459,7 +460,7 @@ refundGas:
                         :CALL(addARITH)
         $ => D          :MLOAD(arithRes1)
         $ => A                          :MLOAD(sequencerAddr)
-        0 => B,C
+        0 => B,C                        ; balance key smt
         $ => SR                         :SSTORE
 
 
