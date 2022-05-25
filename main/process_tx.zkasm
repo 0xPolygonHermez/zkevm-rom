@@ -7,7 +7,6 @@ processTx:
         ; We get a new hashId
         $ => E                          :MLOAD(lastTxHashId)
         E+1 => E                        :MSTORE(lastTxHashId)
-        0 => C
 
 ;;;;;;;;;
 ;; Signaure Verification
@@ -51,6 +50,9 @@ endCheckChainId:
 ;;;;;;;;
         $ => A                          :MLOAD(txSrcOriginAddr)
         ${touchedAddress(A,CTX)}
+
+
+; // 5. there is no overflow when calculating intrinsic gas
 
 ;;;;;;;;
 ; Check and update Nonce --> //TODO: same as chainID
@@ -102,11 +104,13 @@ endCheckChainId:
 ;; Store init state
 ;;;;;;;;;
 
-        SR                              :MSTORE(initSR)
+        SR                              :MSTORE(originSR) 
+        SR                              :MSTORE(initSR) 
 
 ;;;;;;;;
 ; Set the gas
 ;;;;;;;;
+        ; TODO check tx has at least 21000 of gas
         $ => GAS                        :MLOAD(txGas)
         GAS - 21000 => GAS
 
@@ -451,16 +455,7 @@ refundGas:
         $ => SR                         :SSTORE
 
 
-terminateTX:
-                                        :JMP(processTxEnd)
-; TODO: should be an invalid intrinsic txs and (revert, out-of-gas, assert, invalid opcode )
 invalidTx:
-        $ => A                          :MLOAD(originCTX)
-        0 - A                           :JMPN(invalidTxOrigin) ; TODO:: invalid call with depth > 0
-        $ => SR                         :MLOAD(initSR)
-
-                                        :JMP(terminateTX)
-
-invalidTxOrigin:
-        A => CTX
-                                        :JMP(invalidTx)
+        ; Get oldHashPos (saved at the beginning of this file)
+        $ => HASHPOS                    :MLOAD(oldHashPos)
+                                        :JMP(processTxEnd)
