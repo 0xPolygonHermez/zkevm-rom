@@ -22,7 +22,10 @@ VAR GLOBAL tmpZkPC
 ; @out B => Sign of A [1 if negative, 0 positive]
 abs:
     0 => B
-    $               :SLT, JMPC(absIsNeg)
+    ;TODO: fix `$ => B          :SLT,JMPC(absIsNeg)`
+    ;when zkproverjs has been updated
+    $ => B          :SLT
+    -B              :JMPN(absIsNeg)
                     :RETURN
 
 absIsNeg:
@@ -57,6 +60,7 @@ copyInit:
 copyFinal:
     $ => A          :MLOAD(MEM:E)
     32 - C => D
+                    ;SHR/SHL could be optimized
     zkPC+1 => RR    :JMP(SHRarith)
     zkPC+1 => RR    :JMP(SHLarith)
     $ => CTX        :MLOAD(currentCTX)
@@ -88,7 +92,7 @@ copyFinal2:
     $ => A                      :MLOAD(MEM:E)
     32 - C => D
     zkPC+1 => RR                :JMP(SHRarith)
-                                :CALL(SHLarith)
+    zkPC+1 => RR                :JMP(SHLarith)
     $ => CTX                    :MLOAD(currentCTX)
     A                           :MSTORE(SP++)
                                 :JMP(copyEnd)
@@ -97,7 +101,7 @@ copyFinal22:
     ${E%32} => D
     ${(E/32)*32} => E
     $ => A                  :MLOAD(MEM:E)
-                            :CALL(SHLarith)
+    zkPC+1 => RR            :JMP(SHLarith)
     A => B
     E + 32 => E
     $ => A                  :MLOAD(MEM:E)
@@ -105,7 +109,7 @@ copyFinal22:
     32 - D => D
     zkPC+1 => RR            :JMP(SHRarith)
     32 - C => D
-                            :CALL(SHLarith)
+    zkPC+1 => RR            :JMP(SHLarith)
     $ => CTX                :MLOAD(currentCTX)
     A + B                   :MSTORE(SP++)
 
@@ -126,8 +130,7 @@ getLenBytes:
 
 getLenBytesLoop:
     0 => B
-    $ => B          :EQ
-    0 - B           :JMPN(getLenEnd)
+    $               :EQ,JMPC(getLenEnd)
     1 => D
     zkPC+1 => RR    :JMP(SHRarith)
     C + 1 => C
@@ -159,8 +162,9 @@ MSTORE32:
     ${(E/32)*32} => E
     $ => A          :MLOAD(MEM:E)
     32 - C => D
+                    ;SHR/SHL could be optimized
     zkPC+1 => RR    :JMP(SHRarith)
-                    :CALL(SHLarith)
+    zkPC+1 => RR    :JMP(SHLarith)
     A => B
     $ => A          :MLOAD(bytesToStore)
     C => D
@@ -169,12 +173,13 @@ MSTORE32:
     E + 32 => E                                    ;new offset
     $ => A          :MLOAD(MEM:E)
     C => D
-                    :CALL(SHLarith)
+                    ;SHR/SHL could be optimized
+    zkPC+1 => RR    :JMP(SHLarith)
     zkPC+1 => RR    :JMP(SHRarith)
     A => B
     $ => A          :MLOAD(bytesToStore)
     32 - C => D
-                    :CALL(SHLarith)
+    zkPC+1 => RR    :JMP(SHLarith)
     A + B           :MSTORE(MEM:E)
     $ => E          :MLOAD(tmpVarE)
     E + 32 => E
@@ -207,8 +212,9 @@ MSTOREX:
     A => B
     $ => A                      :MLOAD(MEM:E)
     32 - D => D
+                                ;SHR/SHL could be optimized
     zkPC+1 => RR                :JMP(SHRarith)
-                                :CALL(SHLarith)
+    zkPC+1 => RR                :JMP(SHLarith)
     A + B                       :MSTORE(MEM:E)
     $ => E                      :MLOAD(tmpVarE)
     E + C => E                                    ;new offset
@@ -218,16 +224,17 @@ MSTOREX2:
     ${E%32} => D
     ${(E/32)*32} => E
     $ => A                      :MLOAD(bytesToStore)
-                                :CALL(SHRarith)
+    zkPC+1 => RR                :JMP(SHRarith)
     A => B
     $ => A                      :MLOAD(MEM:E)
     32 - D => D
+                                ;SHR/SHL could be optimized
     zkPC+1 => RR                :JMP(SHRarith)
-                                :CALL(SHLarith)
+    zkPC+1 => RR                :JMP(SHLarith)
     A + B                       :MSTORE(MEM:E)
     E + 32 => E
     $ => A                      :MLOAD(bytesToStore)
-                                :CALL(SHLarith)
+    zkPC+1 => RR                :JMP(SHLarith)
     A => B
     $ => A                      :MLOAD(MEM:E)
     C - D => D
@@ -261,13 +268,12 @@ MLOAD32:
     0 => D
     E               :ARITH 
 
-    C - 1     :JMPN(MLOAD322)
+    C - 1           :JMPN(MLOAD322)
     ; ${(E/32)*32} => E - floor E
     ${E%A} => C
     ${E/A} => B
     0 => D
-    E               :ARITH 
-
+    E               :ARITH
     C               :MSTORE(tmpVarA)
     0 => C
     ${A*B} => E     :ARITH
@@ -277,7 +283,7 @@ MLOAD32:
 
     $ => A          :MLOAD(MEM:E)
     C => D
-                    :CALL(SHLarith)
+    zkPC+1 => RR    :JMP(SHLarith)
     A => B
     32 - C => D
     E + 32 => E
@@ -299,20 +305,20 @@ MLOAD322:
 ; @out E => new offset
 
 MLOADX:
-    RR              :MSTORE(tmpZkPC)
-    B               :MSTORE(tmpVarB)
-    C               :MSTORE(tmpVarC)
-    D               :MSTORE(tmpVarD)
-    E               :MSTORE(tmpVarE)
-    32 - ${E%32} - C => D       :JMPN(MLOADX2)
+    RR                      :MSTORE(tmpZkPC)
+    B                       :MSTORE(tmpVarB)
+    C                       :MSTORE(tmpVarC)
+    D                       :MSTORE(tmpVarD)
+    E                       :MSTORE(tmpVarE)
+    32 - ${E%32} - C => D   :JMPN(MLOADX2)
     ${E%32} => B
     ${(E/32)*32} => E
-    $ => A                      :MLOAD(MEM:E)
+    $ => A                  :MLOAD(MEM:E)
     B => D
-                    :CALL(SHLarith)
+    zkPC+1 => RR            :JMP(SHLarith)
     32 - C => D
-    zkPC+1 => RR    :JMP(SHRarith)
-                    :CALL(SHLarith)
+    zkPC+1 => RR            :JMP(SHRarith)
+    zkPC+1 => RR            :JMP(SHLarith)
     E + B + C => E                                    ;new offset
                             :JMP(MLOADend)
 
@@ -320,7 +326,7 @@ MLOADX2:
     ${E%32} => D
     ${(E/32)*32} => E
     $ => A                  :MLOAD(MEM:E)
-                            :CALL(SHLarith)
+    zkPC+1 => RR            :JMP(SHLarith)
     A => B
     E + 32 => E
     $ => A                  :MLOAD(MEM:E)
@@ -328,17 +334,17 @@ MLOADX2:
     32 - D => D
     zkPC+1 => RR            :JMP(SHRarith)
     32 - C => D
-                            :CALL(SHLarith)
+    zkPC+1 => RR            :JMP(SHLarith)
     A + B => A
     E                       :MLOAD(tmpVarE)
     E + C => E                                    ;new offset
 
 MLOADend:
-    $ => B                      :MLOAD(tmpVarB)
-    $ => C                      :MLOAD(tmpVarC)
-    $ => D                      :MLOAD(tmpVarD)
-    $ => RR                     :MLOAD(tmpZkPC)
-                                :RETURN
+    $ => B                  :MLOAD(tmpVarB)
+    $ => C                  :MLOAD(tmpVarC)
+    $ => D                  :MLOAD(tmpVarD)
+    $ => RR                 :MLOAD(tmpZkPC)
+                            :RETURN
 
 ; @info check account is empty ( balance == nonce == code == 0x )
 ; @in E => address
@@ -399,8 +405,7 @@ computeGasSendCall:
     GAS - ${GAS/64} => A
     $ => B                  :MLOAD(gasCall)
     ; gas_sent_with_call = min(requested_gas, all_but_one_64th)
-    $ => D                  :LT
-    0 - D                   :JMPN(computeGasSendCallEnd)
+    $                       :LT,JMPC(computeGasSendCallEnd)
     ; gas to substract
     B => A
 
@@ -532,13 +537,11 @@ SHRarithBit:
 
 SHRarithinit:
     0 => B
-    $ => B                  :EQ
-    0 - B                   :JMPN(SHRarithfinal)
+    $                       :EQ,JMPC(SHRarithfinal)
     A => E
     D => B
     255 => A
-    $ => B                  :LT
-    0 - B                   :JMPN(SHRarith0)
+    $                       :LT,JMPC(SHRarith0)
     E => A
     ${exp(2,D)} => B
     ${B-1} => B
@@ -588,12 +591,11 @@ SHLarithinit:
     A => E
     0 => A
     D => B
-    $ => B                  :EQ
-    0 - B                   :JMPN(SHLarithfinal) ; if D == 0 --> no shift
+    $                       :EQ,JMPC(SHLarithfinal) ; if D == 0 --> no shift
     E => A
     ${exp(2,D)} => B
     ${A*B} => E
-    256 - D => D             :JMPN(SHLarith0) ; if D > 256 --> return 0
+    256 - D => D            :JMPN(SHLarith0) ; if D > 256 --> return 0
     ${exp(2,D)} => B
     ${B-1} => B
     A => C

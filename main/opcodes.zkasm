@@ -92,7 +92,7 @@ opSDIV:
     B               :MSTORE(SP++)
     GAS-5 => GAS
                    :JMP(readCode)
-                   
+
 opSDIVNeg:
     ${E%A} => C
     ${E/A} => B
@@ -147,7 +147,7 @@ opSMODNeg:
     E               :ARITH
     C => B
     0 => A
-    $ => A         :SUB
+    $ => A          :SUB
     A               :MSTORE(SP++)
     GAS-5 => GAS
                     :JMP(readCode)
@@ -318,8 +318,8 @@ opNOT:
     SP - 1 => SP
     $ => A                  :MLOAD(SP)
     GAS-3 => GAS
-    0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn => B
-    $                       :XOR,MSTORE(SP++)
+    0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn => B
+    $ => A                  :XOR,MSTORE(SP++)
                             :JMP(readCode)
 
 opBYTE:
@@ -379,10 +379,10 @@ opSAR:
 opSARNeg:
     C => A
     1 => B
-    $ => A          :LT
+    $ => B          :LT
     ${A + B} => B                   ; TODO: This is UNSAFE
     0 => A
-    $ => A         :SUB
+    $ => A          :SUB
     A               :MSTORE(SP++)
     GAS-3 => GAS
                     :JMP(readCode)
@@ -588,6 +588,7 @@ opCALLDATACOPYfinal:
 
 opCALLDATACOPYxor:
     32 - C => D
+                    ;SHR/SHL could be optimized
                     :CALL(SHRarith)
                     :CALL(SHLarith)
     A               :MSTORE(bytesToStore)
@@ -1862,8 +1863,7 @@ opCALL4:
     $ => A          :MLOAD(valueCall)
     A               :MSTORE(txValue)
     0 => B
-    $ => B          :EQ
-    0 - B           :JMPN(opCALLend)
+    $               :EQ,JMPC(opCALLend)
     GAS - 9000 => GAS
     ; // TODO: usage of ISEMPTY and add 25000 if needed
     ; if is_empty(target_addr) (forcing a new account to be created)
@@ -2046,30 +2046,28 @@ opRETURNcreate:
 
     $ => B                          :MLOAD(txValue)
     0 => A
-    $ => A                          :EQ
-    0 - A                           :JMPN(opRETURNcreateEnd)
+    $                               :EQ,JMPC(opRETURNcreateEnd)
 
 ; Decrement original balance
     $ => A                          :MLOAD(txSrcAddr)
     0 => B,C                        ; balance key smt
     $ => A                          :SLOAD                                                  ; Original Balance in E
     $ => B                          :MLOAD(txValue)                                         ; A = E - C
-    $ => C                          :LT
-    0 - C                           :JMPN(invalidTx)
+    $                               :LT,JMPC(invalidTx)
     $ => D                          :SUB                                                    ; originalBalance -value in D
     $ => A                          :MLOAD(txSrcAddr)
-    0 => B,C                                                                                ; balance key smt
+    0 => B                                                                               ; balance key smt
     $ => SR                         :SSTORE
     ; Increment destination balance
     $ => A                          :MLOAD(createContractAddress)
-    0 => B,C                        ; balance key smt
+    0 => B                       ; balance key smt
     $ => C                          :SLOAD      ; Original Balance in E
     $ => A                          :MLOAD(txValue)
     ; Add operation with Arith
-    A               :MSTORE(arithA)
-    C               :MSTORE(arithB)
-                    :CALL(addARITH)
-    $ => D          :MLOAD(arithRes1) ; originalBalance + value in D
+    A                               :MSTORE(arithA)
+    C                               :MSTORE(arithB)
+                                    :CALL(addARITH)
+    $ => D                          :MLOAD(arithRes1) ; originalBalance + value in D
 
     $ => A                          :MLOAD(createContractAddress)
     0 => B,C                        ; balance key smt
