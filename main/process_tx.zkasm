@@ -7,7 +7,6 @@ processTx:
         ; We get a new hashId
         $ => E                          :MLOAD(lastTxHashId)
         E+1 => E                        :MSTORE(lastTxHashId)
-        0 => C
 
 ;;;;;;;;;
 ;; Signaure Verification
@@ -29,6 +28,7 @@ processTx:
 ;; Store init state
 ;;;;;;;;;
 
+        SR                              :MSTORE(originSR) 
         SR                              :MSTORE(initSR)
 
 ;;;;;;;;
@@ -41,7 +41,7 @@ processTx:
 check_defaultChainId:
         %DEFAULT_SEQ_CHAINID => B       ; B: defaultChainId, A: chainId tx
         $                               :EQ,JMPC(endCheckChainId)                               ; If A == B --> endCheckChainId
-                                        :JMPN(invalidTx)                                    ; If A == B --> endCheckChainId
+                                        :JMP(invalidTx)                                    ; If A == B --> endCheckChainId
 
 endCheckChainId:
 
@@ -51,6 +51,9 @@ endCheckChainId:
 ;;;;;;;;
         $ => A                          :MLOAD(txSrcOriginAddr)
         ${touchedAddress(A,CTX)}
+
+
+; TODO Check intrinsic gas first and invalidate transactoin if gas limit does not cover it
 
 ;;;;;;;;
 ; Check and update Nonce --> //TODO: same as chainID
@@ -102,11 +105,12 @@ endCheckChainId:
 ;; Store init state
 ;;;;;;;;;
 
-        SR                              :MSTORE(initSR)
+        SR                              :MSTORE(initSR) 
 
 ;;;;;;;;
 ; Set the gas
 ;;;;;;;;
+        ; TODO check tx has at least 21000 of gas
         $ => GAS                        :MLOAD(txGas)
         GAS - 21000 => GAS
 
@@ -449,18 +453,9 @@ refundGas:
         $ => A                          :MLOAD(sequencerAddr)
         0 => B,C                        ; balance key smt
         $ => SR                         :SSTORE
-
-
-terminateTX:
                                         :JMP(processTxEnd)
-; TODO: should be an invalid intrinsic txs and (revert, out-of-gas, assert, invalid opcode )
+
+
 invalidTx:
-        $ => A                          :MLOAD(originCTX)
-        0 - A                           :JMPN(invalidTxOrigin) ; TODO:: invalid call with depth > 0
-        $ => SR                         :MLOAD(initSR)
-
-                                        :JMP(terminateTX)
-
-invalidTxOrigin:
-        A => CTX
-                                        :JMP(invalidTx)
+        $ => SR                         :MLOAD(originSR)
+                                        :JMP(processTxEnd)
