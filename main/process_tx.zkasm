@@ -112,7 +112,7 @@ endCheckChainId:
 ;;;;;;;;
         ; TODO check tx has at least 21000 of gas
         $ => GAS                        :MLOAD(txGas)
-        GAS - 21000 => GAS
+        GAS - 21000 => GAS              :JMPN(invalidTx)
 
 ;;;;;;;;
 ; Gas calldata
@@ -144,11 +144,11 @@ loopBytes:
                                         :JMP(add16Gas)
 
 add4Gas:
-        GAS - 4 => GAS
+        GAS - 4 => GAS                  :JMPN(invalidTx)
                                         :JMP(loopBytes)
 
 add16Gas:
-        GAS - 16 => GAS
+        GAS - 16 => GAS                 :JMPN(invalidTx)
                                         :JMP(loopBytes)
 ;;;;;;;;;
 ;; Store init state after substracting intrinsic gas
@@ -225,7 +225,6 @@ endContractAddress:
 
 create2:
         $ => C                          :MLOAD(txCalldataLen)
-        
         ${(C+31)/32} => A
         ; Div operation with Arith
         ${C+31}         :MSTORE(arithA)
@@ -233,7 +232,7 @@ create2:
                         :CALL(divARITH)
         $ => A          :MLOAD(arithRes1)
 
-        GAS - 6*A => GAS
+        GAS - 6*A => GAS                :JMPN(outOfGas)
         1024 => SP
                                         :JMP(loopCreate2)
 
@@ -283,7 +282,7 @@ deploy:
         0                               :MSTORE(SPw)
         0 => PC
         0 => SP
-        GAS - 32000 => GAS
+        GAS - 32000 => GAS              :JMPN(invalidTx)
                                         :JMP(readCode)
 
 readDeployBytecode:
@@ -431,7 +430,7 @@ refundGas:
 ;;;;;;;;
 ; Send remaining gas to sequencer
 ;;;;;;;;
-
+sendGasSeq:
         $ => A                          :MLOAD(txGas)                                           ; Multiplies the txGas amd the txGasPrice
         A - GAS => A                                                                            ; A = txGas -GAS
 
