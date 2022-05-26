@@ -649,7 +649,17 @@ outOfGasEnd:
     0 => GAS
                             :JMP(sendGasSeq)
 
-;outOfStack:
+stackOverflow:
+    $ => A          :MLOAD(originCTX)
+    0 => B
+    $               :EQ,JMPC(stackOverflowEnd)
+    A => CTX
+                    :JMP(stackOverflow)
+
+stackOverflowEnd:
     ;revert all state changes
+    $ => SR                 :MLOAD(initSR)
     ;decrease gas spent by the caller
-    ;return unesed gas to the caller
+    ;return unused gas to the caller
+    0 => A
+                            :JMP(refundGas)
