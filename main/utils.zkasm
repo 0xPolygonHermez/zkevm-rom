@@ -629,18 +629,24 @@ SHLarithfinal:
                             :JMP(RR)
 
 outOfGas:
-    $ => A                  :MLOAD(originCTX)
-    0 => B
-    $                       :EQ,JMPC(outOfGasEnd)
-    A => CTX
-                            :JMP(outOfGas)
-outOfGasEnd:
     ;revert all state changes, decrease gas spent to caller
     ;initSR --> balance = balance - gas, nonce + 1
-    $ => SR                 :MLOAD(initSR)
+    $ => SR         :MLOAD(initSR)
     ;remaining gas = 0
-    0 => GAS
+    $ => A          :MLOAD(originCTX)
+    0 => B
+    $               :EQ,JMPC(outOfGasEnd)
+    A => CTX
+    $ => GAS        :MLOAD(gasCTX)
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    0               :MSTORE(SP++)
+                    :JMP(readCode)
+
+
+outOfGasEnd:
     ;save Root and jump to send gas to sequencer
+    0 => GAS
                             :JMP(sendGasSeq)
 
 ;outOfStack:
