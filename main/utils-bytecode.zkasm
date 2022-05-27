@@ -1,0 +1,44 @@
+; This file is WIP
+
+getHashBytecode:
+    0 => HASHPOS
+    $ => A                          :MLOAD(createContractAddress)
+    $ => E                          :MLOAD(lastHashIdUsed)
+    E+1 => E                        :MSTORE(lastHashIdUsed)
+    ${getDeployedBytecodeLength(A)} => B
+    1024 => SP
+    ;32 => D
+    1 => D
+    0 => C
+
+;addDataHash32:
+;    $ => A                  :MLOAD(createContractAddress)
+;    B - 1                   :JMPN(addDataHashEnd)
+;    B - D                   :JMPN(addDataHashFinal)
+;    B - D => B
+;    ;$ => A                  :MLOAD(SP)
+;    ${getDeployedBytecode(A,C,D)} => A
+;    C + D => C
+;    A                       :HASHP(E)
+;    ;SP + 1 => SP
+;                            :JMP(addDataHash32)
+;
+;addDataHashFinal:
+;    $ => A                  :MLOAD(createContractAddress)
+;    B => D
+;    ;$ => A                  :MLOAD(SP)
+;    ${getDeployedBytecode(A,C,D)} => A
+;    A                       :HASHP(E)
+
+addDataHash:
+    $ => A                  :MLOAD(createContractAddress)
+    B - 1 => B              :JMPN(addDataHashEnd)
+    ${getDeployedBytecode(A,C,D)} => A
+    A                       :HASHP(E)
+    C + 1 => C
+                            :JMP(addDataHash)
+
+addDataHashEnd:
+    HASHPOS                 :HASHPLEN(E)
+    $ => D                  :HASHPDIGEST(E)
+                            :RETURN

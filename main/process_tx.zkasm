@@ -1,5 +1,6 @@
 INCLUDE "map-opcodes.zkasm"
 INCLUDE "precompiled/selector.zkasm"
+INCLUDE "utils-bytecode.zkasm"
 
 processTx:
         ; I think it is not necessary to save hashpos in this file.
@@ -318,6 +319,10 @@ readDeployBytecode:
 callContract:
         0 => PC
         0 => SP
+        ; //TODO: reuse hash id (E) for the same contract
+        $ => E                          :MLOAD(lastHashIdUsed)
+        E+1 => E                        :MSTORE(lastHashIdUsed)
+        E                               :MSTORE(contractId)
                                         :JMP(readCode)
 
 readByteCode:
@@ -327,7 +332,12 @@ readByteCode:
         $ => A                          :SLOAD
         ${getBytecodeLength(A)} => B
         B - PC                          :JMPN(endByteCode) ; // TODO: should be removed
-        ${getBytecode(A,PC)} => B
+        ;${getBytecode(A,PC)} => B
+        $ => E                          :MLOAD(contractId)
+        A                               :HASHPDIGEST(E)
+        PC => HASHPOS
+        1 => D
+        $ => B                          :HASHP(E)
         B => RR
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
@@ -354,7 +364,8 @@ endDeploy:
         A                               :MSTORE(txDestAddr)
         ; TODO: same as nonce, should be done before
         ; TODO zkasm should calculate the deployed bytecode
-        ${getHashBytecode(A)} => D ; TODO: chain poseidon to compute hashBytecode. Jordi checks
+                                        :CALL(getHashBytecode)
+        $ => A                          :MLOAD(createContractAddress)
         %SMT_KEY_SC_CODE => B
         0 => C
         $ => SR                         :SSTORE
