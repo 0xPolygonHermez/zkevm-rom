@@ -628,6 +628,8 @@ SHLarithfinal:
     $ => E                  :MLOAD(tmpVarE2)
                             :JMP(RR)
 
+;//TODO: check if outOfGas error === stack error --> same code
+
 outOfGas:
     ;revert all state changes, decrease gas spent to caller
     ;initSR --> balance = balance - gas, nonce + 1
@@ -647,19 +649,25 @@ outOfGas:
 outOfGasEnd:
     ;save Root and jump to send gas to sequencer
     0 => GAS
-                            :JMP(sendGasSeq)
+                    :JMP(sendGasSeq)
 
+stackUnderflow:
 stackOverflow:
+    ;revert all state changes
+    ;initSR --> balance = balance - gas, nonce + 1
+    $ => SR         :MLOAD(initSR)
+    ;remaining gas = 0
     $ => A          :MLOAD(originCTX)
     0 => B
-    $               :EQ,JMPC(stackOverflowEnd)
+    $               :EQ,JMPC(stackErrorEnd)
     A => CTX
-                    :JMP(stackOverflow)
+    $ => GAS        :MLOAD(gasCTX)
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    0               :MSTORE(SP++)
+                    :JMP(readCode)
 
-stackOverflowEnd:
-    ;revert all state changes
-    $ => SR                 :MLOAD(initSR)
-    ;decrease gas spent by the caller
-    ;return unused gas to the caller
-    0 => A
-                            :JMP(refundGas)
+stackErrorEnd:
+    ;save Root and jump to send gas to sequencer
+    0 => GAS
+                    :JMP(sendGasSeq)
