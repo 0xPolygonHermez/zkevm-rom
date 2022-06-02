@@ -24,8 +24,7 @@ abs:
     0 => B
     ;TODO: fix `$ => B          :SLT,JMPC(absIsNeg)`
     ;when zkproverjs has been updated
-    $ => B          :SLT
-    -B              :JMPN(absIsNeg)
+    $ => B          :SLT,JMPC(absIsNeg)
                     :RETURN
 
 absIsNeg:
@@ -423,8 +422,8 @@ saveMem:
     E                           :MSTORE(memLength)
     ${(E+31)/32} => A
     ${(B+31)/32} => B
-    GAS - 3*A - ${A*A/512} => GAS
-    GAS + 3*B + ${B*B/512} => GAS
+    GAS - 3*A - ${A*A/512} => GAS   :JMPN(outOfGas)
+    GAS + 3*B + ${B*B/512} => GAS   :JMPN(outOfGas)
     $ => A                      :MLOAD(tmpVarA)
     $ => B                      :MLOAD(tmpVarB)
                                 :RETURN
@@ -628,3 +627,47 @@ SHLarithfinal:
     $ => D                  :MLOAD(tmpVarD2)
     $ => E                  :MLOAD(tmpVarE2)
                             :JMP(RR)
+
+;//TODO: check if outOfGas error === stack error --> same code
+
+outOfGas:
+    ;revert all state changes, decrease gas spent to caller
+    ;initSR --> balance = balance - gas, nonce + 1
+    $ => SR         :MLOAD(initSR)
+    ;remaining gas = 0
+    $ => A          :MLOAD(originCTX)
+    0 => B
+    $               :EQ,JMPC(outOfGasEnd)
+    A => CTX
+    $ => GAS        :MLOAD(gasCTX)
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    0               :MSTORE(SP++)
+                    :JMP(readCode)
+
+
+outOfGasEnd:
+    ;save Root and jump to send gas to sequencer
+    0 => GAS
+                    :JMP(sendGasSeq)
+
+stackUnderflow:
+stackOverflow:
+    ;revert all state changes
+    ;initSR --> balance = balance - gas, nonce + 1
+    $ => SR         :MLOAD(initSR)
+    ;remaining gas = 0
+    $ => A          :MLOAD(originCTX)
+    0 => B
+    $               :EQ,JMPC(stackErrorEnd)
+    A => CTX
+    $ => GAS        :MLOAD(gasCTX)
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    0               :MSTORE(SP++)
+                    :JMP(readCode)
+
+stackErrorEnd:
+    ;save Root and jump to send gas to sequencer
+    0 => GAS
+                    :JMP(sendGasSeq)

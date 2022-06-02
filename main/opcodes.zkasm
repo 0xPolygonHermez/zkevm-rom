@@ -1,7 +1,5 @@
 INCLUDE "utils.zkasm"
-; // TODO: handle error not enough stack to read at the beginning of each opcode
-; // TODO: handle error not enough GAS (OOG)
-; // TODO: handle error too much stack (stack over 1024 - stack overflow)
+
 opSTOP:
     $ => B          :MLOAD(originCTX)       ;last ctx
     B - 1           :JMPN(opSTOPend)
@@ -12,13 +10,15 @@ opSTOP:
     GAS + B => GAS
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
-    1               :MSTORE(SP++) ; // TODO: call to an EOA address, what is going on ?
+    1               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow) ; // TODO: call to an EOA address, what is going on ?
                     :JMP(readCode)
 
 opSTOPend:
                     :JMP(endCode)
 
 opADD:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
     $ => C          :MLOAD(SP)
@@ -29,10 +29,12 @@ opADD:
                     :CALL(addARITH)
     $ => E          :MLOAD(arithRes1)
     E               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opMUL:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
     $ => B          :MLOAD(SP)
@@ -42,10 +44,12 @@ opMUL:
                     :CALL(mulARITH)
     $ => E          :MLOAD(arithRes1)
     E               :MSTORE(SP++)
-    GAS-5 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-5 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSUB:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => E          :MLOAD(SP--)
     $ => C          :MLOAD(SP)
@@ -55,10 +59,12 @@ opSUB:
                     :CALL(subARITH)
     $ => A          :MLOAD(arithRes1)
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDIV:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => E          :MLOAD(SP--)
     $ => A          :MLOAD(SP)
@@ -68,10 +74,12 @@ opDIV:
                     :CALL(divARITH)
     $ => B          :MLOAD(arithRes1)
     B               :MSTORE(SP++)
-    GAS-5 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-5 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSDIV:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
                     :CALL(abs)
@@ -92,21 +100,24 @@ opSDIV:
                     :CALL(divARITH)
     $ => B          :MLOAD(arithRes1)
     B               :MSTORE(SP++)
-    GAS-5 => GAS
-                   :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-5 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
 
 opSDIVNeg:
     ${E%A} => C
     ${E/A} => B
     0 => D
-    E              :ARITH
+    E               :ARITH
     0 => A
-    $ => A         :SUB
-    A              :MSTORE(SP++)
-    GAS-5 => GAS
-                   :JMP(readCode)
+    $ => A          :SUB
+    A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-5 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
 
 opMOD:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => E          :MLOAD(SP--)
     $ => A          :MLOAD(SP)
@@ -116,10 +127,12 @@ opMOD:
                     :CALL(divARITH)
     $ => C          :MLOAD(arithRes2)
     C               :MSTORE(SP++)
-    GAS-5 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-5 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSMOD:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
                     :CALL(abs)
@@ -139,7 +152,8 @@ opSMOD:
                     :CALL(divARITH)
     $ => C          :MLOAD(arithRes2)
     C               :MSTORE(SP++)
-    GAS-5 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-5 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSMODNeg:
@@ -151,10 +165,12 @@ opSMODNeg:
     0 => A
     $ => A          :SUB
     A               :MSTORE(SP++)
-    GAS-5 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-5 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opADDMOD:
+    SP - 3          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
     $ => B          :MLOAD(SP--)
@@ -170,10 +186,12 @@ opADDMOD:
                     :CALL(divARITH)
     $ => C          :MLOAD(arithRes2)
     C               :MSTORE(SP++)
-    GAS-8 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-8 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opMULMOD:
+    SP - 3          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
     $ => B          :MLOAD(SP--)
@@ -189,20 +207,24 @@ opMULMOD:
                     :CALL(divARITH)
     $ => C          :MLOAD(arithRes2)
     C               :MSTORE(SP++)
-    GAS-8 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-8 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opEXP: ; //TODO: test exp == 0
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-    $ => B          :MLOAD(SP)
+    $ => A              :MLOAD(SP--)
+    $ => B              :MLOAD(SP)
     ${exp(A,B)} => A
-    A               :MSTORE(SP++)
-                    :CALL(getLenBytes)
-    GAS-10-50*A => GAS
-                    :JMP(readCode)
+    A                   :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                        :CALL(getLenBytes)
+    GAS-10-50*A => GAS  :JMPN(outOfGas)
+                        :JMP(readCode)
 
 opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/vm/src/evm/opcodes/functions.ts#L193
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
     $ => D          :MLOAD(SP)
@@ -235,127 +257,155 @@ opSIGNEXTENDPositive:
 
 opSIGNEXTENDEnd:
     D               :MSTORE(SP++)
-    GAS-5 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-5 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 ; // TODO: "set0" and "set1" move to utils
 set0:
     0               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 set1:
     1               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 opSLT:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A              :MLOAD(SP--)
-    $ => B              :MLOAD(SP)
-    GAS-3 => GAS
-    $                   :SLT,MSTORE(SP++)
-                        :JMP(readCode)
+    $ => A          :MLOAD(SP--)
+    $ => B          :MLOAD(SP)
+    GAS-3 => GAS    :JMPN(outOfGas)
+    $               :SLT,MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)
 opLT:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A              :MLOAD(SP--)
-    $ => B              :MLOAD(SP)
-    GAS-3 => GAS
-    $                   :LT,MSTORE(SP++)
-                        :JMP(readCode)
+    $ => A          :MLOAD(SP--)
+    $ => B          :MLOAD(SP)
+    GAS-3 => GAS    :JMPN(outOfGas)
+    $               :LT,MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)
 
 opSGT:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => B              :MLOAD(SP--)
-    $ => A              :MLOAD(SP)
-    GAS-3 => GAS
-    $                   :SLT,MSTORE(SP++)
-                        :JMP(readCode)
+    $ => B          :MLOAD(SP--)
+    $ => A          :MLOAD(SP)
+    GAS-3 => GAS    :JMPN(outOfGas)
+    $               :SLT,MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)
 opGT:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => B              :MLOAD(SP--)
-    $ => A              :MLOAD(SP)
-    GAS-3 => GAS
-    $                   :LT,MSTORE(SP++)
-                        :JMP(readCode)
+    $ => B          :MLOAD(SP--)
+    $ => A          :MLOAD(SP)
+    GAS-3 => GAS    :JMPN(outOfGas)
+    $               :LT,MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)
 opEQ:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A              :MLOAD(SP--)
-    $ => B              :MLOAD(SP)
-    GAS-3 => GAS
-    $                   :EQ,MSTORE(SP++)
-                        :JMP(readCode)
+    $ => A          :MLOAD(SP--)
+    $ => B          :MLOAD(SP)
+    GAS-3 => GAS    :JMPN(outOfGas)
+    $               :EQ,MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)
 
 opISZERO:
-    SP - 1 => SP
-    $ => A              :MLOAD(SP)
-    GAS-3 => GAS
+    SP - 1 => SP    :JMPN(stackUnderflow)
+    $ => A          :MLOAD(SP)
+    GAS-3 => GAS    :JMPN(outOfGas)
     0 => B
-    $                   :EQ,MSTORE(SP++)
-                        :JMP(readCode)
+    $               :EQ,MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)
 
 opAND:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A                  :MLOAD(SP--)
-    $ => B                  :MLOAD(SP)
-    GAS-3 => GAS
-    $                       :AND,MSTORE(SP++)
-                            :JMP(readCode)
+    $ => A          :MLOAD(SP--)
+    $ => B          :MLOAD(SP)
+    GAS-3 => GAS    :JMPN(outOfGas)
+    $               :AND,MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)
 
 opOR:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A                  :MLOAD(SP--)
-    $ => B                  :MLOAD(SP)
-    GAS-3 => GAS
-    $                       :OR,MSTORE(SP++)
-                            :JMP(readCode)
+    $ => A          :MLOAD(SP--)
+    $ => B          :MLOAD(SP)
+    GAS-3 => GAS    :JMPN(outOfGas)
+    $               :OR,MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)
 
 opXOR:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A                  :MLOAD(SP--)
-    $ => B                  :MLOAD(SP)
-    GAS-3 => GAS
-    $                       :XOR,MSTORE(SP++)
-                            :JMP(readCode)
+    $ => A          :MLOAD(SP--)
+    $ => B          :MLOAD(SP)
+    GAS-3 => GAS    :JMPN(outOfGas)
+    $               :XOR,MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)
 
 opNOT:
-    SP - 1 => SP
-    $ => A                  :MLOAD(SP)
-    GAS-3 => GAS
+    SP - 1 => SP    :JMPN(stackUnderflow)
+    $ => A          :MLOAD(SP)
+    GAS-3 => GAS    :JMPN(outOfGas)
     0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn => B
-    $ => A                  :XOR,MSTORE(SP++)
-                            :JMP(readCode)
+    $ => A          :XOR,MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)
 
 opBYTE:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => B                  :MLOAD(SP--)
-    $ => A                  :MLOAD(SP)
+    $ => B          :MLOAD(SP--)
+    $ => A          :MLOAD(SP)
     31 - B => D
-                            :CALL(SHRarith)
-    GAS-3 => GAS
+                    :CALL(SHRarith)
+    GAS-3 => GAS    :JMPN(outOfGas)
     255 => B
-    $                       :AND,MSTORE(SP++)
-                            :JMP(readCode)
+    $               :AND,MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)
 
 opSHR:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
     $ => A          :MLOAD(SP)
                     :CALL(SHRarithBit)
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSHL:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
     $ => A          :MLOAD(SP)
                     :CALL(SHLarithBit)
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 ; TODO: Adapt to multiplication
 ; https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/vm/src/evm/opcodes/functions.ts#L342
 opSAR:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
     ${D/8} => D
@@ -375,7 +425,8 @@ opSAR:
     $ => B          :XOR
     B - 1           :JMPN(opSARNeg)  ; 0 negative, 1 positive
     C               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSARNeg:
@@ -386,16 +437,18 @@ opSARNeg:
     0 => A
     $ => A          :SUB
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSHA3:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => E          :MLOAD(SP--) ; offset
     $ => C          :MLOAD(SP) ; length
     E + C           :MSTORE(lastMemLength)
     ; gas
-    GAS - 30 => GAS ; gas static = 30
+    GAS - 30 => GAS :JMPN(outOfGas); gas static = 30
     ; Div operation with Arith
     ;${6*((C+31)/32)}
     C+31 => A
@@ -410,7 +463,7 @@ opSHA3:
     A               :MSTORE(arithB)
                     :CALL(mulARITH)
     $ => A          :MLOAD(arithRes1)
-    GAS - A => GAS  ; dynamic_gas = dynamic_gas = 6 * minimum_word_size + memory_expansion_cost
+    GAS - A => GAS  :JMPN(outOfGas)  ; dynamic_gas = dynamic_gas = 6 * minimum_word_size + memory_expansion_cost
     ; new hash id
     $ => B           :MLOAD(lastHashIdUsed)
     B + 1 => B       :MSTORE(lastHashIdUsed)
@@ -441,6 +494,7 @@ opSHA3End:
     HASHPOS         :HASHKLEN(E)
     $ => A          :HASHKDIGEST(E)
     A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
     $ => E          :MLOAD(lastMemLength)
     $ => B          :MLOAD(memLength)
     B - E           :JMPN(saveMemLength)
@@ -458,40 +512,45 @@ opADDRESSdeploy:
 
 opADDRESSend:
     A               :MSTORE(SP++)
-    GAS-2 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opBALANCE:
-    SP - 1 => SP
+    SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     0 => B,C        ; balance smt key
     $ => D          :SLOAD
     D               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
     ${touchedAddress(A,CTX)} => D
-    GAS-100-D*2500 => GAS
+    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opORIGIN:
     $ => A          :MLOAD(txSrcOriginAddr)
     A               :MSTORE(SP++)
-    GAS-2 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opCALLER:
     $ => A          :MLOAD(txSrcAddr)
     A               :MSTORE(SP++)
-    GAS-2 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opCALLVALUE:
     $ => A          :MLOAD(txValue)
     A               :MSTORE(SP++)
-    GAS-2 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 ; // TODO: Check when a contract is deployed with CREATE
 opCALLDATALOAD:
-    SP - 1 => SP
+    SP - 1 => SP    :JMPN(stackUnderflow)
     $ => E          :MLOAD(SP)
     ; Div operation with Arith
     E               :MSTORE(arithA)
@@ -505,7 +564,8 @@ opCALLDATALOAD:
     $ => B          :MLOAD(SP)
     C => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opCALLDATALOAD2:
@@ -520,24 +580,27 @@ opCALLDATALOAD2:
                     :CALL(SHRarith)
     C => SP
     B + A           :MSTORE(SP++)
-    GAS - 3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
                     :JMP(readCode)
 
 opCALLDATASIZE:
     $ => B          :MLOAD(txCalldataLen)
     B               :MSTORE(SP++)
-    GAS-2 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 ; // TODO: check overflow length datacopy
 opCALLDATACOPY:
+    SP - 3          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => E          :MLOAD(SP--) ;destOffset - offset memory
     $ => B          :MLOAD(SP--) ;offset calldata
     $ => C          :MLOAD(SP)   ;length calldata
     E+C             :MSTORE(lastMemLength)
-    GAS - 3 => GAS
-    GAS - ${3*((C+31)/32)} => GAS
+    GAS - 3 => GAS  :JMPN(outOfGas)
+    GAS - ${3*((C+31)/32)} => GAS    :JMPN(outOfGas)
     SP              :MSTORE(SPw)
                     :JMP(opCALLDATACOPYinit)
 
@@ -613,16 +676,19 @@ opCODESIZE:
     $ => A          :SLOAD
     ${getBytecodeLength(A)} => B
     B               :MSTORE(SP++)
-    GAS-2 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opCODESIZEdep: ;//TODO: create/create2, constructor parameters, initBytcode vs deployed Bytecode
     $ => B          :MLOAD(txCalldataLen)
     B               :MSTORE(SP++)
-    GAS-2 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opCODECOPY:
+    SP - 3          :JMPN(stackUnderflow)
     $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPN(opCALLDATACOPY) ; //TODO:
     $ => A          :MLOAD(txDestAddr) ; //TODO: delegate call ?
@@ -634,8 +700,8 @@ opCODECOPY:
     $ => B          :MLOAD(SP--) ;offset, bytecode offset
     $ => C          :MLOAD(SP)   ;length
     E+C             :MSTORE(lastMemLength)
-    GAS - 3 => GAS
-    GAS - ${3*((C+31)/32)} => GAS
+    GAS - 3 => GAS  :JMPN(outOfGas)
+    GAS - ${3*((C+31)/32)} => GAS    :JMPN(outOfGas)
 
 opCODECOPYinit:
     C - 1           :JMPN(opCODECOPYend)
@@ -663,11 +729,12 @@ opCODECOPYend:
 opGASPRICE:
     $ => A          :MLOAD(txGasPrice)
     A               :MSTORE(SP++)
-    GAS-2 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opEXTCODESIZE: ; // TODO: check precompiled? should return 0?
-    SP - 1 => SP
+    SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     ${touchedAddress(A,CTX)} => D
     %SMT_KEY_SC_CODE => B
@@ -675,10 +742,12 @@ opEXTCODESIZE: ; // TODO: check precompiled? should return 0?
     $ => A          :SLOAD
     ${getBytecodeLength(A)} => B
     B               :MSTORE(SP++)
-    GAS-100-D*2500 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opEXTCODECOPY: ; // TODO: check precompiled?
+    SP - 4          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--) ;addr
     ${touchedAddress(A,CTX)} => D
@@ -689,8 +758,8 @@ opEXTCODECOPY: ; // TODO: check precompiled?
     $ => B          :MLOAD(SP--) ;offset ; bytecode offset
     $ => C          :MLOAD(SP)   ;length
     E+C             :MSTORE(lastMemLength)
-    GAS-100-D*2500 => GAS
-    GAS - ${3*((C+31)/32)} => GAS
+    GAS-100-D*2500 => GAS           :JMPN(outOfGas)
+    GAS - ${3*((C+31)/32)} => GAS   :JMPN(outOfGas)
 
 opEXTCODECOPYinit:
     C - 1           :JMPN(opEXTCODECOPYend)
@@ -719,12 +788,14 @@ opEXTCODECOPYend:
 opRETURNDATASIZE:
     $ => A          :MLOAD(retLength)
     A               :MSTORE(SP++)
-    GAS - 2 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS - 2 => GAS  :JMPN(outOfGas)
                     :JMP(readCode)
 
 ; // TODO: check enough data, otherwise expection OOG
 ; // TODO: should read from return buffer
 opRETURNDATACOPY:
+    SP - 3          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => D          :MLOAD(SP--)            ;destOffset - destination memory
     $ => B          :MLOAD(SP--)            ;offset - offset in return data
@@ -732,7 +803,7 @@ opRETURNDATACOPY:
     $ => C          :MLOAD(retOffset)       ;RETURNDATA
     B + C => B                              ;RETURNDATA[offset:offset+length]
     $ => C          :MLOAD(SP)              ;length - length return data
-    GAS - 3 => GAS
+    GAS - 3 => GAS  :JMPN(outOfGas)
     ;${3*((C+31)/32)}
     C+31 => A
     ;(C+31)/32
@@ -746,7 +817,7 @@ opRETURNDATACOPY:
     A               :MSTORE(arithB)
                     :CALL(mulARITH)
     $ => A          :MLOAD(arithRes1)
-    GAS - A => GAS 
+    GAS - A => GAS  :JMPN(outOfGas) 
     B + C           :MSTORE(lastMemLength)
 
 opRETURNDATACOPYinit:
@@ -777,10 +848,10 @@ opRETURNDATACOPYend:
                     :JMP(readCode)
 
 opEXTCODEHASH:
-    SP - 1 => SP
+    SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     ${touchedAddress(A,CTX)} => D
-    GAS-100-D*2500 => GAS
+    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
     %SMT_KEY_SC_CODE => B
     0 => C
     $ => A          :SLOAD
@@ -810,11 +881,12 @@ opEXTCODEHASHend:
     HASHPOS         :HASHKLEN(E)
     $ => A          :HASHKDIGEST(E)
     A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 opBLOCKHASH:
-    SP - 1 => SP
-    GAS-20 => GAS
+    SP - 1 => SP    :JMPN(stackUnderflow)
+    GAS-20 => GAS   :JMPN(outOfGas)
     $ => A          :MLOAD(SP) ; batch number
     
     ; Check batch number is lt current batch number, else return 0
@@ -839,48 +911,56 @@ opBLOCKHASH:
 
     ; Store result value in the stack
     E               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 ; Handle when is asking for the hash of a not computed batch, return 0
 opBLOCKHASHzero:
     0               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 opCOINBASE:
     $ => A          :MLOAD(sequencerAddr)
     A               :MSTORE(SP++)
-    GAS-2 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 
 opTIMESTAMP:
     $ => A          :MLOAD(timestamp)
     A               :MSTORE(SP++)
-    GAS-2 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opNUMBER:
     $ => A          :MLOAD(numBatch)
     A               :MSTORE(SP++)
-    GAS-2 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDIFFICULTY:
     %BATCH_DIFFICULTY => A
     A                       :MSTORE(SP++)
-    GAS-2 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
                             :JMP(readCode)
 
 opGASLIMIT:
     %BATCH_GAS_LIMIT => A
     A                       :MSTORE(SP++)
-    GAS-2 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
                             :JMP(readCode)
 
 opCHAINID:
     %DEFAULT_SEQ_CHAINID => A
     A               :MSTORE(SP++)
-    GAS-2 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 ; // TODO: check delegate call
@@ -889,31 +969,34 @@ opSELFBALANCE:
     0 => B,C        ; balance key smt
     $ => D          :SLOAD
     D               :MSTORE(SP++)
-    GAS-5 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-5 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opPOP:
-    SP - 1 => SP
-    GAS-2 => GAS
+    SP - 1 => SP    :JMPN(stackUnderflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opMLOAD:
-    SP - 1 => SP
+    SP - 1 => SP    :JMPN(stackUnderflow)
     $ => E          :MLOAD(SP)                  ;offset
                     :CALL(MLOAD32)
     A               :MSTORE(SP++)
-    GAS - 3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS - 3 => GAS    :JMPN(outOfGas)
     $ => B          :MLOAD(memLength)
     B - E           :JMPN(saveMemLength)
                     :JMP(readCode)
 
 opMSTORE:                                       ;MSTORE 32 bytes
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => E          :MLOAD(SP--)                ;offset
     $ => B          :MLOAD(SP)                  ;value
     B               :MSTORE(bytesToStore)
                     :CALL(MSTORE32)
-    GAS - 3 => GAS
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => B          :MLOAD(memLength)
     B - E           :JMPN(saveMemLength)
                     :JMP(readCode)
@@ -924,6 +1007,7 @@ saveMemLength:
                     :JMP(readCode)
 
 opMSTORE8:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => E          :MLOAD(SP--)                ;offset
     $ => A          :MLOAD(SP)                  ;value
@@ -932,23 +1016,25 @@ opMSTORE8:
                     :CALL(SHLarith)
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
-    GAS - 3 => GAS
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => B          :MLOAD(memLength)
     B - E           :JMPN(saveMemLength)
                     :JMP(readCode)
 
 opSLOAD:
-    SP - 1 => SP
+    SP - 1 => SP    :JMPN(stackUnderflow)
     $ => C          :MLOAD(SP) ;key
     $ => A          :MLOAD(storageAddr)
     %SMT_KEY_SC_STORAGE => B
     $ => E          :SLOAD ;current value
     E               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
     ${touchedStorageSlots(A,C,CTX)} => A
-    GAS - %SLOAD_GAS - A*2000 => GAS
+    GAS - %SLOAD_GAS - A*2000 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSSTORE:
+    SP - 2          :JMPN(stackUnderflow)
     $ => A          :MLOAD(iSstaticCall)
     0 - A           :JMPN(invalidStaticTx)
     SP - 1 => SP
@@ -972,13 +1058,13 @@ opSSTOREinit:
     $ => SR         :MLOAD(auxSR)
     ${touchedStorageSlots(A,C,CTX)} => A
     B => C           ;origin value
-    GAS - A*2100 => GAS
+    GAS - A*2100 => GAS    :JMPN(outOfGas)
     E => A
     D => B
     $ => A          :EQ
     A - 1           :JMPN(opSSTOREdif)
     ;if new_val == current_val
-    GAS - 100 => GAS
+    GAS - 100 => GAS    :JMPN(outOfGas)
                     :JMP(opSSTOREend)
 
 opSSTOREdif:
@@ -993,12 +1079,12 @@ opSSTOREdif:
     $ => A          :EQ
     A - 1           :JMPN(opSSTOREdifB)
     ;if origin_val == 0
-    GAS - %SSTORE_SET_GAS => GAS
+    GAS - %SSTORE_SET_GAS => GAS    :JMPN(outOfGas)
                     :JMP(opSSTOREend)
 
 opSSTOREdifA:
     ;if current_val != orig_val
-    GAS - 100 => GAS
+    GAS - 100 => GAS    :JMPN(outOfGas)
     0 => A
     C => B
     $ => A          :EQ
@@ -1049,7 +1135,7 @@ opSSTOREdifA2:
 
 opSSTOREdifB:
     ;if orig_val != 0
-    GAS - %SSTORE_RESET_GAS => GAS
+    GAS - %SSTORE_RESET_GAS => GAS    :JMPN(outOfGas)
     0 => A
     D => B
     $ => A          :EQ
@@ -1077,17 +1163,17 @@ opSSTOREsr:
 
 ; // TODO: Check error: addrOp("E") == 5B (JUMPDEST)
 opJUMP:
-    SP - 1 => SP
+    SP - 1 => SP    :JMPN(stackUnderflow)
     $ => E          :MLOAD(SP) ; //TODO: $ => PC
     E => PC
-    GAS - 8 => GAS
+    GAS - 8 => GAS  :JMPN(outOfGas)
                     :JMP(readCode)
 
 ; // TODO: Check error: addrOp("E") == 5B (JUMPDEST)
 opJUMPI:
-    SP - 2 => SP
+    SP - 2 => SP            :JMPN(stackUnderflow)
     $ => B                  :MLOAD(SP)
-    GAS - 10 => GAS
+    GAS - 10 => GAS         :JMPN(outOfGas)
     0 => A
     $ => A                  :LT
     A - 1                   :JMPN(readCode)
@@ -1098,30 +1184,34 @@ opJUMPI:
 
 ; // TODO: check in YUL
 opPC:
-    GAS - 2 => GAS
-    PC                 :MSTORE(SP++)
-                    :JMP(readCode)
+    GAS - 2 => GAS      :JMPN(outOfGas)
+    PC                  :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                        :JMP(readCode)
 
 opMSIZE:
-    GAS - 2 => GAS
-    $ => A             :MLOAD(memLength)
-    A                  :MSTORE(SP++)
-                    :JMP(readCode)
+    GAS - 2 => GAS      :JMPN(outOfGas)
+    $ => A              :MLOAD(memLength)
+    A                   :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                        :JMP(readCode)
 
 opGAS:
-    GAS - 2 => GAS
+    GAS - 2 => GAS  :JMPN(outOfGas)
     GAS             :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 opJUMPDEST:
-    GAS - 1 => GAS
+    GAS - 1 => GAS  :JMPN(outOfGas)
                     :JMP(readCode)
 
 opAuxPUSHA:
     ${getBytecode(A,PC,D)} => B
     B                           :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
     PC + D => PC
-    GAS-3 => GAS
+    GAS-3 => GAS    :JMPN(outOfGas)
                                 :JMP(readCode)
 
 opAuxPUSHB:
@@ -1139,13 +1229,15 @@ opAuxPUSHB:
     $ => SP                     :MLOAD(SPw)
     ${getByte(A,C,D)} => B
     B                           :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
     PC + D => PC
-    GAS-3 => GAS
+    GAS-3 => GAS                :JMPN(outOfGas)
                                 :JMP(readCode)
 
 opAuxPUSHC:
     32 - C => E
     $ => A                      :MLOAD(SP++)
+    1024 - SP
     ${getByte(A,C,E)} => A
     0 => C
     PC + D => PC
@@ -1155,7 +1247,8 @@ opAuxPUSHC:
                                 :CALL(SHRarith)
     $ => SP                     :MLOAD(SPw)
     A + B                       :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS                :JMPN(outOfGas)
                                 :JMP(readCode)
 
 opPUSH1:
@@ -1351,142 +1444,163 @@ opPUSH32:
                                     :JMP(opAuxPUSHA)
 
 opDUP1:
-    SP - 1 => SP
+    SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP++)
+    1024 - SP       :JMPN(stackOverflow)
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP2:
-    SP - 2 => SP
+    SP - 2 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     SP + 2 => SP
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP3:
-    SP - 3 => SP
+    SP - 3 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     SP + 3 => SP
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP4:
-    SP - 4 => SP
+    SP - 4 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     SP + 4 => SP
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP5:
-    SP - 5 => SP
+    SP - 5 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     SP + 5 => SP
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP6:
-    SP - 6 => SP
+    SP - 6 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     SP + 6 => SP
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP7:
-    SP - 7 => SP
+    SP - 7 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     SP + 7 => SP
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP8:
-    SP - 8 => SP
+    SP - 8 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     SP + 8 => SP
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP9:
-    SP - 9 => SP
+    SP - 9 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     SP + 9 => SP
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP10:
-    SP - 10 => SP
+    SP - 10 => SP   :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     SP + 10 => SP
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP11:
-    SP - 11 => SP
+    SP - 11 => SP   :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     SP + 11 => SP
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP12:
-    SP - 12 => SP
+    SP - 12 => SP   :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     SP + 12 => SP
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP13:
-    SP - 13 => SP
+    SP - 13 => SP   :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     SP + 13 => SP
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP14:
-    SP - 14 => SP
+    SP - 14 => SP   :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     SP + 14 => SP
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP15:
-    SP - 15 => SP
+    SP - 15 => SP   :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     SP + 15 => SP
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP16:
-    SP - 16 => SP
+    SP - 16 => SP   :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     SP + 16 => SP
     A               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP1:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
     $ => B          :MLOAD(SP)
     A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP2:
+    SP - 3          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 2 => SP
@@ -1494,10 +1608,12 @@ opSWAP2:
     A               :MSTORE(SP)
     SP + 2 => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP3:
+    SP - 4          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 3 => SP
@@ -1505,10 +1621,12 @@ opSWAP3:
     A               :MSTORE(SP)
     SP + 3 => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP4:
+    SP - 5          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 4 => SP
@@ -1516,10 +1634,12 @@ opSWAP4:
     A               :MSTORE(SP)
     SP + 4 => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP5:
+    SP - 6          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 5 => SP
@@ -1527,10 +1647,12 @@ opSWAP5:
     A               :MSTORE(SP)
     SP + 5 => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP6:
+    SP - 7          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 6 => SP
@@ -1538,10 +1660,12 @@ opSWAP6:
     A               :MSTORE(SP)
     SP + 6 => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP7:
+    SP - 8          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 7 => SP
@@ -1549,10 +1673,12 @@ opSWAP7:
     A               :MSTORE(SP)
     SP + 7 => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP8:
+    SP - 9          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 8 => SP
@@ -1560,10 +1686,12 @@ opSWAP8:
     A               :MSTORE(SP)
     SP + 8 => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP9:
+    SP - 10         :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 9 => SP
@@ -1571,10 +1699,12 @@ opSWAP9:
     A               :MSTORE(SP)
     SP + 9 => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP10:
+    SP - 11         :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 10 => SP
@@ -1582,10 +1712,12 @@ opSWAP10:
     A               :MSTORE(SP)
     SP + 10 => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP11:
+    SP - 12         :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 11 => SP
@@ -1593,10 +1725,12 @@ opSWAP11:
     A               :MSTORE(SP)
     SP + 11 => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP12:
+    SP - 13         :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 12 => SP
@@ -1604,10 +1738,12 @@ opSWAP12:
     A               :MSTORE(SP)
     SP + 12 => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP13:
+    SP - 14         :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 13 => SP
@@ -1615,10 +1751,12 @@ opSWAP13:
     A               :MSTORE(SP)
     SP + 13 => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP14:
+    SP - 15         :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 14 => SP
@@ -1626,10 +1764,12 @@ opSWAP14:
     A               :MSTORE(SP)
     SP + 14 => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP15:
+    SP - 16         :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 15 => SP
@@ -1637,10 +1777,12 @@ opSWAP15:
     A               :MSTORE(SP)
     SP + 15 => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP16:
+    SP - 17         :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 16 => SP
@@ -1648,12 +1790,14 @@ opSWAP16:
     A               :MSTORE(SP)
     SP + 16 => SP
     B               :MSTORE(SP++)
-    GAS-3 => GAS
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 ; // TODO: save logs in memory and consolidate them once the tx is succesfull
 ; gas_cost = 375 + 375 * num_topics + 8 * data_size + mem_expansion_cost
 opLOG0:
+    SP - 2              :JMPN(stackUnderflow)
     $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
@@ -1661,13 +1805,14 @@ opLOG0:
     $ => C              :MLOAD(SP)   ; length
     E + C               :MSTORE(lastMemLength)
     0                   :MSTORE(numTopics)
-    GAS - 375 => GAS                 ; static gas
-    GAS - 8 * C => GAS               ; add gas depending on data bytes
+    GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
+    GAS - 8 * C => GAS    :JMPN(outOfGas)               ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
     B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
                         :JMP(opLOGLoop)
 
 opLOG1:
+    SP - 3              :JMPN(stackUnderflow)
     $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
@@ -1675,13 +1820,14 @@ opLOG1:
     $ => C              :MLOAD(SP)   ; length
     E + C               :MSTORE(lastMemLength)
     1                   :MSTORE(numTopics)
-    GAS - 375 => GAS                 ; static gas
-    GAS - 8 * C => GAS               ; add gas depending on data bytes
+    GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
+    GAS - 8 * C => GAS  :JMPN(outOfGas)               ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
     B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
                         :JMP(opLOGLoop)
 
 opLOG2:
+    SP - 4              :JMPN(stackUnderflow)
     $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
@@ -1689,13 +1835,14 @@ opLOG2:
     $ => C              :MLOAD(SP)   ; length
     E + C               :MSTORE(lastMemLength)
     2                   :MSTORE(numTopics)
-    GAS - 375 => GAS                 ; static gas
-    GAS - 8 * C => GAS               ; add gas depending on data bytes
+    GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
+    GAS - 8 * C => GAS  :JMPN(outOfGas)               ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
     B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
                         :JMP(opLOGLoop)
 
 opLOG3:
+    SP - 5              :JMPN(stackUnderflow)
     $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
@@ -1703,13 +1850,14 @@ opLOG3:
     $ => C              :MLOAD(SP)   ; length
     E + C               :MSTORE(lastMemLength)
     3                   :MSTORE(numTopics)
-    GAS - 375 => GAS                 ; static gas
-    GAS - 8 * C => GAS               ; add gas depending on data bytes
+    GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
+    GAS - 8 * C => GAS  :JMPN(outOfGas)               ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
     B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
                         :JMP(opLOGLoop)
 
 opLOG4:
+    SP - 6              :JMPN(stackUnderflow)
     $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
@@ -1717,8 +1865,8 @@ opLOG4:
     $ => C              :MLOAD(SP)   ; length
     E + C               :MSTORE(lastMemLength)
     4                   :MSTORE(numTopics)
-    GAS - 375 => GAS                 ; static gas
-    GAS - 8 * C => GAS               ; add gas depending on data bytes
+    GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
+    GAS - 8 * C => GAS  :JMPN(outOfGas)               ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
     B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
                         :JMP(opLOGLoop)
@@ -1739,13 +1887,13 @@ opSaveTopicsInit:
     $ => A          :MLOAD(numTopics)
 
 opSaveTopicsLoop:
-    A - 1           :JMPN(opLOGend)
-    SP - 1 => SP
-    GAS - 375 => GAS
-    $ => C          :MLOAD(SP)   ; topicX
+    A - 1               :JMPN(opLOGend)
+    SP - 1 => SP        :JMPN(stackUnderflow)
+    GAS - 375 => GAS    :JMPN(outOfGas)
+    $ => C              :MLOAD(SP)   ; topicX
     ${storeLog(B, 1, C)}     ; storeLog(indexLog, isTopic, bytesToStore)
     A - 1 =>  A
-                    :JMP(opSaveTopicsLoop)
+                        :JMP(opSaveTopicsLoop)
 
 opLOGend:
     $ => E          :MLOAD(lastMemLength)
@@ -1756,37 +1904,51 @@ opLOGend:
 ; // TODO Check with DElEGATE CALL txDestAddr/txSrcAddr ( same as other calls)
 ; // TODO check revert create
 opCREATE:
+    SP - 3              :JMPN(stackUnderflow)
     $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
-    $ => A              :MLOAD(SP--)    ;value
+    $ => A              :MLOAD(SP--)            ;value
     A                   :MSTORE(valueCall)
-    $ => E              :MLOAD(SP--)    ;offset
+    $ => E              :MLOAD(SP--)            ;offset
     E                   :MSTORE(argsOffsetCall)
     $ => C              :MLOAD(SP)      ;length
     C                   :MSTORE(argsLengthCall)
     CTX                 :MSTORE(originAuxCTX)
     $ => B              :MLOAD(txDestAddr)
-    GAS => C
+    GAS - 32000 => GAS  :JMPN(outOfGas)
+    GAS => C            :MSTORE(gasCall)
     SP                  :MSTORE(lastSP)
     PC                  :MSTORE(lastPC)
     ;change new CTX
     $ => A              :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
     A+1 => CTX          :MSTORE(lastCtxUsed)
+    CTX                 :MSTORE(currentCTX)
     1                   :MSTORE(isCreateContract)
+    1                   :MSTORE(isCreate)
     $ => A              :MLOAD(originAuxCTX)
     A                   :MSTORE(originCTX)
+    C => GAS
+                        :CALL(computeGasSendCall)
+    $ => CTX            :MLOAD(originCTX)
+    GAS - A             :MSTORE(gasCTX)
+    $ => CTX            :MLOAD(currentCTX)
+    A => GAS
     B                   :MSTORE(txSrcAddr)
     B                   :MSTORE(txSrcOriginAddr)
-    SR                  :MSTORE(initSR)
     ; TODO is not encesesaary to load and store GAS, bc is global var
-    C => GAS
                         :CALL(copySP)
     B => A
+    ; get nonce & update SR
     %SMT_KEY_NONCE => B                                                                                  ; Constant for nonce
     0 => C                                                                                  ; 3rd parameter does not apply to nonce
     $ => B              :SLOAD
     B                   :MSTORE(txNonce)
+    B + 1 => D
+    %SMT_KEY_NONCE => B
+    0 => C
+    $ => SR             :SSTORE
+    SR                  :MSTORE(initSR)
                         :CALL(getLenBytes)
     A                   :MSTORE(lengthNonce)
     $ => A              :MLOAD(argsLengthCall)
@@ -1809,6 +1971,7 @@ opCREATE:
 ; Should be the previous `srcAddress` but not the `txDestAddr`
 ; TODO ALL calls, initSR context var
 opCALL:
+    SP - 7          :JMPN(stackUnderflow)
     SP - 1 => SP
     CTX             :MSTORE(originAuxCTX)
     $ => A          :MLOAD(SP--)
@@ -1864,15 +2027,15 @@ opCALL4:
     A               :MSTORE(storageAddr)
     ${touchedAddress(A,CTX)} => D
     ;gas_cost = base_gas + gas_sent_with_call
-    GAS-100-D*2500 => GAS
+    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
     $ => A          :MLOAD(valueCall)
     A               :MSTORE(txValue)
     0 => B
     $               :EQ,JMPC(opCALLend)
-    GAS - 9000 => GAS
+    GAS - 9000 => GAS    :JMPN(outOfGas)
     ; // TODO: usage of ISEMPTY and add 25000 if needed
     ; if is_empty(target_addr) (forcing a new account to be created)
-    ; GAS - 25000 => GAS
+    ; GAS - 25000 => GAS    :JMPN(outOfGas)
 
 opCALLend:
                     :CALL(computeGasSendCall)
@@ -1890,6 +2053,7 @@ opCALLend:
 ; TODO if theres a delegate call inside a callCode, who is the msg.sender?
 ; should be the caller of the callCode? ( but we do not store this info yet)
 opCALLCODE: ; TODO check staticCall
+    SP - 7          :JMPN(stackUnderflow)
     SP - 1 => SP
     CTX             :MSTORE(originAuxCTX)
     $ => A          :MLOAD(SP--)
@@ -1940,12 +2104,12 @@ opCALLCODE3:
     A               :MSTORE(txDestAddr)
     ${touchedAddress(A,CTX)} => D
     ;gas_cost = base_gas + gas_sent_with_call
-    GAS-100-D*2500 => GAS
+    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
     $ => A          :MLOAD(valueCall)
     A               :MSTORE(txValue)
     A - 1           :JMPN(opCALLCODEend)
     ; Substract gas if the call has value
-    GAS - 9000 => GAS
+    GAS - 9000 => GAS        :JMPN(outOfGas)
     ; TODO: check gas_sent_with_call
 
 opCALLCODEend:
@@ -1964,6 +2128,7 @@ opCALLCODEend:
 ; // TODO: Redo to copy "return buffer"
 ;TODO RETURN + 32 bytes
 opRETURN:
+    SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => E          :MLOAD(SP--) ;offset
     $ => C          :MLOAD(SP)   ;length
@@ -1978,7 +2143,7 @@ opRETURN:
     B               :MSTORE(gasRefund)
     $ => B          :MLOAD(gasCTX)
     ; TODO Should be substracted first the gas
-    B + GAS => GAS
+    B + GAS => GAS  :JMPN(outOfGas)
     $ => B          :MLOAD(retOffset)
     ; TODO  Origin memory len != return memory len ?
     $ => CTX        :MLOAD(currentCTX)
@@ -2012,6 +2177,7 @@ opRETURNend:
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     1               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
     $ => E          :MLOAD(lastMemLength)
     $ => B          :MLOAD(memLength)
     B - E           :JMPN(saveMemLength)
@@ -2026,19 +2192,25 @@ opRETURNend2:
 
 opRETURNdeploy:
 ; TODO check what does return?  what assures returned_code_size is correct?
-    GAS - 200 * C => GAS ;code_deposit_cost = 200 * returned_code_size
+    GAS - 200 * C => GAS    :JMPN(outOfGas) ;code_deposit_cost = 200 * returned_code_size
     $ => B          :MLOAD(originCTX)       ;last ctx
     0 - B           :JMPN(opRETURNcreate)
                     :JMP(endCode)
 
 ; TODO: not in RETURN, but in CREATE process
 opRETURNcreate:
+    CTX             :MSTORE(currentCTX)
+    $ => B          :MLOAD(gasRefund)
+    $ => CTX        :MLOAD(originCTX)
+    B               :MSTORE(gasRefund)
+    $ => B          :MLOAD(gasCTX)
+    ; TODO Should be substracted first the gas
+    B + GAS => GAS  :JMPN(outOfGas)
+    $ => B          :MLOAD(retOffset)
+    ; TODO  Origin memory len != return memory len ?
+    $ => CTX        :MLOAD(currentCTX)
     $ => A          :MLOAD(txSrcAddr)
     $ => D          :MLOAD(txNonce)
-    D + 1 => D
-    %SMT_KEY_NONCE => B
-    0 => C
-    $ => SR         :SSTORE
     ; Update contract SR
     $ => A          :MLOAD(createContractAddress)
     %SMT_KEY_NONCE => B                                                                                  ; Constant for nonce
@@ -2062,7 +2234,7 @@ opRETURNcreate:
     $ => A                          :SLOAD                                                  ; Original Balance in E
     $ => B                          :MLOAD(txValue)                                         ; A = E - C
     ; TODO should not be invalid tx, should be revert
-    $                               :LT,JMPC(invalidTx)                                    
+    $                               :LT,JMPC(invalidTx)
     $ => D                          :SUB                                                    ; originalBalance -value in D
     $ => A                          :MLOAD(txSrcAddr)
     0 => B                                                                               ; balance key smt
@@ -2089,9 +2261,11 @@ opRETURNcreateEnd:
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 ; TODO if theres a delegate call, there should be not moveBalances
 opDELEGATECALL:
+    SP - 6          :JMPN(stackUnderflow)
     SP - 1 => SP
     CTX             :MSTORE(originAuxCTX)
     $ => A          :MLOAD(SP--)
@@ -2141,7 +2315,7 @@ opDELEGATECALL3:
     A               :MSTORE(txDestAddr)
     ${touchedAddress(A,CTX)} => D
     ;gas_cost = base_gas + gas_sent_with_call
-    GAS-100-D*2500 => GAS
+    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
                     :CALL(computeGasSendCall)
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
@@ -2161,6 +2335,7 @@ opDELEGATECALLend:
 ; // TODO Check with DElEGATE CALL txDestAddr/txSrcAddr ( same as other calls)
 ; // TODO check revert create
 opCREATE2:
+    SP - 4              :JMPN(stackUnderflow)
     $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
@@ -2173,27 +2348,40 @@ opCREATE2:
     $ => D              :MLOAD(SP)    ;salt
     CTX                 :MSTORE(originAuxCTX)
     $ => B              :MLOAD(txDestAddr)
-    GAS => C
+    GAS - 32000 => GAS  :JMPN(outOfGas)
+    GAS => C            :MSTORE(gasCall)
     SP                  :MSTORE(lastSP)
     PC                  :MSTORE(lastPC)
     ;change new CTX
     $ => A              :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
     A+1 => CTX          :MSTORE(lastCtxUsed)
+    CTX                 :MSTORE(currentCTX)
     1                   :MSTORE(isCreateContract)
+    1                   :MSTORE(isCreate)
     1                   :MSTORE(isCreate2)
     D                   :MSTORE(salt)
     $ => A              :MLOAD(originAuxCTX)
     A                   :MSTORE(originCTX)
+    C => GAS
+                        :CALL(computeGasSendCall)
+    $ => CTX            :MLOAD(originCTX)
+    GAS - A             :MSTORE(gasCTX)
+    $ => CTX            :MLOAD(currentCTX)
+    A => GAS
     B                   :MSTORE(txSrcAddr)
     B                   :MSTORE(txSrcOriginAddr)
     ; TODO is not encesesaary to load and store GAS, bc is global var
-    C => GAS
                         :CALL(copySP)
     B => A
     %SMT_KEY_NONCE => B
     0 => C                                                                                  ; 3rd parameter does not apply to nonce
     $ => B              :SLOAD
     B                   :MSTORE(txNonce)
+    B + 1 => D
+    %SMT_KEY_NONCE => B
+    0 => C
+    $ => SR             :SSTORE
+    SR                  :MSTORE(initSR)
                         :CALL(getLenBytes)
     A                   :MSTORE(lengthNonce)
     $ => A              :MLOAD(argsLengthCall)
@@ -2207,6 +2395,7 @@ opCREATE2:
 
 ;TODO same as other calls
 opSTATICCALL:
+    SP - 6          :JMPN(stackUnderflow)
     SP - 1 => SP
     CTX             :MSTORE(originAuxCTX)
     $ => A          :MLOAD(SP--)
@@ -2255,7 +2444,7 @@ opSTATICCALL3:
     A               :MSTORE(storageAddr)
     ${touchedAddress(A,CTX)} => D
     ;gas_cost = base_gas + gas_sent_with_call
-    GAS-100-D*2500 => GAS
+    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
                     :CALL(computeGasSendCall)
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
@@ -2271,6 +2460,7 @@ opSTATICCALL3:
 ; TODO logs, creates (shpoudl revert the call also?), calls(back to initSR)
 ; TODO memExpansion just like Return
 opREVERT:
+    SP - 2          :JMPN(stackUnderflow)
     $ => SR         :MLOAD(initSR)
     SP - 1 => SP
     $ => A          :MLOAD(SP--) ;offset
@@ -2279,10 +2469,11 @@ opREVERT:
     C - 1           :JMPN(opREVERTend)
     C => CTX
     $ => C          :MLOAD(gasCTX)
-    GAS + C => GAS
+    GAS + C => GAS  :JMPN(outOfGas)
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     0               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 opREVERTend:
@@ -2295,7 +2486,7 @@ opSELFDESTRUCT:
     $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPN(invalidStaticTx)
     24000               :MSTORE(gasRefund)
-    GAS - 5000 => GAS
+    GAS - 5000 => GAS   :JMPN(outOfGas)
 
     ; clean bytecode
     $ => A              :MLOAD(txDestAddr)
@@ -2313,17 +2504,17 @@ opSELFDESTRUCT:
     E => D              ; contract balance in D
 
     ; read receiver
-    SP - 1 => SP
+    SP - 1 => SP        :JMPN(stackUnderflow)
     $ => A              :MLOAD(SP)
 
     ; gas: check receiver is empty
     A => E
                         :CALL(ISEMPTY)
-    GAS - 25000 * E => GAS
+    GAS - 25000 * E => GAS    :JMPN(outOfGas)
 
     ; gas: check touched address
     ${touchedAddress(A,CTX)} => E
-    GAS - 2600 * E => GAS
+    GAS - 2600 * E => GAS     :JMPN(outOfGas)
 
     ; read previous balance receiver
     0 => B,C            ; balance key smt
@@ -2368,4 +2559,5 @@ invalidStaticTx:
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     1               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
