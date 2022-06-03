@@ -56,9 +56,6 @@ endCheckChainId:
         $ => A                          :MLOAD(txSrcOriginAddr)
         ${touchedAddress(A,CTX)}
 
-
-; TODO Check intrinsic gas first and invalidate transactoin if gas limit does not cover it
-
 ;;;;;;;;
 ; Check and update Nonce --> //TODO: same as chainID
 ;;;;;;;;
@@ -78,53 +75,30 @@ endCheckChainId:
         $ => SR                         :SSTORE                                                 ; Store the nonce plus one
 
 ;;;;;;;;
-; Buy Gas
+; Intrinsic gas and upfront cost checks
 ;;;;;;;;
 
-        $ => A                          :MLOAD(txGas)                   ; Multiplies the txGas amd the txGasPrice
-        $ => B                          :MLOAD(txGasPrice)
-        ; Mul operation with Arith
-        A                               :MSTORE(arithA)
-        B                               :MSTORE(arithB)
-                                        :CALL(mulARITH)
-        $ => D                          :MLOAD(arithRes1)               ; gas*gasPrice in D
-
-        $ => A                          :MLOAD(txSrcOriginAddr)
-        0 => B,C                                                        ; balance key smt
-        $ => A                          :SLOAD                          ; Original Balance in A
-        D => B
-        ; Balance - intrinsic_gas
+        $ => B                          :MLOAD(txGas)                   ; Multiplies the txGas (gas limit) amd the txGasPrice
+        ; Check batch gas limit is not exceeded by transaction
+        %BATCH_GAS_LIMIT => A
         $                               :LT,JMPC(invalidTx)
-        $ => D                          :SUB                            ; balance - instrinsic_gas in D
-        D => A
-        $ => B                          :MLOAD(txValue)
-        ; Balance - intrinsic_gas - value 
-        $                               :LT,JMPC(invalidTx)             ; If A is a negative value --> invalidTx
-        $ => A                          :MLOAD(txSrcOriginAddr)
-        0 => B,C                        ; bakance key smt
-        $ => SR                         :SSTORE
 
-        ; TODO: create, do not have value
-;;;;;;;;;
-;; Store init state
-;;;;;;;;;
 
-        SR                              :MSTORE(initSR) 
+        ; CHECK INTRINSIC GAS
+        ; gas Limit >= 21k + calldata cost + deployment cost
+        ; Store intrinsic gas at E (21k)
+        21000 => E
+        $ => A                          :MLOAD(isCreateContract)
+        -A                              :JMPN(addDeploymentGasCost)
+                                        :JMP(getCalldataGasCost)
+addDeploymentGasCost:
+        ; Add 32k if tx is a create
+        E + 32000 => E
 
-;;;;;;;;
-; Set the gas
-;;;;;;;;
-        ; TODO check tx has at least 21000 of gas
-        $ => GAS                        :MLOAD(txGas)
-        GAS - 21000 => GAS              :JMPN(invalidTx)
-
-;;;;;;;;
-; Gas calldata
-;;;;;;;;
+getCalldataGasCost:
         $ => A                          :MLOAD(txCalldataLen)
         0 => B
-        $                               :EQ,JMPC(txType)
-        0 => D
+        $                               :EQ,JMPC(endCalldataIntrinsicGas)
         -1 => C
 
 addGas:
@@ -138,32 +112,78 @@ loopBytes:
         32                              :MSTORE(arithB)
                                         :CALL(mulARITH)
         $ => B                          :MLOAD(arithRes1)
-
-        A - B - D - 1                   :JMPN(txType)
+        A - B - D - 1                   :JMPN(endCalldataIntrinsicGas)
         32 - D - 1                      :JMPN(addGas)
-        $ => B                          :MLOAD(SP) ; TODO: mask to get byte per byte
+        $ => B                          :MLOAD(SP)
         ${getByte(B,D)} => B
         D + 1 => D
         B - 1                           :JMPN(add4Gas)
                                         :JMP(add16Gas)
 
 add4Gas:
-        GAS - 4 => GAS                  :JMPN(invalidTx)
+        E + 4 => E
                                         :JMP(loopBytes)
 
 add16Gas:
-        GAS - 16 => GAS                 :JMPN(invalidTx)
+        E + 16 => E
                                         :JMP(loopBytes)
-;;;;;;;;;
-;; Store init state after substracting intrinsic gas
-;;;;;;;;;
+endCalldataIntrinsicGas:
+        ; Compare gas limit >= intrinsic gas
+        $ => A                          :MLOAD(txGas)
+        E => B
+        $                               :LT, JMPC(invalidTx)
+        ; Store calculated gas for later usage
+        E                               :MSTORE(gasCalldata)
 
+        ;CHECK UPFRONT COST
+        ; Get gas Price(B) * gas limit(A)
+        $ => B                          :MLOAD(txGasPrice)
+        ; Mul operation with Arith
+        A                               :MSTORE(arithA)
+        B                               :MSTORE(arithB)
+                                        :CALL(mulARITH)
+        ; gas Price * gas limit in D     
+        $ => D                          :MLOAD(arithRes1)                
+        ; Get caller balance
+        $ => A                          :MLOAD(txSrcOriginAddr)
+        0 => B,C                                                        ; balance key smt
+        ; Caller Balance in C
+        $ => C                          :SLOAD                          
+        $ => B                          :MLOAD(txValue)
+        D                               :MSTORE(arithA)
+        B                               :MSTORE(arithB)
+                                        :CALL(addARITH)
+        ; gas price * gas limit + value in B
+        $ => B                          :MLOAD(arithRes1)
+        ; Caller balance in A               
+        C => A
+        ; Check Balance >= gas price * gas limit + value -> upfront cost
+        $                               :LT,JMPC(invalidTx)
+
+        
+        ; Substract gas Price * gas limit (D) from caller balance (A)
+        C                               :MSTORE(arithA)
+        D                               :MSTORE(arithB)
+                                        :CALL(subARITH)
+        ; Substracted balance result in D
+        $ => D                          :MLOAD(arithRes1)
+        $ => A                          :MLOAD(txSrcOriginAddr)
+        0 => B,C
+        $ => SR                         :SSTORE
+
+        ; TODO: create, do not have value
         SR                              :MSTORE(initSR)
+
+        ; Substract intrinsic gas
+        $ => GAS                        :MLOAD(txGas)
+        $ => A                          :MLOAD(gasCalldata)
+        GAS - A => GAS
 
 txType:
 ;;;;;;;;;;
 ;;;;; Tx type
 ;;;;;;;;;;
+
         $ => A                          :MLOAD(isCreateContract)
         0 - A                           :JMPN(getContractAddress)
         $ => A                          :MLOAD(txDestAddr)
@@ -171,12 +191,6 @@ txType:
         ; // TODO: check "0x000..000" when coming from a CALL
         10 => B
         $                               :LT,JMPC(selectorPrecompiled) ; precompiled smart contracts
-        ; Check if destination address has bytecode to process the tx as a transaction or a call
-        %SMT_KEY_SC_CODE => B
-        0 => C
-        $ => B                          :SLOAD
-        0 => A
-        $                               :EQ,JMPC(moveBalances)
                                         :JMP(callContract)
 
 getContractAddress:
@@ -223,6 +237,7 @@ endContractAddress:
                                         :CALL(SHLarith)
                                         :CALL(SHRarith)
         A                               :MSTORE(createContractAddress)
+        A                               :MSTORE(txDestAddr)
         ; TODO: Check nonce != 0 OR already_bytecode ==> same behaviour as fail constructor
         ; TODO: check CREATE or deployment with constructor reverted
                                         :JMP(deploy)
@@ -280,15 +295,18 @@ create2end:
                                         :CALL(SHLarith)
                                         :CALL(SHRarith)
         A                               :MSTORE(createContractAddress)
+        A                               :MSTORE(txDestAddr)
 
 deploy:
+        ; Move balances if value > 0 just before creating contract (deploy)
+        $ => B                          :MLOAD(txValue)
+        0 => A
+        zkPC+2 => RR
+        $                               :LT, JMPC(moveBalances)
         1024                            :MSTORE(SPr)
         0                               :MSTORE(SPw)
         0 => PC
         0 => SP
-        $ => A                          :MLOAD(isCreate)
-        -A                              :JMPN(readCode)
-        GAS - 32000 => GAS              :JMPN(invalidTx)
                                         :JMP(readCode)
 
 readDeployBytecode:
@@ -313,6 +331,11 @@ readDeployBytecode:
                                         :JMP(@mapping_opcodes + RR)
 
 callContract:
+        ; Move balances if value > 0 just before executing the contract CALL
+        $ => B                          :MLOAD(txValue)
+        0 => A
+        zkPC+2 => RR
+        $                               :LT, JMPC(moveBalances)
         0 => PC
         0 => SP
                                         :JMP(readCode)
@@ -322,8 +345,6 @@ readByteCode:
         %SMT_KEY_SC_CODE => B
         0 => C
         $ => A                          :SLOAD
-        ${getBytecodeLength(A)} => B
-        B - PC                          :JMPN(endByteCode) ; // TODO: should be removed
         ${getBytecode(A,PC)} => B
         B => RR
         ${eventLog(onOpcode)}
@@ -359,44 +380,11 @@ endDeploy:
 
 endByteCode:
 
-moveBalances:
-
-;;;;;;;;
-; evmCALL (Move Balances) ; TODO: move balances before processing
-;;;;;;;;
-
-        ; Decrement original balance
-        $ => A                          :MLOAD(txSrcAddr)
-        0 => B,C                                                                                ; balance key smt
-        $ => A                          :SLOAD                                                  ; Original Balance in E
-        $ => B                          :MLOAD(txValue)                                         ; A = E - C
-        $                               :LT,JMPC(invalidTx)
-        $ => D                          :SUB                                                    ; originalBalance -value in D
-        $ => A                          :MLOAD(txSrcAddr)
-        0 => B                                                                                  ; balance key smt
-        $ => SR                         :SSTORE
-
-        ; Increment destination balance
-        $ => A                          :MLOAD(txDestAddr)
-        0 => B                                                                                  ; balance key smt
-        $ => C                          :SLOAD                                                  ; Original Balance in E
-        $ => A                          :MLOAD(txValue)                                         ; E = A + C
-        ; Add operation with Arith
-        A                               :MSTORE(arithA)
-        C                               :MSTORE(arithB)
-                                        :CALL(addARITH)
-        $ => D                          :MLOAD(arithRes1)
-
-        $ => A                          :MLOAD(txDestAddr)
-        0 => B,C                        ; balance key smt
-        $ => SR                         :SSTORE
-
-
+handleGas:
 
 ;;;;;;;;
 ; Refund GAS
 ;;;;;;;;
-
         0 => A
         $ => B                          :MLOAD(gasRefund)
         B - 1                           :JMPN(refundGas)
