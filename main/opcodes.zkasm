@@ -1009,13 +1009,20 @@ saveMemLength:
 opMSTORE8:
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => E          :MLOAD(SP--)                ;offset
-    $ => A          :MLOAD(SP)                  ;value
-    1 => C
-    32 - C => D
-                    :CALL(SHLarith)
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX)
+    $ => B          :MLOAD(SP--)                ;offset
+    0x200000 => A
+    $               :LT,JMPC(errorMLOADMSTORE)
+    B => A
+    ${A >> 5} => E          ; ${A >> 5} -> E (*)
+    ${A & 0x1F} => C        ; ${A & 0x1F} -> C
+    0x0FFFF - E     :JMPN(errorMLOADMSTORE)
+    31-C            :JMPN(errorMLOADMSTORE)
+    E*32+C          :ASSERT
+    $ => B          :MLOAD(SP)                  ;value
+    $ => A          :MLOAD(MEM:E) ; read M0
+    ${memAlignWR8_W0(A,B,C)} => D  ; no trust calculate W0
+    B               :MEM_ALIGN_WR8 ; only use LSB of B, rest of bytes could be non zero.
+    D               :MSTORE(MEM:E)     ; write W0
     GAS - 3 => GAS  :JMPN(outOfGas)
     $ => B          :MLOAD(memLength)
     B - E           :JMPN(saveMemLength)
