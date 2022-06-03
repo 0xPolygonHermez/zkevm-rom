@@ -410,8 +410,8 @@ opSHA3:
     $ => A          :MLOAD(arithRes1)
     GAS - A => GAS  ; dynamic_gas = dynamic_gas = 6 * minimum_word_size + memory_expansion_cost
     ; new hash id
-    $ => B           :MLOAD(lastHashIdUsed)
-    B + 1 => B       :MSTORE(lastHashIdUsed)
+    $ => B           :MLOAD(lastHashKIdUsed)
+    B + 1 => B       :MSTORE(lastHashKIdUsed)
     32 => D
     ; A new hash with position 0 is started
     0 => HASHPOS
@@ -421,7 +421,7 @@ opSHA3Loop:
     C - 32          :JMPN(opSHA3Final)
                     :CALL(MLOAD32)
     E => B
-    $ => E          :MLOAD(lastHashIdUsed)
+    $ => E          :MLOAD(lastHashKIdUsed)
     A               :HASHK(E)
     B => E
     C - 32 => C
@@ -430,12 +430,12 @@ opSHA3Final:
                     :CALL(MLOADX)
     32 - C => D
                     :CALL(SHRarith)
-    $ => E          :MLOAD(lastHashIdUsed)
+    $ => E          :MLOAD(lastHashKIdUsed)
     C => D
     A               :HASHK(E)
 
 opSHA3End:
-    $ => E          :MLOAD(lastHashIdUsed)
+    $ => E          :MLOAD(lastHashKIdUsed)
     HASHPOS         :HASHKLEN(E)
     $ => A          :HASHKDIGEST(E)
     A               :MSTORE(SP++)
@@ -783,8 +783,8 @@ opEXTCODEHASH:
     $ => A          :SLOAD
     $${p = 0}
     ${getBytecodeLength(A)} => C
-    $ => E           :MLOAD(lastHashIdUsed)
-    E+1 => E         :MSTORE(lastHashIdUsed)
+    $ => E           :MLOAD(lastHashKIdUsed)
+    E+1 => E         :MSTORE(lastHashKIdUsed)
     ; A new hash with position 0 is started
     0 => HASHPOS
 
@@ -819,8 +819,8 @@ opBLOCKHASH:
     B - A - 1       :JMPN(opBLOCKHASHzero)
     
     ; Create key for the batch hash mapping key
-    $ => E          :MLOAD(lastHashIdUsed)
-    E+1 => E        :MSTORE(lastHashIdUsed)
+    $ => E          :MLOAD(lastHashKIdUsed)
+    E+1 => E        :MSTORE(lastHashKIdUsed)
     ; A new hash with position 0 is started
     0 => HASHPOS
     32 => D
@@ -1114,11 +1114,20 @@ opJUMPDEST:
                     :JMP(readCode)
 
 opAuxPUSHA:
-    ${getBytecode(A,PC,D)} => B
-    B                           :MSTORE(SP++)
-    PC + D => PC
     GAS-3 => GAS
-                                :JMP(readCode)
+
+opAuxPushALoop:
+    A - 1                       :JMPN(opAuxPushAFinal)
+    1 => D
+    PC => HASHPOS
+    $ => B                      :HASHP(E)
+    B                           :MSTORE(SP++)
+    PC + 1 => PC
+    A - 1 => A
+                                :JMP(opAuxPushALoop)
+
+opAuxPushAFinal:
+    :JMP(readCode)
 
 opAuxPUSHB:
     SP                          :MSTORE(SPw)
@@ -1155,193 +1164,193 @@ opAuxPUSHC:
                                 :JMP(readCode)
 
 opPUSH1:
-    1 => D
+    1 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH2:
-    2 => D
+    2 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH3:
-    3 => D
+    3 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH4:
-    4 => D
+    4 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH5:
-    5 => D
+    5 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH6:
-    6 => D
+    6 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH7:
-    7 => D
+    7 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH8:
-    8 => D
+    8 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH9:
-    9 => D
+    9 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH10:
-    10 => D
+    10 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH11:
-    11 => D
+    11 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH12:
-    12 => D
+    12 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH13:
-    13 => D
+    13 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH14:
-    14 => D
+    14 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH15:
-    15 => D
+    15 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH16:
-    16 => D
+    16 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH17:
-    17 => D
+    17 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH18:
-    18 => D
+    18 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH19:
-    19 => D
+    19 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH20:
-    20 => D
+    20 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH21:
-    21 => D
+    21 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH22:
-    22 => D
+    22 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH23:
-    23 => D
+    23 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH24:
-    24 => D
+    24 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH25:
-    25 => D
+    25 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH26:
-    26 => D
+    26 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH27:
-    27 => D
+    27 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH28:
-    28 => D
+    28 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH29:
-    29 => D
+    29 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH30:
-    30 => D
+    30 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH31:
-    31 => D
+    31 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)
 
 opPUSH32:
-    32 => D
+    32 => A
     $ => B                          :MLOAD(isCreateContract)
     0 - B                           :JMPN(opAuxPUSHB)
                                     :JMP(opAuxPUSHA)

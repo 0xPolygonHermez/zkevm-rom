@@ -100,7 +100,7 @@ endCheckChainId:
         $ => D          :SUB
         D => A
         $ => B          :MLOAD(txValue)
-        ; Balance - intrinsic_gas - value 
+        ; Balance - intrinsic_gas - value
         $ => C          :LT
         0 - C           :JMPN(invalidTx)                               ; If A is a negative value --> invalidTx
         $ => A                          :MLOAD(txSrcOriginAddr)
@@ -113,7 +113,6 @@ endCheckChainId:
 ;;;;;;;;;
 
         SR                              :MSTORE(initSR)
-
 
 ;;;;;;;;
 ; Set the gas
@@ -187,8 +186,8 @@ getContractAddress:
         ; A new hash with position 0 is started
         0 => HASHPOS
         ; We get a new hashId
-        $ => E                          :MLOAD(lastHashIdUsed)
-        E+1 => E                        :MSTORE(lastHashIdUsed)
+        $ => E                          :MLOAD(lastHashKIdUsed)
+        E+1 => E                        :MSTORE(lastHashKIdUsed)
         $ => A                          :MLOAD(isCreate2)
         0 - A                           :JMPN(create2)
         $ => A                          :MLOAD(txSrcAddr)
@@ -233,7 +232,7 @@ endContractAddress:
 
 create2:
         $ => C                          :MLOAD(txCalldataLen)
-        
+
         ${(C+31)/32} => A
         ; Div operation with Arith
         ${C+31}         :MSTORE(arithA)
@@ -266,8 +265,8 @@ create2end:
         $ => C                          :HASHKDIGEST(E)
         ; A new hash with position 0 is started
         0 => HASHPOS
-        $ => E                          :MLOAD(lastHashIdUsed)
-        E+1 => E                        :MSTORE(lastHashIdUsed)
+        $ => E                          :MLOAD(lastHashKIdUsed)
+        E+1 => E                        :MSTORE(lastHashKIdUsed)
         ;keccak256( 0xff ++ address ++ salt ++ keccak256(init_code))[12:]
         1 => D
         0xff                            :HASHK(E)
@@ -294,6 +293,53 @@ deploy:
         GAS - 32000 => GAS
                                         :JMP(readCode)
 
+callContract:
+        0 => PC
+        0 => SP
+                                        :JMP(checkHashBytecode)
+
+; TODO: Optimitzation: Detect PUSH opcodes, between 0x60 -  and change HASHPOS accordingly
+checkHashBytecode:
+        ; get a new hashPIdP
+        $ => E                          :MLOAD(nextHashPId)
+        E                               :MSTORE(contractHashId)
+        E+1                             :MSTORE(nextHashPId)
+        $ => A                          :MLOAD(txDestAddr)
+        %SMT_KEY_SC_CODE => B
+        0 => C
+        $ => A                          :SLOAD
+        A                               :MSTORE(hashContractTxDestAddr)
+        0 => HASHPOS
+        1 => D
+        ${getBytecodeLength(A)} => B    :JMP(checkHashBytecodeLoop)
+
+checkHashBytecodeLoop:
+        B - 1 - HASHPOS                         :JMPN(checkHashBytecodeEnd) ; finish reading bytecode
+        ${getBytecode(A, HASHPOS, 1)}           :HASHP(E)                   ; hash contract bytecode
+                                                :JMP(checkHashBytecodeLoop)
+
+checkHashBytecodeEnd:
+        HASHPOS                         :MSTORE(bytecodeLen)
+        HASHPOS                         :HASHPLEN(E)
+        $ => E                          :HASHPDIGEST(E)
+        ; check hash computed matches hash in the smt leaf
+        A                               :MLOAD(hashContractTxDestAddr)
+        E                               :ASSERT
+                                        :JMP(readCode)
+
+readCode:
+        $ => A                          :MLOAD(isCreateContract)
+        0 - A                           :JMPN(readDeployBytecode)
+                                        :JMP(readByteCode)
+
+readByteCode:
+        $ => E                          :MLOAD(contractHashId) ; index
+        PC => HASHPOS
+        1 => D
+        $ => RR                         :HASHP(E)
+        PC + 1 => PC
+                                        :JMP(@mapping_opcodes + RR)
+
 readDeployBytecode:
         SP                              :MSTORE(SPw)
         $ => SP                         :MLOAD(SPr)
@@ -310,32 +356,10 @@ readDeployBytecode:
         B - PC                          :JMPN(endDeploy)
         $ => A                          :MLOAD(SP)
         $ => SP                         :MLOAD(SPw)
-        ${getByte(A,C)} => B
+        ${getByte(A,C)} => B            ; TODO: not safe. use masks. (SHRArith + SHLArith)
         B => RR
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
-
-callContract:
-        0 => PC
-        0 => SP
-                                        :JMP(readCode)
-
-readByteCode:
-        $ => A                          :MLOAD(txDestAddr)
-        %SMT_KEY_SC_CODE => B
-        0 => C
-        $ => A                          :SLOAD
-        ${getBytecodeLength(A)} => B
-        B - PC                          :JMPN(endByteCode) ; // TODO: should be removed
-        ${getBytecode(A,PC)} => B
-        B => RR
-        PC + 1 => PC
-                                        :JMP(@mapping_opcodes + RR)
-
-readCode:
-        $ => A                          :MLOAD(isCreateContract)
-        0 - A                           :JMPN(readDeployBytecode)
-                                        :JMP(readByteCode)
 
 endCode:
         $ => A                          :MLOAD(isCreateContract)
