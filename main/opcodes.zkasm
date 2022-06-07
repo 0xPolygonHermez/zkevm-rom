@@ -1165,11 +1165,11 @@ opJUMP:
     :JMP(checkJumpDest)
 
 opJUMPI:
-    SP - 2 => SP            :JMPN(stackUnderflow)
-    $ => B                  :MLOAD(SP)
-    GAS - 10 => GAS         :JMPN(outOfGas)
+    SP - 2 => SP                    :JMPN(stackUnderflow)
+    $ => B                          :MLOAD(SP)
+    GAS - 10 => GAS                 :JMPN(outOfGas)
     0 => A
-    $                              :EQ, JMPC(readCode)
+    $                               :EQ, JMPC(readCode)
     SP + 1 => SP
     $ => PC                         :MLOAD(SP--) ;
     ; Check PC is a JUMPDEST
@@ -1177,16 +1177,16 @@ opJUMPI:
 
 checkJumpDest:
     ; If it is a deploy we have to check the data from the calldata (not the bytecode)
-    $ => A                           :MLOAD(isCreateContract)
-    -A                               :JMPN(checkJumpDestDeployment)
-    $ => A                           :MLOAD(txDestAddr)
+    $ => A                          :MLOAD(isCreateContract)
+    -A                              :JMPN(checkJumpDestDeployment)
+    $ => A                          :MLOAD(txDestAddr)
     %SMT_KEY_SC_CODE => B
     $ => A                          :SLOAD
     0 => B
     ${getBytecode(A,PC)} => A
     0x5B => B
     $                               :EQ, JMPC(readCode)
-                                    :JMP(invalidTx)
+                                    :JMP(revertTx)
 checkJumpDestDeployment:
     PC                              :MSTORE(arithA)
     32                              :MSTORE(arithB)
@@ -1201,7 +1201,7 @@ checkJumpDestDeployment:
     ${getByte(A,C)} => A
     0x5B => B
     $                               :EQ, JMPC(readCode)
-                                    :JMP(invalidTx)
+                                    :JMP(revertTx)
 
 ; // TODO: check in YUL
 opPC:
@@ -2082,11 +2082,11 @@ opCALL4:
     GAS - 25000*E => GAS :JMPN(outOfGas)
 
 opCALLend:
-    ; Add estipend (2300) in case of tx with value
-    GAS + 2300*C => GAS
                     :CALL(computeGasSendCall)
+    ; Add estipend (2300) in case of tx with value
+    A + 2300*C => A
     $ => CTX        :MLOAD(originCTX)
-    GAS - A         :MSTORE(gasCTX)
+    GAS - A + 2300*C:MSTORE(gasCTX)
     $ => CTX        :MLOAD(currentCTX)
     
     A => GAS
@@ -2102,33 +2102,55 @@ opCALLCODE: ; TODO check staticCall
     SP - 7          :JMPN(stackUnderflow)
     SP - 1 => SP
     CTX             :MSTORE(originAuxCTX)
+    ; Store gas call
     $ => A          :MLOAD(SP--)
     A               :MSTORE(gasCall)
+    ; Store address call
     $ => A          :MLOAD(SP--)
     A               :MSTORE(addrCall)
+    ; Store value call
     $ => A          :MLOAD(SP--)
     A               :MSTORE(valueCall)
-    $ => A          :MLOAD(SP--)
-    A               :MSTORE(argsOffsetCall)
-    $ => B          :MLOAD(SP--)
-    B               :MSTORE(argsLengthCall)
-    ${A + B} => A
-    $ => C          :MLOAD(SP--)
-    C               :MSTORE(retOffset)
-    $ => B          :MLOAD(SP)
-    B               :MSTORE(retLength)
-    ${C + B} => B
-    $ => C          :LT
-    C - 1           :JMPN(opCALLCODE2)
-    B => A
+    ; If is static and value is not 0 -> revert
+    $ => B          :MLOAD(iSstaticCall)
+    B - 1           :JMPN(opCALLCODE2)
+    0 - A           :JMPN(invalidStaticTx)
 
 opCALLCODE2:
-    A => E
-    $ => B          :MLOAD(memLength)
-    E - B           :JMPN(opCALLCODE3)
-                    :CALL(saveMem)
+    ; Store bytes offset int the memory, the calldata of the subcontext
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(argsOffsetCall)
+    ; Byte size to copy, size of the calldata of the subcontext
+    $ => C          :MLOAD(SP--)
+    C               :MSTORE(argsLengthCall)
+    ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
+    $ => B          :MLOAD(SP--)
+    B               :MSTORE(retOffset)
+    ; Store byte size to copy (size of the return data).
+    $ => D          :MLOAD(SP)
+    D               :MSTORE(retLength)
+    ; Access with zero length will not extend the memory
+    ; Add operation with Arith
+    D               :MSTORE(arithA)
+    C               :MSTORE(arithB)
+                    :CALL(addARITH)
+    $ => A          :MLOAD(arithRes1)
+    0 => B
+    $               :EQ, JMPC(opCALLCODE4)
+
+    $ => A          :MLOAD(argsOffsetCall)
+    ${A + C} => A   ; last memory pointer call
+    $ => B          :MLOAD(retOffset)
+    ${B + D} => B   ; last memory pointer return
+    $ => C          :LT, JMPC(opCALLCODE3)
+    B => A
 
 opCALLCODE3:
+    A => E
+    $ => B          :MLOAD(memLength)
+    E - B           :JMPN(opCALLCODE4) ; last memory pointer - currentMemLen
+                    :CALL(saveMem)
+opCALLCODE4:
     $ => B          :MLOAD(txDestAddr)
     $ => C          :MLOAD(txSrcAddr)
     $ => D          :MLOAD(txSrcOriginAddr)
@@ -2145,29 +2167,35 @@ opCALLCODE3:
     E               :MSTORE(storageAddr)
     D               :MSTORE(txSrcOriginAddr)
     SR              :MSTORE(initSR)
-    ${copyTouchedAddress(A,CTX)}
+    ${copyTouchedAddress(A,CTX)} ;// TODO: Check security copy same addresses
+    ; // TODO: copyTouchedAddress once the depth CTX is returned
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
+
+    ; If addr in touched addres D = 0, else D = 1
     ${touchedAddress(A,CTX)} => D
-    ;gas_cost = base_gas + gas_sent_with_call
+
+    ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost
+    ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
     GAS-100-D*2500 => GAS    :JMPN(outOfGas)
-    $ => A          :MLOAD(valueCall)
-    A               :MSTORE(txValue)
-    A - 1           :JMPN(opCALLCODEend)
+    ; Calculate positive_value_cost, if value call > 0 -> 9000
+    $ => B                   :MLOAD(valueCall)
+    B                        :MSTORE(txValue)
+    0 => A
+    $ => C                   :LT
     ; Substract gas if the call has value
-    GAS - 9000 => GAS        :JMPN(outOfGas)
-    ; TODO: check gas_sent_with_call
+    GAS - 9000*C => GAS      :JMPN(outOfGas)
 
 opCALLCODEend:
                     :CALL(computeGasSendCall)
+    ; Add estipend (2300) in case of tx with value
+    A + 2300*C => A
     $ => CTX        :MLOAD(originCTX)
-    GAS - A         :MSTORE(gasCTX)
+    GAS - A + 2300*C:MSTORE(gasCTX)
     $ => CTX        :MLOAD(currentCTX)
     A => GAS
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txCalldataLen)
-    $ => E          :MLOAD(argsOffsetCall) ;offset
-    $ => C          :MLOAD(argsLengthCall) ;length
                     :CALL(copySP)
                     :JMP(txType)
 

@@ -406,10 +406,9 @@ divARITH:
 
     $ => E          :MLOAD(arithA)
     $ => A          :MLOAD(arithB)
-    ; Check A is not zero
+    ; Check denominator(A) is not zero
     0 => B
-    $ => B          :EQ
-    -B              :JMPN(zeroDiv)
+    $ => B          :EQ, JMPC(zeroDiv)
     ${E%A} => C
     ${E/A} => B
     0 => D
@@ -418,9 +417,10 @@ divARITH:
     B               :MSTORE(arithRes1)
     C               :MSTORE(arithRes2)
 
-    ; check remainder < numToDiv
+    ; check remainder < dividend
     ; Add one to check also the case where remainder = numToDiv
-    C + 1 => B
+    E => A
+    C => B
     $               :LT, JMPC(invalidTx)
     zkPC+1 => RR    :JMP(loadTmp)
     $ => RR         :MLOAD(tmpZkPC)
@@ -601,6 +601,7 @@ outOfGasEnd:
     0 => GAS
                     :JMP(sendGasSeq)
 
+revertTx:
 stackUnderflow:
 stackOverflow:
     ;revert all state changes
@@ -669,7 +670,7 @@ invalidCall:
         $ => SR                         :MLOAD(initSR)
         $ => A                          :MLOAD(originCTX)
         0 => B
-        $                               :EQ,JMPC(processTxEnd)
+        $                               :EQ,JMPC(handleGas)
         A => CTX
         $ => A                          :MLOAD(gasCTX)
         GAS + A => GAS
