@@ -1,5 +1,6 @@
 INCLUDE "map-opcodes.zkasm"
 INCLUDE "precompiled/selector.zkasm"
+INCLUDE "../node_modules/@polygon-hermez/zk_ecrecover/src/ecrecover.zkasm"
 
 processTx:
         ; Get sigDataSize (VAR CTX)
@@ -13,11 +14,14 @@ processTx:
 ;;;;;;;;;
 
         ; Check the signature
+        $ => A                          :MLOAD(lastHashIdUsed)
+        A + 1                           :MSTORE(lastHashIdUsed)
+        A + 1                           :MSTORE(ecrecover_lastHashIdUsed)
         $ => A                          :HASHKDIGEST(E)
         $ => B                          :MLOAD(txR)
         $ => C                          :MLOAD(txS)
         $ => D                          :MLOAD(txV)
-        $ => A                          :ECRECOVER
+                                        :CALL(ecrecover)
         ; Check result is non-zero
         0 => B
         $                               :EQ,JMPC(invalidTx)
