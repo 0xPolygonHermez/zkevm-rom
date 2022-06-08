@@ -120,11 +120,7 @@ MSTORE32:
                     :JMP(errorMLOADMSTORE)
 
 initMSTORE:
-    ${A >> 5} => E          ; ${A >> 5} -> E (*)
-    ${A & 0x1F} => C        ; ${A & 0x1F} -> C
-    0x0FFFF - E     :JMPN(errorMLOADMSTORE)
-    31-C            :JMPN(errorMLOADMSTORE)
-    E*32+C          :ASSERT
+    zkPC+1 => RR    :JMP(offsetUtil)
     $ => B          :MLOAD(isMSTOREX)
     B - 1           :JMPN(finalMSTORE)
     -C              :JMPN(MSTOREX2)
@@ -232,11 +228,7 @@ MLOAD32:
                     :JMP(errorMLOADMSTORE)
 
 initMLOAD:
-    ${A >> 5} => E          ; ${A >> 5} -> E (*)
-    ${A & 0x1F} => C        ; ${A & 0x1F} -> C
-    0x0FFFF - E     :JMPN(errorMLOADMSTORE)
-    31-C            :JMPN(errorMLOADMSTORE)
-    E*32+C          :ASSERT
+    zkPC+1 => RR    :JMP(offsetUtil)
     -C              :JMPN(memAlignOptionMLOAD)
 
     $ => A          :MLOAD(MEM:E)
@@ -610,4 +602,15 @@ stackErrorEnd:
     ;save Root and jump to send gas to sequencer
     0 => GAS
                     :JMP(sendGasSeq)
-                    :JMP(readCode)
+
+;Get offset/32 & offset%32
+;@in A offset
+;@out E offset/32
+;out C offset%32
+offsetUtil:
+    ${A >> 5} => E          ; ${A >> 5} -> E (*)
+    ${A & 0x1F} => C        ; ${A & 0x1F} -> C
+    0x0FFFF - E     :JMPN(stackUnderflow)
+    31-C            :JMPN(stackUnderflow)
+    E*32+C          :ASSERT
+                    :RETURN
