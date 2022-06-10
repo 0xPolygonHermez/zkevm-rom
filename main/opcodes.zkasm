@@ -551,6 +551,7 @@ opCALLDATALOAD:
                     :CALL(divARITH)
     $ => B          :MLOAD(arithRes1)
     $ => A          :MLOAD(arithRes2)
+    
     0 - A           :JMPN(opCALLDATALOAD2)
     SP => C
     1024 + B => SP
@@ -794,8 +795,13 @@ opRETURNDATACOPY:
     $ => B          :MLOAD(SP--)            ;offset - offset in return data
     ;TODO: offset is only offset or returndata + offset?
     $ => C          :MLOAD(retOffset)       ;RETURNDATA
-    B + C => B                              ;RETURNDATA[offset:offset+length]
+    B + C => E                              ;RETURNDATA[offset:offset+length]
     $ => C          :MLOAD(SP)              ;length - length return data
+    ; if retdataOffset + dataLen > retDataSize -> OOG
+    $ => A          :MLOAD(retLength)
+    B + C => B
+    $               :LT, JMPC(outOfGas)
+    E => B
     GAS - 3 => GAS  :JMPN(outOfGas)
     ;${3*((C+31)/32)}
     C+31 => A
@@ -811,7 +817,7 @@ opRETURNDATACOPY:
                     :CALL(mulARITH)
     $ => A          :MLOAD(arithRes1)
     GAS - A => GAS  :JMPN(outOfGas) 
-    B + C           :MSTORE(lastMemLength)
+    D + C           :MSTORE(lastMemLength)
 
 opRETURNDATACOPYinit:
     C - 1           :JMPN(opRETURNDATACOPYend)
@@ -958,7 +964,7 @@ opCHAINID:
 
 ; // TODO: check delegate call
 opSELFBALANCE:
-    $ => A          :MLOAD(txDestAddr)
+    $ => A          :MLOAD(storageAddr)
     0 => B,C        ; balance key smt
     $ => D          :SLOAD
     D               :MSTORE(SP++)
@@ -1827,7 +1833,7 @@ opLOG0:
     E + C               :MSTORE(lastMemLength)
     0                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
-    GAS - 8 * C => GAS    :JMPN(outOfGas)               ; add gas depending on data bytes
+    GAS - 8 * C => GAS  :JMPN(outOfGas)                 ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
     B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
                         :JMP(opLOGLoop)
@@ -2047,6 +2053,7 @@ opCALL3:
 opCALL4:
     $ => B          :MLOAD(txDestAddr)
     $ => D          :MLOAD(txSrcOriginAddr)
+    $ => C          :MLOAD(storageAddr)
     SP              :MSTORE(lastSP)
     PC              :MSTORE(lastPC)
     ;change new CTX
@@ -2055,7 +2062,7 @@ opCALL4:
     CTX             :MSTORE(currentCTX)
     $ => A          :MLOAD(originAuxCTX)
     A               :MSTORE(originCTX)
-    B               :MSTORE(txSrcAddr)
+    C               :MSTORE(txSrcAddr)
     D               :MSTORE(txSrcOriginAddr)
     SR              :MSTORE(initSR)
     ${copyTouchedAddress(A,CTX)} ; // TODO: Check security copy same addresses
@@ -2214,6 +2221,7 @@ opRETURN:
     CTX             :MSTORE(currentCTX)
     $ => B          :MLOAD(gasRefund)
     $ => CTX        :MLOAD(originCTX)
+    C               :MSTORE(retLength)
     B               :MSTORE(gasRefund)
     $ => B          :MLOAD(gasCTX)
     ; TODO Should be substracted first the gas
@@ -2428,7 +2436,6 @@ opCREATE2:
     A => GAS
     B                   :MSTORE(txSrcAddr)
     B                   :MSTORE(txSrcOriginAddr)
-    ; TODO is not encesesaary to load and store GAS, bc is global var
                         :CALL(copySP)
     B => A
     %SMT_KEY_NONCE => B
@@ -2522,10 +2529,13 @@ opREVERT:
     $ => SR         :MLOAD(initSR)
     SP - 1 => SP
     $ => A          :MLOAD(SP--) ;offset
-    $ => B          :MLOAD(SP) ; length
+    $ => B          :MLOAD(SP) ; length    
     $ => C          :MLOAD(originCTX)       ;last ctx
+    ${eventLog(onError, revert)}
     C - 1           :JMPN(opREVERTend)
     C => CTX
+    ;Store ret length
+    B               :MSTORE(retLength)
     $ => C          :MLOAD(gasCTX)
     GAS + C => GAS  :JMPN(outOfGas)
     $ => SP         :MLOAD(lastSP)
@@ -2533,6 +2543,7 @@ opREVERT:
     0               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
+                    
 
 opREVERTend:
                     :JMP(endCode)
@@ -2599,16 +2610,7 @@ opINVALID:
     0 => GAS
     ; if main context, halt execution
     $ => B          :MLOAD(originCTX)       ;last ctx
-    B - 1           :JMPN(opINVALIDend)
-    ; Decrease context and continue execution
-    B => CTX
-    ; Set values from source context, no need to refund GAS because is 0
-    $ => SP         :MLOAD(lastSP)
-    $ => PC         :MLOAD(lastPC)
-                    :JMP(readCode)
-opINVALIDend:
-    ; TODO: should revert to initSR
-                    :JMP(endCode)
+                    :JMP(invalidProcess)
 
 invalidStaticTx:
     $ => CTX        :MLOAD(originCTX)       ;last ctx
