@@ -269,41 +269,43 @@ errorMLOADMSTORE:
 
 ; @info check account is empty ( balance == nonce == code == 0x )
 ; @in E => address
-; @out E => isEmpty
+; @out E => isEmpty => 1 = true, 0 = false
 
-ISEMPTY:
+isEmptyAccount:
     A                           :MSTORE(tmpVarA)
     B                           :MSTORE(tmpVarB)
     C                           :MSTORE(tmpVarC)
     D                           :MSTORE(tmpVarD)
-    ; read balance
+    
     E => A
+
+    ;Check is precompiled
+    10 => B
+    $                               :LT,JMPC(isNotEmptyAccount)
+
+    ; read balance
     0 => B,C                    ; balance key smt
-    $ => A                      :SLOAD
-    $ => A                      :EQ
-    A - 1                       :JMPN(ISEMPTYSet0)
+    $ => B                      :SLOAD
+    0 => A                      
+    $                           :LT,JMPC(isNotEmptyAccount)
 
     ; read nonce
     E => A
     %SMT_KEY_NONCE => B
-    $ => A                      :SLOAD
-    0 => B
-    $ => A                      :EQ
-    A - 1                       :JMPN(ISEMPTYSet0)
+    $ => B                      :SLOAD
+    0 => A                      
+    $                           :LT,JMPC(isNotEmptyAccount)
 
     ; read bytecode
     E => A
     %SMT_KEY_SC_CODE => B
-    $ => A                      :SLOAD
-    0 => B
-    $ => A                      :EQ
-    A - 1                       :JMPN(ISEMPTYSet0)
-
-ISEMPTYSet1:
+    $ => B                      :SLOAD
+    0 => A                      
+    $                           :LT,JMPC(isNotEmptyAccount)
     1 => E
                                 :JMP(ISEMPTYEnd)
 
-ISEMPTYSet0:
+isNotEmptyAccount:
     0 => E
                                 :JMP(ISEMPTYEnd)
 
@@ -349,6 +351,7 @@ saveMem:
     $ => A                      :MLOAD(tmpVarA)
     $ => B                      :MLOAD(tmpVarB)
                                 :RETURN
+
 addARITH:
 
     RR              :MSTORE(tmpZkPC)
@@ -403,18 +406,34 @@ divARITH:
 
     $ => E          :MLOAD(arithA)
     $ => A          :MLOAD(arithB)
+    ; Check denominator(A) is not zero
+    0 => B
+    $ => B          :EQ, JMPC(zeroDiv)
     ${E%A} => C
     ${E/A} => B
     0 => D
-    E               :ARITH ;TODO: Add --> LT(Residu < numToDiv)
+    E               :ARITH
 
     B               :MSTORE(arithRes1)
     C               :MSTORE(arithRes2)
 
+    ; check remainder < dividend
+    ; Add one to check also the case where remainder = numToDiv
+    E => A
+    C => B
+    $               :LT, JMPC(invalidTx)
     zkPC+1 => RR    :JMP(loadTmp)
     $ => RR         :MLOAD(tmpZkPC)
                     :JMP(RR)
 
+zeroDiv:
+    0               :MSTORE(arithRes1)
+    0               :MSTORE(arithRes2)
+
+    zkPC+1 => RR    :JMP(loadTmp)
+    $ => RR         :MLOAD(tmpZkPC)
+                    :JMP(RR)
+                    
 loadTmp:
     $ => A                  :MLOAD(tmpVarA)
     $ => B                  :MLOAD(tmpVarB)
@@ -582,6 +601,7 @@ outOfGasEnd:
     0 => GAS
                     :JMP(sendGasSeq)
 
+revertTx:
 stackUnderflow:
 stackOverflow:
     ;revert all state changes
@@ -614,3 +634,47 @@ offsetUtil:
     31-C            :JMPN(stackUnderflow)
     E*32+C          :ASSERT
                     :RETURN
+
+moveBalances:
+
+;;;;;;;;
+; evmCALL (Move Balances)
+;;;;;;;;
+        ;Check if is a delegate call
+        $ => A                           :MLOAD(isDelegateCall)
+        -A                               :JMPN(endMoveBalances)
+        ; Decrement original balance
+        $ => A                          :MLOAD(txSrcAddr)
+        0 => B,C                                                                                ; balance key smt
+        $ => A                          :SLOAD                                                  ; Original Balance in E
+        $ => B                          :MLOAD(txValue)                                         ; A = E - C
+        ; Check has enough balance to pay the value. In case not, means we are in a CALL/CALLCODE
+        $                               :LT,JMPC(invalidCall)
+        $ => D                          :SUB                                                    ; originalBalance -value in D
+        $ => A                          :MLOAD(txSrcAddr)
+        0 => B                                                                                  ; balance key smt
+        $ => SR                         :SSTORE
+
+        ; Increment destination balance
+        $ => A                          :MLOAD(txDestAddr)
+        0 => B                                                                                  ; balance key smt
+        $ => A                          :SLOAD                                                  ; Original Balance in E
+        $ => B                          :MLOAD(txValue)                                         ; E = A + C
+        $ => D                          :ADD 
+        $ => A                          :MLOAD(txDestAddr)
+        0 => B,C                        ; balance key smt
+        $ => SR                         :SSTORE
+endMoveBalances:
+                                        :RETURN
+invalidCall:
+        $ => SR                         :MLOAD(initSR)
+        $ => A                          :MLOAD(originCTX)
+        0 => B
+        $                               :EQ,JMPC(handleGas)
+        A => CTX
+        $ => A                          :MLOAD(gasCTX)
+        GAS + A => GAS
+        $ => SP                         :MLOAD(lastSP)
+        $ => PC                         :MLOAD(lastPC)
+        0                               :MSTORE(SP++)
+                                        :JMP(readCode)
