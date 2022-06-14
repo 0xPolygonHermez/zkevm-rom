@@ -580,30 +580,22 @@ endFailed:
     0               :MSTORE(SP++)
                     :JMP(readCode)
 
-
 outOfGas:
-    ;revert all state changes, decrease gas spent to caller
-    ;initSR --> balance = balance - gas, nonce + 1
-    $ => SR         :MLOAD(initSR)
-    ;remaining gas = 0
-    $ => A          :MLOAD(originCTX)
-    0 => B
-    $               :EQ,JMPC(outOfGasEnd)
-    A => CTX
-    $ => GAS        :MLOAD(gasCTX)
-    $ => SP         :MLOAD(lastSP)
-    $ => PC         :MLOAD(lastPC)
-    0               :MSTORE(SP++)
-                    :JMP(readCode)
-
-outOfGasEnd:
-    ;save Root and jump to send gas to sequencer
-    0 => GAS
-                    :JMP(sendGasSeq)
-
+    ${eventLog(onError, OOG)}
+                    :JMP(handleError)
 revertTx:
+${eventLog(onError, revert)}
+                    :JMP(handleError)
+invalidProcess:
+${eventLog(onError, invalid)}
+                    :JMP(handleError)
 stackUnderflow:
+${eventLog(onError, underflow)}
+                    :JMP(handleError)
 stackOverflow:
+${eventLog(onError, overflow)}
+                    :JMP(handleError)
+handleError:
     ;revert all state changes
     ;initSR --> balance = balance - gas, nonce + 1
     $ => SR         :MLOAD(initSR)
@@ -612,6 +604,7 @@ stackOverflow:
     0 => B
     $               :EQ,JMPC(stackErrorEnd)
     A => CTX
+    CTX             :MSTORE(currentCTX)
     $ => GAS        :MLOAD(gasCTX)
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
@@ -672,6 +665,7 @@ invalidCall:
         0 => B
         $                               :EQ,JMPC(handleGas)
         A => CTX
+        CTX                             :MSTORE(currentCTX)
         $ => A                          :MLOAD(gasCTX)
         GAS + A => GAS
         $ => SP                         :MLOAD(lastSP)
