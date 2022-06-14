@@ -298,27 +298,64 @@ callContract:
         0 => SP
                                         :JMP(checkHashBytecode)
 
-; TODO: 2 different hashes
-; - A: byte by byte and detect PUSH operations
-; - B: 32 bytes by 32 bytes
-; TODO: handle calls to an EOS addres, whih would have 0x000...000 in the smt leaf
+checkHashBytecode:
         ; get a new hashPIdP
         $ => E                          :MLOAD(nextHashPId)
-        E                               :MSTORE(contractHashId)
-        E+1                             :MSTORE(nextHashPId)
+        E                               :MSTORE(contractHashId_1Byte)
+        E+1                             :MSTORE(contractHashId_Push_Byte)
+        E+2                             :MSTORE(contractHashId_32Byte)
+        E+3                             :MSTORE(nextHashPId)
         $ => A                          :MLOAD(txDestAddr)
         %SMT_KEY_SC_CODE => B
         0 => C
         $ => A                          :SLOAD
         A                               :MSTORE(hashContractTxDestAddr)
         0 => HASHPOS
-        1 => D
-        ${getBytecodeLength(A)} => B    :JMP(checkHashBytecodeLoop)
+        ${getBytecodeLength(A)} => C
+                                        :JMP(checkHashBytecodeLoop)
 
+; add 1 byte into the hash except PUSH operations
 checkHashBytecodeLoop:
-        B - 1 - HASHPOS                         :JMPN(checkHashBytecodeEnd) ; finish reading bytecode
-        ${getBytecode(A, HASHPOS, 1)}           :HASHP(E)                   ; hash contract bytecode
+        C - 1 - HASHPOS                         :JMPN(checkHashBytecodeEnd) ; finish reading bytecode
+        ; read 1 byte
+        ${getBytecode(A, HASHPOS, 1)} => B
+
+        ; store 1 byte in contractHashId_1Byte
+        $ => E                                  :MLOAD(contractHashId_1Byte)
+        1 => D
+        B                                       :HASHP(E)
+        HASHPOS - D => HASHPOS
+
+        $ => D                                  :MLOAD(skipPushBytes)
+        1 - D                                   :JMPN(checkHashBytecodeLoop)
+        ; store 1 byte and if it is PUSH opcode, store its bytes
+        $ => E                                  :MLOAD(contractHashId_Push_Byte)
+        B                                       :HASHP(E)
+        ; check opcode
+        0x7f - B                                :JMPN(checkHashBytecodeLoop)
+        B - 0x60                                :JMPN(checkHashBytecodeLoop)
+        ; add PUSH bytes
+        ; check PUSH does not exceed length. If it does, read only the left bytes
+        B - 0x5f => D
+        D                                       :MSTORE(skipPushBytes)
+        C - 1 - HASHPOS - D                     :JMPN(writeLastBytesHash)
+        ${getBytecode(A, HASHPOS, D)}           :HASHP(E)
+        HASHPOS - D => HASHPOS
                                                 :JMP(checkHashBytecodeLoop)
+
+checkSkipBytes:
+        $ => D                                  :MLOAD(skipPushBytes)
+        D - 1                                   :JMPN(checkHashBytecodeLoop)
+
+                                                :RETURN
+
+
+nextByteHash:
+                                        :JMP(checkHashBytecodeLoop)
+
+writeLastBytesHash:
+
+
 
 checkHashBytecodeEnd:
         HASHPOS                         :MSTORE(bytecodeLen)
