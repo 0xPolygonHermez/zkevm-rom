@@ -1201,17 +1201,14 @@ checkJumpDestDeployment:
                                     :JMP(revertTx)
 
 checkJumpDestDeploymentCreate:
-    PC                              :MSTORE(arithA)
-    32                              :MSTORE(arithB)
-                                    :CALL(divARITH)
-    $ => A                          :MLOAD(arithRes1)
-    $ => C                          :MLOAD(arithRes2)
-    ; Store SP to restore it later
-    SP => D
-    A + 1024 => SP
-    $ => A                          :MLOAD(SP)
-    D => SP
-    ${getByte(A,C)} => A
+    $ => CTX                        :MLOAD(originCTX)
+    $ => E                          :MLOAD(argsOffsetCall)
+    E + PC => E
+    1 => C
+                                    :CALL(MLOADX)
+    $ => CTX                        :MLOAD(currentCTX)
+    31 => D
+                                    :CALL(SHRarith)
     0x5B => B
     $                               :EQ, JMPC(readCode)
                                     :JMP(revertTx)
@@ -1305,7 +1302,7 @@ opAuxPUSHCcreate:
                                 :CALL(SHRarith)
     $ => SP                     :MLOAD(SPw)
     A + B                       :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
+    1024 - SP                   :JMPN(stackOverflow)
     GAS-3 => GAS                :JMPN(outOfGas)
                                 :JMP(readCode)
 
@@ -2014,9 +2011,9 @@ opCREATE:
     $ => A              :MLOAD(valueCall)
     A                   :MSTORE(txValue)
 ; TODO: memory?
-;    $ => B          :MLOAD(memLength)
-;    B - X           :JMPN(saveMemLength)
-                     :JMP(txType)
+;    $ => B             :MLOAD(memLength)
+;    B - X              :JMPN(saveMemLength)
+                        :JMP(txType)
 
 ; // TODO: Check returnOffset and returnSize parameters
 ; // Shpuld be set ? what happen if they are not set ?

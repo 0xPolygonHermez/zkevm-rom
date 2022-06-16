@@ -322,25 +322,19 @@ readDeployBytecode:
                                         :JMP(@mapping_opcodes + RR)
 
 readDeployBytecodeCreate:
-        SP                              :MSTORE(SPw)
-        $ => SP                         :MLOAD(SPr)
-        ; Div operation with Arith
-        PC               :MSTORE(arithA)
-        32               :MSTORE(arithB)
-                        :CALL(divARITH)
-        $ => A          :MLOAD(arithRes1)
-        $ => C          :MLOAD(arithRes2)
-
-        SP + A => SP
-
-        $ => B                          :MLOAD(txCalldataLen)
-        B - PC                          :JMPN(endDeploy)
-        $ => A                          :MLOAD(SP)
-        $ => SP                         :MLOAD(SPw)
-        ${getByte(A,C)} => B
+        $ => CTX                        :MLOAD(originCTX)
+        $ => E                          :MLOAD(argsOffsetCall)
+        E + PC => E
+        1 => C
+                                        :CALL(MLOADX)
+        $ => CTX                        :MLOAD(currentCTX)
+        31 => D
+                                        :CALL(SHRarith)
+        A => B
         B => RR
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
+
 
 callContract:
         ; Move balances if value > 0 just before executing the contract CALL
