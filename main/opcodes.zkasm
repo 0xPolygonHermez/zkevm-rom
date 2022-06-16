@@ -603,13 +603,13 @@ opCALLDATACOPYinit:
     B               :MSTORE(arithA)
     32              :MSTORE(arithB)
                     :CALL(divARITH)
-    $ => D          :MLOAD(arithRes2)            
-    $ => A          :MLOAD(arithRes1)    
+    $ => D          :MLOAD(arithRes2)
+    $ => A          :MLOAD(arithRes1)
     1024 + A => SP
     $ => A          :MLOAD(SP)
                     :CALL(SHLarith)
     A => C
-    $ => A          :MLOAD(arithRes1) 
+    $ => A          :MLOAD(arithRes1)
     1024 + A + 1 => SP
     32 - D => D
     $ => A          :MLOAD(SP)
@@ -1319,17 +1319,27 @@ checkJumpDest:
     $                               :EQ, JMPC(readCode)
                                     :JMP(revertTx)
 checkJumpDestDeployment:
-    PC                              :MSTORE(arithA)
-    32                              :MSTORE(arithB)
-                                    :CALL(divARITH)
-    $ => A                          :MLOAD(arithRes1)
-    $ => C                          :MLOAD(arithRes2)
-    ; Store SP to restore it later
-    SP => D
-    A + 1024 => SP
-    $ => A                          :MLOAD(SP)
-    D => SP
-    ${getByte(A,C)} => A
+    1 => A
+    $ => B                          :MLOAD(isCreate)
+    $                               :EQ,JMPC(checkJumpDestDeploymentCreate)
+    $ => HASHPOS                    :MLOAD(dataStarts)
+    HASHPOS + PC => HASHPOS
+    $ => E                          :MLOAD(batchHashDataId)
+    1 => D
+    $ => A                          :HASHK(E)
+    0x5B => B
+    $                               :EQ, JMPC(readCode)
+                                    :JMP(revertTx)
+
+checkJumpDestDeploymentCreate:
+    $ => CTX                        :MLOAD(originCTX)
+    $ => E                          :MLOAD(argsOffsetCall)
+    E + PC => E
+    1 => C
+                                    :CALL(MLOADX)
+    $ => CTX                        :MLOAD(currentCTX)
+    31 => D
+                                    :CALL(SHRarith)
     0x5B => B
     $                               :EQ, JMPC(readCode)
                                     :JMP(revertTx)
@@ -1381,41 +1391,42 @@ opAuxPUSHA:
                         :JMP(readCode)
 
 opAuxPUSHB:
-    SP                          :MSTORE(SPw)
-    $ => SP                     :MLOAD(SPr) ; SPr == 1024
-    ; Div operation with Arith
-    PC              :MSTORE(arithA)
-    32              :MSTORE(arithB)
-                    :CALL(divARITH)
-    $ => A          :MLOAD(arithRes1)
-    $ => C          :MLOAD(arithRes2)
-    SP + A => SP
-    A - ${(PC+D)/32}            :JMPN(opAuxPUSHC)
-    $ => A                      :MLOAD(SP)
-    $ => SP                     :MLOAD(SPw)
-    ${getByte(A,C,D)} => B
-    B                           :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-    PC + D => PC
-    GAS-3 => GAS                :JMPN(outOfGas)
-                                :JMP(readCode)
+    1 => A
+    $ => B                          :MLOAD(isCreate)
+    $                               :EQ,JMPC(opAuxPUSHBcreate)
+    D - 1 => C
+    0 => A
 
-opAuxPUSHC:
-    32 - C => E
-    $ => A                      :MLOAD(SP++)
-    1024 - SP
-    ${getByte(A,C,E)} => A
-    0 => C
-    PC + D => PC
-    D - E => D
-    $ => B                      :MLOAD(SP)
-    ${getByte(B,C,D)} => B
-                                :CALL(SHRarith)
-    $ => SP                     :MLOAD(SPw)
-    A + B                       :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS                :JMPN(outOfGas)
-                                :JMP(readCode)
+opAuxPUSHBloop:
+    1 => D
+    $ => HASHPOS                    :MLOAD(dataStarts)
+    HASHPOS + PC => HASHPOS
+    PC + 1 => PC
+    $ => E                          :MLOAD(batchHashDataId)
+    $ => B                          :HASHK(E)
+    A + B => A
+    C - 1 => C                      :JMPN(opAuxPUSHBend)
+                                    :CALL(SHLarith)
+                                    :JMP(opAuxPUSHBloop)
+
+opAuxPUSHBend:
+    GAS-3 => GAS                    :JMPN(outOfGas)
+    A                               :MSTORE(SP++)
+                                    :JMP(readCode)
+
+opAuxPUSHBcreate:
+    0 => B
+    $ => CTX                        :MLOAD(originCTX)
+    $ => E                          :MLOAD(argsOffsetCall)
+    E + PC => E
+    D => C
+                                    :CALL(MLOADX)
+    PC + C => PC
+    32 - C => D
+                                    :CALL(SHRarith)
+    $ => CTX                        :MLOAD(currentCTX)
+                                    :JMP(opAuxPUSHBend)
+
 
 opPUSH1:
     1 => D
@@ -2102,7 +2113,7 @@ opCREATE:
     B                   :MSTORE(txSrcAddr)
     B                   :MSTORE(txSrcOriginAddr)
     ; TODO is not encesesaary to load and store GAS, bc is global var
-                        :CALL(copySP)
+    ;                    :CALL(copySP)
     B => A
     ; get nonce & update SR
     %SMT_KEY_NONCE => B                                                                                  ; Constant for nonce
@@ -2121,9 +2132,9 @@ opCREATE:
     $ => A              :MLOAD(valueCall)
     A                   :MSTORE(txValue)
 ; TODO: memory?
-;    $ => B          :MLOAD(memLength)
-;    B - X           :JMPN(saveMemLength)
-                     :JMP(txType)
+;    $ => B             :MLOAD(memLength)
+;    B - X              :JMPN(saveMemLength)
+                        :JMP(txType)
 
 ; // Shpuld be set ? what happen if they are not set ?
 ; // Return buffer should be written always
@@ -2579,7 +2590,8 @@ opCREATE2:
     A => GAS
     B                   :MSTORE(txSrcAddr)
     B                   :MSTORE(txSrcOriginAddr)
-                        :CALL(copySP)
+    ; TODO is not encesesaary to load and store GAS, bc is global var
+    ;                    :CALL(copySP)
     B => A
     %SMT_KEY_NONCE => B
     0 => C                                                                                  ; 3rd parameter does not apply to nonce
