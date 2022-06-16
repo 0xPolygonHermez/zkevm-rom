@@ -1188,6 +1188,19 @@ checkJumpDest:
     $                               :EQ, JMPC(readCode)
                                     :JMP(revertTx)
 checkJumpDestDeployment:
+    1 => A
+    $ => B                          :MLOAD(isCreate)
+    $                               :EQ,JMPC(checkJumpDestDeploymentCreate)
+    $ => HASHPOS                    :MLOAD(dataStarts)
+    HASHPOS + PC => HASHPOS
+    $ => E                          :MLOAD(batchHashDataId)
+    1 => D
+    $ => A                          :HASHK(E)
+    0x5B => B
+    $                               :EQ, JMPC(readCode)
+                                    :JMP(revertTx)
+
+checkJumpDestDeploymentCreate:
     PC                              :MSTORE(arithA)
     32                              :MSTORE(arithB)
                                     :CALL(divARITH)
@@ -1229,33 +1242,57 @@ opJUMPDEST:
 
 opAuxPUSHA:
     ${getBytecode(A,PC,D)} => B
-    B                           :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
+    B                               :MSTORE(SP++)
+    1024 - SP                       :JMPN(stackOverflow)
     PC + D => PC
-    GAS-3 => GAS    :JMPN(outOfGas)
-                                :JMP(readCode)
+    GAS-3 => GAS                    :JMPN(outOfGas)
+                                    :JMP(readCode)
 
 opAuxPUSHB:
+    1 => A
+    $ => B                          :MLOAD(isCreate)
+    $                               :EQ,JMPC(opAuxPUSHBcreate)
+    D - 1 => C
+    0 => A
+
+opAuxPUSHBloop:
+    1 => D
+    $ => HASHPOS                    :MLOAD(dataStarts)
+    HASHPOS + PC => HASHPOS
+    PC + 1 => PC
+    $ => E                          :MLOAD(batchHashDataId)
+    $ => B                          :HASHK(E)
+    A + B => A
+    C - 1 => C                      :JMPN(opAuxPUSHBend)
+                                    :CALL(SHLarith)
+                                    :JMP(opAuxPUSHBloop)
+
+opAuxPUSHBend:
+    GAS-3 => GAS                    :JMPN(outOfGas)
+    A                               :MSTORE(SP++)
+                                    :JMP(readCode)
+
+opAuxPUSHBcreate:
     SP                          :MSTORE(SPw)
     $ => SP                     :MLOAD(SPr) ; SPr == 1024
     ; Div operation with Arith
-    PC              :MSTORE(arithA)
-    32              :MSTORE(arithB)
-                    :CALL(divARITH)
-    $ => A          :MLOAD(arithRes1)
-    $ => C          :MLOAD(arithRes2)
+    PC                          :MSTORE(arithA)
+    32                          :MSTORE(arithB)
+                                :CALL(divARITH)
+    $ => A                      :MLOAD(arithRes1)
+    $ => C                      :MLOAD(arithRes2)
     SP + A => SP
-    A - ${(PC+D)/32}            :JMPN(opAuxPUSHC)
+    A - ${(PC+D)/32}            :JMPN(opAuxPUSHCcreate)
     $ => A                      :MLOAD(SP)
     $ => SP                     :MLOAD(SPw)
     ${getByte(A,C,D)} => B
     B                           :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
+    1024 - SP                   :JMPN(stackOverflow)
     PC + D => PC
     GAS-3 => GAS                :JMPN(outOfGas)
                                 :JMP(readCode)
 
-opAuxPUSHC:
+opAuxPUSHCcreate:
     32 - C => E
     $ => A                      :MLOAD(SP++)
     1024 - SP

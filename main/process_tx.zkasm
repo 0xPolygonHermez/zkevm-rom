@@ -99,26 +99,22 @@ getCalldataGasCost:
         $ => A                          :MLOAD(txCalldataLen)
         0 => B
         $                               :EQ,JMPC(endCalldataIntrinsicGas)
-        -1 => C
 
 addGas:
-        C + 1 => C
-        0 => D
-        1024 + C => SP
+        $ => HASHPOS                    :MLOAD(dataStarts)
+        0 => C
                                         :JMP(loopBytes)
 loopBytes:
         ; Mul operation with Arith
-        C                               :MSTORE(arithA)
-        32                              :MSTORE(arithB)
-                                        :CALL(mulARITH)
-        $ => B                          :MLOAD(arithRes1)
-        A - B - D - 1                   :JMPN(endCalldataIntrinsicGas)
-        32 - D - 1                      :JMPN(addGas)
-        $ => B                          :MLOAD(SP)
-        ; TODO: is not safe here. It should be removed and data should be read from the hash that is built on loadtx_rlp
-        ${getByte(B,D)} => B
-        D + 1 => D
-        B - 1                           :JMPN(add4Gas)
+        A - C - 1                       :JMPN(endCalldataIntrinsicGas)
+        E => B
+        HASHPOS => D
+        1 => D
+        $ => E                          :MLOAD(batchHashDataId)
+        $ => D                          :HASHK(E)
+        B => E
+        C + 1 => C
+        D - 1                           :JMPN(add4Gas)
                                         :JMP(add16Gas)
 
 add4Gas:
@@ -311,6 +307,21 @@ deploy:
                                         :JMP(readCode)
 
 readDeployBytecode:
+        1 => A
+        $ => B                          :MLOAD(isCreate)
+        $                               :EQ,JMPC(readDeployBytecodeCreate)
+        $ => B                          :MLOAD(txCalldataLen)
+        B - PC                          :JMPN(endDeploy)
+        $ => HASHPOS                    :MLOAD(dataStarts)
+        HASHPOS + PC => HASHPOS
+        $ => E                          :MLOAD(batchHashDataId)
+        1 => D
+        $ => B                          :HASHK(E)
+        B => RR
+        PC + 1 => PC
+                                        :JMP(@mapping_opcodes + RR)
+
+readDeployBytecodeCreate:
         SP                              :MSTORE(SPw)
         $ => SP                         :MLOAD(SPr)
         ; Div operation with Arith
