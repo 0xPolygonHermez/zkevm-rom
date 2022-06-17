@@ -14,8 +14,8 @@ processTx:
 ;;;;;;;;;
 
         ; Check the signature
-        $ => A                          :MLOAD(lastHashIdUsed)
-        A + 1                           :MSTORE(lastHashIdUsed)
+        $ => A                          :MLOAD(lastHashKIdUsed)
+        A + 1                           :MSTORE(lastHashKIdUsed)
         A + 1                           :MSTORE(ecrecover_lastHashIdUsed)
         $ => A                          :HASHKDIGEST(E)
         $ => B                          :MLOAD(txR)
@@ -198,8 +198,8 @@ getContractAddress:
         ; A new hash with position 0 is started
         0 => HASHPOS
         ; We get a new hashId
-        $ => E                          :MLOAD(lastHashIdUsed)
-        E+1 => E                        :MSTORE(lastHashIdUsed)
+        $ => E                          :MLOAD(lastHashKIdUsed)
+        E+1 => E                        :MSTORE(lastHashKIdUsed)
         $ => A                          :MLOAD(isCreate2)
         0 - A                           :JMPN(create2)
         $ => A                          :MLOAD(txSrcAddr)
@@ -277,8 +277,8 @@ create2end:
         $ => C                          :HASHKDIGEST(E)
         ; A new hash with position 0 is started
         0 => HASHPOS
-        $ => E                          :MLOAD(lastHashIdUsed)
-        E+1 => E                        :MSTORE(lastHashIdUsed)
+        $ => E                          :MLOAD(lastHashKIdUsed)
+        E+1 => E                        :MSTORE(lastHashKIdUsed)
         ;keccak256( 0xff ++ address ++ salt ++ keccak256(init_code))[12:]
         1 => D
         0xff                            :HASHK(E)
@@ -340,16 +340,54 @@ callContract:
         $                               :LT, JMPC(moveBalances)
         0 => PC
         0 => SP
+                                        :JMP(checkHashBytecode)
+
+checkHashBytecode:
+        $ => A                          :MLOAD(txDestAddr)
+        ; get contract length
+        %SMT_KEY_SC_LENGTH => B
+        0 => C
+        $ => B                          :SLOAD
+        B                               :MSTORE(bytecodeLength)
+        0 => A
+        $                               :EQ, JMPC(opSTOP) ;no bytecode
+
+        $ => A                          :MLOAD(txDestAddr)
+        ; get hash contract
+        %SMT_KEY_SC_CODE => B
+        $ => A                          :SLOAD
+        A                               :MSTORE(hashContractTxDestAddr)
+        0 => HASHPOS
+        1 => D
+        $ => B                          :MLOAD(bytecodeLength)
+
+        ; get a new hashPId
+        $ => E                          :MLOAD(nextHashPId)
+        E                               :MSTORE(contractHashId)
+        E+1                             :MSTORE(nextHashPId)
+
+                                        :JMP(checkHashBytecodeLoop)
+
+checkHashBytecodeLoop:
+        B - 1 - HASHPOS                         :JMPN(checkHashBytecodeEnd) ; finish reading bytecode
+        ${getBytecode(A, HASHPOS, 1)}           :HASHP(E)                   ; hash contract bytecode
+                                                :JMP(checkHashBytecodeLoop)
+
+checkHashBytecodeEnd:
+        HASHPOS                         :HASHPLEN(E)
+        $ => E                          :HASHPDIGEST(E)
+        ; check hash computed matches hash in the smt leaf
+        $ => A                               :MLOAD(hashContractTxDestAddr)
+        E                               :ASSERT
                                         :JMP(readCode)
 
 readByteCode:
-        $ => A                          :MLOAD(txDestAddr)
-        %SMT_KEY_SC_CODE => B
-        0 => C
-        $ => A                          :SLOAD
-        ${getBytecode(A,PC)} => B
-        B => RR
-        ${eventLog(onOpcode)}
+        $ => E                          :MLOAD(contractHashId) ; hash index
+        PC => HASHPOS
+        HASHPOS => B
+        1 => D
+        $ => RR                         :HASHP(E)
+        RR => B
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
 
@@ -364,20 +402,21 @@ endCode:
                                         :JMP(endByteCode)
 
 endDeploy:
-        ; TODO:: increase nonce before reading the contructor opcodes
-        ; Update contract nonce
+        ; set bytecode length
         $ => A                          :MLOAD(createContractAddress)
-        %SMT_KEY_NONCE => B                                                                                  ; Constant for nonce
+        %SMT_KEY_SC_LENGTH => B
+        C => D  ; "endDeploy" is called from opRETURNDeploy which has: C --> length, E --> offset
         0 => C
+        $ => SR         :SSTORE
+        ; set contract nonce to 1
+        %SMT_KEY_NONCE => B                                                                                  ; Constant for nonce
         1 => D
         $ => SR                         :SSTORE
-        ;if txValue != 0 --> move balance to contractAddress
+        ; TODO: if txValue != 0 --> move balance to contractAddress. Probably missing moveBalances CALL.
         A                               :MSTORE(txDestAddr)
-        ; TODO: same as nonce, should be done before
-        ; TODO zkasm should calculate the deployed bytecode
-        ${getHashBytecode(A)} => D ; TODO: chain poseidon to compute hashBytecode. Jordi checks
+        ${getHashBytecode(A)} => D ; TODO: chain poseidon to compute hashBytecode --> utils that
+        ; takes offset (E) and length (C), reads bytes from memory, set bytes into HASHP and gets the hash
         %SMT_KEY_SC_CODE => B
-        0 => C
         $ => SR                         :SSTORE
 
 endByteCode:
