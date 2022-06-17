@@ -459,8 +459,8 @@ opSHA3:
     $ => A          :MLOAD(arithRes1)
     GAS - A => GAS  :JMPN(outOfGas)  ; dynamic_gas = dynamic_gas = 6 * minimum_word_size + memory_expansion_cost
     ; new hash id
-    $ => B           :MLOAD(lastHashIdUsed)
-    B + 1 => B       :MSTORE(lastHashIdUsed)
+    $ => B           :MLOAD(lastHashKIdUsed)
+    B + 1 => B       :MSTORE(lastHashKIdUsed)
     32 => D
     ; A new hash with position 0 is started
     0 => HASHPOS
@@ -470,7 +470,7 @@ opSHA3Loop:
     C - 32          :JMPN(opSHA3Final)
                     :CALL(MLOAD32)
     E => B
-    $ => E          :MLOAD(lastHashIdUsed)
+    $ => E          :MLOAD(lastHashKIdUsed)
     A               :HASHK(E)
     B => E
     C - 32 => C
@@ -479,12 +479,12 @@ opSHA3Final:
                     :CALL(MLOADX)
     32 - C => D
                     :CALL(SHRarith)
-    $ => E          :MLOAD(lastHashIdUsed)
+    $ => E          :MLOAD(lastHashKIdUsed)
     C => D
     A               :HASHK(E)
 
 opSHA3End:
-    $ => E          :MLOAD(lastHashIdUsed)
+    $ => E          :MLOAD(lastHashKIdUsed)
     HASHPOS         :HASHKLEN(E)
     $ => A          :HASHKDIGEST(E)
     A               :MSTORE(SP++)
@@ -659,16 +659,14 @@ opCALLDATACOPYend:
     B - E           :JMPN(saveMemLength)
                     :JMP(readCode)
 
-; missing verification --> hash table needed
 opCODESIZE:
     $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPN(opCODESIZEdep)
     $ => A          :MLOAD(txDestAddr)
-    %SMT_KEY_SC_CODE => B
+    %SMT_KEY_SC_LENGTH => B
     0 => C
     $ => A          :SLOAD
-    ${getBytecodeLength(A)} => B
-    B               :MSTORE(SP++)
+    A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
     GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
@@ -680,44 +678,83 @@ opCODESIZEdep: ;//TODO: create/create2, constructor parameters, initBytcode vs d
     GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
+VAR GLOBAL memOffset
+VAR GLOBAL remainingBytes
+VAR GLOBAL previousValue
+VAR GLOBAL codecopyHashId
+VAR GLOBAL codecopyBytecodeLength
+VAR GLOBAL memInteger
 opCODECOPY:
     SP - 3          :JMPN(stackUnderflow)
     $ => A          :MLOAD(isCreateContract)
-    0 - A           :JMPN(opCALLDATACOPY)
-    $ => A          :MLOAD(txDestAddr)
-    %SMT_KEY_SC_CODE => B
-    0 => C
-    $ => A          :SLOAD
+    0 - A           :JMPN(opCALLDATACOPY) ; //TODO: delegateCall ? use of storageAddr? same in process_tx ?
     SP - 1 => SP
-    $ => E          :MLOAD(SP--) ;destOffset, memory offset
-    $ => B          :MLOAD(SP--) ;offset, bytecode offset
-    $ => C          :MLOAD(SP)   ;length
-    E + C           :MSTORE(lastMemLength)
+    $ => C          :MLOAD(SP--) ;destOffset, memory offset
+    $ => D          :MLOAD(SP--) ;offset, bytecode offset
+    $ => E          :MLOAD(SP)   ;bytecode length
+    C + E           :MSTORE(lastMemLength)
     GAS - 3 => GAS  :JMPN(outOfGas)
-    GAS - ${3*((C+31)/32)} => GAS    :JMPN(outOfGas)
+    GAS - ${3*((E+31)/32)} => GAS    :JMPN(outOfGas)
+    ; check memory limits
+    0x200000 => A
+    C + E => B
+    $               :LT,JMPC(errorMLOADMSTORE)
+    ; init vars for copy the code
+    D => HASHPOS
+    C => A ; memory offset
+    E => B ; bytes to copy
+    $ => D          :MLOAD(contractHashId)
+    D               :MSTORE(codecopyHashId) ; set hashId to get bytes from
+    $ => D          :MLOAD(bytecodeLength)
+    D               :MSTORE(codecopyBytecodeLength) ; set contract bytecode length
+    A               :MSTORE(memOffset)
+    B               :MSTORE(remainingBytes)
 
 opCODECOPYinit:
-    C - 1           :JMPN(opCODECOPYend)
-    C - 32          :JMPN(opCODECOPYfinal)
-    ${getBytecode(A,B,32)} => D
-    D               :MSTORE(bytesToStore)
-                    :CALL(MSTORE32)
-    C - 32 => C
-    B + 32 => B
+    $ => B          :MLOAD(remainingBytes)
+    B - 1           :JMPN(opCODECOPYend)
+    $ => A          :MLOAD(memOffset)
+                    :CALL(offsetUtil) ; E (integer) / C (remaining)
+    E               :MSTORE(memInteger)
+    $ => A          :MLOAD(MEM:E) ; read M0 previous value
+    A               :MSTORE(previousValue)
+                    :CALL(opCODECOPYLoadBytes)
+    $ => A          :MLOAD(previousValue)
+    ${memAlignWR8_W0(A,B,C)} => D  ; no trust calculate W0
+    B               :MEM_ALIGN_WR8 ; only use LSB of B, rest of bytes could be non zero
+    $ => E          :MLOAD(memInteger)
+    D               :MSTORE(MEM:E) ; write W0
+    ; update vars loop
+    $ => B          :MLOAD(remainingBytes)
+    B - 1 => B  ; decrease 1 byte from length
+    B               :MSTORE(remainingBytes)
+    $ => A          :MLOAD(memOffset)
+    A + 1 => A  ; increment offset to write the next byte
+    A               :MSTORE(memOffset)
                     :JMP(opCODECOPYinit)
-
-opCODECOPYfinal:
-    ${getBytecode(A,B,C)} => A
-    32 - C  => D
-                    :CALL(SHLarith)
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX)
 
 opCODECOPYend:
     $ => E          :MLOAD(lastMemLength)
     $ => B          :MLOAD(memLength)
     B - E           :JMPN(saveMemLength)
                     :JMP(readCode)
+
+; @info Load 0 if read bytecode position is above bytecode length
+opCODECOPYLoadBytes:
+    HASHPOS => A
+    $ => B          :MLOAD(codecopyBytecodeLength)
+    B - 1 => B
+    $               :LT, JMPC(readValueBytecode)
+
+readValueBytecode:
+    1 => D
+    $ => E          :MLOAD(codecopyHashId)
+    $ => B          :HASHP(E)   ; read value to write in memory
+                    :RETURN
+
+readZero:
+    0 => B
+                    :RETURN
 
 opGASPRICE:
     $ => A          :MLOAD(txGasPrice)
@@ -726,33 +763,89 @@ opGASPRICE:
     GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
-opEXTCODESIZE: ; // TODO: check precompiled? should return 0?
+opEXTCODESIZE:
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     ${touchedAddress(A,CTX)} => D
-    %SMT_KEY_SC_CODE => B
+    %SMT_KEY_SC_LENGTH => B
     0 => C
     $ => A          :SLOAD
-    ${getBytecodeLength(A)} => B
-    B               :MSTORE(SP++)
+    A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
     GAS-100-D*2500 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
-opEXTCODECOPY: ; // TODO: check precompiled?
+; read hash smt
+; put 32 by 32 bytes in the hashP
+; assert bytes with hash smt
+
+; read byte from hashP and copy into memory
+; over length => set 0's
+VAR GLOBAL tmpContractHashId
+VAR GLOBAL tmpContractLength
+opEXTCODECOPY:
     SP - 4          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--) ;addr
     ${touchedAddress(A,CTX)} => D
+    GAS-100-D*2500 => GAS            :JMPN(outOfGas)
+                    :CALL(opEXTCODECOPYCheckHash)
+    $ => C          :MLOAD(SP--) ;destOffset, memory offset
+    $ => D          :MLOAD(SP--) ;offset, bytecode offset
+    $ => E          :MLOAD(SP)   ;bytecode length
+    C + E           :MSTORE(lastMemLength)
+    GAS - ${3*((E+31)/32)} => GAS    :JMPN(outOfGas)
+    ; check memory limits
+    0x200000 => A
+    C + E => B
+    $               :LT,JMPC(errorMLOADMSTORE)
+    ; init vars for copy the code
+    D => HASHPOS
+    C => A ; memory offset
+    E => B ; bytes to copy
+    $ => D          :MLOAD(tmpContractHashId)
+    D               :MSTORE(codecopyHashId) ; set hashId to get bytes from
+    $ => D          :MLOAD(tmpContractLength)
+    D               :MSTORE(codecopyBytecodeLength) ; set contract bytecode length
+    A               :MSTORE(memOffset)
+    B               :MSTORE(remainingBytes)
+                    :JMP(opCODECOPYinit)
+
+opEXTCODECOPYCheckHash:
+    ; get contract length
+    %SMT_KEY_SC_LENGTH => B
+    0 => C
+    $ => D                          :SLOAD
+    D                               :MSTORE(tmpContractLength)
+    ; get hash contract
     %SMT_KEY_SC_CODE => B
     0 => C
-    $ => A          :SLOAD       ;hash
-    $ => E          :MLOAD(SP--) ;destOffset; memory offset
-    $ => B          :MLOAD(SP--) ;offset ; bytecode offset
-    $ => C          :MLOAD(SP)   ;length
-    E+C             :MSTORE(lastMemLength)
-    GAS-100-D*2500 => GAS           :JMPN(outOfGas)
-    GAS - ${3*((C+31)/32)} => GAS   :JMPN(outOfGas)
+    $ => A          :SLOAD
+    ; get a new hashPId
+    $ => E                          :MLOAD(nextHashPId)
+    E                               :MSTORE(tmpContractHashId)
+    E + 1                           :MSTORE(nextHashPId)
+
+    ; set vars prior to loop
+    D => B
+    0 => HASHPOS
+                                    :JMP(opEXTCODECOPYCheckHashLoop)
+
+; @info bytes are inserted byte by byte
+; TODO: it could be improved by computing how many 32 bytes slots are needed
+opEXTCODECOPYCheckHashLoop:
+        B - 1                                   :JMPN(opEXTCODECOPYCheckHashLoopEnd) ; finish reading bytecode
+        1 => D
+        ${getBytecode(A, HASHPOS, 1)}           :HASHP(E)                   ; add bytes to hash contract bytecode
+        B - 1 => B
+                                                :JMP(opEXTCODECOPYCheckHashLoop)
+
+opEXTCODECOPYCheckHashLoopEnd:
+        HASHPOS                         :HASHPLEN(E)
+        $ => E                          :HASHPDIGEST(E)
+        ; check hash computed matches hash in the smt leaf
+        E                               :ASSERT
+                                        :RETURN
 
 opEXTCODECOPYinit:
     C - 1           :JMPN(opEXTCODECOPYend)
@@ -873,34 +966,48 @@ opEXTCODEHASH:
     %SMT_KEY_SC_CODE => B
     0 => C
     $ => A          :SLOAD
-    $${p = 0}
-    ${getBytecodeLength(A)} => C
-    $ => E           :MLOAD(lastHashIdUsed)
-    E+1 => E         :MSTORE(lastHashIdUsed)
-    ; A new hash with position 0 is started
-    0 => HASHPOS
-
-opEXTCODEHASHinit:
-    32 => D
-    C - 1           :JMPN(opEXTCODEHASHend)
-    C - 32          :JMPN(opEXTCODEHASHfinal)
-    ${getBytecode(A,p,D)} => B ; //TODO: add state machine :READ_BYTECODE(A, P)
-    B               :HASHK(E)
-    C - D => C
-    $${p = p + D}
-                    :JMP(opEXTCODEHASHinit)
-
-opEXTCODEHASHfinal:
-    C => D
-    ${getBytecode(A,p,C)} => B
-    B               :HASHK(E)
-
-opEXTCODEHASHend:
-    HASHPOS         :HASHKLEN(E)
-    $ => A          :HASHKDIGEST(E)
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
+
+; @info opEXTCODEHASHL2 returns the keccak of the bytecode
+; opEXTCODEHASH returns the hash bytecode stored in the smt (poseidon linear hash)
+;opEXTCODEHASHL2:
+;    SP - 1 => SP    :JMPN(stackUnderflow)
+;    $ => A          :MLOAD(SP)
+;    ${touchedAddress(A,CTX)} => D
+;    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
+;    %SMT_KEY_SC_CODE => B
+;    0 => C
+;    $ => A          :SLOAD
+;    $${p = 0}
+;    ${getBytecodeLength(A)} => C
+;    $ => E           :MLOAD(lastHashKIdUsed)
+;    E+1 => E         :MSTORE(lastHashKIdUsed)
+;    ; A new hash with position 0 is started
+;    0 => HASHPOS
+;
+;opEXTCODEHASHinit:
+;    32 => D
+;    C - 1           :JMPN(opEXTCODEHASHend)
+;    C - 32          :JMPN(opEXTCODEHASHfinal)
+;    ${getBytecode(A,p,D)} => B
+;    B               :HASHK(E)
+;    C - D => C
+;    $${p = p + D}
+;                    :JMP(opEXTCODEHASHinit)
+;
+;opEXTCODEHASHfinal:
+;    C => D
+;    ${getBytecode(A,p,C)} => B
+;    B               :HASHK(E)
+;
+;opEXTCODEHASHend:
+;    HASHPOS         :HASHKLEN(E)
+;    $ => A          :HASHKDIGEST(E)
+;    A               :MSTORE(SP++)
+;    1024 - SP       :JMPN(stackOverflow)
+;                    :JMP(readCode)
 
 opBLOCKHASH:
     SP - 1 => SP    :JMPN(stackUnderflow)
@@ -912,8 +1019,8 @@ opBLOCKHASH:
     B - A - 1       :JMPN(opBLOCKHASHzero)
     
     ; Create key for the batch hash mapping key
-    $ => E          :MLOAD(lastHashIdUsed)
-    E+1 => E        :MSTORE(lastHashIdUsed)
+    $ => E          :MLOAD(lastHashKIdUsed)
+    E+1 => E        :MSTORE(lastHashKIdUsed)
     ; A new hash with position 0 is started
     0 => HASHPOS
     32 => D
@@ -1195,6 +1302,7 @@ opJUMPI:
     $                               :EQ, JMPC(readCode)
     SP + 1 => SP
     $ => PC                         :MLOAD(SP--) ;
+    PC => B
     ; Check PC is a JUMPDEST
                                     :JMP(checkJumpDest)
 
@@ -1202,11 +1310,11 @@ checkJumpDest:
     ; If it is a deploy we have to check the data from the calldata (not the bytecode)
     $ => A                          :MLOAD(isCreateContract)
     -A                              :JMPN(checkJumpDestDeployment)
-    $ => A                          :MLOAD(txDestAddr)
-    %SMT_KEY_SC_CODE => B
-    $ => A                          :SLOAD
-    0 => B
-    ${getBytecode(A,PC)} => A
+    PC => HASHPOS
+    HASHPOS => D
+    1 => D
+    $ => E                          :MLOAD(contractHashId) ; hash index
+    $ => A                          :HASHP(E)
     0x5B => B
     $                               :EQ, JMPC(readCode)
                                     :JMP(revertTx)
@@ -1265,12 +1373,12 @@ opJUMPDEST:
                     :JMP(readCode)
 
 opAuxPUSHA:
-    ${getBytecode(A,PC,D)} => B
-    B                           :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
+    GAS-3 => GAS        :JMPN(outOfGas)
+                        :CALL(readPush)
+    E                   :MSTORE(SP++)
+    1024 - SP           :JMPN(stackOverflow)
     PC + D => PC
-    GAS-3 => GAS    :JMPN(outOfGas)
-                                :JMP(readCode)
+                        :JMP(readCode)
 
 opAuxPUSHB:
     SP                          :MSTORE(SPw)
@@ -2320,17 +2428,24 @@ opRETURNcreate:
     $ => CTX        :MLOAD(currentCTX)
     $ => A          :MLOAD(txSrcAddr)
     $ => D          :MLOAD(txNonce)
-    ; Update contract SR
+
+    ; set bytecode length
     $ => A          :MLOAD(createContractAddress)
-    %SMT_KEY_NONCE => B                                                                                  ; Constant for nonce
+    %SMT_KEY_SC_LENGTH => B
+    C => D
     0 => C
+    $ => SR         :SSTORE
+
+    ; set contract nonce
+    %SMT_KEY_NONCE => B
     1 => D
     $ => SR         :SSTORE
 
     ;TODO: deploy with value
+    ; read contract bytes from memory
+    ; set contract hashBytecode
     ${getHashBytecode(A)} => D
     %SMT_KEY_SC_CODE => B
-    0 => C
     $ => SR                         :SSTORE
 
 opRETURNcreateEnd:
@@ -2596,6 +2711,10 @@ opSELFDESTRUCT:
     %SMT_KEY_SC_CODE => B
     0 => C
     0 => D
+    $ => SR             :SSTORE
+
+    ; clean contract length
+    %SMT_KEY_SC_LENGTH => B
     $ => SR             :SSTORE
 
     ; get contract balance

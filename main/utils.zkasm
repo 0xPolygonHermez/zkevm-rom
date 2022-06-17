@@ -622,7 +622,7 @@ stackErrorEnd:
 ;Get offset/32 & offset%32
 ;@in A offset
 ;@out E offset/32
-;out C offset%32
+;@out C offset%32
 offsetUtil:
     ${A >> 5} => E          ; ${A >> 5} -> E (*)
     ${A & 0x1F} => C        ; ${A & 0x1F} -> C
@@ -675,3 +675,122 @@ invalidCall:
         $ => PC                         :MLOAD(lastPC)
         0                               :MSTORE(SP++)
                                         :JMP(readCode)
+
+; @info Read bytes opcode PUSHX
+; @internalParam {numBlocks} 4 bytes blocks to read
+; @internalParam {leftBytes} remaining bytes
+; @in D => bytes to read
+; @out E => value read
+VAR GLOBAL pushBytes
+VAR GLOBAL numBlocks
+VAR GLOBAL leftBytes
+VAR GLOBAL accumulator
+readPush:
+    D                           :MSTORE(pushBytes)
+    D => A
+    0                           :MSTORE(accumulator)
+    PC + D - 1 => HASHPOS
+    ${A >> 2} => B
+    ${A & 0x03} => D
+    B*4 + D                     :ASSERT
+    D                           :MSTORE(leftBytes)
+    B                           :MSTORE(numBlocks)
+    0 => B
+                                :JMP(readPushBlock)
+
+readPushBlock:
+    $ => A                      :MLOAD(numBlocks)
+    $                           :EQ, JMPC(endPushInit)
+
+    E                           :MLOAD(contractHashId) ; load hash contract identifier
+
+    ; read bytes
+    1 => D
+    $ => C                      :HASHP(E)
+    HASHPOS - 2 => HASHPOS
+
+    $ => A                      :HASHP(E)
+    HASHPOS - 2 => HASHPOS
+    A*256 + C => C
+
+    $ => A                      :HASHP(E)
+    HASHPOS - 2 => HASHPOS
+    A*65536 + C => C
+
+    $ => A                      :HASHP(E)
+    HASHPOS - 2 => HASHPOS
+    A*16777216 + C => C
+
+                                :JMP(doRotate)
+
+doRotate:
+    B - 1 => A
+
+                                :JMP(doRotateLoop)
+
+doRotateLoop:
+    A                           :JMPN(endRotate)
+    ROTL_C => C
+    A - 1 => A
+                                :JMP(doRotateLoop)
+
+endRotate:
+    $ => D                      :MLOAD(accumulator)
+    C + D => D
+    D                           :MSTORE(accumulator)
+    B + 1 => B
+                                :JMP(readPushBlock)
+
+endPushInit:
+    $ => A                          :MLOAD(leftBytes)
+    A - 1                           :JMPN(finalPush)
+    0 => C
+    0 => B
+                                    :JMP(endPushLoop)
+
+
+endPushLoop:
+    $ => A                          :MLOAD(leftBytes)
+    $                               :EQ, JMPC(endPushFinal)
+
+    1 => D
+    $ => D                          :HASHP(E)
+    HASHPOS - 2 => HASHPOS
+    B - 1 => A
+                                    :JMP(computeFactorLoop)
+
+computeFactorLoop:
+    A                               :JMPN(computeFactorEnd)
+    256*D => D
+    A - 1 => A
+                                    :JMP(computeFactorLoop)
+
+computeFactorEnd:
+    B + 1 => B
+    D + C => C
+                                    :JMP(endPushLoop)
+
+endPushFinal:
+    $ => B                          :MLOAD(numBlocks)
+                                    :JMP(doRotate2)
+
+doRotate2:
+    B - 1 => A
+                                :JMP(doRotateLoop2)
+
+doRotateLoop2:
+    A                           :JMPN(endRotate2)
+    ROTL_C => C
+    A - 1 => A
+                                :JMP(doRotateLoop2)
+
+endRotate2:
+    $ => D                      :MLOAD(accumulator)
+    C + D => D
+    D                           :MSTORE(accumulator)
+                                :JMP(finalPush)
+
+finalPush:
+    $ => E                      :MLOAD(accumulator)
+    $ => D                      :MLOAD(pushBytes)
+                                :RETURN
