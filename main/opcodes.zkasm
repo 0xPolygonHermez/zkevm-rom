@@ -603,13 +603,13 @@ opCALLDATACOPYinit:
     B               :MSTORE(arithA)
     32              :MSTORE(arithB)
                     :CALL(divARITH)
-    $ => D          :MLOAD(arithRes2)            
-    $ => A          :MLOAD(arithRes1)    
+    $ => D          :MLOAD(arithRes2)
+    $ => A          :MLOAD(arithRes1)
     1024 + A => SP
     $ => A          :MLOAD(SP)
                     :CALL(SHLarith)
     A => C
-    $ => A          :MLOAD(arithRes1) 
+    $ => A          :MLOAD(arithRes1)
     1024 + A + 1 => SP
     32 - D => D
     $ => A          :MLOAD(SP)
@@ -1270,41 +1270,18 @@ opAuxPUSHBend:
                                     :JMP(readCode)
 
 opAuxPUSHBcreate:
-    SP                          :MSTORE(SPw)
-    $ => SP                     :MLOAD(SPr) ; SPr == 1024
-    ; Div operation with Arith
-    PC                          :MSTORE(arithA)
-    32                          :MSTORE(arithB)
-                                :CALL(divARITH)
-    $ => A                      :MLOAD(arithRes1)
-    $ => C                      :MLOAD(arithRes2)
-    SP + A => SP
-    A - ${(PC+D)/32}            :JMPN(opAuxPUSHCcreate)
-    $ => A                      :MLOAD(SP)
-    $ => SP                     :MLOAD(SPw)
-    ${getByte(A,C,D)} => B
-    B                           :MSTORE(SP++)
-    1024 - SP                   :JMPN(stackOverflow)
-    PC + D => PC
-    GAS-3 => GAS                :JMPN(outOfGas)
-                                :JMP(readCode)
+    0 => B
+    $ => CTX                        :MLOAD(originCTX)
+    $ => E                          :MLOAD(argsOffsetCall)
+    E + PC => E
+    D => C
+                                    :CALL(MLOADX)
+    PC + C => PC
+    32 - C => D
+                                    :CALL(SHRarith)
+    $ => CTX                        :MLOAD(currentCTX)
+                                    :JMP(opAuxPUSHBend)
 
-opAuxPUSHCcreate:
-    32 - C => E
-    $ => A                      :MLOAD(SP++)
-    1024 - SP
-    ${getByte(A,C,E)} => A
-    0 => C
-    PC + D => PC
-    D - E => D
-    $ => B                      :MLOAD(SP)
-    ${getByte(B,C,D)} => B
-                                :CALL(SHRarith)
-    $ => SP                     :MLOAD(SPw)
-    A + B                       :MSTORE(SP++)
-    1024 - SP                   :JMPN(stackOverflow)
-    GAS-3 => GAS                :JMPN(outOfGas)
-                                :JMP(readCode)
 
 opPUSH1:
     1 => D
@@ -1992,7 +1969,7 @@ opCREATE:
     B                   :MSTORE(txSrcAddr)
     B                   :MSTORE(txSrcOriginAddr)
     ; TODO is not encesesaary to load and store GAS, bc is global var
-                        :CALL(copySP)
+    ;                    :CALL(copySP)
     B => A
     ; get nonce & update SR
     %SMT_KEY_NONCE => B                                                                                  ; Constant for nonce
@@ -2463,7 +2440,7 @@ opCREATE2:
     B                   :MSTORE(txSrcAddr)
     B                   :MSTORE(txSrcOriginAddr)
     ; TODO is not encesesaary to load and store GAS, bc is global var
-                        :CALL(copySP)
+    ;                    :CALL(copySP)
     B => A
     %SMT_KEY_NONCE => B
     0 => C                                                                                  ; 3rd parameter does not apply to nonce

@@ -243,32 +243,38 @@ create2:
         $ => C                          :MLOAD(txCalldataLen)
         ${(C+31)/32} => A
         ; Div operation with Arith
-        ${C+31}         :MSTORE(arithA)
-        32              :MSTORE(arithB)
-                        :CALL(divARITH)
-        $ => A          :MLOAD(arithRes1)
+        ${C+31}                         :MSTORE(arithA)
+        32                              :MSTORE(arithB)
+                                        :CALL(divARITH)
+        $ => A                          :MLOAD(arithRes1)
 
         GAS - 6*A => GAS                :JMPN(outOfGas)
-        1024 => SP
-                                        :JMP(loopCreate2)
+        $ => CTX                        :MLOAD(originCTX)
+        $ => B                          :MLOAD(argsOffsetCall)
 
 loopCreate2:
         C - 1                           :JMPN(create2end)
         C - 32                          :JMPN(endloopCreate2)
-        $ => A                          :MLOAD(SP++)
+        B => E
+                                        :CALL(MLOAD32)
+        E => B
         32 => D
+        $ => E                          :MLOAD(lastHashIdUsed)
         A                               :HASHK(E)
         C - 32 => C
                                         :JMP(loopCreate2)
 
 endloopCreate2:
-        $ => A                          :MLOAD(SP)
+        B => E
+                                        :CALL(MLOADX)
         32 - C => D
                                         :CALL(SHRarith)
         C => D
+        $ => E                          :MLOAD(lastHashIdUsed)
         A                               :HASHK(E)
 
 create2end:
+        $ => CTX                        :MLOAD(currentCTX)
         HASHPOS                         :HASHKLEN(E)
         $ => C                          :HASHKDIGEST(E)
         ; A new hash with position 0 is started
@@ -300,8 +306,6 @@ deploy:
         0 => A
         zkPC+2 => RR
         $                               :LT, JMPC(moveBalances)
-        1024                            :MSTORE(SPr)
-        0                               :MSTORE(SPw)
         0 => PC
         0 => SP
                                         :JMP(readCode)
