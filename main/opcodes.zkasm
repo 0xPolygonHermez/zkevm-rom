@@ -12,7 +12,7 @@ opSTOP:
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     1               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow) ; // TODO: call to an EOA address, what is going on ?
+    1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 opSTOPend:
@@ -493,8 +493,6 @@ opSHA3End:
     $ => B          :MLOAD(memLength)
     B - E           :JMPN(saveMemLength)
                     :JMP(readCode)
-
-; // TODO: check opcode with DelegateCall (storage or implementation address)
 opADDRESS:
     $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPN(opADDRESSdeploy)
@@ -685,8 +683,8 @@ opCODESIZEdep: ;//TODO: create/create2, constructor parameters, initBytcode vs d
 opCODECOPY:
     SP - 3          :JMPN(stackUnderflow)
     $ => A          :MLOAD(isCreateContract)
-    0 - A           :JMPN(opCALLDATACOPY) ; //TODO:
-    $ => A          :MLOAD(txDestAddr) ; //TODO: delegate call ?
+    0 - A           :JMPN(opCALLDATACOPY)
+    $ => A          :MLOAD(txDestAddr)
     %SMT_KEY_SC_CODE => B
     0 => C
     $ => A          :SLOAD
@@ -779,7 +777,6 @@ opEXTCODECOPYend:
     B - E           :JMPN(saveMemLength)
                     :JMP(readCode)
 
-; // TODO: should read from return buffer
 opRETURNDATASIZE:
     ; Load ret data length from last ctx
     ; If no retDataCTX(0), retDataLength = 0
@@ -797,14 +794,11 @@ endOpRETURNDATASIZE:
     GAS - 2 => GAS  :JMPN(outOfGas)
                     :JMP(readCode)
 
-; // TODO: check enough data, otherwise expection OOG
-; // TODO: should read from return buffer
 opRETURNDATACOPY:
     SP - 3          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => D          :MLOAD(SP--)            ;destOffset
     $ => B          :MLOAD(SP--)            ;offset - offset in return data
-    ;TODO: offset is only offset or returndata + offset?
     $ => C          :MLOAD(SP)              ;length - length return data
     ; if retdataOffset + dataLen > retDataSize -> OOG
     ; Load ret data length from last ctx
@@ -987,7 +981,6 @@ opCHAINID:
     GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
-; // TODO: check delegate call
 opSELFBALANCE:
     $ => A          :MLOAD(storageAddr)
     0 => B,C        ; balance key smt
@@ -1233,7 +1226,6 @@ checkJumpDestDeployment:
     $                               :EQ, JMPC(readCode)
                                     :JMP(revertTx)
 
-; // TODO: check in YUL
 opPC:
     GAS - 2 => GAS      :JMPN(outOfGas)
     PC                  :MSTORE(SP++)
@@ -1860,7 +1852,6 @@ opSWAP16:
     GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
-; // TODO: save logs in memory and consolidate them once the tx is succesfull
 ; gas_cost = 375 + 375 * num_topics + 8 * data_size + mem_expansion_cost
 opLOG0:
     SP - 2              :JMPN(stackUnderflow)
@@ -2026,16 +2017,11 @@ opCREATE:
 ;    B - X           :JMPN(saveMemLength)
                      :JMP(txType)
 
-; // TODO: Check returnOffset and returnSize parameters
 ; // Shpuld be set ? what happen if they are not set ?
 ; // Return buffer should be written always
 ; // If retOffet, retSize === 0 --> just not write in memory
 ; // Affects to opcodes related to RETURN
 ; // https://eips.ethereum.org/EIPS/eip-211
-
-; TODO If inside a delegate/callcode, a call is made, the srcAddress 
-; Should be the previous `srcAddress` but not the `txDestAddr`
-; TODO ALL calls, initSR context var
 opCALL:
     SP - 7          :JMPN(stackUnderflow)
     SP - 1 => SP
@@ -2245,8 +2231,6 @@ opCALLCODEend:
                     :CALL(copySP)
                     :JMP(txType)
 
-; // TODO: Redo to copy "return buffer"
-;TODO RETURN + 32 bytes
 opRETURN:
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
@@ -2653,17 +2637,16 @@ opSELFDESTRUCT:
 
                             :JMP(endCode)
 
-; TODO INVALID should go back to the last state before a call same as revert
 opINVALID:
     ; Equivalent to REVERT with 0,0 as stack parameters
     ; Remaining gas is consumed
     0 => GAS
     ; if main context, halt execution
-    $ => B          :MLOAD(originCTX)       ;last ctx
+    $ => B          :MLOAD(originCTX)      
                     :JMP(invalidProcess)
 
 invalidStaticTx:
-    $ => CTX        :MLOAD(originCTX)       ;last ctx
+    $ => CTX        :MLOAD(originCTX)      
     $ => A          :MLOAD(gasCTX)
     A => GAS
     $ => SP         :MLOAD(lastSP)
