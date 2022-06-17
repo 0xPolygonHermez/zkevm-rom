@@ -599,14 +599,11 @@ handleError:
     ;revert all state changes
     ;initSR --> balance = balance - gas, nonce + 1
     $ => SR         :MLOAD(initSR)
-    $ => C          :MLOAD(currentCTX)
     ;remaining gas = 0
     $ => A          :MLOAD(originCTX)
     0 => B
     $               :EQ,JMPC(stackErrorEnd)
     A => CTX
-    ; Add return data context value to origin context
-    C               :MSTORE(retDataCTX)
     CTX             :MSTORE(currentCTX)
     $ => GAS        :MLOAD(gasCTX)
     $ => SP         :MLOAD(lastSP)
@@ -794,26 +791,3 @@ finalPush:
     $ => E                      :MLOAD(accumulator)
     $ => D                      :MLOAD(pushBytes)
                                 :RETURN
-
-VAR GLOBAL auxBytes
-addBatchHashBytebyByte:
-        RR                              :MSTORE(tmpZkPC)
-        A                               :MSTORE(auxBytes)
-        D => B
-        B                               :MSTORE(tmpVarB)
-        1 => D
-
-utilsAddBatchHashBytebyByte:
-        32 - D => D
-        $ => A                          :MLOAD(auxBytes)
-        zkPC+1 => RR                    :JMP(SHRarith)
-        D => B
-        1 => D
-        zkPC+1 => RR                    :JMP(addBatchHashData)
-        B => D
-        32 - D => D
-        D + 1 => D
-        $ => B                          :MLOAD(tmpVarB)
-        D - B - 1                       :JMPN(utilsAddBatchHashBytebyByte)
-        $ => RR                         :MLOAD(tmpZkPC)
-                                        :RETURN
