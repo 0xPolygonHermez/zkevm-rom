@@ -782,10 +782,16 @@ opEXTCODECOPYend:
 ; // TODO: should read from return buffer
 opRETURNDATASIZE:
     ; Load ret data length from last ctx
-    $ => CTX        :MLOAD(retDataCTX)
+    ; If no retDataCTX(0), retDataLength = 0
+    $ => B          :MLOAD(retDataCTX)
+    0 => A
+    $               :EQ, JMPC(endOpRETURNDATASIZE)
+    B => CTX        
     $ => A          :MLOAD(retDataLength)
     ; Restore current context
     $ => CTX        :MLOAD(currentCTX)
+                    
+endOpRETURNDATASIZE:
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
     GAS - 2 => GAS  :JMPN(outOfGas)
