@@ -893,12 +893,18 @@ opRETURNDATACOPY:
     $ => D          :MLOAD(SP--)            ;destOffset
     $ => B          :MLOAD(SP--)            ;offset - offset in return data
     $ => C          :MLOAD(SP)              ;length - length return data
-    ; if retdataOffset + dataLen > retDataSize -> OOG
+    ; if retDataCTX is 0, end opcode execution
+    B => E
+    $ => B          :MLOAD(retDataCTX)
+    0 => A
+    $               :EQ, JMPC(opRETURNDATACOPYend)
     ; Load ret data length from last ctx
-    $ => CTX        :MLOAD(retDataCTX)
+    B => CTX
+    E => B
     $ => A          :MLOAD(retDataLength)
     $ => E          :MLOAD(retDataOffset)
     $ => CTX        :MLOAD(currentCTX)
+    ; if retdataOffset + dataLen > retDataSize -> OOG
     E + B => E
     A + 1 => A
     B + C => B
