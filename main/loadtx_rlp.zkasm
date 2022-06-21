@@ -4,8 +4,8 @@ loadTx_rlp:
         0 => HASHPOS
 
         ; We get a new hashId
-        $ => E                          :MLOAD(lastHashIdUsed)
-        E+1 => E                        :MSTORE(lastHashIdUsed)
+        $ => E                          :MLOAD(lastHashKIdUsed)
+        E+1 => E                        :MSTORE(lastHashKIdUsed)
         ; Pointer to next RLP bytes to read
         0 => C
 
@@ -183,6 +183,8 @@ dataREAD:
         1024 => SP
                                         :CALL(addHashTx)
                                         :CALL(addBatchHashData)
+        $ => D                          :MLOAD(batchHashPos)
+        D                               :MSTORE(dataStarts)
         A - 0x80                        :JMPN(veryShortData)
         A - 0x81                        :JMPN(endData)
         A - 0xb8                        :JMPN(shortData)
@@ -204,6 +206,8 @@ longData:
         A - 0xb7 => D
                                         :CALL(addHashTx)
                                         :CALL(addBatchHashData)
+        $ => D                          :MLOAD(batchHashPos)
+        D                               :MSTORE(dataStarts)
         A => B                          :MSTORE(txCalldataLen)
 
 readData:
@@ -211,8 +215,8 @@ readData:
         B - D                           :JMPN(readDataFinal)
         B - D                           :MSTORE(txDataRead)
                                         :CALL(addHashTx)
-                                        :CALL(addBatchHashData)
         A                               :MSTORE(SP++)
+                                        :CALL(addBatchHashBytebyByte)
         $ => B                          :MLOAD(txDataRead)
                                         :JMP(readData)
 
@@ -221,10 +225,11 @@ readDataFinal:
         B - 1                           :JMPN(endData)
         B => D
                                         :CALL(addHashTx)
-                                        :CALL(addBatchHashData)
         32-D => D
                                         :CALL(SHLarith)
         A                               :MSTORE(SP)
+        32-D => D
+                                        :CALL(addBatchHashBytebyByte)
 
 endData:
 
@@ -327,7 +332,7 @@ addBatchHashData:
         A                               :HASHK(E)
         HASHPOS                         :MSTORE(batchHashPos)
         C => HASHPOS
-        $ => E                          :MLOAD(lastHashIdUsed)
+        $ => E                          :MLOAD(lastHashKIdUsed)
                                         :RETURN
 
 getTxBytes:

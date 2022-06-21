@@ -14,8 +14,8 @@ processTx:
 ;;;;;;;;;
 
         ; Check the signature
-        $ => A                          :MLOAD(lastHashIdUsed)
-        A + 1                           :MSTORE(lastHashIdUsed)
+        $ => A                          :MLOAD(lastHashKIdUsed)
+        A + 1                           :MSTORE(lastHashKIdUsed)
         A + 1                           :MSTORE(ecrecover_lastHashIdUsed)
         $ => A                          :HASHKDIGEST(E)
         $ => B                          :MLOAD(txR)
@@ -99,26 +99,22 @@ getCalldataGasCost:
         $ => A                          :MLOAD(txCalldataLen)
         0 => B
         $                               :EQ,JMPC(endCalldataIntrinsicGas)
-        -1 => C
 
 addGas:
-        C + 1 => C
-        0 => D
-        1024 + C => SP
+        $ => HASHPOS                    :MLOAD(dataStarts)
+        0 => C
                                         :JMP(loopBytes)
 loopBytes:
         ; Mul operation with Arith
-        C                               :MSTORE(arithA)
-        32                              :MSTORE(arithB)
-                                        :CALL(mulARITH)
-        $ => B                          :MLOAD(arithRes1)
-        A - B - D - 1                   :JMPN(endCalldataIntrinsicGas)
-        32 - D - 1                      :JMPN(addGas)
-        $ => B                          :MLOAD(SP)
-        ; TODO: is not safe here. It should be removed and data should be read from the hash that is built on loadtx_rlp
-        ${getByte(B,D)} => B
-        D + 1 => D
-        B - 1                           :JMPN(add4Gas)
+        A - C - 1                       :JMPN(endCalldataIntrinsicGas)
+        E => B
+        HASHPOS => D
+        1 => D
+        $ => E                          :MLOAD(batchHashDataId)
+        $ => D                          :HASHK(E)
+        B => E
+        C + 1 => C
+        D - 1                           :JMPN(add4Gas)
                                         :JMP(add16Gas)
 
 add4Gas:
@@ -198,8 +194,8 @@ getContractAddress:
         ; A new hash with position 0 is started
         0 => HASHPOS
         ; We get a new hashId
-        $ => E                          :MLOAD(lastHashIdUsed)
-        E+1 => E                        :MSTORE(lastHashIdUsed)
+        $ => E                          :MLOAD(lastHashKIdUsed)
+        E+1 => E                        :MSTORE(lastHashKIdUsed)
         $ => A                          :MLOAD(isCreate2)
         0 - A                           :JMPN(create2)
         $ => A                          :MLOAD(txSrcAddr)
@@ -247,38 +243,44 @@ create2:
         $ => C                          :MLOAD(txCalldataLen)
         ${(C+31)/32} => A
         ; Div operation with Arith
-        ${C+31}         :MSTORE(arithA)
-        32              :MSTORE(arithB)
-                        :CALL(divARITH)
-        $ => A          :MLOAD(arithRes1)
+        ${C+31}                         :MSTORE(arithA)
+        32                              :MSTORE(arithB)
+                                        :CALL(divARITH)
+        $ => A                          :MLOAD(arithRes1)
 
         GAS - 6*A => GAS                :JMPN(outOfGas)
-        1024 => SP
-                                        :JMP(loopCreate2)
+        $ => CTX                        :MLOAD(originCTX)
+        $ => B                          :MLOAD(argsOffsetCall)
 
 loopCreate2:
         C - 1                           :JMPN(create2end)
         C - 32                          :JMPN(endloopCreate2)
-        $ => A                          :MLOAD(SP++)
+        B => E
+                                        :CALL(MLOAD32)
+        E => B
         32 => D
+        $ => E                          :MLOAD(lastHashKIdUsed)
         A                               :HASHK(E)
         C - 32 => C
                                         :JMP(loopCreate2)
 
 endloopCreate2:
-        $ => A                          :MLOAD(SP)
+        B => E
+                                        :CALL(MLOADX)
         32 - C => D
                                         :CALL(SHRarith)
         C => D
+        $ => E                          :MLOAD(lastHashKIdUsed)
         A                               :HASHK(E)
 
 create2end:
+        $ => CTX                        :MLOAD(currentCTX)
         HASHPOS                         :HASHKLEN(E)
         $ => C                          :HASHKDIGEST(E)
         ; A new hash with position 0 is started
         0 => HASHPOS
-        $ => E                          :MLOAD(lastHashIdUsed)
-        E+1 => E                        :MSTORE(lastHashIdUsed)
+        $ => E                          :MLOAD(lastHashKIdUsed)
+        E+1 => E                        :MSTORE(lastHashKIdUsed)
         ;keccak256( 0xff ++ address ++ salt ++ keccak256(init_code))[12:]
         1 => D
         0xff                            :HASHK(E)
@@ -304,33 +306,40 @@ deploy:
         0 => A
         zkPC+2 => RR
         $                               :LT, JMPC(moveBalances)
-        1024                            :MSTORE(SPr)
-        0                               :MSTORE(SPw)
         0 => PC
         0 => SP
                                         :JMP(readCode)
 
 readDeployBytecode:
-        SP                              :MSTORE(SPw)
-        $ => SP                         :MLOAD(SPr)
-        ; Div operation with Arith
-        PC               :MSTORE(arithA)
-        32               :MSTORE(arithB)
-                        :CALL(divARITH)
-        $ => A          :MLOAD(arithRes1)
-        $ => C          :MLOAD(arithRes2)
-
-        SP + A => SP
-
+        1 => A
+        $ => B                          :MLOAD(isCreate)
+        $                               :EQ,JMPC(readDeployBytecodeCreate)
         $ => B                          :MLOAD(txCalldataLen)
         B - PC                          :JMPN(endDeploy)
-        $ => A                          :MLOAD(SP)
-        $ => SP                         :MLOAD(SPw)
-        ${getByte(A,C)} => B
+        $ => HASHPOS                    :MLOAD(dataStarts)
+        HASHPOS + PC => HASHPOS
+        $ => E                          :MLOAD(batchHashDataId)
+        1 => D
+        $ => B                          :HASHK(E)
         B => RR
         ${eventLog(onOpcode)}
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
+
+readDeployBytecodeCreate:
+        $ => CTX                        :MLOAD(originCTX)
+        $ => E                          :MLOAD(argsOffsetCall)
+        E + PC => E
+        1 => C
+                                        :CALL(MLOADX)
+        $ => CTX                        :MLOAD(currentCTX)
+        31 => D
+                                        :CALL(SHRarith)
+        A => B
+        B => RR
+        PC + 1 => PC
+                                        :JMP(@mapping_opcodes + RR)
+
 
 callContract:
         ; Move balances if value > 0 just before executing the contract CALL
@@ -340,16 +349,54 @@ callContract:
         $                               :LT, JMPC(moveBalances)
         0 => PC
         0 => SP
+                                        :JMP(checkHashBytecode)
+
+checkHashBytecode:
+        $ => A                          :MLOAD(txDestAddr)
+        ; get contract length
+        %SMT_KEY_SC_LENGTH => B
+        0 => C
+        $ => B                          :SLOAD
+        B                               :MSTORE(bytecodeLength)
+        0 => A
+        $                               :EQ, JMPC(opSTOP) ;no bytecode
+
+        $ => A                          :MLOAD(txDestAddr)
+        ; get hash contract
+        %SMT_KEY_SC_CODE => B
+        $ => A                          :SLOAD
+        A                               :MSTORE(hashContractTxDestAddr)
+        0 => HASHPOS
+        1 => D
+        $ => B                          :MLOAD(bytecodeLength)
+
+        ; get a new hashPId
+        $ => E                          :MLOAD(nextHashPId)
+        E                               :MSTORE(contractHashId)
+        E+1                             :MSTORE(nextHashPId)
+
+                                        :JMP(checkHashBytecodeLoop)
+
+checkHashBytecodeLoop:
+        B - 1 - HASHPOS                         :JMPN(checkHashBytecodeEnd) ; finish reading bytecode
+        ${getBytecode(A, HASHPOS, 1)}           :HASHP(E)                   ; hash contract bytecode
+                                                :JMP(checkHashBytecodeLoop)
+
+checkHashBytecodeEnd:
+        HASHPOS                         :HASHPLEN(E)
+        $ => E                          :HASHPDIGEST(E)
+        ; check hash computed matches hash in the smt leaf
+        $ => A                               :MLOAD(hashContractTxDestAddr)
+        E                               :ASSERT
                                         :JMP(readCode)
 
 readByteCode:
-        $ => A                          :MLOAD(txDestAddr)
-        %SMT_KEY_SC_CODE => B
-        0 => C
-        $ => A                          :SLOAD
-        ${getBytecode(A,PC)} => B
-        B => RR
-        ${eventLog(onOpcode)}
+        $ => E                          :MLOAD(contractHashId) ; hash index
+        PC => HASHPOS
+        HASHPOS => B
+        1 => D
+        $ => RR                         :HASHP(E)
+        RR => B
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
 
@@ -364,19 +411,21 @@ endCode:
                                         :JMP(endByteCode)
 
 endDeploy:
-        ; Update contract nonce
+        ; set bytecode length
         $ => A                          :MLOAD(createContractAddress)
-        %SMT_KEY_NONCE => B                                                                                  ; Constant for nonce
+        %SMT_KEY_SC_LENGTH => B
+        C => D  ; "endDeploy" is called from opRETURNDeploy which has: C --> length, E --> offset
         0 => C
+        $ => SR         :SSTORE
+        ; set contract nonce to 1
+        %SMT_KEY_NONCE => B                                                                                  ; Constant for nonce
         1 => D
         $ => SR                         :SSTORE
-        ;if txValue != 0 --> move balance to contractAddress
+        ; TODO: if txValue != 0 --> move balance to contractAddress. Probably missing moveBalances CALL.
         A                               :MSTORE(txDestAddr)
-        ; TODO: same as nonce, should be done before
-        ; TODO zkasm should calculate the deployed bytecode
-        ${getHashBytecode(A)} => D ; TODO: chain poseidon to compute hashBytecode. Jordi checks
+        ${getHashBytecode(A)} => D ; TODO: chain poseidon to compute hashBytecode --> utils that
+        ; takes offset (E) and length (C), reads bytes from memory, set bytes into HASHP and gets the hash
         %SMT_KEY_SC_CODE => B
-        0 => C
         $ => SR                         :SSTORE
 
 endByteCode:
