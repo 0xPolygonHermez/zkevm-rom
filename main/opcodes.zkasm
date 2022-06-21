@@ -204,7 +204,7 @@ opMULMOD:
     A               :MSTORE(arithA)
     B               :MSTORE(arithB)
                     :CALL(mulARITH)
-    $ => E          :MLOAD(arithRes1) 
+    $ => E          :MLOAD(arithRes1)
     $ => A          :MLOAD(SP)
     ; Div operation with Arith
     E               :MSTORE(arithA)
@@ -550,7 +550,7 @@ opCALLDATALOAD:
                     :CALL(divARITH)
     $ => B          :MLOAD(arithRes1)
     $ => A          :MLOAD(arithRes2)
-    
+
     0 - A           :JMPN(opCALLDATALOAD2)
     SP => C
     1024 + B => SP
@@ -615,6 +615,7 @@ opCALLDATACOPYinit:
     $ => A          :MLOAD(SP)
                     :CALL(SHRarith)
     A + C           :MSTORE(bytesToStore)
+    A + C => A
                     :CALL(MSTORE32)
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP)   ;length
@@ -925,7 +926,7 @@ opRETURNDATACOPY:
     A               :MSTORE(arithB)
                     :CALL(mulARITH)
     $ => A          :MLOAD(arithRes1)
-    GAS - A => GAS  :JMPN(outOfGas) 
+    GAS - A => GAS  :JMPN(outOfGas)
     D + C           :MSTORE(lastMemLength)
 
 opRETURNDATACOPYinit:
@@ -1019,11 +1020,11 @@ opBLOCKHASH:
     SP - 1 => SP    :JMPN(stackUnderflow)
     GAS-20 => GAS   :JMPN(outOfGas)
     $ => A          :MLOAD(SP) ; batch number
-    
+
     ; Check batch number is lt current batch number, else return 0
     $ => B          :MLOAD(numBatch)
     B - A - 1       :JMPN(opBLOCKHASHzero)
-    
+
     ; Create key for the batch hash mapping key
     $ => E          :MLOAD(lastHashKIdUsed)
     E+1 => E        :MSTORE(lastHashKIdUsed)
@@ -1371,7 +1372,7 @@ opMSIZE:
     ; Round size to 32bytes multiple
     C + 1 => C
     C * 32 => E
-    
+
 MSIZEend:
     E               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
@@ -2245,7 +2246,7 @@ opCALLend:
     $ => CTX        :MLOAD(originCTX)
     GAS - A + 2300*C:MSTORE(gasCTX)
     $ => CTX        :MLOAD(currentCTX)
-    
+
     A => GAS
 
     $ => A          :MLOAD(argsLengthCall)
@@ -2361,6 +2362,7 @@ opRETURN:
     SP - 1 => SP
     $ => E          :MLOAD(SP--) ;offset
     $ => C          :MLOAD(SP)   ;length
+    CTX => D
     E               :MSTORE(retDataOffset)
     C               :MSTORE(retDataLength)
     E+C             :MSTORE(lastMemLength)
@@ -2433,6 +2435,10 @@ opRETURNdeploy:
 
 ; TODO: not in RETURN, but in CREATE process
 opRETURNcreate:
+    ; save offset memory and length to compute contract hash
+    E                               :MSTORE(memOffsetLinearPoseidon)
+    C                               :MSTORE(memSizeLinearPoseidon)
+
     CTX             :MSTORE(currentCTX)
     $ => B          :MLOAD(gasRefund)
     $ => CTX        :MLOAD(originCTX)
@@ -2458,16 +2464,17 @@ opRETURNcreate:
     1 => D
     $ => SR         :SSTORE
 
-    ;TODO: deploy with value
-    ; read contract bytes from memory
-    ; set contract hashBytecode
-    ${getHashBytecode(A)} => D
+    ; get bytecode and hash it
+                        :CALL(hashPoseidonLinearFromMemory)
+    $ => A              :MLOAD(createContractAddress)
+    0 => C
     %SMT_KEY_SC_CODE => B
+
     $ => SR                         :SSTORE
 
 opRETURNcreateEnd:
     $ => A          :MLOAD(createContractAddress)
-    $ => CTX          :MLOAD(originCTX) 
+    $ => CTX        :MLOAD(originCTX)
     CTX             :MSTORE(currentCTX)
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
@@ -2596,6 +2603,7 @@ opCREATE2:
     A => GAS
     B                   :MSTORE(txSrcAddr)
     B                   :MSTORE(txSrcOriginAddr)
+                        :CALL(copySP)
     ; TODO is not encesesaary to load and store GAS, bc is global var
                         :CALL(copySP)
     B => A
@@ -2692,7 +2700,7 @@ opREVERT:
     $ => A          :MLOAD(SP--) ;offset
     $ => B          :MLOAD(SP) ; length
     E               :MSTORE(retDataOffset)
-    C               :MSTORE(retDataLength)    
+    C               :MSTORE(retDataLength)
     $ => C          :MLOAD(originCTX)
     ${eventLog(onError, revert)}
     C - 1           :JMPN(opREVERTend)
@@ -2710,7 +2718,7 @@ opREVERT:
     0               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
-                    
+
 
 opREVERTend:
                     :JMP(endCode)

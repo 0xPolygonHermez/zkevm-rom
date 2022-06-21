@@ -411,6 +411,9 @@ endCode:
                                         :JMP(endByteCode)
 
 endDeploy:
+        ; save offset memory and length to compute contract hash
+        E                               :MSTORE(memOffsetLinearPoseidon)
+        C                               :MSTORE(memSizeLinearPoseidon)
         ; set bytecode length
         $ => A                          :MLOAD(createContractAddress)
         %SMT_KEY_SC_LENGTH => B
@@ -423,8 +426,9 @@ endDeploy:
         $ => SR                         :SSTORE
         ; TODO: if txValue != 0 --> move balance to contractAddress. Probably missing moveBalances CALL.
         A                               :MSTORE(txDestAddr)
-        ${getHashBytecode(A)} => D ; TODO: chain poseidon to compute hashBytecode --> utils that
-        ; takes offset (E) and length (C), reads bytes from memory, set bytes into HASHP and gets the hash
+                                        :CALL(hashPoseidonLinearFromMemory)
+        $ => A                          :MLOAD(createContractAddress)
+        0 => C
         %SMT_KEY_SC_CODE => B
         $ => SR                         :SSTORE
 

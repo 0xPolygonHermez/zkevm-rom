@@ -230,7 +230,6 @@ MLOAD32:
 initMLOAD:
     zkPC+1 => RR    :JMP(offsetUtil)
     -C              :JMPN(memAlignOptionMLOAD)
-
     $ => A          :MLOAD(MEM:E)
     $ => B          :MLOAD(isMLOADX)
     E*32 => E
@@ -433,7 +432,7 @@ zeroDiv:
     zkPC+1 => RR    :JMP(loadTmp)
     $ => RR         :MLOAD(tmpZkPC)
                     :JMP(RR)
-                    
+
 loadTmp:
     $ => A                  :MLOAD(tmpVarA)
     $ => B                  :MLOAD(tmpVarB)
@@ -815,3 +814,47 @@ utilsAddBatchHashBytebyByte:
         D - B - 1                       :JMPN(utilsAddBatchHashBytebyByte)
         $ => RR                         :MLOAD(tmpZkPC)
                                         :RETURN
+
+
+; @info Computes hash bytecode from memory bytes
+; @internalParam {memOffset} memory offset to read bytes from
+; @internalParam {memSize} memory size to read bytes from
+; @out D => resulting linear poseidon
+VAR GLOBAL memOffsetLinearPoseidon
+VAR GLOBAL memSizeLinearPoseidon
+hashPoseidonLinearFromMemory:
+    RR                               :MSTORE(tmpZkPC2)
+    $ => E                           :MLOAD(memOffsetLinearPoseidon)
+    $ => C                           :MLOAD(memSizeLinearPoseidon)
+    ; get a new hashPId
+    $ => B                          :MLOAD(nextHashPId)
+    B                               :MSTORE(tmpContractHashId)
+    B + 1                           :MSTORE(nextHashPId)
+    32 => D
+    0 => HASHPOS
+
+hashPoseidonLoop:
+    C - 1           :JMPN(hashPoseidonEnd)
+    C - 32          :JMPN(hashPoseidonFinal)
+    zkPC+1 => RR    :JMP(MLOAD32)
+    E => B
+    $ => E          :MLOAD(tmpContractHashId)
+    A               :HASHP(E)
+    B => E
+    C - 32 => C
+                    :JMP(hashPoseidonLoop)
+
+hashPoseidonFinal:
+    zkPC+1 => RR    :JMP(MLOADX)
+    32 - C => D
+    zkPC+1 => RR    :JMP(SHRarith)
+    $ => E          :MLOAD(tmpContractHashId)
+    C => D
+    A               :HASHP(E)
+
+hashPoseidonEnd:
+    $ => E          :MLOAD(tmpContractHashId)
+    HASHPOS         :HASHPLEN(E)
+    $ => D          :HASHPDIGEST(E)
+    $ => RR         :MLOAD(tmpZkPC2)
+                    :RETURN
