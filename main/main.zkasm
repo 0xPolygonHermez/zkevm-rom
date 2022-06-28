@@ -23,8 +23,6 @@ start:
 
         ${getBatchHashData()}               :MSTORE(batchHashData)
 
-        ${getChainId()}                     :MSTORE(chainId)
-
         ${getNumBatch()}                    :MSTORE(numBatch)
 
         ${getTimestamp()}                   :MSTORE(timestamp)
@@ -53,7 +51,7 @@ start:
         %SMT_KEY_SC_STORAGE => B
         $ => D                              :MLOAD(oldStateRoot)
         $ => SR                             :SSTORE                    ; Store 'oldStateRoot' in storage position 'keccak256(numBatch - 1, 0)'
-        
+
 ;;;;;;;;;
 ;; Set global exit root
 ;;;;;;;;;
@@ -63,7 +61,7 @@ start:
         $ => E                              :MLOAD(lastHashKIdUsed)
         E+1 => E                            :MSTORE(lastHashKIdUsed)
         32 => D
-        $ => A                              :MLOAD(numBatch)
+        $ => A                              :MLOAD(globalExitRoot)
         A                                   :HASHK(E)
         %GLOBAL_EXIT_ROOT_STORAGE_POS       :HASHK(E)                  ; Storage position of the global exit root map
         HASHPOS                             :HASHKLEN(E)
@@ -71,7 +69,7 @@ start:
 
         %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2 => A
         %SMT_KEY_SC_STORAGE => B
-        $ => D                              :MLOAD(globalExitRoot)
+        $ => D                              :MLOAD(numBatch)
         $ => SR                             :SSTORE
 
 ;;;;;;;;;
@@ -139,19 +137,14 @@ processTxsEnd:
         32 => D
         $ => A                          :MLOAD(globalExitRoot)
         A                               :HASHK(E)
-        8 => D
-        $ => A                          :MLOAD(timestamp)
-        A                               :HASHK(E)
+
         20 => D
         $ => A                          :MLOAD(sequencerAddr)
         A                               :HASHK(E)
-        8 => D
-        $ => A                          :MLOAD(chainId)
-        A                               :HASHK(E)
-        $ => A                          :MLOAD(numBatch)
-        A                               :HASHK(E)
+
         HASHPOS                         :HASHKLEN(E)
         $ => A                          :MLOAD(batchHashData)
+
         $                               :HASHKDIGEST(E), ASSERT
 
 ;;;;;;;
@@ -168,6 +161,14 @@ processTxsEnd:
         A                               :HASHK(0)
 
         $ => A                          :MLOAD(batchHashData)
+        A                               :HASHK(0)
+
+        8 => D
+
+        $ => A                          :MLOAD(numBatch)
+        A                               :HASHK(0)
+
+        $ => A                          :MLOAD(timestamp)
         A                               :HASHK(0)
 
         HASHPOS                         :HASHKLEN(0)

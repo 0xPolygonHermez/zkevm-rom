@@ -32,21 +32,16 @@ processTx:
 ;; Store init state
 ;;;;;;;;;
 
-        SR                              :MSTORE(originSR) 
+        SR                              :MSTORE(originSR)
         SR                              :MSTORE(initSR)
 
 ;;;;;;;;
-; Check chainID --> //TODO: chainID is defined as 64 bits which does not fit in the Field. If we consider just 63 bits it could be done directly (A - B), saving the EQ comaprison
+; Check chainID --> //TODO: chainID is defined as 64 bits which does not fit in the Field. If we consider just 63 bits it could be done directly (A - B), saving the EQ comparison
 ;;;;;;;;
         $ => A                          :MLOAD(txChainId)                                       ; A: chainId tx
-        $ => B                          :MLOAD(chainId)                                         ; B: chainId
+        %ZKEVM_CHAINID => B                                                               ; B: defaultChainId, A: chainId tx
         $                               :EQ,JMPC(endCheckChainId)                               ; If A == B --> endCheckChainId
-        ; If A != B --> check defaultChainId
-check_defaultChainId:
-        %DEFAULT_SEQ_CHAINID => B       ; B: defaultChainId, A: chainId tx
-        $                               :EQ,JMPC(endCheckChainId)                               ; If A == B --> endCheckChainId
-                                        :JMP(invalidTx)                                    ; If A == B --> endCheckChainId
-
+                                        :JMP(invalidTx)                                         ; If A != B --> invalidTx
 endCheckChainId:
 
 ; //TODO: move touchedAddress after intrinsic checks
