@@ -2439,8 +2439,8 @@ opRETURNdeploy:
 ; TODO: not in RETURN, but in CREATE process
 opRETURNcreate:
     ; save offset memory and length to compute contract hash
-    E                               :MSTORE(memOffsetLinearPoseidon)
-    C                               :MSTORE(memSizeLinearPoseidon)
+    E               :MSTORE(memOffsetLinearPoseidon)
+    C               :MSTORE(memSizeLinearPoseidon)
 
     CTX             :MSTORE(currentCTX)
     $ => B          :MLOAD(gasRefund)
@@ -2482,6 +2482,7 @@ opRETURNcreateEnd:
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     A               :MSTORE(SP++)
+    ${touchedAddress(A,CTX)}
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
@@ -2739,7 +2740,7 @@ opSELFDESTRUCT:
     GAS - 5000 => GAS   :JMPN(outOfGas)
 
     ; clean bytecode
-    $ => A              :MLOAD(txDestAddr)
+    $ => A              :MLOAD(storageAddr)
     %SMT_KEY_SC_CODE => B
     0 => C
     0 => D
@@ -2752,10 +2753,7 @@ opSELFDESTRUCT:
     ; get contract balance
     0 => B,C            ; balance key smt
     $ => E              :SLOAD
-
-    ; set contract balance to 0
-    $ => SR             :SSTORE
-    E => D              ; contract balance in D
+    E => D
 
     ; read receiver
     SP - 1 => SP        :JMPN(stackUnderflow)
@@ -2786,7 +2784,24 @@ opSELFDESTRUCT:
     0 => B,C                ; balance key smt
     $ => SR                 :SSTORE
 
-                            :JMP(endCode)
+    ; set contract balance to 0
+    $ => A                  :MLOAD(storageAddr)
+    0 => D
+    $ => SR                 :SSTORE
+
+    $ => A                  :MLOAD(originCTX)
+    $                       :EQ,JMPC(endCode)
+    $ => B                  :MLOAD(gasRefund)
+    A => CTX
+    ;Store ret length
+    B                       :MSTORE(gasRefund)
+    $ => C                  :MLOAD(gasCTX)
+    GAS + C => GAS          :JMPN(outOfGas)
+    $ => SP                 :MLOAD(lastSP)
+    $ => PC                 :MLOAD(lastPC)
+    1                       :MSTORE(SP++)
+    1024 - SP               :JMPN(stackOverflow)
+                            :JMP(readCode)
 
 opINVALID:
     ; Equivalent to REVERT with 0,0 as stack parameters
