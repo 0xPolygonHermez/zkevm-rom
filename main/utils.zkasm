@@ -342,13 +342,23 @@ computeGasSendCallEnd:
 saveMem:
     A                           :MSTORE(tmpVarA)
     B                           :MSTORE(tmpVarB)
+    E                           :MSTORE(tmpVarE)
+    $ => B                      :MLOAD(memLength)
+    $ => E                      :MLOAD(lastMemLength)
+    B - E                       :JMPN(saveMemGAS)
+                                :JMP(saveMemEnd)
+
+saveMemGAS:
     E                           :MSTORE(memLength)
     ${(E+31)/32} => A
     ${(B+31)/32} => B
     GAS - 3*A - ${A*A/512} => GAS   :JMPN(outOfGas)
     GAS + 3*B + ${B*B/512} => GAS
+
+saveMemEnd:
     $ => A                      :MLOAD(tmpVarA)
     $ => B                      :MLOAD(tmpVarB)
+    $ => E                      :MLOAD(tmpVarE)
                                 :RETURN
 
 addARITH:
@@ -661,6 +671,7 @@ moveBalances:
         $ => SR                         :SSTORE
 endMoveBalances:
                                         :RETURN
+
 invalidCall:
         $ => SR                         :MLOAD(initSR)
         $ => A                          :MLOAD(originCTX)
