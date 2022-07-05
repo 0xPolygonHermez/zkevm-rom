@@ -7,7 +7,8 @@ opSTOP:
     B => CTX
     CTX             :MSTORE(currentCTX)
     $ => B          :MLOAD(gasCTX)
-    A               :MSTORE(gasRefund)
+    $ => C          :MLOAD(gasRefund)
+    A + C           :MSTORE(gasRefund)
     GAS + B => GAS
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
@@ -2378,13 +2379,14 @@ opRETURN:
     $ => CTX        :MLOAD(originCTX)
     ; Add return data context value to origin context
     A               :MSTORE(retDataCTX)
-    B               :MSTORE(gasRefund)
+    $ => A          :MLOAD(gasRefund)
+    A + B           :MSTORE(gasRefund)
     $ => B          :MLOAD(gasCTX)
     ; TODO Should be substracted first the gas
-    B + GAS => GAS  :JMPN(outOfGas)
+    B + GAS => GAS
     $ => B          :MLOAD(retOffset)
     ; TODO  Origin memory len != return memory len ?
-    A => CTX
+    $ => CTX          :MLOAD(currentCTX)
 
 ; Copy from memory current CTX to memory origin CTX
 opRETURN32:
@@ -2445,10 +2447,11 @@ opRETURNcreate:
     CTX             :MSTORE(currentCTX)
     $ => B          :MLOAD(gasRefund)
     $ => CTX        :MLOAD(originCTX)
-    B               :MSTORE(gasRefund)
+    $ => A          :MLOAD(gasRefund)
+    A + B           :MSTORE(gasRefund)
     $ => B          :MLOAD(gasCTX)
     ; TODO Should be substracted first the gas
-    B + GAS => GAS  :JMPN(outOfGas)
+    B + GAS => GAS
     $ => B          :MLOAD(retOffset)
     ; TODO  Origin memory len != return memory len ?
     $ => CTX        :MLOAD(currentCTX)
@@ -2482,7 +2485,6 @@ opRETURNcreateEnd:
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     A               :MSTORE(SP++)
-    ${touchedAddress(A,CTX)}
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
@@ -2719,7 +2721,7 @@ opREVERT:
 
     ;Store ret length
     $ => C          :MLOAD(gasCTX)
-    GAS + C => GAS  :JMPN(outOfGas)
+    GAS + C => GAS
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     0               :MSTORE(SP++)
@@ -2794,9 +2796,10 @@ opSELFDESTRUCT:
     $ => B                  :MLOAD(gasRefund)
     A => CTX
     ;Store ret length
-    B                       :MSTORE(gasRefund)
+    $ => A                  :MLOAD(gasRefund)
+    A + B                   :MSTORE(gasRefund)
     $ => C                  :MLOAD(gasCTX)
-    GAS + C => GAS          :JMPN(outOfGas)
+    GAS + C => GAS
     $ => SP                 :MLOAD(lastSP)
     $ => PC                 :MLOAD(lastPC)
     1                       :MSTORE(SP++)
