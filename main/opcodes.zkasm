@@ -443,6 +443,7 @@ opSHA3:
     E + C           :MSTORE(lastMemLength)
     ; gas
     GAS - 30 => GAS :JMPN(outOfGas); gas static = 30
+                    :CALL(saveMem)
     ; Div operation with Arith
     ;${6*((C+31)/32)}
     C+31 => A
@@ -489,10 +490,8 @@ opSHA3End:
     $ => A          :HASHKDIGEST(E)
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    $ => E          :MLOAD(lastMemLength)
-    $ => B          :MLOAD(memLength)
-    B - E           :JMPN(saveMemLength)
                     :JMP(readCode)
+
 opADDRESS:
     $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPN(opADDRESSdeploy)
@@ -594,6 +593,7 @@ opCALLDATACOPY:
     E+C             :MSTORE(lastMemLength)
     GAS - 3 => GAS  :JMPN(outOfGas)
     GAS - ${3*((C+31)/32)} => GAS    :JMPN(outOfGas)
+                    :CALL(saveMem)
     SP              :MSTORE(SPw)
                     :JMP(opCALLDATACOPYinit)
 
@@ -654,9 +654,6 @@ opCALLDATACOPYxor:
 
 opCALLDATACOPYend:
     $ => SP         :MLOAD(SPw)
-    $ => E          :MLOAD(lastMemLength)
-    $ => B          :MLOAD(memLength)
-    B - E           :JMPN(saveMemLength)
                     :JMP(readCode)
 
 opCODESIZE:
@@ -695,6 +692,7 @@ opCODECOPY:
     C + E           :MSTORE(lastMemLength)
     GAS - 3 => GAS  :JMPN(outOfGas)
     GAS - ${3*((E+31)/32)} => GAS    :JMPN(outOfGas)
+                    :CALL(saveMem)
     ; check memory limits
     0x200000 => A
     C + E => B
@@ -712,7 +710,7 @@ opCODECOPY:
 
 opCODECOPYinit:
     $ => B          :MLOAD(remainingBytes)
-    B - 1           :JMPN(opCODECOPYend)
+    B - 1           :JMPN(readCode)
     $ => A          :MLOAD(memOffset)
                     :CALL(offsetUtil) ; E (integer) / C (remaining)
     E               :MSTORE(memInteger)
@@ -733,11 +731,6 @@ opCODECOPYinit:
     A               :MSTORE(memOffset)
                     :JMP(opCODECOPYinit)
 
-opCODECOPYend:
-    $ => E          :MLOAD(lastMemLength)
-    $ => B          :MLOAD(memLength)
-    B - E           :JMPN(saveMemLength)
-                    :JMP(readCode)
 
 ; @info Load 0 if read bytecode position is above bytecode length
 opCODECOPYLoadBytes:
@@ -795,6 +788,7 @@ opEXTCODECOPY:
     $ => E          :MLOAD(SP)   ;bytecode length
     C + E           :MSTORE(lastMemLength)
     GAS - ${3*((E+31)/32)} => GAS    :JMPN(outOfGas)
+                    :CALL(saveMem)
     ; check memory limits
     0x200000 => A
     C + E => B
@@ -848,7 +842,7 @@ opEXTCODECOPYCheckHashLoopEnd:
                                         :RETURN
 
 opEXTCODECOPYinit:
-    C - 1           :JMPN(opEXTCODECOPYend)
+    C - 1           :JMPN(readCode)
     C - 32          :JMPN(opEXTCODECOPYfinal)
     ${getBytecode(A,B,32)} => D
     D               :MSTORE(bytesToStore)
@@ -863,11 +857,6 @@ opEXTCODECOPYfinal:
                     :CALL(SHLarith)
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
-
-opEXTCODECOPYend:
-    $ => E          :MLOAD(lastMemLength)
-    $ => B          :MLOAD(memLength)
-    B - E           :JMPN(saveMemLength)
                     :JMP(readCode)
 
 opRETURNDATASIZE:
@@ -893,11 +882,13 @@ opRETURNDATACOPY:
     $ => D          :MLOAD(SP--)            ;destOffset
     $ => B          :MLOAD(SP--)            ;offset - offset in return data
     $ => C          :MLOAD(SP)              ;length - length return data
+    D + C           :MSTORE(lastMemLength)
+                    :CALL(saveMem)
     ; if retDataCTX is 0, end opcode execution
     B => E
     $ => B          :MLOAD(retDataCTX)
     0 => A
-    $               :EQ, JMPC(opRETURNDATACOPYend)
+    $               :EQ, JMPC(readCode)
     ; Load ret data length from last ctx
     B => CTX
     E => B
@@ -926,10 +917,9 @@ opRETURNDATACOPY:
                     :CALL(mulARITH)
     $ => A          :MLOAD(arithRes1)
     GAS - A => GAS  :JMPN(outOfGas)
-    D + C           :MSTORE(lastMemLength)
 
 opRETURNDATACOPYinit:
-    C - 1           :JMPN(opRETURNDATACOPYend)
+    C - 1           :JMPN(readCode)
     C - 32          :JMPN(opRETURNDATACOPYfinal)
     B => E
     ; Load memory from last context used
@@ -956,12 +946,6 @@ opRETURNDATACOPYfinal:
     D => E
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
-
-opRETURNDATACOPYend:
-    ; Update mem length in case mem expansion
-    $ => E          :MLOAD(lastMemLength)
-    $ => B          :MLOAD(memLength)
-    B - E           :JMPN(saveMemLength)
                     :JMP(readCode)
 
 opEXTCODEHASH:
@@ -1112,11 +1096,11 @@ opMLOAD:
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => E          :MLOAD(SP)                  ;offset
                     :CALL(MLOAD32)
+    E               :MSTORE(lastMemLength)
+                    :CALL(saveMem)
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
     GAS - 3 => GAS    :JMPN(outOfGas)
-    $ => B          :MLOAD(memLength)
-    B - E           :JMPN(saveMemLength)
                     :JMP(readCode)
 
 opMSTORE:                                       ;MSTORE 32 bytes
@@ -1126,15 +1110,11 @@ opMSTORE:                                       ;MSTORE 32 bytes
     $ => B          :MLOAD(SP)                  ;value
     B               :MSTORE(bytesToStore)
                     :CALL(MSTORE32)
+    E               :MSTORE(lastMemLength)
+                    :CALL(saveMem)
     GAS - 3 => GAS  :JMPN(outOfGas)
-    $ => B          :MLOAD(memLength)
-    B - E           :JMPN(saveMemLength)
                     :JMP(readCode)
 
-; // TODO: move to utils
-saveMemLength:
-                    :CALL(saveMem)
-                    :JMP(readCode)
 
 opMSTORE8:
     SP - 2          :JMPN(stackUnderflow)
@@ -1150,8 +1130,8 @@ opMSTORE8:
     B               :MEM_ALIGN_WR8 ; only use LSB of B, rest of bytes could be non zero.
     D               :MSTORE(MEM:E)     ; write W0
     GAS - 3 => GAS  :JMPN(outOfGas)
-    $ => B          :MLOAD(memLength)
-    B - E           :JMPN(saveMemLength)
+    E               :MSTORE(lastMemLength)
+                    :CALL(saveMem)
                     :JMP(readCode)
 
 opSLOAD:
@@ -1352,7 +1332,7 @@ checkJumpDestDeploymentCreate:
 
 opPC:
     GAS - 2 => GAS      :JMPN(outOfGas)
-    PC                  :MSTORE(SP++)
+    PC - 1              :MSTORE(SP++) ; TODO: check PC
     1024 - SP           :JMPN(stackOverflow)
                         :JMP(readCode)
 
@@ -1986,6 +1966,7 @@ opLOG0:
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
     E + C               :MSTORE(lastMemLength)
+                        :CALL(saveMem)
     0                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
     GAS - 8 * C => GAS  :JMPN(outOfGas)                 ; add gas depending on data bytes
@@ -2001,6 +1982,7 @@ opLOG1:
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
     E + C               :MSTORE(lastMemLength)
+                        :CALL(saveMem)
     1                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
     GAS - 8 * C => GAS  :JMPN(outOfGas)               ; add gas depending on data bytes
@@ -2016,6 +1998,7 @@ opLOG2:
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
     E + C               :MSTORE(lastMemLength)
+                        :CALL(saveMem)
     2                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
     GAS - 8 * C => GAS  :JMPN(outOfGas)               ; add gas depending on data bytes
@@ -2031,6 +2014,7 @@ opLOG3:
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
     E + C               :MSTORE(lastMemLength)
+                        :CALL(saveMem)
     3                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
     GAS - 8 * C => GAS  :JMPN(outOfGas)               ; add gas depending on data bytes
@@ -2046,6 +2030,7 @@ opLOG4:
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
     E + C               :MSTORE(lastMemLength)
+                        :CALL(saveMem)
     4                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
     GAS - 8 * C => GAS  :JMPN(outOfGas)               ; add gas depending on data bytes
@@ -2069,7 +2054,7 @@ opSaveTopicsInit:
     $ => A          :MLOAD(numTopics)
 
 opSaveTopicsLoop:
-    A - 1               :JMPN(opLOGend)
+    A - 1               :JMPN(readCode)
     SP - 1 => SP        :JMPN(stackUnderflow)
     GAS - 375 => GAS    :JMPN(outOfGas)
     $ => C              :MLOAD(SP)   ; topicX
@@ -2077,11 +2062,6 @@ opSaveTopicsLoop:
     A - 1 =>  A
                         :JMP(opSaveTopicsLoop)
 
-opLOGend:
-    $ => E          :MLOAD(lastMemLength)
-    $ => B          :MLOAD(memLength)
-    B - E           :JMPN(saveMemLength)
-                    :JMP(readCode)
 
 ; // TODO Check with DElEGATE CALL txDestAddr/txSrcAddr ( same as other calls)
 ; // TODO check revert create
@@ -2197,9 +2177,7 @@ opCALL2:
     B => A
 
 opCALL3:
-    A => E
-    $ => B          :MLOAD(memLength)
-    E - B           :JMPN(opCALL4) ; last memory pointer - currentMemLen
+    A               :MSTORE(lastMemLength)
                     :CALL(saveMem)
 
 opCALL4:
@@ -2306,10 +2284,9 @@ opCALLCODE2:
     B => A
 
 opCALLCODE3:
-    A => E
-    $ => B          :MLOAD(memLength)
-    E - B           :JMPN(opCALLCODE4) ; last memory pointer - currentMemLen
+    A               :MSTORE(lastMemLength)
                     :CALL(saveMem)
+
 opCALLCODE4:
     $ => B          :MLOAD(txDestAddr)
     $ => C          :MLOAD(txSrcAddr)
@@ -2369,10 +2346,11 @@ opRETURN:
     E               :MSTORE(retDataOffset)
     C               :MSTORE(retDataLength)
     E+C             :MSTORE(lastMemLength)
+                    :CALL(saveMem)
     $ => D          :MLOAD(isCreateContract)
     0 - D           :JMPN(opRETURNdeploy)
     $ => B          :MLOAD(originCTX)
-    B - 1           :JMPN(opRETURNend2)
+    B - 1           :JMPN(endCode)
     $ => B          :MLOAD(gasRefund)
     $ => A          :MLOAD(currentCTX)
     $ => CTX        :MLOAD(originCTX)
@@ -2417,17 +2395,8 @@ opRETURNend:
     $ => PC         :MLOAD(lastPC)
     1               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    $ => E          :MLOAD(lastMemLength)
-    $ => B          :MLOAD(memLength)
-    B - E           :JMPN(saveMemLength)
                     :JMP(readCode)
 
-; Return to last CTX
-opRETURNend2:
-    $ => E          :MLOAD(lastMemLength)
-    $ => B          :MLOAD(memLength)
-    B - E           :JMPN(saveMemLength)
-                    :JMP(endCode)
 
 opRETURNdeploy:
 ; TODO check what does return?  what assures returned_code_size is correct?
@@ -2527,9 +2496,7 @@ opDELEGATECALL:
     B => A
 
 opDELEGATECALL2:
-    A => E
-    $ => B          :MLOAD(memLength)
-    E - B           :JMPN(opDELEGATECALL3)
+    A               :MSTORE(lastMemLength)
                     :CALL(saveMem)
 
 opDELEGATECALL3:
@@ -2656,9 +2623,7 @@ opSTATICCALL:
     B => A
 
 opSTATICCALL2:
-    A => E
-    $ => B          :MLOAD(memLength)
-    E - B           :JMPN(opSTATICCALL3)
+    A               :MSTORE(lastMemLength)
                     :CALL(saveMem)
 
 opSTATICCALL3:
@@ -2710,7 +2675,7 @@ opREVERT:
     C               :MSTORE(retDataLength)
     $ => C          :MLOAD(originCTX)
     ${eventLog(onError, revert)}
-    C - 1           :JMPN(opREVERTend)
+    C - 1           :JMPN(handleGas)
     $ => A          :MLOAD(currentCTX)
     C => CTX
     C               :MSTORE(currentCTX)
@@ -2726,17 +2691,14 @@ opREVERT:
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
-
-opREVERTend:
-                    :JMP(endCode)
-
 ; // TODO: handle if depth is over 0
 ; DelegateCAll + selfdestruct, should destro the caller bytecode
 ; Test selfDestruct: sent value to another contract
 opSELFDESTRUCT:
     $ => A              :MLOAD(iSstaticCall)
     0 - A               :JMPN(invalidStaticTx)
-    24000               :MSTORE(gasRefund)
+    $ => A              :MLOAD(gasRefund)
+    A + 24000           :MSTORE(gasRefund)
     GAS - 5000 => GAS   :JMPN(outOfGas)
 
     ; clean bytecode
