@@ -4,8 +4,6 @@ opSTOP:
     $ => B          :MLOAD(originCTX)
     B - 1           :JMPN(opSTOPend)
     $ => A          :MLOAD(gasRefund)
-    $ => D          :MLOAD(isCreateContract)
-    $ => E          :MLOAD(createContractAddress)
     B => CTX
     CTX             :MSTORE(currentCTX)
     $ => B          :MLOAD(gasCTX)
@@ -15,18 +13,8 @@ opSTOP:
     $ => PC         :MLOAD(lastPC)
     1               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    0 - D           :JMPN(opStopCreate)
                     :JMP(readCode)
-opStopCreate:
-    ; Increase nonce after create exection
-    E => A
-    %SMT_KEY_NONCE => B
-    0 => C
-    $ => B          :SLOAD
-    B + 1 => D
-    %SMT_KEY_NONCE => B
-    $ => SR         :SSTORE
-                    :JMP(readCode)
+
 opSTOPend:
                     :JMP(endCode)
 
@@ -2439,11 +2427,6 @@ opRETURNcreate:
     %SMT_KEY_SC_LENGTH => B
     C => D
     0 => C
-    $ => SR         :SSTORE
-
-    ; set contract nonce
-    %SMT_KEY_NONCE => B
-    1 => D
     $ => SR         :SSTORE
 
     ; get bytecode and hash it
