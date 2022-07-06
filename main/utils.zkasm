@@ -346,7 +346,7 @@ saveMem:
     ${(E+31)/32} => A
     ${(B+31)/32} => B
     GAS - 3*A - ${A*A/512} => GAS   :JMPN(outOfGas)
-    GAS + 3*B + ${B*B/512} => GAS   :JMPN(outOfGas)
+    GAS + 3*B + ${B*B/512} => GAS
     $ => A                      :MLOAD(tmpVarA)
     $ => B                      :MLOAD(tmpVarB)
                                 :RETURN
@@ -651,12 +651,12 @@ moveBalances:
         $ => SR                         :SSTORE
 
         ; Increment destination balance
-        $ => A                          :MLOAD(txDestAddr)
+        $ => A                          :MLOAD(storageAddr)
         0 => B                                                                                  ; balance key smt
         $ => A                          :SLOAD                                                  ; Original Balance in E
         $ => B                          :MLOAD(txValue)                                         ; E = A + C
         $ => D                          :ADD 
-        $ => A                          :MLOAD(txDestAddr)
+        $ => A                          :MLOAD(storageAddr)
         0 => B,C                        ; balance key smt
         $ => SR                         :SSTORE
 endMoveBalances:
@@ -825,6 +825,10 @@ utilsAddBatchHashBytebyByte:
 VAR GLOBAL memOffsetLinearPoseidon
 VAR GLOBAL memSizeLinearPoseidon
 hashPoseidonLinearFromMemory:
+    A                                :MSTORE(tmpVarA)
+    B                                :MSTORE(tmpVarB)
+    C                                :MSTORE(tmpVarC)
+    E                                :MSTORE(tmpVarE)
     RR                               :MSTORE(tmpZkPC2)
     $ => E                           :MLOAD(memOffsetLinearPoseidon)
     $ => C                           :MLOAD(memSizeLinearPoseidon)
@@ -858,5 +862,10 @@ hashPoseidonEnd:
     $ => E          :MLOAD(tmpContractHashId)
     HASHPOS         :HASHPLEN(E)
     $ => D          :HASHPDIGEST(E)
+    ${saveContractBytecode(E)}
     $ => RR         :MLOAD(tmpZkPC2)
+    $ => A          :MLOAD(tmpVarA)
+    $ => B          :MLOAD(tmpVarB)
+    $ => C          :MLOAD(tmpVarC)
+    $ => E          :MLOAD(tmpVarE)
                     :RETURN
