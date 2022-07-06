@@ -1,0 +1,29 @@
+;; Add 'data' bytes to batchHashData. batchHashData = H_keccak( transactions | globalExitRoot | sequencerAddr )
+addBatchHashData:
+        $ => HASHPOS                    :MLOAD(batchHashPos)
+        $ => E                          :MLOAD(batchHashDataId)
+        A                               :HASHK(E)
+        HASHPOS                         :MSTORE(batchHashPos)
+        C => HASHPOS
+        $ => E                          :MLOAD(lastHashKIdUsed)
+                                        :RETURN
+
+;; get D bytes from transaction bytes
+getTxBytes:
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
+        A - B - C - D                   :JMPN(invalidTxRLP)
+        ${getTxs(p,D)} => A
+        $${p = p + D}
+                                        :RETURN
+
+;; Add bytes to generate ethereum transaction hash. transactionHash = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data, chainId, 0, 0))
+addHashTx:
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
+        A - B - C - D                   :JMPN(invalidTxRLP)
+        ${getTxs(p,D)} => A
+        $${p = p + D}
+        A                               :HASHK(E)
+        C + D => C
+                                        :RETURN

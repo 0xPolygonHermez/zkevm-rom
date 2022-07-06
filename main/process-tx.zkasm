@@ -73,7 +73,7 @@ endCheckChainId:
 ; Intrinsic gas and upfront cost checks
 ;;;;;;;;
 
-        $ => B                          :MLOAD(txGas)                   ; Multiplies the txGas (gas limit) amd the txGasPrice
+        $ => B                          :MLOAD(txGasLimit)                   ; Multiplies the txGasLimit (gas limit) amd the txGasPrice
         ; Check batch gas limit is not exceeded by transaction
         %BATCH_GAS_LIMIT => A
         $                               :LT,JMPC(invalidTx)
@@ -121,7 +121,7 @@ add16Gas:
                                         :JMP(loopBytes)
 endCalldataIntrinsicGas:
         ; Compare gas limit >= intrinsic gas
-        $ => A                          :MLOAD(txGas)
+        $ => A                          :MLOAD(txGasLimit)
         E => B
         $                               :LT, JMPC(invalidTx)
         ; Store calculated gas for later usage
@@ -134,25 +134,25 @@ endCalldataIntrinsicGas:
         A                               :MSTORE(arithA)
         B                               :MSTORE(arithB)
                                         :CALL(mulARITH)
-        ; gas Price * gas limit in D     
-        $ => D                          :MLOAD(arithRes1)                
+        ; gas Price * gas limit in D
+        $ => D                          :MLOAD(arithRes1)
         ; Get caller balance
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C                                                        ; balance key smt
         ; Caller Balance in C
-        $ => C                          :SLOAD                          
+        $ => C                          :SLOAD
         $ => B                          :MLOAD(txValue)
         D                               :MSTORE(arithA)
         B                               :MSTORE(arithB)
                                         :CALL(addARITH)
         ; gas price * gas limit + value in B
         $ => B                          :MLOAD(arithRes1)
-        ; Caller balance in A               
+        ; Caller balance in A
         C => A
         ; Check Balance >= gas price * gas limit + value -> upfront cost
         $                               :LT,JMPC(invalidTx)
 
-        
+
         ; Substract gas Price * gas limit (D) from caller balance (A)
         C                               :MSTORE(arithA)
         D                               :MSTORE(arithB)
@@ -167,7 +167,7 @@ endCalldataIntrinsicGas:
         SR                              :MSTORE(initSR)
 
         ; Substract intrinsic gas
-        $ => GAS                        :MLOAD(txGas)
+        $ => GAS                        :MLOAD(txGasLimit)
         $ => A                          :MLOAD(gasCalldata)
         GAS - A => GAS
 
@@ -455,7 +455,7 @@ handleGas:
         0 => A
         $ => B                          :MLOAD(gasRefund)
         B - 1                           :JMPN(refundGas)
-        $ => A                          :MLOAD(txGas)
+        $ => A                          :MLOAD(txGasLimit)
         A - GAS => A
         ; Div operation with Arith
         A               :MSTORE(arithA)
@@ -493,8 +493,8 @@ refundGas:
 ; Send remaining gas to sequencer
 ;;;;;;;;
 sendGasSeq:
-        $ => A                          :MLOAD(txGas)                                           ; Multiplies the txGas amd the txGasPrice
-        A - GAS => A                                                                            ; A = txGas -GAS
+        $ => A                          :MLOAD(txGasLimit)                                           ; Multiplies the txGasLimit amd the txGasPrice
+        A - GAS => A                                                                            ; A = txGasLimit -GAS
 
         $ => B                          :MLOAD(txGasPrice)                                               ; value to pay the sequencer in D
         ; Mul operation with Arith

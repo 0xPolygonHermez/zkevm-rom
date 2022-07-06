@@ -1,48 +1,53 @@
 INCLUDE "constants.zkasm"
 INCLUDE "vars.zkasm"
 
-start:
-; First of all, load The call Data.  The first A value is forced with the hash of the TX.
-        ${getGlobalHash()}                  :MSTORE(globalHash)                    ; In A register we have the TXHash
+; Blocks zkROM
+;       A - Load input variables
+;       B - Set batch storage state-tree: batchHash (oldStateRoot) & globalExitRoot
+;       C - Loop parsing RLP transactions
+;       D - Loop processing transactions
+;       E - Batch asserts: localExitRoot, transactions size, batchHashData & globalHash
+;       F - Finalize execution
+
+start: ; main zkROM entry point
+;;;;;;;;;;;;;;;;;;
+;; A - Load input variabales
+;;;;;;;;;;;;;;;;;;
+        ${getGlobalHash()}                  :MSTORE(globalHash)
         STEP => A
-        1                                   :ASSERT                                ; Ensure it is the begining of the execution
+        1                                   :ASSERT ; Ensure it is the begining of the execution
         ${getGlobalExitRoot()}              :MSTORE(globalExitRoot)
         ${getOldStateRoot()}                :MSTORE(oldStateRoot)
-
-        32 => D
-        $ => A                              :MLOAD(oldStateRoot)
-        A                                   :HASHK(0)
-        A => SR
-
-        ${getOldLocalExitRoot()}  => A      :HASHK(0)
-                                            :MSTORE(oldLocalExitRoot)
-
+        ${getOldLocalExitRoot()}            :MSTORE(oldLocalExitRoot)
         ${getNewLocalExitRoot()}            :MSTORE(newLocalExitRoot)
-
         ${getSequencerAddr()}               :MSTORE(sequencerAddr)
-
         ${getBatchHashData()}               :MSTORE(batchHashData)
-
         ${getNumBatch()}                    :MSTORE(numBatch)
-
         ${getTimestamp()}                   :MSTORE(timestamp)
-
         ${getTxsLen()}                      :MSTORE(batchL2DataLength)
 
-;;;;;;;;;
-;; Set batch hash
-;;;;;;;;;
-        ; Save the position of the last hash (oldHashPos --> VAR GLOBAL)
-        HASHPOS                             :MSTORE(oldHashPos)
-        ; A new hash with position 0 is started
-        0 => HASHPOS
+        ; Fill globalHash: oldStateRoot & oldLocalExitRoot
+        32 => D
+        $ => A                              :MLOAD(oldStateRoot)
+        A                                   :HASHK(0) ; GlobalHash address is 0
+        A => SR
+        $ => A                              :MLOAD(oldLocalExitRoot)
+        A                                   :HASHK(0)
 
+        HASHPOS                             :MSTORE(oldHashPos) ; Save globalHash data position
+
+;;;;;;;;;;;;;;;;;;
+;; B - Set batch storage state-tree: batchHash (oldStateRoot) & globalExitRoot
+;;;;;;;;;;;;;;;;;;
+
+;; Set batch hash
+        0 => HASHPOS ; A new hash with position 0 is started
         $ => E                              :MLOAD(lastHashKIdUsed)
         E+1 => E                            :MSTORE(lastHashKIdUsed)
-        32 => D ; //TODO: opt. no need set D to 32
+
         $ => A                              :MLOAD(numBatch)
         A - 1                               :HASHK(E)
-        %STATE_ROOT_STORAGE_POS             :HASHK(E)                  ; Storage position of the batch hash
+        %STATE_ROOT_STORAGE_POS             :HASHK(E) ; Storage position of the batch hash
         HASHPOS                             :HASHKLEN(E)
         $ => C                              :HASHKDIGEST(E)
         ${eventLog(onStartBatch, C)}
@@ -50,43 +55,42 @@ start:
         %ADDRESS_SYSTEM => A
         %SMT_KEY_SC_STORAGE => B
         $ => D                              :MLOAD(oldStateRoot)
-        $ => SR                             :SSTORE                    ; Store 'oldStateRoot' in storage position 'keccak256(numBatch - 1, 0)'
+        $ => SR                             :SSTORE ; Store 'oldStateRoot' in storage position 'keccak256(numBatch - 1, 0)'
 
-;;;;;;;;;
 ;; Set global exit root
-;;;;;;;;;
-        ; A new hash with position 0 is started
         0 => HASHPOS
-
         $ => E                              :MLOAD(lastHashKIdUsed)
         E+1 => E                            :MSTORE(lastHashKIdUsed)
+
         32 => D
         $ => A                              :MLOAD(globalExitRoot)
         A                                   :HASHK(E)
-        %GLOBAL_EXIT_ROOT_STORAGE_POS       :HASHK(E)                  ; Storage position of the global exit root map
+        %GLOBAL_EXIT_ROOT_STORAGE_POS       :HASHK(E) ; Storage position of the global exit root map
         HASHPOS                             :HASHKLEN(E)
-        $ => C                              :HASHKDIGEST(E)            ; Storage position of the current global exit root
+        $ => C                              :HASHKDIGEST(E)
 
         %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2 => A
         %SMT_KEY_SC_STORAGE => B
         $ => D                              :MLOAD(numBatch)
-        $ => SR                             :SSTORE
+        $ => SR                             :SSTORE ; Store 'numBatch' in storage position 'keccak256(globalExitRoot, 0)'
 
-;;;;;;;;;
-;; Prepare transaction loop
-;;;;;;;;;
+;;;;;;;;;;;;;;;;;;
+;; C - Loop parsing RLP transactions
+;;      - Load transaction RLP data and ensure it has correct RLP encoding
+;;      - If an error is found in any transaction, the batch will not process any transaction
+;;;;;;;;;;;;;;;;;;
+
         E+1 => E                            :MSTORE(lastHashKIdUsed)
         0                                   :MSTORE(batchHashPos)
         E                                   :MSTORE(batchHashDataId)
-        ; Store the lastHashKIdUsed at lastTxHashId variable. We need this variable to know where to read the hash for each transaction at process_tx flow
-        E                                   :MSTORE(lastTxHashId) ; //TODO: explanation variable
+        E                                   :MSTORE(lastTxHashId) ; Points at first hash address to be used when processing transactions
         $ => A                              :MLOAD(lastCtxUsed)
-        A                                   :MSTORE(ctxTxToUse)
+        A                                   :MSTORE(ctxTxToUse) ; Points at first context to be used when processing transactions
 
         $${var p = 0}
 
 txLoopRLP:
-        $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
+        $ => A          :MLOAD(lastCtxUsed)
         A+1 => CTX      :MSTORE(lastCtxUsed)
 
         $ => A          :MLOAD(batchL2DataLength)
@@ -97,12 +101,17 @@ txLoopRLP:
 endCheckRLP:
                         :JMP(txLoop)
 
+;;;;;;;;;;;;;;;;;;
+;; D - Loop processing transactions
+;;      - Load transaction data and interpret it
+;;;;;;;;;;;;;;;;;;
+
 txLoop:
         $ => A          :MLOAD(pendingTxs)
         A-1 => A        :MSTORE(pendingTxs)
         A               :JMPN(processTxsEnd)
 
-        $ => A          :MLOAD(ctxTxToUse)                        ; Set the CTX and store in system
+        $ => A          :MLOAD(ctxTxToUse) ; Load first context used by transaction
         A+1 => CTX      :MSTORE(ctxTxToUse)
 
                         :JMP(processTx)
@@ -113,24 +122,28 @@ processTxEnd:
 
 processTxsEnd:
 
-;;;;;;;;;
+;;;;;;;;;;;;;;;;;;
+;; E - Batch asserts: localExitRoot, transactions size, batchHashData & globalHash
+;;;;;;;;;;;;;;;;;;
+
 ;; Assert local exit root
-;;;;;;;;;
+        ; Read 'localExitRoot' variable from GLOBAL_EXIT_ROOT_MANAGER_L2 and check
+        ; it is equal to the 'newLocalExitRoot' input
         %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2  => A
         %SMT_KEY_SC_STORAGE => B
-        %LOCAL_EXIT_ROOT_STORAGE_POS => C                         ; Storage position of the local exit root
-        $ => A                          :SLOAD
-        $                               :MLOAD(newLocalExitRoot), ASSERT
+        %LOCAL_EXIT_ROOT_STORAGE_POS => C
+        $ => A                                          :SLOAD
+        $                                               :MLOAD(newLocalExitRoot), ASSERT
 
-;;;;;;;;;
-;; Txs Size Verification
-;;;;;;;;;
+
+;; Transactions size verification
+        ; Ensure bytes added to compute the 'batchHashData' matches the number of bytes loaded from input
         $ => A                          :MLOAD(batchHashPos)
         $                               :MLOAD(batchL2DataLength), ASSERT
 
-;;;;;;;;;
-;; Check batchHashData
-;;;;;;;;;
+;; Compute and check 'batchHashData'
+        ; Compute 'batchHashData'
+        ; Ensure hash result 'batchHashData' mathes the input
         A => HASHPOS
         $ => E                          :MLOAD(batchHashDataId)
 
@@ -147,15 +160,11 @@ processTxsEnd:
 
         $                               :HASHKDIGEST(E), ASSERT
 
-;;;;;;;
-; Check Global Hash
-;;;;;;;
-
-        ; Get position of the previous hash
-        $ => HASHPOS                    :MLOAD(oldHashPos)
+;; Compute and check 'globalHash'
+        $ => HASHPOS                    :MLOAD(oldHashPos) ; Retrieve 'globalHash' hash postion
 
         32 => D
-        SR                              :HASHK(0)
+        SR                              :HASHK(0) ; add 'newStateRoot' to `globalHash`
 
         $ => A                          :MLOAD(newLocalExitRoot)
         A                               :HASHK(0)
@@ -164,7 +173,6 @@ processTxsEnd:
         A                               :HASHK(0)
 
         8 => D
-
         $ => A                          :MLOAD(numBatch)
         A                               :HASHK(0)
 
@@ -177,12 +185,13 @@ processTxsEnd:
         $                               :HASHKDIGEST(0), ASSERT
         ${eventLog(onFinishBatch)}
 
-        0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR                 ; Set all registers to 0
+;;;;;;;;;;;;;;;;;;
+;; F - Finalize execution
+;;;;;;;;;;;;;;;;;;
+        0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR ; Set all registers to 0
+                                                                        :JMP(finalWait)
 
-finalWait:
-        ${beforeLast()}  : JMPN(finalWait)
-                         : JMP(start)
-
-INCLUDE "loadtx_rlp.zkasm"
-INCLUDE "process_tx.zkasm"
+INCLUDE "end.zkasm"
+INCLUDE "load-tx-rlp.zkasm"
+INCLUDE "process-tx.zkasm"
 INCLUDE "opcodes.zkasm"

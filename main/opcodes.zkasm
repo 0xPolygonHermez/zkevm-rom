@@ -1169,7 +1169,7 @@ opSLOAD:
 
 opSSTORE:
     SP - 2          :JMPN(stackUnderflow)
-    $ => A          :MLOAD(iSstaticCall)
+    $ => A          :MLOAD(isStaticCall)
     0 - A           :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => C          :MLOAD(SP--) ;key
@@ -1981,7 +1981,7 @@ opSWAP16:
 ; gas_cost = 375 + 375 * num_topics + 8 * data_size + mem_expansion_cost
 opLOG0:
     SP - 2              :JMPN(stackUnderflow)
-    $ => A              :MLOAD(iSstaticCall)
+    $ => A              :MLOAD(isStaticCall)
     0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
@@ -1996,7 +1996,7 @@ opLOG0:
 
 opLOG1:
     SP - 3              :JMPN(stackUnderflow)
-    $ => A              :MLOAD(iSstaticCall)
+    $ => A              :MLOAD(isStaticCall)
     0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
@@ -2011,7 +2011,7 @@ opLOG1:
 
 opLOG2:
     SP - 4              :JMPN(stackUnderflow)
-    $ => A              :MLOAD(iSstaticCall)
+    $ => A              :MLOAD(isStaticCall)
     0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
@@ -2026,7 +2026,7 @@ opLOG2:
 
 opLOG3:
     SP - 5              :JMPN(stackUnderflow)
-    $ => A              :MLOAD(iSstaticCall)
+    $ => A              :MLOAD(isStaticCall)
     0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
@@ -2041,7 +2041,7 @@ opLOG3:
 
 opLOG4:
     SP - 6              :JMPN(stackUnderflow)
-    $ => A              :MLOAD(iSstaticCall)
+    $ => A              :MLOAD(isStaticCall)
     0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
@@ -2088,7 +2088,7 @@ opLOGend:
 ; // TODO check revert create
 opCREATE:
     SP - 3              :JMPN(stackUnderflow)
-    $ => A              :MLOAD(iSstaticCall)
+    $ => A              :MLOAD(isStaticCall)
     0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => A              :MLOAD(SP--)            ;value
@@ -2164,7 +2164,7 @@ opCALL:
     $ => A          :MLOAD(SP--)
     A               :MSTORE(valueCall)
     ; If is static and value is not 0 -> revert
-    $ => B          :MLOAD(iSstaticCall)
+    $ => B          :MLOAD(isStaticCall)
     B - 1           :JMPN(opCALL2)
     0 - A           :JMPN(invalidStaticTx)
 
@@ -2242,20 +2242,20 @@ opCALL4:
     GAS - 25000*E => GAS :JMPN(outOfGas)
 
 opCALLend:
-                    :CALL(computeGasSendCall)
+                        :CALL(computeGasSendCall)
     ; Add estipend (2300) in case of tx with value
     A + 2300*C => A
-    $ => CTX        :MLOAD(originCTX)
-    GAS - A + 2300*C:MSTORE(gasCTX)
-    $ => C          :MLOAD(txGasPrice)
-    $ => CTX        :MLOAD(currentCTX)
-    C               :MSTORE(txGasPrice)
+    $ => CTX            :MLOAD(originCTX)
+    GAS - A + 2300*C    :MSTORE(gasCTX)
+    $ => C              :MLOAD(txGasPrice)
+    $ => CTX            :MLOAD(currentCTX)
+    C                   :MSTORE(txGasPrice)
     A => GAS
 
-    $ => A          :MLOAD(argsLengthCall)
-    A               :MSTORE(txCalldataLen)
-                    :CALL(copySP)
-                    :JMP(txType)
+    $ => A              :MLOAD(argsLengthCall)
+    A                   :MSTORE(txCalldataLen)
+                        :CALL(copySP)
+                        :JMP(txType)
 
 ; TODO if theres a delegate call inside a callCode, who is the msg.sender?
 ; should be the caller of the callCode? ( but we do not store this info yet)
@@ -2273,7 +2273,7 @@ opCALLCODE: ; TODO check staticCall
     $ => A          :MLOAD(SP--)
     A               :MSTORE(valueCall)
     ; If is static and value is not 0 -> revert
-    $ => B          :MLOAD(iSstaticCall)
+    $ => B          :MLOAD(isStaticCall)
     B - 1           :JMPN(opCALLCODE2)
     0 - A           :JMPN(invalidStaticTx)
 
@@ -2577,7 +2577,7 @@ opDELEGATECALLend:
 ; // TODO check revert create
 opCREATE2:
     SP - 4              :JMPN(stackUnderflow)
-    $ => A              :MLOAD(iSstaticCall)
+    $ => A              :MLOAD(isStaticCall)
     0 - A               :JMPN(invalidStaticTx)
     SP - 1 => SP
     $ => A              :MLOAD(SP--)    ;value
@@ -2676,7 +2676,7 @@ opSTATICCALL3:
     $ => A          :MLOAD(originAuxCTX)
     A               :MSTORE(originCTX)
     0               :MSTORE(txValue)
-    1               :MSTORE(iSstaticCall)
+    1               :MSTORE(isStaticCall)
     B               :MSTORE(txSrcAddr)
     D               :MSTORE(txSrcOriginAddr)
     ${copyTouchedAddress(A,CTX)}
@@ -2736,7 +2736,7 @@ opREVERTend:
 ; DelegateCAll + selfdestruct, should destro the caller bytecode
 ; Test selfDestruct: sent value to another contract
 opSELFDESTRUCT:
-    $ => A              :MLOAD(iSstaticCall)
+    $ => A              :MLOAD(isStaticCall)
     0 - A               :JMPN(invalidStaticTx)
     24000               :MSTORE(gasRefund)
     GAS - 5000 => GAS   :JMPN(outOfGas)
