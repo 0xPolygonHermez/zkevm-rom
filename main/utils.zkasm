@@ -337,14 +337,19 @@ computeGasSendCallEnd:
     $ => D                  :MLOAD(tmpVarD)
     $ => E                  :MLOAD(tmpVarE)
                             :RETURN
-
-;@in E --> new mem length
+; lastMemOffset: offset to copy bytes
+; lastMemLength: size of the bytes to copy
 saveMem:
     A                           :MSTORE(tmpVarA)
     B                           :MSTORE(tmpVarB)
     E                           :MSTORE(tmpVarE)
+    $ => E                      :MLOAD(lastMemOffset)
+    $ => B                      :MLOAD(lastMemLength)
+    0 => A
+    ; If no len, no memory expansion
+    $                           :EQ, JMPC(saveMemEnd)
+    E + B => E
     $ => B                      :MLOAD(memLength)
-    $ => E                      :MLOAD(lastMemLength)
     B - E                       :JMPN(saveMemGAS)
                                 :JMP(saveMemEnd)
 

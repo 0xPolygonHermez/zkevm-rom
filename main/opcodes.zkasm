@@ -441,7 +441,8 @@ opSHA3:
     SP - 1 => SP
     $ => E          :MLOAD(SP--) ; offset
     $ => C          :MLOAD(SP) ; length
-    E + C           :MSTORE(lastMemLength)
+    E               :MSTORE(lastMemOffset)
+    C               :MSTORE(lastMemLength)
     ; gas
     GAS - 30 => GAS :JMPN(outOfGas); gas static = 30
                     :CALL(saveMem)
@@ -591,7 +592,8 @@ opCALLDATACOPY:
     $ => E          :MLOAD(SP--) ;destOffset - offset memory
     $ => B          :MLOAD(SP--) ;offset calldata
     $ => C          :MLOAD(SP)   ;length calldata
-    E+C             :MSTORE(lastMemLength)
+    E               :MSTORE(lastMemOffset)
+    C               :MSTORE(lastMemLength)
     GAS - 3 => GAS  :JMPN(outOfGas)
     GAS - ${3*((C+31)/32)} => GAS    :JMPN(outOfGas)
                     :CALL(saveMem)
@@ -690,7 +692,8 @@ opCODECOPY:
     $ => C          :MLOAD(SP--) ;destOffset, memory offset
     $ => D          :MLOAD(SP--) ;offset, bytecode offset
     $ => E          :MLOAD(SP)   ;bytecode length
-    C + E           :MSTORE(lastMemLength)
+    C               :MSTORE(lastMemOffset)
+    E               :MSTORE(lastMemLength)
     GAS - 3 => GAS  :JMPN(outOfGas)
     GAS - ${3*((E+31)/32)} => GAS    :JMPN(outOfGas)
                     :CALL(saveMem)
@@ -787,7 +790,8 @@ opEXTCODECOPY:
     $ => C          :MLOAD(SP--) ;destOffset, memory offset
     $ => D          :MLOAD(SP--) ;offset, bytecode offset
     $ => E          :MLOAD(SP)   ;bytecode length
-    C + E           :MSTORE(lastMemLength)
+    D               :MSTORE(lastMemOffset)
+    E               :MSTORE(lastMemLength)
     GAS - ${3*((E+31)/32)} => GAS    :JMPN(outOfGas)
                     :CALL(saveMem)
     ; check memory limits
@@ -883,7 +887,8 @@ opRETURNDATACOPY:
     $ => D          :MLOAD(SP--)            ;destOffset
     $ => B          :MLOAD(SP--)            ;offset - offset in return data
     $ => C          :MLOAD(SP)              ;length - length return data
-    D + C           :MSTORE(lastMemLength)
+    D               :MSTORE(lastMemOffset)
+    C               :MSTORE(lastMemLength)
                     :CALL(saveMem)
     ; if retDataCTX is 0, end opcode execution
     B => E
@@ -1096,22 +1101,26 @@ opPOP:
 opMLOAD:
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => E          :MLOAD(SP)                  ;offset
+    E               :MSTORE(lastMemOffset)
                     :CALL(MLOAD32)
-    E               :MSTORE(lastMemLength)
+    32              :MSTORE(lastMemLength)
                     :CALL(saveMem)
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS - 3 => GAS    :JMPN(outOfGas)
+    GAS - 3 => GAS  :JMPN(outOfGas)
                     :JMP(readCode)
 
-opMSTORE:                                       ;MSTORE 32 bytes
+;MSTORE 32 bytes
+opMSTORE:
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => E          :MLOAD(SP--)                ;offset
     $ => B          :MLOAD(SP)                  ;value
     B               :MSTORE(bytesToStore)
+    E               :MSTORE(lastMemOffset)
+    E => A
                     :CALL(MSTORE32)
-    E               :MSTORE(lastMemLength)
+    E - A           :MSTORE(lastMemLength)
                     :CALL(saveMem)
     GAS - 3 => GAS  :JMPN(outOfGas)
                     :JMP(readCode)
@@ -1131,7 +1140,8 @@ opMSTORE8:
     B               :MEM_ALIGN_WR8 ; only use LSB of B, rest of bytes could be non zero.
     D               :MSTORE(MEM:E)     ; write W0
     GAS - 3 => GAS  :JMPN(outOfGas)
-    E               :MSTORE(lastMemLength)
+    E               :MSTORE(lastMemOffset)
+    1               :MSTORE(lastMemLength)
                     :CALL(saveMem)
                     :JMP(readCode)
 
@@ -1966,7 +1976,8 @@ opLOG0:
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
-    E + C               :MSTORE(lastMemLength)
+    E                   :MSTORE(lastMemOffset)
+    C                   :MSTORE(lastMemLength)
                         :CALL(saveMem)
     0                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
@@ -1982,7 +1993,8 @@ opLOG1:
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
-    E + C               :MSTORE(lastMemLength)
+    E                   :MSTORE(lastMemOffset)
+    C                   :MSTORE(lastMemLength)
                         :CALL(saveMem)
     1                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
@@ -1998,7 +2010,8 @@ opLOG2:
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
-    E + C               :MSTORE(lastMemLength)
+    E                   :MSTORE(lastMemOffset)
+    C                   :MSTORE(lastMemLength)
                         :CALL(saveMem)
     2                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
@@ -2014,7 +2027,8 @@ opLOG3:
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
-    E + C               :MSTORE(lastMemLength)
+    E                   :MSTORE(lastMemOffset)
+    C                   :MSTORE(lastMemLength)
                         :CALL(saveMem)
     3                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
@@ -2030,7 +2044,8 @@ opLOG4:
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; offset
     $ => C              :MLOAD(SP)   ; length
-    E + C               :MSTORE(lastMemLength)
+    E                   :MSTORE(lastMemOffset)
+    C                   :MSTORE(lastMemLength)
                         :CALL(saveMem)
     4                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
@@ -2158,9 +2173,11 @@ opCALL2:
     ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
     $ => B          :MLOAD(SP--)
     B               :MSTORE(retOffset)
+    B               :MSTORE(lastMemOffset)
     ; Store byte size to copy (size of the return data).
     $ => D          :MLOAD(SP)
     D               :MSTORE(retLength)
+    D               :MSTORE(lastMemLength)
     ; Access with zero length will not extend the memory
     ; Add operation with Arith
     D               :MSTORE(arithA)
@@ -2178,7 +2195,6 @@ opCALL2:
     B => A
 
 opCALL3:
-    A               :MSTORE(lastMemLength)
                     :CALL(saveMem)
 
 opCALL4:
@@ -2264,9 +2280,11 @@ opCALLCODE2:
     ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
     $ => B          :MLOAD(SP--)
     B               :MSTORE(retOffset)
+    B               :MSTORE(lastMemOffset)
     ; Store byte size to copy (size of the return data).
     $ => D          :MLOAD(SP)
     D               :MSTORE(retLength)
+    D               :MSTORE(lastMemLength)
     ; Access with zero length will not extend the memory
     ; Add operation with Arith
     D               :MSTORE(arithA)
@@ -2284,7 +2302,6 @@ opCALLCODE2:
     B => A
 
 opCALLCODE3:
-    A               :MSTORE(lastMemLength)
                     :CALL(saveMem)
 
 opCALLCODE4:
@@ -2343,7 +2360,8 @@ opRETURN:
     $ => C          :MLOAD(SP)   ;length
     E               :MSTORE(retDataOffset)
     C               :MSTORE(retDataLength)
-    E+C             :MSTORE(lastMemLength)
+    E               :MSTORE(lastMemOffset)
+    C               :MSTORE(lastMemLength)
                     :CALL(saveMem)
     $ => D          :MLOAD(isCreateContract)
     0 - D           :JMPN(opRETURNdeploy)
@@ -2471,9 +2489,11 @@ opDELEGATECALL:
     ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
     $ => B          :MLOAD(SP--)
     B               :MSTORE(retOffset)
+    B               :MSTORE(lastMemOffset)
     ; Store byte size to copy (size of the return data).
     $ => D          :MLOAD(SP)
     D               :MSTORE(retLength)
+    D               :MSTORE(lastMemLength)
     ; Access with zero length will not extend the memory
     ; Add operation with Arith
     D               :MSTORE(arithA)
@@ -2491,7 +2511,6 @@ opDELEGATECALL:
     B => A
 
 opDELEGATECALL2:
-    A               :MSTORE(lastMemLength)
                     :CALL(saveMem)
 
 opDELEGATECALL3:
@@ -2603,19 +2622,20 @@ opSTATICCALL:
     $ => A          :MLOAD(SP--)
     A               :MSTORE(argsOffsetCall)
     $ => B          :MLOAD(SP--)
-    B               :MSTORE(argsLengthCall)
+    B               :MSTORE(argsLengthCall)    
     ${A + B} => A
     $ => C          :MLOAD(SP--)
     C               :MSTORE(retOffset)
+    C               :MSTORE(lastMemOffset)
     $ => B          :MLOAD(SP)
     B               :MSTORE(retLength)
+    B               :MSTORE(lastMemLength)
     ${C + B} => B
     $ => C          :LT
     C - 1           :JMPN(opSTATICCALL2)
     B => A
 
 opSTATICCALL2:
-    A               :MSTORE(lastMemLength)
                     :CALL(saveMem)
 
 opSTATICCALL3:
