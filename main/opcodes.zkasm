@@ -2,8 +2,14 @@ INCLUDE "utils.zkasm"
 
 opSTOP:
     $ => B          :MLOAD(originCTX)
-    B - 1           :JMPN(opSTOPend)
+    B - 1           :JMPN(endCode)
     $ => A          :MLOAD(gasRefund)
+    $ => C          :MLOAD(isCreate)
+    1 => D 
+    C - 1           :JMPN(opSTOPend)
+    $ => D          :MLOAD(createContractAddress)
+
+opSTOPend:
     B => CTX
     CTX             :MSTORE(currentCTX)
     $ => B          :MLOAD(gasCTX)
@@ -12,12 +18,9 @@ opSTOP:
     GAS + B => GAS
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
-    1               :MSTORE(SP++)
+    D               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
-
-opSTOPend:
-                    :JMP(endCode)
 
 opADD:
     SP - 2          :JMPN(stackUnderflow)
@@ -2704,6 +2707,7 @@ opREVERT:
 ; // TODO: handle if depth is over 0
 ; DelegateCAll + selfdestruct, should destro the caller bytecode
 ; Test selfDestruct: sent value to another contract
+; TODO selfdestrut should destory the contract at the end of the transaction
 opSELFDESTRUCT:
     $ => A              :MLOAD(isStaticCall)
     0 - A               :JMPN(invalidStaticTx)
@@ -2764,6 +2768,12 @@ opSELFDESTRUCT:
     $ => A                  :MLOAD(originCTX)
     $                       :EQ,JMPC(endCode)
     $ => B                  :MLOAD(gasRefund)
+    $ => C                  :MLOAD(isCreate)
+    1 => D 
+    C - 1                   :JMPN(opSELFDESTRUCTCend)
+    $ => D                  :MLOAD(createContractAddress)
+
+opSELFDESTRUCTCend:
     A => CTX
     ;Store ret length
     $ => A                  :MLOAD(gasRefund)
@@ -2772,7 +2782,7 @@ opSELFDESTRUCT:
     GAS + C => GAS
     $ => SP                 :MLOAD(lastSP)
     $ => PC                 :MLOAD(lastPC)
-    1                       :MSTORE(SP++)
+    D                       :MSTORE(SP++)
     1024 - SP               :JMPN(stackOverflow)
                             :JMP(readCode)
 

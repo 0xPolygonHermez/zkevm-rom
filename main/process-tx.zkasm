@@ -318,13 +318,13 @@ readDeployBytecode:
         $ => B                          :MLOAD(isCreate)
         $                               :EQ,JMPC(readDeployBytecodeCreate)
         $ => B                          :MLOAD(txCalldataLen)
-        B - PC                          :JMPN(endDeploy)
+        ; TODO E i C should be pointers as: "endDeploy" is called from opRETURNDeploy which has: C --> length, E --> offset
+        B - PC                          :JMPN(opSTOP) 
         $ => HASHPOS                    :MLOAD(dataStarts)
         HASHPOS + PC => HASHPOS
         $ => E                          :MLOAD(batchHashDataId)
         1 => D
-        $ => B                          :HASHK(E)
-        B => RR
+        $ => RR                         :HASHK(E)
         ${eventLog(onOpcode)}
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
@@ -395,12 +395,10 @@ readByteCode:
         $ => A                          :MLOAD(txDestAddr)
         ; get contract length
         $ => B                          :MLOAD(bytecodeLength)
-        B - PC - 1                      :JMPN(endCode)
+        B - PC - 1                      :JMPN(opSTOP) ; no bytecode treated as 0x00
         PC => HASHPOS
-        HASHPOS => B
         1 => D
         $ => RR                         :HASHP(E)
-        RR => B
         ${eventLog(onOpcode)}
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
@@ -410,11 +408,12 @@ readCode:
         0 - A                           :JMPN(readDeployBytecode)
                                         :JMP(readByteCode)
 
+; only when first context ends
 endCode:
         $ => A                          :MLOAD(isCreateContract)
         0 - A                           :JMPN(endDeploy)
-                                        :JMP(endByteCode)
-
+                                        :JMP(handleGas)
+; only when first context ends on deploy
 endDeploy:
         ; save offset memory and length to compute contract hash
         E                               :MSTORE(memOffsetLinearPoseidon)
@@ -433,18 +432,6 @@ endDeploy:
         %SMT_KEY_SC_CODE => B
         $ => SR                         :SSTORE
 
-endByteCode:
-        $ => A                          :MLOAD(originCTX)
-        A - 1                           :JMPN(handleGas)
-        A => CTX
-        CTX                             :MSTORE(currentCTX)
-        $ => B                          :MLOAD(gasCTX)
-        B + GAS => GAS
-        $ => SP                         :MLOAD(lastSP)
-        $ => PC                         :MLOAD(lastPC)
-        1                               :MSTORE(SP++)
-        1024 - SP                       :JMPN(stackOverflow)
-                                        :JMP(readCode)
 
 handleGas:
 
