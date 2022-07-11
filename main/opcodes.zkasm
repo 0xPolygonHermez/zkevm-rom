@@ -2,7 +2,7 @@ INCLUDE "utils.zkasm"
 
 opSTOP:
     $ => B          :MLOAD(originCTX)
-    B - 1           :JMPN(endCode)
+    B - 1           :JMPN(handleGas)
     $ => A          :MLOAD(gasRefund)
     $ => C          :MLOAD(isCreate)
     1 => D 
@@ -2369,7 +2369,7 @@ opRETURN:
     $ => D          :MLOAD(isCreateContract)
     0 - D           :JMPN(opRETURNdeploy)
     $ => B          :MLOAD(originCTX)
-    B - 1           :JMPN(endCode)
+    B - 1           :JMPN(handleGas)
     $ => B          :MLOAD(gasRefund)
     $ => A          :MLOAD(currentCTX)
     $ => CTX        :MLOAD(originCTX)
@@ -2423,7 +2423,7 @@ opRETURNdeploy:
     GAS - 200 * C => GAS    :JMPN(outOfGas) ;code_deposit_cost = 200 * returned_code_size
     $ => B          :MLOAD(originCTX)       ;last ctx
     0 - B           :JMPN(opRETURNcreate)
-                    :JMP(endCode)
+                    :JMP(endDeploy)
 
 ; TODO: not in RETURN, but in CREATE process
 opRETURNcreate:
@@ -2766,7 +2766,7 @@ opSELFDESTRUCT:
     $ => SR                 :SSTORE
 
     $ => A                  :MLOAD(originCTX)
-    $                       :EQ,JMPC(endCode)
+    $                       :EQ,JMPC(handleGas)
     $ => B                  :MLOAD(gasRefund)
     $ => C                  :MLOAD(isCreate)
     1 => D 

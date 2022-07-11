@@ -318,17 +318,15 @@ readDeployBytecode:
         $ => B                          :MLOAD(isCreate)
         $                               :EQ,JMPC(readDeployBytecodeCreate)
         $ => B                          :MLOAD(txCalldataLen)
-        ; TODO E i C should be pointers as: "endDeploy" is called from opRETURNDeploy which has: C --> length, E --> offset
-        B - PC                          :JMPN(opSTOP) 
+        B - PC - 1                      :JMPN(defaultOpCode) 
         $ => HASHPOS                    :MLOAD(dataStarts)
         HASHPOS + PC => HASHPOS
         $ => E                          :MLOAD(batchHashDataId)
         1 => D
         $ => RR                         :HASHK(E)
-        ${eventLog(onOpcode)}
+        ${eventLog(onOpcode(RR))}
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
-
 readDeployBytecodeCreate:
         $ => CTX                        :MLOAD(originCTX)
         $ => E                          :MLOAD(argsOffsetCall)
@@ -338,9 +336,8 @@ readDeployBytecodeCreate:
         $ => CTX                        :MLOAD(currentCTX)
         31 => D
                                         :CALL(SHRarith)
-        A => B
         B => RR
-        ${eventLog(onOpcode)}
+        ${eventLog(onOpcode(RR))}
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
 
@@ -361,7 +358,7 @@ callContract:
         $ => B                          :SLOAD
         B                               :MSTORE(bytecodeLength)
         0 => A
-        $                               :EQ, JMPC(opSTOP) ;no bytecode
+        $                               :EQ, JMPC(defaultOpCode) ;no bytecode
 
         $ => A                          :MLOAD(txDestAddr)
         ; get hash contract
@@ -395,11 +392,11 @@ readByteCode:
         $ => A                          :MLOAD(txDestAddr)
         ; get contract length
         $ => B                          :MLOAD(bytecodeLength)
-        B - PC - 1                      :JMPN(opSTOP) ; no bytecode treated as 0x00
+        B - PC - 1                      :JMPN(defaultOpCode) ; no bytecode treated as 0x00
         PC => HASHPOS
         1 => D
         $ => RR                         :HASHP(E)
-        ${eventLog(onOpcode)}
+        ${eventLog(onOpcode(RR))}
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
 
@@ -408,11 +405,6 @@ readCode:
         0 - A                           :JMPN(readDeployBytecode)
                                         :JMP(readByteCode)
 
-; only when first context ends
-endCode:
-        $ => A                          :MLOAD(isCreateContract)
-        0 - A                           :JMPN(endDeploy)
-                                        :JMP(handleGas)
 ; only when first context ends on deploy
 endDeploy:
         ; save offset memory and length to compute contract hash
@@ -506,3 +498,7 @@ sendGasSeq:
 invalidTx:
         $ => SR                         :MLOAD(originSR)
                                         :JMP(processTxEnd)
+
+defaultOpCode:
+        ${eventLog(onOpcode(0))}
+                                        :JMP(opSTOP) 
