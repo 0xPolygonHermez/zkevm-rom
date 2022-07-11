@@ -2,14 +2,19 @@ INCLUDE "utils.zkasm"
 
 opSTOP:
     $ => B          :MLOAD(originCTX)
+    ${log(B)}
     B - 1           :JMPN(handleGas)
     $ => A          :MLOAD(gasRefund)
     $ => C          :MLOAD(isCreate)
     1 => D 
+    ${log(C)}
+    ${log(B)}
     C - 1           :JMPN(opSTOPend)
     $ => D          :MLOAD(createContractAddress)
 
 opSTOPend:
+    ${log(D)}
+
     B => CTX
     CTX             :MSTORE(currentCTX)
     $ => B          :MLOAD(gasCTX)
@@ -2095,6 +2100,11 @@ opCREATE:
     E                   :MSTORE(argsOffsetCall)
     $ => C              :MLOAD(SP)      ;length
     C                   :MSTORE(argsLengthCall)
+    ; Mem expansion gas cost
+    E                   :MSTORE(lastMemOffset)
+    C                   :MSTORE(lastMemLength)
+                        :CALL(saveMem)
+
     CTX                 :MSTORE(originAuxCTX)
     $ => B              :MLOAD(txDestAddr)
     GAS - 32000 => GAS  :JMPN(outOfGas)
@@ -2567,6 +2577,11 @@ opCREATE2:
     $ => C              :MLOAD(SP--)      ;length
     C                   :MSTORE(argsLengthCall)
     $ => D              :MLOAD(SP)    ;salt
+    ; Mem expansion gas cost
+    E                   :MSTORE(lastMemOffset)
+    C                   :MSTORE(lastMemLength)
+                        :CALL(saveMem)
+
     CTX                 :MSTORE(originAuxCTX)
     $ => B              :MLOAD(txDestAddr)
     GAS - 32000 => GAS  :JMPN(outOfGas)
