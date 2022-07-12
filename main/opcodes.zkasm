@@ -867,20 +867,20 @@ opCODECOPYinit:
 
 ; @info Load 0 if read bytecode position is above bytecode length
 opCODECOPYLoadBytes:
-    HASHPOS => A
+    0 => A
     $ => B          :MLOAD(codecopyBytecodeLength)
-    B - 1 => B
+    $               :EQ, JMPC(readZero)
+    HASHPOS => A
     $               :LT, JMPC(readValueBytecode)
-
+readZero:
+    0 => B
+                    :RETURN
 readValueBytecode:
     1 => D
     $ => E          :MLOAD(codecopyHashId)
     $ => B          :HASHP(E)   ; read value to write in memory
                     :RETURN
 
-readZero:
-    0 => B
-                    :RETURN
 
 opGASPRICE:
     $ => A          :MLOAD(txGasPrice)
@@ -924,8 +924,8 @@ opEXTCODECOPY:
     GAS-100-D*2500 => GAS            :JMPN(outOfGas)
                     :CALL(opEXTCODECOPYCheckHash)
     $ => C          :MLOAD(SP--) ;destOffset, memory offset
-    $ => D          :MLOAD(SP--) ;offset, bytecode offset
-    $ => E          :MLOAD(SP)   ;bytecode length
+    $ => D          :MLOAD(SP--) ;offset to read from bytecode
+    $ => E          :MLOAD(SP)   ; bytes to read from bytecode
     D               :MSTORE(lastMemOffset)
     E               :MSTORE(lastMemLength)
 
@@ -957,7 +957,12 @@ opEXTCODECOPYCheckHash:
     0 => C
     $ => D                          :SLOAD
     D                               :MSTORE(tmpContractLength)
-
+    ; If len is 0 nothing to check
+    A => E
+    0 => A
+    D => B
+    $                               :EQ, JMPC(opEXTCODECOPYCheckHashEnd)
+    E => A
     ; get hash contract
     %SMT_KEY_SC_CODE => B
     0 => C
@@ -986,6 +991,7 @@ opEXTCODECOPYCheckHashLoopEnd:
         $ => E                          :HASHPDIGEST(E)
         ; check hash computed matches hash in the smt leaf
         E                               :ASSERT
+opEXTCODECOPYCheckHashEnd:
                                         :RETURN
 
 opEXTCODECOPYinit:
