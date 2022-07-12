@@ -422,7 +422,15 @@ divARITH:
     ; Check denominator(A) is not zero
     0 => B
     $               :EQ, JMPC(zeroDiv)
-    ${E%A} => C
+
+    ; Check if divisor (E) is smaller than denominator E < A
+    A => C ; store temporally A in C
+    E => A ; divisor
+    C => B ; denominator
+    $               :LT, JMPC(divisorSmallerDiv)
+    C => A
+
+    ${E%A} => C ; reminder
     ${E/A} => B
     0 => D
     E               :ARITH
@@ -430,13 +438,12 @@ divARITH:
     B               :MSTORE(arithRes1)
     C               :MSTORE(arithRes2)
 
-    ; check remainder < dividend
-    ; Add one to check also the case where remainder = numToDiv
-    E => A
-    C => B
+    ; check divisor > reminder
+    C => A ; reminder
+    E => B ; divisor
     $ => A          :LT
-    0               :ASSERT
-    
+    1               :ASSERT
+
     zkPC+1 => RR    :JMP(loadTmp)
     $ => RR         :MLOAD(tmpZkPC)
                     :JMP(RR)
@@ -444,6 +451,14 @@ divARITH:
 zeroDiv:
     0               :MSTORE(arithRes1)
     0               :MSTORE(arithRes2)
+
+    zkPC+1 => RR    :JMP(loadTmp)
+    $ => RR         :MLOAD(tmpZkPC)
+                    :JMP(RR)
+                    
+divisorSmallerDiv:
+    0               :MSTORE(arithRes1)
+    E               :MSTORE(arithRes2)
 
     zkPC+1 => RR    :JMP(loadTmp)
     $ => RR         :MLOAD(tmpZkPC)
