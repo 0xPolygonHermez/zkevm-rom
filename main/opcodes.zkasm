@@ -2175,37 +2175,27 @@ opCALL2:
     ; Store bytes offset int the memory, the calldata of the subcontext
     $ => A          :MLOAD(SP--)
     A               :MSTORE(argsOffsetCall)
+    A               :MSTORE(lastMemOffset)
+
     ; Byte size to copy, size of the calldata of the subcontext
     $ => C          :MLOAD(SP--)
     C               :MSTORE(argsLengthCall)
+    C               :MSTORE(lastMemLength)
+    ; Mem expansion gas cost call args
+                    :CALL(saveMem)
+
     ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
     $ => B          :MLOAD(SP--)
     B               :MSTORE(retOffset)
     B               :MSTORE(lastMemOffset)
+
     ; Store byte size to copy (size of the return data).
     $ => D          :MLOAD(SP)
     D               :MSTORE(retLength)
     D               :MSTORE(lastMemLength)
-    ; Access with zero length will not extend the memory
-    ; Add operation with Arith
-    D               :MSTORE(arithA)
-    C               :MSTORE(arithB)
-                    :CALL(addARITH)
-    $ => A          :MLOAD(arithRes1)
-    0 => B
-    $               :EQ, JMPC(opCALL4)
-
-    $ => A          :MLOAD(argsOffsetCall)
-    ${A + C} => A   ; last memory pointer call
-    $ => B          :MLOAD(retOffset)
-    ${B + D} => B   ; last memory pointer return
-    $ => C          :LT, JMPC(opCALL3)
-    B => A
-
-opCALL3:
+    ;  Mem expansion gas cost return args
                     :CALL(saveMem)
 
-opCALL4:
     $ => B          :MLOAD(txDestAddr)
     $ => D          :MLOAD(txSrcAddr)
     $ => C          :MLOAD(storageAddr)
@@ -2282,9 +2272,14 @@ opCALLCODE2:
     ; Store bytes offset int the memory, the calldata of the subcontext
     $ => A          :MLOAD(SP--)
     A               :MSTORE(argsOffsetCall)
+    A               :MSTORE(lastMemOffset)
     ; Byte size to copy, size of the calldata of the subcontext
     $ => C          :MLOAD(SP--)
     C               :MSTORE(argsLengthCall)
+    C               :MSTORE(lastMemLength)
+    ; Mem expansion gas cost call args
+                    :CALL(saveMem)
+    
     ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
     $ => B          :MLOAD(SP--)
     B               :MSTORE(retOffset)
@@ -2293,21 +2288,7 @@ opCALLCODE2:
     $ => D          :MLOAD(SP)
     D               :MSTORE(retLength)
     D               :MSTORE(lastMemLength)
-    ; Access with zero length will not extend the memory
-    ; Add operation with Arith
-    D               :MSTORE(arithA)
-    C               :MSTORE(arithB)
-                    :CALL(addARITH)
-    $ => A          :MLOAD(arithRes1)
-    0 => B
-    $               :EQ, JMPC(opCALLCODE4)
-
-    $ => A          :MLOAD(argsOffsetCall)
-    ${A + C} => A   ; last memory pointer call
-    $ => B          :MLOAD(retOffset)
-    ${B + D} => B   ; last memory pointer return
-    $ => C          :LT, JMPC(opCALLCODE3)
-    B => A
+                    :CALL(saveMem)
 
 opCALLCODE3:
                     :CALL(saveMem)
@@ -2490,10 +2471,15 @@ opDELEGATECALL:
     ; Store bytes offset int the memory, the calldata of the subcontext
     $ => A          :MLOAD(SP--)
     A               :MSTORE(argsOffsetCall)
+    A               :MSTORE(lastMemOffset)
+
     ; Byte size to copy, size of the calldata of the subcontext
     $ => C          :MLOAD(SP--)
     C               :MSTORE(argsLengthCall)
-    ${A + B} => A
+    C               :MSTORE(lastMemLength)
+    ; Mem expansion gas cost call args
+                    :CALL(saveMem)
+
     ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
     $ => B          :MLOAD(SP--)
     B               :MSTORE(retOffset)
@@ -2502,26 +2488,9 @@ opDELEGATECALL:
     $ => D          :MLOAD(SP)
     D               :MSTORE(retLength)
     D               :MSTORE(lastMemLength)
-    ; Access with zero length will not extend the memory
-    ; Add operation with Arith
-    D               :MSTORE(arithA)
-    C               :MSTORE(arithB)
-                    :CALL(addARITH)
-    $ => A          :MLOAD(arithRes1)
-    0 => B
-    $               :EQ, JMPC(opDELEGATECALL3)
-
-    $ => A          :MLOAD(argsOffsetCall)
-    ${A + C} => A   ; last memory pointer call
-    $ => B          :MLOAD(retOffset)
-    ${B + D} => B   ; last memory pointer return
-    $ => C          :LT, JMPC(opDELEGATECALL2)
-    B => A
-
-opDELEGATECALL2:
+    ;  Mem expansion gas cost return args
                     :CALL(saveMem)
 
-opDELEGATECALL3:
     $ => B          :MLOAD(txValue)
     $ => C          :MLOAD(txSrcAddr)
     $ => E          :MLOAD(storageAddr)
@@ -2572,6 +2541,7 @@ opCREATE2:
     $ => C              :MLOAD(SP--)      ;length
     C                   :MSTORE(argsLengthCall)
     $ => D              :MLOAD(SP)    ;salt
+
     ; Mem expansion gas cost
     E                   :MSTORE(lastMemOffset)
     C                   :MSTORE(lastMemLength)
@@ -2634,24 +2604,24 @@ opSTATICCALL:
     A               :MSTORE(addrCall)
     $ => A          :MLOAD(SP--)
     A               :MSTORE(argsOffsetCall)
+    A               :MSTORE(lastMemOffset)
+
     $ => B          :MLOAD(SP--)
-    B               :MSTORE(argsLengthCall)    
-    ${A + B} => A
+    B               :MSTORE(argsLengthCall)  
+    B               :MSTORE(lastMemLength)
+    ; Mem expansion gas cost call args
+                    :CALL(saveMem)
+
     $ => C          :MLOAD(SP--)
     C               :MSTORE(retOffset)
     C               :MSTORE(lastMemOffset)
+
     $ => B          :MLOAD(SP)
     B               :MSTORE(retLength)
     B               :MSTORE(lastMemLength)
-    ${C + B} => B
-    $ => C          :LT
-    C - 1           :JMPN(opSTATICCALL2)
-    B => A
-
-opSTATICCALL2:
+    ;  Mem expansion gas cost return args
                     :CALL(saveMem)
 
-opSTATICCALL3:
     $ => B          :MLOAD(txDestAddr)
     SR              :MSTORE(initSR)
     SP              :MSTORE(lastSP)
