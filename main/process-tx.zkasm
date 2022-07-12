@@ -318,17 +318,15 @@ readDeployBytecode:
         $ => B                          :MLOAD(isCreate)
         $                               :EQ,JMPC(readDeployBytecodeCreate)
         $ => B                          :MLOAD(txCalldataLen)
-        B - PC                          :JMPN(endDeploy)
+        B - PC - 1                      :JMPN(defaultOpCode) 
         $ => HASHPOS                    :MLOAD(dataStarts)
         HASHPOS + PC => HASHPOS
         $ => E                          :MLOAD(batchHashDataId)
         1 => D
-        $ => B                          :HASHK(E)
-        B => RR
-        ${eventLog(onOpcode)}
+        $ => RR                         :HASHK(E)
+        ${eventLog(onOpcode(RR))}
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
-
 readDeployBytecodeCreate:
         $ => CTX                        :MLOAD(originCTX)
         $ => E                          :MLOAD(argsOffsetCall)
@@ -338,9 +336,8 @@ readDeployBytecodeCreate:
         $ => CTX                        :MLOAD(currentCTX)
         31 => D
                                         :CALL(SHRarith)
-        A => B
-        B => RR
-        ${eventLog(onOpcode)}
+        A => RR
+        ${eventLog(onOpcode(RR))}
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
 
@@ -361,7 +358,7 @@ callContract:
         $ => B                          :SLOAD
         B                               :MSTORE(bytecodeLength)
         0 => A
-        $                               :EQ, JMPC(opSTOP) ;no bytecode
+        $                               :EQ, JMPC(defaultOpCode) ;no bytecode
 
         $ => A                          :MLOAD(txDestAddr)
         ; get hash contract
@@ -395,13 +392,11 @@ readByteCode:
         $ => A                          :MLOAD(txDestAddr)
         ; get contract length
         $ => B                          :MLOAD(bytecodeLength)
-        B - PC - 1                      :JMPN(endCode)
+        B - PC - 1                      :JMPN(defaultOpCode) ; no bytecode treated as 0x00
         PC => HASHPOS
-        HASHPOS => B
         1 => D
         $ => RR                         :HASHP(E)
-        RR => B
-        ${eventLog(onOpcode)}
+        ${eventLog(onOpcode(RR))}
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
 
@@ -410,11 +405,7 @@ readCode:
         0 - A                           :JMPN(readDeployBytecode)
                                         :JMP(readByteCode)
 
-endCode:
-        $ => A                          :MLOAD(isCreateContract)
-        0 - A                           :JMPN(endDeploy)
-                                        :JMP(endByteCode)
-
+; only when first context ends on deploy
 endDeploy:
         ; save offset memory and length to compute contract hash
         E                               :MSTORE(memOffsetLinearPoseidon)
@@ -433,18 +424,6 @@ endDeploy:
         %SMT_KEY_SC_CODE => B
         $ => SR                         :SSTORE
 
-endByteCode:
-        $ => A                          :MLOAD(originCTX)
-        A - 1                           :JMPN(handleGas)
-        A => CTX
-        CTX                             :MSTORE(currentCTX)
-        $ => B                          :MLOAD(gasCTX)
-        B + GAS => GAS
-        $ => SP                         :MLOAD(lastSP)
-        $ => PC                         :MLOAD(lastPC)
-        1                               :MSTORE(SP++)
-        1024 - SP                       :JMPN(stackOverflow)
-                                        :JMP(readCode)
 
 handleGas:
 
@@ -519,3 +498,7 @@ sendGasSeq:
 invalidTx:
         $ => SR                         :MLOAD(originSR)
                                         :JMP(processTxEnd)
+
+defaultOpCode:
+        ${eventLog(onOpcode(0))}
+                                        :JMP(opSTOP) 
