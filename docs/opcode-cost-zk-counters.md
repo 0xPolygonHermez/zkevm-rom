@@ -133,33 +133,34 @@
 In the following doc, we calculate the cost of processing the opcode. It's important to also add the cost of calculating the cost
 
 ### EXP
-Inputs:
-1- a: integer base.
+Inputs:  
+1- a: integer base.  
 2- exponent: integer exponent.
+
 `dynamic_gas = 50 * exponent_byte_size`
 We need to calculate the exponent byte size to get the gas cost. The counters cost is dynamic but we can't calculate the cost without consuming counters in a dynamic way. We need to find a way to get the size of the exponent in a constant manner or handle the counters limitations from the zkasm.
 Maximum setted: Maxmimun byte syze = 256 bytes. Max counters = 256 * (2A + 4B) + 1B = 512A + 1025B
 
 ### SHA3
-L = input length
-L/32 = A
-L % 32 > 0 ? true -> B = 1, false -> B = 0
+L = input length  
+L/32 = A  
+L % 32 > 0 ? true -> B = 1, false -> B = 0  
 
-cnt_arith = 2 + B*6
-cnt_binary = 2 + A + B*9
-cnt_keccak = 1
+cnt_arith = 2 + B*6  
+cnt_binary = 2 + A + B*9  
+cnt_keccak = 1  
 
 ### CALLDATALOAD
-L = byte offset in the calldata.
-L/32 = A
-L % 32 > 0 ? true -> B = 1, false -> B = 0
+L = byte offset in the calldata.  
+L/32 = A  
+L % 32 > 0 ? true -> B = 1, false -> B = 0  
 
 counters = divARITH + B*(SHLarith + SHRarith)
 
 ### CALLDATACOPY
-L = Length to copy.
-L/32 = A
-L % 32 > 0 ? true -> B = 1, false -> B = 0
+L = Length to copy.  
+L/32 = A  
+L % 32 > 0 ? true -> B = 1, false -> B = 0  
 
 counters = A*(divARITH + SHLarith + SHRarith + MSTORE32) + SHLarith*2 + SHRarith + MSTOREX
 
@@ -167,22 +168,22 @@ counters = A*(divARITH + SHLarith + SHRarith + MSTORE32) + SHLarith*2 + SHRarith
 counters = SLOAD
 
 ### CODECOPY
-L = bytes to copy.
-if is createContract -> counters = CALLDATACOPY
-else -> counters = LT + L*(LT + MEM_ALIGN_WR8)
+L = bytes to copy.  
+if is createContract -> counters = CALLDATACOPY  
+else -> counters = LT + L*(LT + MEM_ALIGN_WR8)  
 
 ### EXTCODESIZE
-counters = SLOAD
+counters = SLOAD  
 
 ### EXTCODECOPY
-L = bytes to copy.
-if is createContract -> counters = CALLDATACOPY
+L = bytes to copy.  
+if is createContract -> counters = CALLDATACOPY  
 else -> counters = LT + L*(LT + MEM_ALIGN_WR8)
 
 ### RETURNDATACOPY
-L = Length to copy.
-L/32 = A
-L % 32 > 0 ? true -> B = 1, false -> B = 0
+L = Length to copy.  
+L/32 = A  
+L % 32 > 0 ? true -> B = 1, false -> B = 0  
 counters = 2*EQ + LT + divARITH + mulARITH + A*(MLOAD32 + MSTORE32) + B*(MLOADX + MSTOREX)
 
 ### EXTCODEHASH
@@ -204,42 +205,42 @@ counters = SLOAD
 Cant calculate
 
 ### JUMPI
-isCreateContract ? true -> A = 1, false -> A = 0
-isCreate ? true -> B = 1, false -> B = 0
+isCreateContract ? true -> A = 1, false -> A = 0  
+isCreate ? true -> B = 1, false -> B = 0  
 
-counters = EQ + A*(B*(MLOADX + SHRarith) + (1-B)*(EQ)) + (1-A)*(EQ)
+counters = EQ + A*(B*(MLOADX + SHRarith) + (1-B)*(EQ)) + (1-A)*(EQ)  
 
 ### JUMP
-isCreateContract ? true -> A = 1, false -> A = 0
-isCreate ? true -> B = 1, false -> B = 0
+isCreateContract ? true -> A = 1, false -> A = 0  
+isCreate ? true -> B = 1, false -> B = 0  
 
-counters = EQ + A*(B*(MLOADX + SHRarith) + (1-B)*(EQ)) + (1-A)*(EQ)
+counters = EQ + A*(B*(MLOADX + SHRarith) + (1-B)*(EQ)) + (1-A)*(EQ)  
 
 ### LOG
-L = byte size to copy.
-L/32 = A
-L % 32 > 0 ? true -> B = 1, false -> B = 0
-counters = A*MLOAD32 + B*MLOADX
+L = byte size to copy.  
+L/32 = A  
+L % 32 > 0 ? true -> B = 1, false -> B = 0  
+counters = A*MLOAD32 + B*MLOADX  
 
 ### CREATE
 counters = computeGasSendCall + copySP + SLOAD + SSTORE + getLenBytes
 
 ### CALL
-argsLengthCall + retLength == 0 ? true -> A = 1, false -> A = 0
-argsOffsetCall > memLength ? true -> B = 1, false -> B = 0
-counters = addARITH + EQ + (1-A)*(LT +B*saveMem ) + LT + isEmptyAccount + computeGasSendCall + copySP
+argsLengthCall + retLength == 0 ? true -> A = 1, false -> A = 0  
+argsOffsetCall > memLength ? true -> B = 1, false -> B = 0  
+counters = addARITH + EQ + (1-A)*(LT +B*saveMem ) + LT + isEmptyAccount + computeGasSendCall + copySP  
 
 ### CALLCODE
-counters = 2*EQ + LT*2 + computeGasSendCall + copySP
+counters = 2*EQ + LT*2 + computeGasSendCall + copySP  
 
 ### DELEGATECALL
-counters = 2*EQ + LT*2 + computeGasSendCall + copySP
+counters = 2*EQ + LT*2 + computeGasSendCall + copySP  
 
 ### CREATE2
-counters = computeGasSendCall + copySP + SLOAD + SSTORE + getLenBytes
+counters = computeGasSendCall + copySP + SLOAD + SSTORE + getLenBytes  
 
 ### STATICCALL
-counters = 2*EQ + LT*2 + computeGasSendCall + copySP
+counters = 2*EQ + LT*2 + computeGasSendCall + copySP  
 
 # REGS TABLE
 | REG Name       | cnt_arith | cnt_binary | cnt_mem_align | cnt_keccak_f | cnt_padding_pg | cnt_poseidon_g | is_dynamic |
@@ -281,34 +282,34 @@ Should check how SLOAD is implemented
 ## Dynamic functions
 
 ### copySP
-It depends on the stack size. 
-L = stack length
-L/32 = A
-L % 32 > 0 ? true -> B = 1, false -> B = 0
-counters = MLOAD32 * (A + B)
+It depends on the stack size.   
+L = stack length  
+L/32 = A  
+L % 32 > 0 ? true -> B = 1, false -> B = 0  
+counters = MLOAD32 * (A + B)  
 
 
 ### MLOAD32
 ### MSTORE32
 ### MSTOREX
 ### MLOADX
-L = bytes length
-L > 0 ? true -> A = 1, false -> A = 0
-isMSTOREX ? true -> B = 1, false -> B = 0
-counters = LT + B*(2*SHRarith + 2*SHLarith) + (1-B)*(C*(2*SHLarith + 4*SHRarith) + (1-C)*(2*SHRarith + 2*SHLarith) + MEM_ALIGN_WR)
-MAX:
-counters = 192A + 193B + 2MA
+L = bytes length  
+L > 0 ? true -> A = 1, false -> A = 0  
+isMSTOREX ? true -> B = 1, false -> B = 0  
+counters = LT + B*(2*SHRarith + 2*SHLarith) + (1-B)*(C*(2*SHLarith + 4*SHRarith) + (1-C)*(2*SHRarith + 2*SHLarith) + MEM_ALIGN_WR)  
+MAX:  
+counters = 192A + 193B + 2MA  
 ### SHRarith
 ### SHLarith
-A -> bytes to shift
-D -> times to shift (A << D)
-E -> D > 256? true = 1, false = 0
-counters= ARITH + EQ + (1-E) * (D*(LT + ARITH)) = 1A + 1B + (1-E)*(D*(1A + 1B)
-MAX:
-counters = 32A + 32B 
+A -> bytes to shift  
+D -> times to shift (A << D)  
+E -> D > 256? true = 1, false = 0  
+counters= ARITH + EQ + (1-E) * (D*(LT + ARITH)) = 1A + 1B + (1-E)*(D*(1A + 1B)  
+MAX:  
+counters = 32A + 32B   
 ### isEmptyAccount
-isNotPrecompiled ? true -> A = 1, false -> A = 0
-zeroBalance ? true -> B = 1, false -> B = 0
-zeroNonce ? true -> C = 1, false -> C = 0
+isNotPrecompiled ? true -> A = 1, false -> A = 0  
+zeroBalance ? true -> B = 1, false -> B = 0  
+zeroNonce ? true -> C = 1, false -> C = 0  
 
 counters = LT + A*(SLOAD + LT + B*(SLOAD + LT + C*(SLOAD + LT)))
