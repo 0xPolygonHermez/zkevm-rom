@@ -23,6 +23,9 @@ opSTOPend:
                     :JMP(readCode)
 
 opADD:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
@@ -39,6 +42,9 @@ opADD:
                     :JMP(readCode)
 
 opMUL:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
@@ -54,6 +60,9 @@ opMUL:
                     :JMP(readCode)
 
 opSUB:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => E          :MLOAD(SP--)
@@ -69,6 +78,10 @@ opSUB:
                     :JMP(readCode)
 
 opDIV:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => E          :MLOAD(SP--)
@@ -84,6 +97,10 @@ opDIV:
                     :JMP(readCode)
 
 opSDIV:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 8 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
@@ -125,6 +142,10 @@ opSDIVNeg:
                     :JMP(readCode)
 
 opMOD:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => E          :MLOAD(SP--)
@@ -140,6 +161,10 @@ opMOD:
                     :JMP(readCode)
 
 opSMOD:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 8 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
@@ -179,6 +204,10 @@ opSMODNeg:
                     :JMP(readCode)
 
 opADDMOD:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCounters)
+
     SP - 3          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
@@ -200,6 +229,10 @@ opADDMOD:
                     :JMP(readCode)
 
 opMULMOD:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 2 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCounters)
+
     SP - 3          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
@@ -221,18 +254,25 @@ opMULMOD:
                     :JMP(readCode)
 
 opEXP: ; //TODO: test exp == 0
-    SP - 2          :JMPN(stackUnderflow)
+
+    %MAX_CNT_ARITH - CNT_ARITH - 512 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 1025 :JMPN(outOfCounters)
+
+    SP - 2              :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A              :MLOAD(SP--)
     $ => B              :MLOAD(SP)
     ${exp(A,B)} => A
     A                   :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
+    1024 - SP           :JMPN(stackOverflow)
                         :CALL(getLenBytes)
     GAS-10-50*A => GAS  :JMPN(outOfGas)
                         :JMP(readCode)
 
 opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/vm/src/evm/opcodes/functions.ts#L193
+
+    %MAX_CNT_ARITH - CNT_ARITH - 6 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
@@ -271,6 +311,9 @@ opSIGNEXTENDEnd:
                     :JMP(readCode)
 
 opSLT:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
@@ -280,6 +323,9 @@ opSLT:
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 opLT:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
@@ -290,6 +336,9 @@ opLT:
                     :JMP(readCode)
 
 opSGT:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => B          :MLOAD(SP--)
@@ -299,6 +348,9 @@ opSGT:
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 opGT:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => B          :MLOAD(SP--)
@@ -308,6 +360,9 @@ opGT:
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 opEQ:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
@@ -318,6 +373,9 @@ opEQ:
                     :JMP(readCode)
 
 opISZERO:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCounters)
+
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     GAS-3 => GAS    :JMPN(outOfGas)
@@ -327,6 +385,9 @@ opISZERO:
                     :JMP(readCode)
 
 opAND:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
@@ -337,6 +398,9 @@ opAND:
                     :JMP(readCode)
 
 opOR:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
@@ -347,6 +411,9 @@ opOR:
                     :JMP(readCode)
 
 opXOR:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
@@ -357,6 +424,9 @@ opXOR:
                     :JMP(readCode)
 
 opNOT:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCounters)
+
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     GAS-3 => GAS    :JMPN(outOfGas)
@@ -366,6 +436,10 @@ opNOT:
                     :JMP(readCode)
 
 opBYTE:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 2 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => B          :MLOAD(SP--)
@@ -379,6 +453,10 @@ opBYTE:
                     :JMP(readCode)
 
 opSHR:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
@@ -390,6 +468,10 @@ opSHR:
                     :JMP(readCode)
 
 opSHL:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
@@ -403,6 +485,10 @@ opSHL:
 ; TODO: Adapt to multiplication
 ; https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/vm/src/evm/opcodes/functions.ts#L342
 opSAR:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 2 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 10 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
@@ -440,6 +526,13 @@ opSARNeg:
                     :JMP(readCode)
 
 opSHA3:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 193 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 2 :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 10 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => E          :MLOAD(SP--) ; offset
@@ -472,6 +565,11 @@ opSHA3:
     0 => HASHPOS
 
 opSHA3Loop:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 32 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 1 :JMPN(outOfCounters)
+
     C - 1           :JMPN(opSHA3End)
     C - 32          :JMPN(opSHA3Final)
                     :CALL(MLOAD32)
@@ -513,6 +611,9 @@ opADDRESSend:
                     :JMP(readCode)
 
 opBALANCE:
+
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 252 :JMPN(outOfCounters)
+
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     0 => B,C        ; balance smt key
@@ -546,6 +647,10 @@ opCALLVALUE:
 
 ; // TODO: Check when a contract is deployed with CREATE
 opCALLDATALOAD:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 64 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 66 :JMPN(outOfCounters)
+
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => E          :MLOAD(SP)
     ; Div operation with Arith
@@ -590,6 +695,11 @@ opCALLDATASIZE:
 
 ; // TODO: check overflow length datacopy
 opCALLDATACOPY:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 192 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1 :JMPN(outOfCounters)
+
     SP - 3          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => E          :MLOAD(SP--) ;destOffset - offset memory
@@ -604,6 +714,12 @@ opCALLDATACOPY:
                     :JMP(opCALLDATACOPYinit)
 
 opCALLDATACOPYinit:
+
+
+    %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 192 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1 :JMPN(outOfCounters)
+
     C - 1           :JMPN(opCALLDATACOPYend)
     C - 32          :JMPN(opCALLDATACOPYfinal)
     B               :MSTORE(arithA)
@@ -663,6 +779,9 @@ opCALLDATACOPYend:
                     :JMP(readCode)
 
 opCODESIZE:
+
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 252 :JMPN(outOfCounters)
+
     $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPN(opCODESIZEdep)
     $ => A          :MLOAD(txDestAddr)
@@ -688,6 +807,7 @@ VAR GLOBAL codecopyHashId
 VAR GLOBAL codecopyBytecodeLength
 VAR GLOBAL memInteger
 opCODECOPY:
+
     SP - 3          :JMPN(stackUnderflow)
     $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPN(opCALLDATACOPY) ; //TODO: delegateCall ? use of storageAddr? same in process_tx ?
@@ -697,6 +817,12 @@ opCODECOPY:
     $ => E          :MLOAD(SP)   ;bytecode length
     C               :MSTORE(lastMemOffset)
     E               :MSTORE(lastMemLength)
+
+    ; Check counters
+    %MAX_CNT_BINARY - CNT_BINARY - 2*E :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2*E :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCounters)
+
     GAS - 3 => GAS  :JMPN(outOfGas)
     GAS - ${3*((E+31)/32)} => GAS    :JMPN(outOfGas)
                     :CALL(saveMem)
@@ -764,6 +890,9 @@ opGASPRICE:
                     :JMP(readCode)
 
 opEXTCODESIZE:
+
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCounters)
+
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     ${touchedAddress(A)} => D
@@ -784,6 +913,10 @@ opEXTCODESIZE:
 VAR GLOBAL tmpContractHashId
 VAR GLOBAL tmpContractLength
 opEXTCODECOPY:
+
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
+    %MAX_CNT_PADDING_PG - CNT_PADDING_PG - 11 :JMPN(outOfCounters)
+
     SP - 4          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--) ;addr
@@ -795,6 +928,11 @@ opEXTCODECOPY:
     $ => E          :MLOAD(SP)   ;bytecode length
     D               :MSTORE(lastMemOffset)
     E               :MSTORE(lastMemLength)
+
+    ; Check counters
+    %MAX_CNT_BINARY - CNT_BINARY - 2*E :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2*E :JMPN(outOfCounters)
+
     GAS - ${3*((E+31)/32)} => GAS    :JMPN(outOfGas)
                     :CALL(saveMem)
     ; check memory limits
@@ -819,6 +957,7 @@ opEXTCODECOPYCheckHash:
     0 => C
     $ => D                          :SLOAD
     D                               :MSTORE(tmpContractLength)
+
     ; get hash contract
     %SMT_KEY_SC_CODE => B
     0 => C
@@ -868,6 +1007,9 @@ opEXTCODECOPYfinal:
                     :JMP(readCode)
 
 opRETURNDATASIZE:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCounters)
+
     ; Load ret data length from last ctx
     ; If no retDataCTX(0), retDataLength = 0
     $ => B          :MLOAD(retDataCTX)
@@ -892,6 +1034,12 @@ opRETURNDATACOPY:
     $ => C          :MLOAD(SP)              ;length - length return data
     D               :MSTORE(lastMemOffset)
     C               :MSTORE(lastMemLength)
+
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - C*4 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - C*4 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2 :JMPN(outOfCounters)
+
                     :CALL(saveMem)
     ; if retDataCTX is 0, end opcode execution
     B => E
@@ -958,6 +1106,9 @@ opRETURNDATACOPYfinal:
                     :JMP(readCode)
 
 opEXTCODEHASH:
+
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCounters)
+
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
     ${touchedAddress(A)} => D
@@ -1009,6 +1160,10 @@ opEXTCODEHASH:
 ;                    :JMP(readCode)
 
 opBLOCKHASH:
+
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCounters)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 2 :JMPN(outOfCounters)
+
     SP - 1 => SP    :JMPN(stackUnderflow)
     GAS-20 => GAS   :JMPN(outOfGas)
     $ => A          :MLOAD(SP) ; batch number
@@ -1068,17 +1223,17 @@ opNUMBER:
 
 opDIFFICULTY:
     %BATCH_DIFFICULTY => A
-    A                       :MSTORE(SP++)
+    A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
     GAS-2 => GAS    :JMPN(outOfGas)
-                            :JMP(readCode)
+                    :JMP(readCode)
 
 opGASLIMIT:
     %BATCH_GAS_LIMIT => A
-    A                       :MSTORE(SP++)
+    A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
     GAS-2 => GAS    :JMPN(outOfGas)
-                            :JMP(readCode)
+                    :JMP(readCode)
 
 opCHAINID:
     %ZKEVM_CHAINID => A
@@ -1088,6 +1243,9 @@ opCHAINID:
                     :JMP(readCode)
 
 opSELFBALANCE:
+    
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCounters)
+
     $ => A          :MLOAD(storageAddr)
     0 => B,C        ; balance key smt
     $ => D          :SLOAD
@@ -1102,6 +1260,12 @@ opPOP:
                     :JMP(readCode)
 
 opMLOAD:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 32 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 1 :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCounters)
+
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => E          :MLOAD(SP)                  ;offset
     E               :MSTORE(lastMemOffset)
@@ -1114,7 +1278,13 @@ opMLOAD:
                     :JMP(readCode)
 
 ;MSTORE 32 bytes
-opMSTORE:
+opMSTORE:                                       
+
+    %MAX_CNT_ARITH - CNT_ARITH - 32 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 1 :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => E          :MLOAD(SP--)                ;offset
@@ -1130,6 +1300,11 @@ opMSTORE:
 
 
 opMSTORE8:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 32 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 1 :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => B          :MLOAD(SP--)                ;offset
@@ -1149,6 +1324,9 @@ opMSTORE8:
                     :JMP(readCode)
 
 opSLOAD:
+
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCounters)
+
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => C          :MLOAD(SP) ;key
     $ => A          :MLOAD(storageAddr)
@@ -1161,6 +1339,11 @@ opSLOAD:
                     :JMP(readCode)
 
 opSSTORE:
+
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 765 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 10 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1 :JMPN(outOfCounters)
+
     SP - 2          :JMPN(stackUnderflow)
     $ => A          :MLOAD(isStaticCall)
     0 - A           :JMPN(invalidStaticTx)
@@ -1211,7 +1394,7 @@ opSSTOREdif:
 
 opSSTOREdifA:
     ;if current_val != orig_val
-    GAS - 100 => GAS    :JMPN(outOfGas)
+    GAS - 100 => GAS:JMPN(outOfGas)
     0 => A
     C => B
     $ => A          :EQ
@@ -1288,6 +1471,9 @@ opSSTOREsr:
                     :JMP(readCode)
 
 opJUMP:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCounters)
+
     SP - 1 => SP                    :JMPN(stackUnderflow)
     $ => PC                         :MLOAD(SP)
     GAS - 8 => GAS                  :JMPN(outOfGas)
@@ -1332,6 +1518,11 @@ checkJumpDestDeployment:
                                     :JMP(revertTx)
 
 checkJumpDestDeploymentCreate:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 224 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 225 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
+
     $ => CTX                        :MLOAD(originCTX)
     $ => E                          :MLOAD(argsOffsetCall)
     E + PC => E
@@ -1351,6 +1542,10 @@ opPC:
                         :JMP(readCode)
 
 opMSIZE:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCounters)
+
     GAS - 2 => GAS      :JMPN(outOfGas)
     $ => E              :MLOAD(memLength)
     ; MSIZE should be multiple of a word (32 bytes)
@@ -1383,6 +1578,9 @@ opJUMPDEST:
                     :JMP(readCode)
 
 opAuxPUSHA:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 6 :JMPN(outOfCounters)
+
     GAS-3 => GAS        :JMPN(outOfGas)
                         :CALL(readPush)
     E                   :MSTORE(SP++)
@@ -1391,6 +1589,9 @@ opAuxPUSHA:
                         :JMP(readCode)
 
 opAuxPUSHB:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 6 :JMPN(outOfCounters)
+
     1 => A
     $ => B                          :MLOAD(isCreate)
     $                               :EQ,JMPC(opAuxPUSHBcreate)
@@ -1415,6 +1616,11 @@ opAuxPUSHBend:
                                     :JMP(readCode)
 
 opAuxPUSHBcreate:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 224 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 225 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
+
     0 => B
     $ => CTX                        :MLOAD(originCTX)
     $ => E                          :MLOAD(argsOffsetCall)
@@ -2058,6 +2264,11 @@ opLOG4:
                         :JMP(opLOGLoop)
 
 opLOGLoop:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 32 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2 :JMPN(outOfCounters)
+
     C - 1           :JMPN(opSaveTopicsInit)
     C - 32          :JMPN(opLOGFinal)
                     :CALL(MLOAD32)
@@ -2085,6 +2296,7 @@ opSaveTopicsLoop:
 ; // TODO Check with DElEGATE CALL txDestAddr/txSrcAddr ( same as other calls)
 ; // TODO check revert create
 opCREATE:
+
     SP - 3              :JMPN(stackUnderflow)
     $ => A              :MLOAD(isStaticCall)
     0 - A               :JMPN(invalidStaticTx)
@@ -2095,6 +2307,13 @@ opCREATE:
     E                   :MSTORE(argsOffsetCall)
     $ => C              :MLOAD(SP)      ;length
     C                   :MSTORE(argsLengthCall)
+
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - C - 32 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - C -32 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
+
     ; Mem expansion gas cost
     E                   :MSTORE(lastMemOffset)
     C                   :MSTORE(lastMemLength)
@@ -2154,6 +2373,8 @@ opCREATE:
 ; // Affects to opcodes related to RETURN
 ; // https://eips.ethereum.org/EIPS/eip-211
 opCALL:
+
+
     SP - 7          :JMPN(stackUnderflow)
     SP - 1 => SP
     CTX             :MSTORE(originAuxCTX)
@@ -2193,7 +2414,10 @@ opCALL2:
     $ => D          :MLOAD(SP)
     D               :MSTORE(retLength)
     D               :MSTORE(lastMemLength)
-    ;  Mem expansion gas cost return args
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - C - 32 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - C -32 :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
                     :CALL(saveMem)
 
     $ => B          :MLOAD(txDestAddr)
@@ -2289,6 +2513,11 @@ opCALLCODE2:
     $ => D          :MLOAD(SP)
     D               :MSTORE(retLength)
     D               :MSTORE(lastMemLength)
+
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - C - 32 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - C -32 :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
                     :CALL(saveMem)
 
 opCALLCODE3:
@@ -2346,6 +2575,12 @@ opRETURN:
     SP - 1 => SP
     $ => E          :MLOAD(SP--) ;offset
     $ => C          :MLOAD(SP)   ;length
+
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - C - 32 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - C -32 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
+
     E               :MSTORE(retDataOffset)
     C               :MSTORE(retDataLength)
     E               :MSTORE(lastMemOffset)
@@ -2412,6 +2647,13 @@ opRETURNdeploy:
 
 ; TODO: not in RETURN, but in CREATE process
 opRETURNcreate:
+
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 192 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1020 :JMPN(outOfCounters)
+
     ; save offset memory and length to compute contract hash
     E               :MSTORE(memOffsetLinearPoseidon)
     C               :MSTORE(memSizeLinearPoseidon)
@@ -2486,6 +2728,12 @@ opDELEGATECALL:
     $ => D          :MLOAD(SP)
     D               :MSTORE(retLength)
     D               :MSTORE(lastMemLength)
+
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - C - 32 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - C -32 :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
+
     ;  Mem expansion gas cost return args
                     :CALL(saveMem)
 
@@ -2538,6 +2786,12 @@ opCREATE2:
     $ => C              :MLOAD(SP--)      ;length
     C                   :MSTORE(argsLengthCall)
     $ => D              :MLOAD(SP)    ;salt
+
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - C - 32 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - C -32 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
 
     ; Mem expansion gas cost
     E                   :MSTORE(lastMemOffset)
@@ -2606,9 +2860,14 @@ opSTATICCALL:
     $ => B          :MLOAD(SP--)
     B               :MSTORE(argsLengthCall)  
     B               :MSTORE(lastMemLength)
+
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - B - 32 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - B -32 :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
+
     ; Mem expansion gas cost call args
                     :CALL(saveMem)
-
     $ => C          :MLOAD(SP--)
     C               :MSTORE(retOffset)
     C               :MSTORE(lastMemOffset)
@@ -2685,6 +2944,11 @@ opREVERT:
 ; Test selfDestruct: sent value to another contract
 ; TODO selfdestrut should destory the contract at the end of the transaction
 opSELFDESTRUCT:
+
+    ;Check counters
+    %MAX_CNT_BINARY - CNT_BINARY - 10 :JMPN(outOfCounters)  
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 2040 :JMPN(outOfCounters)
+
     $ => A              :MLOAD(isStaticCall)
     0 - A               :JMPN(invalidStaticTx)
     $ => A              :MLOAD(gasRefund)
