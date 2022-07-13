@@ -12,6 +12,7 @@ opSTOP:
 opSTOPend:
     B => CTX
     CTX             :MSTORE(currentCTX)
+    0               :MSTORE(retDataCTX)
     $ => B          :MLOAD(gasCTX)
     $ => C          :MLOAD(gasRefund)
     A + C           :MSTORE(gasRefund)
@@ -1500,6 +1501,7 @@ opJUMPI:
     ; Check PC is a JUMPDEST
                                     :JMP(checkJumpDest)
 
+; TODO check do not overflow
 checkJumpDest:
     ; If it is a deploy we have to check the data from the calldata (not the bytecode)
     $ => A                          :MLOAD(isCreateContract)
@@ -1511,7 +1513,7 @@ checkJumpDest:
     $ => A                          :HASHP(E)
     0x5B => B
     $                               :EQ, JMPC(readCode)
-                                    :JMP(revertTx)
+                                    :JMP(invalidJump)
 checkJumpDestDeployment:
     1 => A
     $ => B                          :MLOAD(isCreate)
@@ -1523,7 +1525,7 @@ checkJumpDestDeployment:
     $ => A                          :HASHK(E)
     0x5B => B
     $                               :EQ, JMPC(readCode)
-                                    :JMP(revertTx)
+                                    :JMP(invalidJump)
 
 checkJumpDestDeploymentCreate:
 
@@ -1541,7 +1543,7 @@ checkJumpDestDeploymentCreate:
                                     :CALL(SHRarith)
     0x5B => B
     $                               :EQ, JMPC(readCode)
-                                    :JMP(revertTx)
+                                    :JMP(invalidJump)
 
 opPC:
     GAS - 2 => GAS      :JMPN(outOfGas)
@@ -2610,7 +2612,7 @@ opRETURN:
     B + GAS => GAS
     $ => B          :MLOAD(retOffset)
     ; TODO  Origin memory len != return memory len ?
-    $ => CTX          :MLOAD(currentCTX)
+    $ => CTX        :MLOAD(currentCTX)
 
 ; Copy from memory current CTX to memory origin CTX
 opRETURN32:
@@ -3023,7 +3025,8 @@ opSELFDESTRUCT:
 
 opSELFDESTRUCTCend:
     A => CTX
-    ;Store ret length
+    0                       :MSTORE(retDataCTX)
+    CTX                     :MSTORE(currentCTX)
     $ => A                  :MLOAD(gasRefund)
     A + B                   :MSTORE(gasRefund)
     $ => C                  :MLOAD(gasCTX)
@@ -3041,13 +3044,3 @@ opINVALID:
     ; if main context, halt execution
     $ => B          :MLOAD(originCTX)      
                     :JMP(invalidProcess)
-
-invalidStaticTx:
-    $ => CTX        :MLOAD(originCTX)      
-    $ => A          :MLOAD(gasCTX)
-    A => GAS
-    $ => SP         :MLOAD(lastSP)
-    $ => PC         :MLOAD(lastPC)
-    1               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
