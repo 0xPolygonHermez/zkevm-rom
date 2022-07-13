@@ -209,7 +209,7 @@ VAR GLOBAL isMLOADX
 ; @out A => value
 ; @out E => new offset
 MLOADX:
-    32 - C          :JMPN(errorMLOADMSTORE)
+    32 - C          :JMPN(errorMLOADMSTORE) ; TDDO Should be unreachable! check it
     32 - C - 1      :JMPN(MLOAD32)
     1               :MSTORE(isMLOADX)
 
@@ -264,7 +264,7 @@ endMLOAD:
                     :RETURN
 
 errorMLOADMSTORE:
-                    :JMP(endFailed)
+                    :JMP(handleError)
 
 ; @info check account is empty ( balance == nonce == code == 0x )
 ; @in E => address
@@ -414,7 +414,6 @@ mulARITH:
                     :JMP(RR)
 
 divARITH:
-
     RR              :MSTORE(tmpZkPC)
     zkPC+1 => RR    :JMP(storeTmp)
 
@@ -422,8 +421,16 @@ divARITH:
     $ => A          :MLOAD(arithB)
     ; Check denominator(A) is not zero
     0 => B
-    $ => B          :EQ, JMPC(zeroDiv)
-    ${E%A} => C
+    $               :EQ, JMPC(zeroDiv)
+
+    ; Check if divisor (E) is smaller than denominator E < A
+    A => C ; store temporally A in C
+    E => A ; divisor
+    C => B ; denominator
+    $               :LT, JMPC(divisorSmallerDiv)
+    C => A
+
+    ${E%A} => C ; reminder
     ${E/A} => B
     0 => D
     E               :ARITH
@@ -431,11 +438,12 @@ divARITH:
     B               :MSTORE(arithRes1)
     C               :MSTORE(arithRes2)
 
-    ; check remainder < dividend
-    ; Add one to check also the case where remainder = numToDiv
-    E => A
-    C => B
-    $               :LT, JMPC(invalidTx)
+    ; check divisor > reminder
+    C => A ; reminder
+    E => B ; divisor
+    $ => A          :LT
+    1               :ASSERT
+
     zkPC+1 => RR    :JMP(loadTmp)
     $ => RR         :MLOAD(tmpZkPC)
                     :JMP(RR)
@@ -443,6 +451,14 @@ divARITH:
 zeroDiv:
     0               :MSTORE(arithRes1)
     0               :MSTORE(arithRes2)
+
+    zkPC+1 => RR    :JMP(loadTmp)
+    $ => RR         :MLOAD(tmpZkPC)
+                    :JMP(RR)
+                    
+divisorSmallerDiv:
+    0               :MSTORE(arithRes1)
+    E               :MSTORE(arithRes2)
 
     zkPC+1 => RR    :JMP(loadTmp)
     $ => RR         :MLOAD(tmpZkPC)
@@ -583,16 +599,6 @@ SHLarithfinal:
     $ => E                  :MLOAD(tmpVarE2)
                             :JMP(RR)
 
-;//TODO: check if outOfGas error === stack error --> same code
-endFailed:
-    $ => A          :MLOAD(originCTX)
-    A - 1           :JMPN(invalidTx)
-    A => CTX
-    $ => GAS        :MLOAD(gasCTX)
-    $ => SP         :MLOAD(lastSP)
-    $ => PC         :MLOAD(lastPC)
-    0               :MSTORE(SP++)
-                    :JMP(readCode)
 
 outOfGas:
 ${eventLog(onError, OOG)}
@@ -617,7 +623,7 @@ handleError:
     ;remaining gas = 0
     $ => A          :MLOAD(originCTX)
     0 => B
-    $               :EQ,JMPC(stackErrorEnd)
+    $               :EQ,JMPC(firstContextInvalid)
     A => CTX
     ; Add return data context value to origin context
     C               :MSTORE(retDataCTX)
@@ -628,7 +634,7 @@ handleError:
     0               :MSTORE(SP++)
                     :JMP(readCode)
 
-stackErrorEnd:
+firstContextInvalid:
     ;save Root and jump to send gas to sequencer
     0 => GAS
                     :JMP(sendGasSeq)
