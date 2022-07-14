@@ -1,0 +1,89 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; checkSqrtFpEc (C = pow(C,(FpEc-1)/2))
+;;
+;; (FpEc-1)/2 = 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffff 7ffffe17
+;;             (*) 222 x 1, 1 x 0, 22 x 1, 4 x 0, 1 x 1, 1 x 0, 3 x 1
+;;             (*) 222 x SM, S, 22 x SM, 4 x S, 1 x SM, 1 x S, 3 x SM    (S=square M=multiplication)
+;;
+;;             (*) 222 + initial initialization
+;;
+;; return 1 => no sqrts  0 => has solutions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL checkSqrtFpEc_index
+VAR GLOBAL checkSqrtFpEc_base
+VAR GLOBAL checkSqrtFpEc_RR
+
+checkSqrtFpEc:
+
+        RR          :MSTORE(checkSqrtFpEc_RR)
+        C           :MSTORE(checkSqrtFpEc_base)
+
+; 222 x SM
+        221         :MSTORE(checkSqrtFpEc_index)
+checkSqrtFpEc_Loop1:
+                    :CALL(sqFpEc)
+        $ => A      :MLOAD(checkSqrtFpEc_base)
+        C => B
+                    :CALL(mulFpEc)
+        $ => E      :MLOAD(checkSqrtFpEc_index)
+        E - 1 => E  :JMPN(checkSqrtFpEc_EndLoop1)
+        E           :MSTORE(checkSqrtFpEc_index)
+                    :JMP(checkSqrtFpEc_Loop1)
+checkSqrtFpEc_EndLoop1:
+
+; 1 x S
+        :CALL(sqFpEc)
+
+; 22 x SM
+        21          :MSTORE(checkSqrtFpEc_index)
+checkSqrtFpEc_Loop2:
+                    :CALL(sqFpEc)
+        $ => A      :MLOAD(checkSqrtFpEc_base)
+        C => B
+                    :CALL(mulFpEc)
+        $ => E      :MLOAD(checkSqrtFpEc_index)
+        E - 1 => E  :JMPN(checkSqrtFpEc_EndLoop2)
+        E           :MSTORE(checkSqrtFpEc_index)
+                    :JMP(checkSqrtFpEc_Loop2)
+checkSqrtFpEc_EndLoop2:
+
+; 4 x S
+        3           :MSTORE(checkSqrtFpEc_index)
+checkSqrtFpEc_Loop3:
+                    :CALL(sqFpEc)
+        $ => E      :MLOAD(checkSqrtFpEc_index)
+        E - 1 => E  :JMPN(checkSqrtFpEc_EndLoop3)
+        E           :MSTORE(checkSqrtFpEc_index)
+                    :JMP(checkSqrtFpEc_Loop3)
+checkSqrtFpEc_EndLoop3:
+
+; 1 x SM
+                    :CALL(sqFpEc)
+        $ => A      :MLOAD(checkSqrtFpEc_base)
+        C => B
+                    :CALL(mulFpEc)
+
+; 1 x S
+                    :CALL(sqFpEc)
+
+; 3 x SM
+        2           :MSTORE(checkSqrtFpEc_index)
+checkSqrtFpEc_Loop4:
+                    :CALL(sqFpEc)
+        $ => A      :MLOAD(checkSqrtFpEc_base)
+        C => B
+                    :CALL(mulFpEc)
+        $ => E      :MLOAD(checkSqrtFpEc_index)
+        E - 1 => E  :JMPN(checkSqrtFpEc_EndLoop4)
+        E           :MSTORE(checkSqrtFpEc_index)
+                    :JMP(checkSqrtFpEc_Loop4)
+checkSqrtFpEc_EndLoop4:
+        C => B
+        %FPEC_MINUS_ONE => A
+        $ => A      :EQ
+
+        $ => RR     :MLOAD(checkSqrtFpEc_RR)
+        :RETURN
+

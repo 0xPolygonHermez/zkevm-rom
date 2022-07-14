@@ -1,0 +1,228 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; ecrecover A = hash, B = r, C = s, D = v
+;;           E = result
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL ecrecover_hash
+VAR GLOBAL ecrecover_r
+VAR GLOBAL ecrecover_s
+VAR GLOBAL ecrecover_v
+VAR GLOBAL ecrecover_r_inv
+VAR GLOBAL ecrecover_y
+VAR GLOBAL ecrecover_y2
+VAR GLOBAL ecrecover_k1
+VAR GLOBAL ecrecover_k2
+VAR GLOBAL ecrecover_RR
+VAR GLOBAL ecrecover_v_parity
+
+; ecrecover_lastHashIdUsed was a madatory parameter
+VAR GLOBAL ecrecover_lastHashIdUsed
+
+INCLUDE "constEc.zkasm"
+
+; ERROR CODES
+; 1 - r is zero (0)
+; 2 - r is too big
+; 3 - s is zero (0)
+; 4 - s is too big
+; 5 - v not valid value (1b, 1c)
+; 6 - not exists sqrt of y
+; 100 - fail sqrt, but has solution (!!!)
+
+ecrecover:
+
+        A           :MSTORE(ecrecover_hash)
+        B           :MSTORE(ecrecover_r)
+        C           :MSTORE(ecrecover_s)
+        D           :MSTORE(ecrecover_v)
+
+ecrecover_params_by_var:
+        ; save RR to call return at end of routine
+        RR          :MSTORE(ecrecover_RR)
+
+        ; r in [1, FNEC-1]
+        $ => B      :MLOAD(ecrecover_r)
+        0n => A
+        $           :EQ,JMPC(ecrecover_r_is_zero)
+        %FNEC_MINUS_ONE => A
+
+        $           :LT,JMPC(ecrecover_r_is_too_big)
+
+        ; s in [1, FNEC-1]
+        $ => B      :MLOAD(ecrecover_s)
+        $           :LT,JMPC(ecrecover_s_is_too_big)
+        0n => A
+        $           :EQ,JMPC(ecrecover_s_is_zero)
+
+        ; r and s in [1, FNEC-1]
+        $ => A      :MLOAD(ecrecover_r)
+
+                    :CALL(invFnEc)
+        B           :MSTORE(ecrecover_r_inv)
+
+        0x1Bn => B
+        $ => A      :MLOAD(ecrecover_v)
+        $ => E      :EQ
+
+        E - 1       :JMPN(ecrecover_v_not_eq_1b)
+
+        ;  ecrecover_v_eq_1b:
+        0n          :MSTORE(ecrecover_v_parity)
+                    :JMP(ecrecover_v_ok)
+
+ecrecover_v_not_eq_1b:
+        0x1Cn => B
+        $ => E      :EQ
+        E - 1       :JMPN(ecrecover_v_not_eq_1b1c)
+
+        ; ecrecover_v_eq_1c:
+        1n          :MSTORE(ecrecover_v_parity)
+                    :JMP(ecrecover_v_ok)
+
+ecrecover_v_ok:
+        ; A*B*A + 7 = calculate y from x
+        $ => A,B    :MLOAD(ecrecover_r)
+                    :CALL(mulFpEc)
+
+        C => A
+        $ => B      :MLOAD(ecrecover_r)
+                    :CALL(mulFpEc)
+
+        7 => A
+                    :CALL(addFpEc)
+
+        ;; ----- A * 2**31 + B * 2**31  :JMPN(end)
+
+        C           :MSTORE(ecrecover_y2)
+
+        ;; TODO: VERIFICATE ROOT
+        ;; If has root y ** (p-1)/2 = 1, if -1 => no root, not valid signature
+                    :CALL(sqrtFpEc)
+        %FPEC_NON_SQRT => A
+        C => B
+        $ => E      :EQ
+        E - 1       :JMPN(ecrecover_has_sqrt)
+
+        ; hasn't sqrt, now verify
+
+        $ => C      :MLOAD(ecrecover_y2)
+                    :CALL(checkSqrtFpEc)
+        ; check must return on A register 1, because the root has no solution
+        1           :ASSERT,JMP(ecrecover_not_exists_sqrt_of_y)
+
+ecrecover_has_sqrt:
+        ; (v == 1b) ecrecover_y_parity = 0x00
+        ; (v == 1c) ecrecover_y_parity = 0x01
+        ; ecrevover_y xor ecrecover_y_parity => 0 same parity, 1 different parity
+
+        0x01n => A
+        $ => A      :AND
+
+        $ => B      :MLOAD(ecrecover_v_parity)
+        $ => E      :XOR
+
+        E - 1       :JMPN(ecrecover_v_y2_same_parity)
+
+        ; calculate neg(ecrecover_y) C = (A:FPEC) - (B:ecrecovery_y)
+        %FPEC => A
+        C => B
+        $ => C      :SUB
+
+ecrecover_v_y2_same_parity:
+
+        C           :MSTORE(ecrecover_y)
+
+        ;   C = (hash * inv_r) % n
+
+        $ => A      :MLOAD(ecrecover_hash)
+        $ => B      :MLOAD(ecrecover_r_inv)
+                    :CALL(mulFnEc)
+
+        ; C = n - (hash * inv_r) % n
+
+        ${const.FNEC - C}  => A
+        1 => B
+        0 => D
+        %FNEC       :ARITH
+
+        A           :MSTORE(mulPointEc_k1)
+
+        $ => A      :MLOAD(ecrecover_s)
+        $ => B      :MLOAD(ecrecover_r_inv)
+                    :CALL(mulFnEc)
+
+        ;   C = (s * inv_r) % n
+        C           :MSTORE(mulPointEc_k2)
+
+        %ECGX       :MSTORE(mulPointEc_p1_x)
+        %ECGY       :MSTORE(mulPointEc_p1_y)
+
+        $ => A      :MLOAD(ecrecover_r)
+        A           :MSTORE(mulPointEc_p2_x)
+
+        $ => A      :MLOAD(ecrecover_y)
+        A           :MSTORE(mulPointEc_p2_y)
+
+                    :CALL(mulPointEc)
+
+
+        ; generate keccak of public key to obtain ethereum address
+        $ => E      :MLOAD(ecrecover_lastHashIdUsed)
+        0 => HASHPOS
+        32 => D
+
+        $ => A         :MLOAD(mulPointEc_p3_x)
+
+        A              :HASHK(E)
+
+
+        $ => A         :MLOAD(mulPointEc_p3_y)
+        A              :HASHK(E)
+
+        64             :HASHKLEN(E)
+
+        $ => A         :HASHKDIGEST(E)
+
+        ; for address take only last 20 bytes
+        0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn => B
+        $ => A         :AND
+
+        :JMP(ecrecover_end)
+
+; ERRORS
+ecrecover_r_is_zero:
+        1 => B      :JMP(ecrecover_error)
+
+ecrecover_r_is_too_big:
+        2 => B      :JMP(ecrecover_error)
+
+ecrecover_s_is_zero:
+        3 => B      :JMP(ecrecover_error)
+
+ecrecover_s_is_too_big:
+        4 => B      :JMP(ecrecover_error)
+
+ecrecover_v_not_eq_1b1c:
+        5 => B      :JMP(ecrecover_error)
+
+ecrecover_not_exists_sqrt_of_y:
+        6 => B      :JMP(ecrecover_error)
+
+ecrecover_error:
+        0 => A
+
+ecrecover_end:
+        $ => RR :MLOAD(ecrecover_RR)
+        :RETURN
+
+INCLUDE "addFpEc.zkasm"
+INCLUDE "sqFpEc.zkasm"
+INCLUDE "mulFpEc.zkasm"
+INCLUDE "mulFnEc.zkasm"
+INCLUDE "invFpEc.zkasm"
+INCLUDE "invFnEc.zkasm"
+INCLUDE "sqrtFpEc.zkasm"
+INCLUDE "checkSqrtFpEc.zkasm"
+INCLUDE "mulPointEc.zkasm"
