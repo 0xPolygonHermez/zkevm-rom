@@ -1320,6 +1320,8 @@ opMSTORE8:
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => B          :MLOAD(SP--)                ;offset
+    B               :MSTORE(lastMemOffset)
+    1               :MSTORE(lastMemLength)
     0x200000 => A
     $               :LT,JMPC(errorMLOADMSTORE)
     B => A
@@ -1330,8 +1332,6 @@ opMSTORE8:
     B               :MEM_ALIGN_WR8 ; only use LSB of B, rest of bytes could be non zero.
     D               :MSTORE(MEM:E)     ; write W0
     GAS - 3 => GAS  :JMPN(outOfGas)
-    E               :MSTORE(lastMemOffset)
-    1               :MSTORE(lastMemLength)
                     :CALL(saveMem)
                     :JMP(readCode)
 
@@ -3022,11 +3022,12 @@ opSELFDESTRUCT:
     SP - 1 => SP        :JMPN(stackUnderflow)
     $ => A              :MLOAD(SP)
 
-    ; gas: check receiver is empty
+    ; gas: check receiver is empty and balance gt 0
     A => E
+    D - 1               :JMPN(opSELFDESTRUCT2)
                         :CALL(isEmptyAccount)
     GAS - 25000 * E => GAS    :JMPN(outOfGas)
-
+opSELFDESTRUCT2:
     ; gas: check touched address
     ${touchedAddress(A)} => E
     GAS - 2600 * E => GAS     :JMPN(outOfGas)
