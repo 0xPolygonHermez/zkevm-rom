@@ -1,0 +1,43 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; sqrtFpEc (C = sqrt(C))
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL sqrtFpC_tmp
+VAR GLOBAL sqrtFpC_res
+
+sqrtFpEc:
+
+        C               :MSTORE(sqrtFpC_tmp)
+
+        ; [A] * [A] + 0 = [D] * 2 ** 256 + [E]
+
+        ; set C because if jmp to sqrtFpEc C must have return value (FPEC_NON_SQRT)
+        ${var _sqrtFpEc_sqrt = sqrtFpEc(C) } => A,C   :MSTORE(sqrtFpC_res)
+        %FPEC_NON_SQRT => B
+        $                                             :EQ,JMPC(sqrtFpEc_End)
+
+        A => B
+        0 => C
+
+        $${var _sqrtFpEc_sq = _sqrtFpEc_sqrt * _sqrtFpEc_sqrt }
+
+        ${_sqrtFpEc_sq >> 256} => D
+        ${_sqrtFpEc_sq} => E :ARITH
+
+        ;
+        ; with committed E,D
+        ; FpEc * [k] + C = D * 2 ** 256 + E
+        ;
+
+        $ => C          :MLOAD(sqrtFpC_tmp)
+        ${_sqrtFpEc_sq / const.FPEC} => B
+        %FPEC => A
+        E :ARITH
+
+        $ => C          :MLOAD(sqrtFpC_res)
+
+sqrtFpEc_End:
+
+        :RETURN

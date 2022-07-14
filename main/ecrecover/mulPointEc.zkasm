@@ -1,0 +1,176 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; mulPointEc
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL mulPointEc_p1_x
+VAR GLOBAL mulPointEc_p1_y
+VAR GLOBAL mulPointEc_p2_x
+VAR GLOBAL mulPointEc_p2_y
+VAR GLOBAL mulPointEc_k1
+VAR GLOBAL mulPointEc_k2
+VAR GLOBAL mulPointEc_p3_x
+VAR GLOBAL mulPointEc_p3_y
+VAR GLOBAL mulPointEc_RR
+VAR GLOBAL mulPointEc_bits
+VAR GLOBAL mulPointEc_p12_x
+VAR GLOBAL mulPointEc_p12_y
+VAR GLOBAL mulPointEc_p3_no_infinity
+
+; TODO protect all cases
+mulPointEc:
+        RR      :MSTORE(mulPointEc_RR)
+        255n    :MSTORE(mulPointEc_bits)
+        0n      :MSTORE(mulPointEc_p3_no_infinity)
+
+        0n      :MSTORE(mulPointEc_p3_x)
+        0n      :MSTORE(mulPointEc_p3_y)
+
+        $ => A  :MLOAD(mulPointEc_p1_x)
+        $ => B  :MLOAD(mulPointEc_p1_y)
+        $ => C  :MLOAD(mulPointEc_p2_x)
+        $ => D  :MLOAD(mulPointEc_p2_y)
+        ${xAddPointEc(A,B,C,D)} => E  :MSTORE(mulPointEc_p12_x)
+        ${yAddPointEc(A,B,C,D)} :ARITH_ECADD_DIFFERENT, MSTORE(mulPointEc_p12_y)
+
+; Goes forward in different branches of code depending on the values of the
+; most significant bits of k1 and k2.
+; First branch was determined by k1 most significant bit.
+
+;
+; Most Significant bit was calculated ki + ki,
+;
+;    A b255 b254 b253 ... b1   b0
+;    A b255 b254 b253 ... b1   b0
+;   ---------------------------
+;    E b254 b253 b252 ... b0    0
+;
+;   if b255 == 1 then carry = 1
+;   if b255 == 0 then carry = 0
+;
+;   E = A << 1  (equivalent A + A)
+;
+;   store E to be used in next round
+;
+
+mulPointEc_loop:
+        $ => A,B  :MLOAD(mulPointEc_k1)
+        ; E = A*2 [carry] => bit 255 = 1
+        $ => E    :ADD,JMPC(mulPointEc_k11)
+
+; high_bit(k1) == 0 high_bit(k2) == ??
+mulPointEc_k10:
+        ; store E on multipointEc_k1, E was A*2 equivalent SHL and 255 bit on carry.
+        E         :MSTORE(mulPointEc_k1)
+        $ => A,B  :MLOAD(mulPointEc_k2)
+        ; E = A*2 [carry] => bit 255 = 1
+        $ => E    :ADD,JMPC(mulPointEc_k10_k21)
+
+; high_bit(k1) == 0 high_bit(k2) == 0
+mulPointEc_k10_k20:
+        ; store E on multipointEc_k2, E was A*2 equivalent SHL and 255 bit on carry.
+        E       :MSTORE(mulPointEc_k2)
+        $ => A  :MLOAD(mulPointEc_p3_x)
+        $ => B  :MLOAD(mulPointEc_p3_y)
+        :JMP(mulPointEc_square)
+
+; high_bit(k1) == 1 high_bit(k2) == ??
+mulPointEc_k11:
+        E         :MSTORE(mulPointEc_k1)
+        $ => A,B  :MLOAD(mulPointEc_k2)
+        $ => E    :ADD,JMPC(mulPointEc_k11_k21)
+
+; high_bit(k1) == 1 high_bit(k2) == 0
+mulPointEc_k11_k20:
+        $ => C  :MLOAD(mulPointEc_p1_x)
+        $ => D  :MLOAD(mulPointEc_p1_y)
+        :JMP(mulPointEc_p2_loaded)
+
+; high_bit(k1) == 1 high_bit(k2) == 1
+mulPointEc_k11_k21:
+        $ => C  :MLOAD(mulPointEc_p12_x)
+        $ => D  :MLOAD(mulPointEc_p12_y)
+        :JMP(mulPointEc_p2_loaded)
+
+; high_bit(k1) == 0 high_bit(k2) == 1
+mulPointEc_k10_k21:
+        $ => C  :MLOAD(mulPointEc_p2_x)
+        $ => D  :MLOAD(mulPointEc_p2_y)
+        :JMP(mulPointEc_p2_loaded)
+
+; in this point C,D have point to be add
+mulPointEc_p2_loaded:
+        E       :MSTORE(mulPointEc_k2)
+
+        ; check if p3 has a value, isn't point at infinity.
+        $ => A  :MLOAD(mulPointEc_p3_no_infinity)
+        1       :MSTORE(mulPointEc_p3_no_infinity)
+        A - 1   :JMPN(mulPointEc_p3_assignment)
+
+        C => A  ; point_x
+        $ => B  :MLOAD(mulPointEc_p3_x)
+                :EQ,JMPC(mulPointEc_x_equals_before_add)
+
+
+        $ => A  :MLOAD(mulPointEc_p3_x)
+        $ => B  :MLOAD(mulPointEc_p3_y)
+
+        ${xAddPointEc(A,B,C,D)} => E  :MSTORE(mulPointEc_p3_x)
+        ${yAddPointEc(A,B,C,D)} :ARITH_ECADD_DIFFERENT, MSTORE(mulPointEc_p3_y)
+
+mulPointEc_after_add:
+
+        E => A
+        $ => B  :MLOAD(mulPointEc_p3_y)
+
+                :JMP(mulPointEc_square)
+
+mulPointEc_p3_assignment:
+
+        C => A   :MSTORE(mulPointEc_p3_x)
+        D => B   :MSTORE(mulPointEc_p3_y)
+
+mulPointEc_square:
+
+        $ => C  :MLOAD(mulPointEc_bits)
+        C - 1   :JMPN(mulPointEc_end_loop)
+        C - 1   :MSTORE(mulPointEc_bits)
+
+        $ => C   :MLOAD(mulPointEc_p3_no_infinity)
+        ; if not data in p3, p3 was empty, no dblPointEc
+        C - 1   :JMPN(mulPointEc_loop)
+
+        $ => A  :MLOAD(mulPointEc_p3_x)
+        $ => B  :MLOAD(mulPointEc_p3_y)
+
+        ${xDblPointEc(A,B)} => E  :MSTORE(mulPointEc_p3_x)
+        ${yDblPointEc(A,B)} :ARITH_ECADD_SAME, MSTORE(mulPointEc_p3_y)
+
+        :JMP(mulPointEc_loop)
+
+mulPointEc_x_equals_before_add:
+        D => A ; D contains y of point to add (depends of bits k1,k2)
+        $ => B :MLOAD(mulPointEc_p3_y)
+               :EQ,JMPC(mulPointEc_same_point_to_add)
+
+        ; x1 = x2 and y1 != y2
+        ; ASSUME y1 = -y2
+        0n     :MSTORE(mulPointEc_p3_no_infinity)
+        0n     :MSTORE(mulPointEc_p3_x)
+        0n     :MSTORE(mulPointEc_p3_y)
+               :JMP(mulPointEc_square)
+
+mulPointEc_same_point_to_add:
+        C => A
+        D => B
+
+        ${xDblPointEc(A,B)} => E  :MSTORE(mulPointEc_p3_x)
+        ${yDblPointEc(A,B)} :ARITH_ECADD_SAME, MSTORE(mulPointEc_p3_y)
+
+                            :JMP(mulPointEc_after_add)
+
+mulPointEc_end_loop:
+
+        $ => RR     :MLOAD(mulPointEc_RR)
+        :RETURN

@@ -1,0 +1,33 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; mulFnEc (C = A * B)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+mulFnEc:
+        0 => C
+
+        ; A * B + 0 = [D] * 2 ** 256 + [E]
+
+        $${var _mulFnEc_AB = A * B}
+
+        ${_mulFnEc_AB >> 256} => D
+
+        ;;
+        ;; result of command was only 256 bits, not need mask
+        ;; ${_mulFnEc_AB & ((1 << 256) - 1)} == ${_mulFnEc_AB}
+
+        ${_mulFnEc_AB} => E :ARITH
+
+        ;
+        ; with committed E,D
+        ; FnEc * [k] + [C] = D * 2 ** 256 + E
+        ;
+
+        ${_mulFnEc_AB % const.FNEC} => C
+        ${_mulFnEc_AB / const.FNEC} => B
+        %FNEC => A
+
+        E :ARITH
+
+        :RETURN
