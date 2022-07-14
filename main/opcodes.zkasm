@@ -1019,6 +1019,7 @@ opRETURNDATASIZE:
 
     ; Load ret data length from last ctx
     ; If no retDataCTX(0), retDataLength = 0
+    GAS - 2 => GAS  :JMPN(outOfGas)
     $ => B          :MLOAD(retDataCTX)
     0 => A
     $               :EQ, JMPC(endOpRETURNDATASIZE)
@@ -1030,11 +1031,11 @@ opRETURNDATASIZE:
 endOpRETURNDATASIZE:
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS - 2 => GAS  :JMPN(outOfGas)
                     :JMP(readCode)
 
 opRETURNDATACOPY:
     SP - 3          :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => D          :MLOAD(SP--)            ;destOffset
     $ => B          :MLOAD(SP--)            ;offset - offset in return data
@@ -1052,7 +1053,7 @@ opRETURNDATACOPY:
     B => E
     $ => B          :MLOAD(retDataCTX)
     0 => A
-    $               :EQ, JMPC(readCode)
+    $               :EQ, JMPC(opRETURNDATACOPYEmpty)
     ; Load ret data length from last ctx
     B => CTX
     E => B
@@ -1066,7 +1067,6 @@ opRETURNDATACOPY:
     $               :LT, JMPC(outOfGas)
     $               :EQ, JMPC(outOfGas)
     E => B
-    GAS - 3 => GAS  :JMPN(outOfGas)
     ;${3*((C+31)/32)}
     C+31 => A
     ;(C+31)/32
@@ -1111,6 +1111,11 @@ opRETURNDATACOPYfinal:
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
                     :JMP(readCode)
+
+opRETURNDATACOPYEmpty:
+    E + C => B ; offset return data + len return data must be 0
+    $               :EQ, JMPC(readCode)
+                    :JMP(outOfGas)
 
 opEXTCODEHASH:
 
@@ -2417,12 +2422,10 @@ opCALL2:
 
     ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
     $ => B          :MLOAD(SP--)
-    B               :MSTORE(retOffset)
     B               :MSTORE(lastMemOffset)
 
     ; Store byte size to copy (size of the return data).
     $ => D          :MLOAD(SP)
-    D               :MSTORE(retLength)
     D               :MSTORE(lastMemLength)
     ;Check counters
     %MAX_CNT_ARITH - CNT_ARITH - C - 32 :JMPN(outOfCounters)
@@ -2430,8 +2433,6 @@ opCALL2:
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
                     :CALL(saveMem)
 
-    $ => B          :MLOAD(txDestAddr)
-    $ => D          :MLOAD(txSrcAddr)
     $ => C          :MLOAD(storageAddr)
     SP              :MSTORE(lastSP)
     PC              :MSTORE(lastPC)
@@ -2446,6 +2447,8 @@ opCALL2:
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
     A               :MSTORE(storageAddr)
+    B               :MSTORE(retCallOffset)
+    D               :MSTORE(retCallLength)
 
     ; If addr in touched addres D = 0, else D = 1
     ${touchedAddress(A)} => D
@@ -2517,11 +2520,9 @@ opCALLCODE2:
     
     ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
     $ => B          :MLOAD(SP--)
-    B               :MSTORE(retOffset)
     B               :MSTORE(lastMemOffset)
     ; Store byte size to copy (size of the return data).
     $ => D          :MLOAD(SP)
-    D               :MSTORE(retLength)
     D               :MSTORE(lastMemLength)
 
     ;Check counters
@@ -2530,12 +2531,6 @@ opCALLCODE2:
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
                     :CALL(saveMem)
 
-opCALLCODE3:
-                    :CALL(saveMem)
-
-opCALLCODE4:
-    $ => B          :MLOAD(txDestAddr)
-    $ => C          :MLOAD(txSrcAddr)
     $ => E          :MLOAD(storageAddr)
     SP              :MSTORE(lastSP)
     PC              :MSTORE(lastPC)
@@ -2550,6 +2545,8 @@ opCALLCODE4:
     SR              :MSTORE(initSR)
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
+    B               :MSTORE(retCallOffset)
+    D               :MSTORE(retCallLength)
 
     ; If addr in touched addres D = 0, else D = 1
     ${touchedAddress(A)} => D
@@ -2608,11 +2605,13 @@ opRETURN:
     $ => A          :MLOAD(gasRefund)
     A + B           :MSTORE(gasRefund)
     $ => B          :MLOAD(gasCTX)
-    ; TODO Should be substracted first the gas
     B + GAS => GAS
-    $ => B          :MLOAD(retOffset)
-    ; TODO  Origin memory len != return memory len ?
+
     $ => CTX        :MLOAD(currentCTX)
+    $ => B          :MLOAD(retCallOffset)
+    $ => D          :MLOAD(retCallLength)
+    C - D           :JMPN(opRETURN32) ; Take the smaller one
+    D => C
 
 ; Copy from memory current CTX to memory origin CTX
 opRETURN32:
@@ -2676,8 +2675,6 @@ opRETURNcreate:
     $ => B          :MLOAD(gasCTX)
     ; TODO Should be substracted first the gas
     B + GAS => GAS
-    $ => B          :MLOAD(retOffset)
-    ; TODO  Origin memory len != return memory len ?
     $ => CTX        :MLOAD(currentCTX)
     $ => A          :MLOAD(txSrcAddr)
     $ => D          :MLOAD(txNonce)
@@ -2732,11 +2729,9 @@ opDELEGATECALL:
 
     ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
     $ => B          :MLOAD(SP--)
-    B               :MSTORE(retOffset)
     B               :MSTORE(lastMemOffset)
     ; Store byte size to copy (size of the return data).
     $ => D          :MLOAD(SP)
-    D               :MSTORE(retLength)
     D               :MSTORE(lastMemLength)
 
     ;Check counters
@@ -2747,7 +2742,6 @@ opDELEGATECALL:
     ;  Mem expansion gas cost return args
                     :CALL(saveMem)
 
-    $ => B          :MLOAD(txValue)
     $ => C          :MLOAD(txSrcAddr)
     $ => E          :MLOAD(storageAddr)
     SP              :MSTORE(lastSP)
@@ -2762,9 +2756,12 @@ opDELEGATECALL:
     E               :MSTORE(storageAddr)
     1               :MSTORE(isDelegateCall)
     SR              :MSTORE(initSR)
-    B               :MSTORE(txValue)
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
+    
+    B               :MSTORE(retCallOffset)
+    D               :MSTORE(retCallLength)
+
     ${touchedAddress(A)} => D
     ;gas_cost = base_gas + gas_sent_with_call
     GAS-100-D*2500 => GAS    :JMPN(outOfGas)
@@ -2772,7 +2769,9 @@ opDELEGATECALL:
     $ => CTX        :MLOAD(originCTX)
     $ => C          :MLOAD(txGasPrice)
     GAS - A         :MSTORE(gasCTX)
+    $ => B          :MLOAD(txValue)
     $ => CTX        :MLOAD(currentCTX)
+    B               :MSTORE(txValue)
     C               :MSTORE(txGasPrice)
     A => GAS
 
@@ -2878,17 +2877,16 @@ opSTATICCALL:
 
     ; Mem expansion gas cost call args
                     :CALL(saveMem)
-    $ => C          :MLOAD(SP--)
-    C               :MSTORE(retOffset)
-    C               :MSTORE(lastMemOffset)
 
-    $ => B          :MLOAD(SP)
-    B               :MSTORE(retLength)
-    B               :MSTORE(lastMemLength)
+    $ => B          :MLOAD(SP--)
+    B               :MSTORE(lastMemOffset)
+
+    $ => D          :MLOAD(SP)
+    D               :MSTORE(lastMemLength)
     ;  Mem expansion gas cost return args
                     :CALL(saveMem)
 
-    $ => B          :MLOAD(txDestAddr)
+    $ => C          :MLOAD(txDestAddr)
     SR              :MSTORE(initSR)
     SP              :MSTORE(lastSP)
     PC              :MSTORE(lastPC)
@@ -2900,10 +2898,13 @@ opSTATICCALL:
     A               :MSTORE(originCTX)
     0               :MSTORE(txValue)
     1               :MSTORE(isStaticCall)
-    B               :MSTORE(txSrcAddr)
+    C               :MSTORE(txSrcAddr)
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
     A               :MSTORE(storageAddr)
+    B               :MSTORE(retCallOffset)
+    D               :MSTORE(retCallLength)
+
     ${touchedAddress(A)} => D
     ;gas_cost = base_gas + gas_sent_with_call
     GAS-100-D*2500 => GAS    :JMPN(outOfGas)
@@ -2927,22 +2928,58 @@ opREVERT:
     SP - 2          :JMPN(stackUnderflow)
     $ => SR         :MLOAD(initSR)
     SP - 1 => SP
-    $ => A          :MLOAD(SP--) ;offset
-    $ => B          :MLOAD(SP) ; length
+    $ => E          :MLOAD(SP--) ;offset
+    $ => C          :MLOAD(SP) ;length
     E               :MSTORE(retDataOffset)
     C               :MSTORE(retDataLength)
-    $ => C          :MLOAD(originCTX)
+    E               :MSTORE(lastMemOffset)
+    C               :MSTORE(lastMemLength)
+                    :CALL(saveMem)
+
+    $ => B          :MLOAD(originCTX)
     ${eventLog(onError, revert)}
-    C - 1           :JMPN(handleGas)
+    B - 1           :JMPN(handleGas)
     $ => A          :MLOAD(currentCTX)
-    C => CTX
-    C               :MSTORE(currentCTX)
+    B => CTX
     ; Add return data context value to origin context
     A               :MSTORE(retDataCTX)
 
-    ;Store ret length
-    $ => C          :MLOAD(gasCTX)
-    GAS + C => GAS
+    $ => B          :MLOAD(gasCTX)
+    GAS + B => GAS
+
+    A => CTX; current context
+    $ => B          :MLOAD(retCallOffset)
+    $ => D          :MLOAD(retCallLength)
+    C - D           :JMPN(opRETURN32) ; Take the smaller one
+    D => C
+
+; Copy from memory current CTX to memory origin CTX
+opREVERT32:
+    C - 1           :JMPN(opREVERTend)
+    C - 32          :JMPN(opREVERTfinal)
+                    :CALL(MLOAD32)
+    E => D
+    $ => CTX        :MLOAD(originCTX)
+    B => E
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTORE32)
+    E => B
+    D => E
+    C - 32 => C
+    $ => CTX        :MLOAD(currentCTX)
+                    :JMP(opREVERT32)
+
+opREVERTfinal:
+                    :CALL(MLOADX)
+    $ => CTX        :MLOAD(originCTX)
+    B => E
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
+    $ => CTX        :MLOAD(currentCTX)
+
+opREVERTend:
+    $ => CTX        :MLOAD(originCTX)
+    CTX             :MSTORE(currentCTX)
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     0               :MSTORE(SP++)
