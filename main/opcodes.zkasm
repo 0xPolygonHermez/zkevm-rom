@@ -1305,7 +1305,7 @@ opMSTORE:
     E               :MSTORE(lastMemOffset)
     E => A
                     :CALL(MSTORE32)
-    E - A           :MSTORE(lastMemLength)
+    32              :MSTORE(lastMemLength)
                     :CALL(saveMem)
     GAS - 3 => GAS  :JMPN(outOfGas)
                     :JMP(readCode)
@@ -2205,7 +2205,10 @@ opLOG0:
                         :CALL(saveMem)
     0                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
-    GAS - 8 * C => GAS  :JMPN(outOfGas)                 ; add gas depending on data bytes
+    GAS => A
+    8 * C => B
+    $                   :LT,JMPC(outOfGas)
+    GAS - B => GAS                                  ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
     B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
                         :JMP(opLOGLoop)
@@ -2222,7 +2225,10 @@ opLOG1:
                         :CALL(saveMem)
     1                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
-    GAS - 8 * C => GAS  :JMPN(outOfGas)               ; add gas depending on data bytes
+    GAS => A
+    8 * C => B
+    $                   :LT,JMPC(outOfGas)
+    GAS - B => GAS                                  ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
     B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
                         :JMP(opLOGLoop)
@@ -2239,7 +2245,10 @@ opLOG2:
                         :CALL(saveMem)
     2                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
-    GAS - 8 * C => GAS  :JMPN(outOfGas)               ; add gas depending on data bytes
+    GAS => A
+    8 * C => B
+    $                   :LT,JMPC(outOfGas)
+    GAS - B => GAS                                  ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
     B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
                         :JMP(opLOGLoop)
@@ -2256,7 +2265,10 @@ opLOG3:
                         :CALL(saveMem)
     3                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
-    GAS - 8 * C => GAS  :JMPN(outOfGas)               ; add gas depending on data bytes
+    GAS => A
+    8 * C => B
+    $                   :LT,JMPC(outOfGas)
+    GAS - B => GAS                                  ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
     B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
                         :JMP(opLOGLoop)
@@ -2273,7 +2285,10 @@ opLOG4:
                         :CALL(saveMem)
     4                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
-    GAS - 8 * C => GAS  :JMPN(outOfGas)               ; add gas depending on data bytes
+    GAS => A
+    8 * C => B
+    $                   :LT,JMPC(outOfGas)
+    GAS - B => GAS                                  ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
     B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
                         :JMP(opLOGLoop)
@@ -3020,15 +3035,18 @@ opSELFDESTRUCT:
 
     ; read receiver
     SP - 1 => SP        :JMPN(stackUnderflow)
-    $ => A              :MLOAD(SP)
+    $ => E              :MLOAD(SP)
 
     ; gas: check receiver is empty and balance gt 0
-    A => E
-    D - 1               :JMPN(opSELFDESTRUCT2)
+    E => C
+    0 => A
+    D => B
+    $                   :EQ,JMPC(opSELFDESTRUCT2)
                         :CALL(isEmptyAccount)
     GAS - 25000 * E => GAS    :JMPN(outOfGas)
 opSELFDESTRUCT2:
     ; gas: check touched address
+    C => A
     ${touchedAddress(A)} => E
     GAS - 2600 * E => GAS     :JMPN(outOfGas)
 
