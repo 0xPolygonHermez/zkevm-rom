@@ -303,6 +303,9 @@ create2end:
 
 deploy:
         ${touchedAddress(A)}
+        A => E
+                                       :CALL(isEmptyAccount)
+        E - 1                          :JMPN(invalidDeploy)
         ; set contract nonce to 1
         0 => C
         1 => D
@@ -333,6 +336,9 @@ readDeployBytecode:
                                         :JMP(@mapping_opcodes + RR)
 readDeployBytecodeCreate:
         $ => CTX                        :MLOAD(originCTX)
+        $ => E                          :MLOAD(argsLengthCall)
+        E - PC - 1                      :JMPN(readDeployBytecodeCreateDefault) 
+        
         $ => E                          :MLOAD(argsOffsetCall)
         E + PC => E
         1 => C
@@ -345,6 +351,9 @@ readDeployBytecodeCreate:
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
 
+readDeployBytecodeCreateDefault:
+        $ => CTX                        :MLOAD(currentCTX)
+                                        :JMP(defaultOpCode)
 
 callContract:
         ; Move balances if value > 0 just before executing the contract CALL
