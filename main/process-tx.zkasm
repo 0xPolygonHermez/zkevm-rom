@@ -321,9 +321,8 @@ deploy:
                                         :JMP(readCode)
 
 readDeployBytecode:
-        1 => A
         $ => B                          :MLOAD(isCreate)
-        $                               :EQ,JMPC(readDeployBytecodeCreate)
+        0 - B                           :JMPN(readDeployBytecodeCreate)
         $ => B                          :MLOAD(txCalldataLen)
         B - PC - 1                      :JMPN(defaultOpCode) 
         $ => HASHPOS                    :MLOAD(dataStarts)
@@ -420,6 +419,8 @@ readCode:
 
 ; only when first context ends on deploy
 endDeploy:
+        ; If 0 len, nothing to compute
+        C - 1                           :JMPN(handleGas)
         ; save offset memory and length to compute contract hash
         E                               :MSTORE(memOffsetLinearPoseidon)
         C                               :MSTORE(memSizeLinearPoseidon)
