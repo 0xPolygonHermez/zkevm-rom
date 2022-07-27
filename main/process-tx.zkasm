@@ -1,17 +1,26 @@
 INCLUDE "map-opcodes.zkasm"
 INCLUDE "precompiled/selector.zkasm"
 INCLUDE "ecrecover/ecrecover.zkasm"
+; Blocks process txs
+;       A - Verify ecdsa signature
+;       B - Verify chainID
+;       C - Verify and increase nonce
+;       D - Verify upfront cost
+;       E - Check transaction type
+;         E.1 - call contract
+;         E.2 - deploy contract
+
 
 processTx:
-        ; Get sigDataSize (VAR CTX)
+;;;;;;;;;;;;;;;;;;
+;; A - Verify ecdsa signature
+;;;;;;;;;;;;;;;;;;
+
+        ; Get sigDataSize
         $ => HASHPOS                    :MLOAD(sigDataSize)
-        ; We get a new hashId
+        ; Get hash address previously stored in RLP parsing
         $ => E                          :MLOAD(lastTxHashId)
         E+1 => E                        :MSTORE(lastTxHashId)
-
-;;;;;;;;;
-;; Signaure Verification
-;;;;;;;;;
 
         ; Check the signature
         $ => A                          :MLOAD(lastHashKIdUsed)
@@ -29,69 +38,63 @@ checkAndSaveFrom:
         A                               :MSTORE(txSrcAddr)
         A                               :MSTORE(txSrcOriginAddr)
         ${eventLog(onProcessTx)}
-;;;;;;;;;
-;; Store init state
-;;;;;;;;;
 
+        ; Store initial state at the beginning of the transaction
         SR                              :MSTORE(originSR)
         SR                              :MSTORE(initSR)
 
-;;;;;;;;
-; Check chainID --> //TODO: chainID is defined as 64 bits which does not fit in the Field. If we consider just 63 bits it could be done directly (A - B), saving the EQ comparison
-;;;;;;;;
+;;;;;;;;;;;;;;;;;;
+;; B - Verify chainID
+;;;;;;;;;;;;;;;;;;
+
         $ => A                          :MLOAD(txChainId)                                       ; A: chainId tx
         %ZKEVM_CHAINID => B                                                               ; B: defaultChainId, A: chainId tx
         $                               :EQ,JMPC(endCheckChainId)                               ; If A == B --> endCheckChainId
                                         :JMP(invalidTx)                                         ; If A != B --> invalidTx
 endCheckChainId:
 
-; //TODO: move touchedAddress after intrinsic checks
-;;;;;;;;
-; Touched Addresses
-;;;;;;;;
+;; Reset warm/cold information
         $ => A                          :MLOAD(txSrcOriginAddr)
-        ${resetTouchedAddress()}
-        ${resetStorageSlots()}
-        ${touchedAddress(A)}
+        ${resetTouchedAddress()} ; clean touchedAddresses since there is a new transaction
+        ${resetStorageSlots()} ; clean storageSlots since there is a new transaction
+        ${touchedAddress(A)} ; add tx.origin to touched addresses
 
-;;;;;;;;
-; Check and update Nonce --> //TODO: same as chainID
-;;;;;;;;
+;;;;;;;;;;;;;;;;;;
+;; C - Verify and increase nonce
+;;;;;;;;;;;;;;;;;;
 
-        $ => A, E                       :MLOAD(txSrcOriginAddr)                                 ; Address of the origin to A and E
+        $ => A, E                       :MLOAD(txSrcOriginAddr) ; Address of the origin to A and E
         %SMT_KEY_NONCE => B
-        0 => C                                                                                  ; 3rd parameter does not apply to nonce
-        $ => A                          :SLOAD                                                  ; Load the nonce to A and C from storage
+        0 => C
+        $ => A                          :SLOAD
         $ => B                          :MLOAD(txNonce)
         $ => C                          :EQ
-        C - 1                           :JMPN(invalidTx)                                        ; Compare "nonce storage" (A) and "nonce tx" (B). If A != B --> invalidTx
-        B                               :ASSERT                                                 ; sanity check
-        A+1 => D                                                                                ; Set to A the current address
+        C - 1                           :JMPN(invalidTx) ; Compare nonce state tree with nonce transaction
+        B                               :ASSERT ; sanity check
+        A + 1 => D
         E => A
         %SMT_KEY_NONCE => B
         0 => C
-        $ => SR                         :SSTORE                                                 ; Store the nonce plus one
+        $ => SR                         :SSTORE ; Store the nonce plus one
 
-;;;;;;;;
-; Intrinsic gas and upfront cost checks
-;;;;;;;;
+;;;;;;;;;;;;;;;;;;
+;; D - Verify upfront cost
+;;;;;;;;;;;;;;;;;;
 
-        $ => B                          :MLOAD(txGasLimit)                   ; Multiplies the txGasLimit (gas limit) amd the txGasPrice
+        ; Verify batch gas limit
+        $ => B                          :MLOAD(txGasLimit)
         ; Check batch gas limit is not exceeded by transaction
         %BATCH_GAS_LIMIT => A
         $                               :LT,JMPC(invalidTx)
 
-
-        ; CHECK INTRINSIC GAS
-        ; gas Limit >= 21k + calldata cost + deployment cost
-        ; Store intrinsic gas at E (21k)
-        21000 => E
+        ; Intrinsic gas --> gas Limit >= 21000 + calldata cost + deployment cost
+        %BASE_TX_GAS => E ; Store init intrinsic gas at E
         $ => A                          :MLOAD(isCreateContract)
         -A                              :JMPN(addDeploymentGasCost)
                                         :JMP(getCalldataGasCost)
+
 addDeploymentGasCost:
-        ; Add 32k if tx is a create
-        E + 32000 => E
+        E + BASE_TX_DEPLOY_GAS => E ; Add 32000 if transaction is a create
 
 getCalldataGasCost:
         $ => A                          :MLOAD(txCalldataLen)
@@ -103,7 +106,6 @@ addGas:
         0 => C
                                         :JMP(loopBytes)
 loopBytes:
-        ; Mul operation with Arith
         A - C - 1                       :JMPN(endCalldataIntrinsicGas)
         E => B
         HASHPOS => D
@@ -122,6 +124,7 @@ add4Gas:
 add16Gas:
         E + 16 => E
                                         :JMP(loopBytes)
+
 endCalldataIntrinsicGas:
         ; Compare gas limit >= intrinsic gas
         $ => A                          :MLOAD(txGasLimit)
@@ -130,33 +133,28 @@ endCalldataIntrinsicGas:
         ; Store calculated gas for later usage
         E                               :MSTORE(gasCalldata)
 
-        ;CHECK UPFRONT COST
-        ; Get gas Price(B) * gas limit(A)
+        ; Check upfront cost: balance >= gas price * gas limit + value
+        ; gas price * gas limit
         $ => B                          :MLOAD(txGasPrice)
-        ; Mul operation with Arith
         A                               :MSTORE(arithA)
         B                               :MSTORE(arithB)
                                         :CALL(mulARITH)
-        ; gas Price * gas limit in D
         $ => D                          :MLOAD(arithRes1)
         ; Get caller balance
         $ => A                          :MLOAD(txSrcOriginAddr)
-        0 => B,C                                                        ; balance key smt
-        ; Caller Balance in C
+        0 => B, C
         $ => C                          :SLOAD
+        ; (gas price * gas limit) + value
         $ => B                          :MLOAD(txValue)
         D                               :MSTORE(arithA)
         B                               :MSTORE(arithB)
                                         :CALL(addARITH)
-        ; gas price * gas limit + value in B
         $ => B                          :MLOAD(arithRes1)
-        ; Caller balance in A
+        ; Comparison
         C => A
-        ; Check Balance >= gas price * gas limit + value -> upfront cost
-        $                               :LT,JMPC(invalidTx)
+        $                               :LT, JMPC(invalidTx)
 
-
-        ; Substract gas Price * gas limit (D) from caller balance (A)
+        ; Substract (gas price * gas limit) from caller balance
         C                               :MSTORE(arithA)
         D                               :MSTORE(arithB)
                                         :CALL(subARITH)
@@ -166,7 +164,7 @@ endCalldataIntrinsicGas:
         0 => B,C
         $ => SR                         :SSTORE
 
-        ; TODO: create, do not have value
+        ; Store state root with upfront cost substracted and nonce increased
         SR                              :MSTORE(initSR)
 
         ; Substract intrinsic gas
@@ -174,28 +172,33 @@ endCalldataIntrinsicGas:
         $ => A                          :MLOAD(gasCalldata)
         GAS - A => GAS
 
+;;;;;;;;;;;;;;;;;;
+;; E - Check transaction type
+;;;;;;;;;;;;;;;;;;
 txType:
-;;;;;;;;;;
-;;;;; Tx type
-;;;;;;;;;;
 
+        ; Compute deployment address if create contract operation
         $ => A                          :MLOAD(isCreateContract)
         0 - A                           :JMPN(getContractAddress)
         $ => A                          :MLOAD(txDestAddr)
+        ; Add 'to' to touched addresses
         ${touchedAddress(A)}
-        ; Check if is zero address, zero address is not precompiled
+        ; Check 'to' is zero or precompiled contract
+        ; Check zero address since zero address is not a precompiled contract
         0 => B
         $                               :EQ, JMPC(callContract)
         10 => B
-        $                               :LT,JMPC(selectorPrecompiled) ; precompiled smart contracts
+        $                               :LT,JMPC(selectorPrecompiled)
                                         :JMP(callContract)
 
+;; compute new create address
 getContractAddress:
         ; A new hash with position 0 is started
         0 => HASHPOS
         ; We get a new hashId
         $ => E                          :MLOAD(lastHashKIdUsed)
         E+1 => E                        :MSTORE(lastHashKIdUsed)
+        ; Check if create is with CREATE2 opcode
         $ => A                          :MLOAD(isCreate2)
         0 - A                           :JMPN(create2)
         $ => A                          :MLOAD(txSrcAddr)
@@ -203,7 +206,8 @@ getContractAddress:
         B - 0x80                        :JMPN(nonce1byte)
         $ => C                          :MLOAD(lengthNonce)
         1 => D
-        0xc0 + 22 + C                   :HASHK(E) ; 1 byte length address, 20 bytes address, 1 bytes length nonce = 22 bytes
+        ; 1 byte length address + 20 bytes address + 1 byte length nonce + C bytes nonce
+        0xc0 + 22 + C                   :HASHK(E)
         0x94                            :HASHK(E)
         20 => D
         A                               :HASHK(E)
@@ -214,8 +218,9 @@ getContractAddress:
                                         :JMP(endContractAddress)
 
 nonce1byte:
+        ; 1 byte length address + 20 bytes address + 1 bytes nonce
         1 => D
-        0xc0 + 22                       :HASHK(E) ; 1 byte length address, 20 bytes address, 1 bytes length nonce = 22 bytes
+        0xc0 + 22                       :HASHK(E)
         0x94                            :HASHK(E)
         20 => D
         A                               :HASHK(E)
@@ -236,8 +241,10 @@ endContractAddress:
         A                               :MSTORE(createContractAddress)
         A                               :MSTORE(txDestAddr)
         A                               :MSTORE(storageAddr)
-        ; TODO: Check nonce != 0 OR already_bytecode ==> same behaviour as fail constructor
-        ; TODO: check CREATE or deployment with constructor reverted
+        ; TODO: New address where bytecode is deployed must:
+        ;         - have a nonce == 0
+        ;         - has already bytecode
+        ; TODO: Add check CREATE or deployment with constructor reverted
                                         :JMP(deploy)
 
 create2:
