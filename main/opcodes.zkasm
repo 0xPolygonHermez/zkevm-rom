@@ -2599,8 +2599,14 @@ opRETURN:
     $ => C          :MLOAD(SP)   ;length
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - C - 32 :JMPN(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - C -32 :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
+    C => B
+    $ => B                  :SUB
+    B                       :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
+    C => B
+    $ => B                  :SUB
+    B                       :JMPN(outOfCounters)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
 
     E               :MSTORE(retDataOffset)
@@ -2623,13 +2629,15 @@ opRETURN:
     B + GAS => GAS
 
     $ => CTX        :MLOAD(currentCTX)
-    $ => B          :MLOAD(retCallOffset)
     $ => D          :MLOAD(retCallLength)
-    C - D           :JMPN(opRETURN32) ; Take the smaller one
+    C => A
+    D => B
+    $               :LT,JMPC(opRETURN32) ; Take the smaller one
     D => C
 
 ; Copy from memory current CTX to memory origin CTX
 opRETURN32:
+    $ => B          :MLOAD(retCallOffset)
     C - 1           :JMPN(opRETURNend)
     C - 32          :JMPN(opRETURNfinal)
                     :CALL(MLOAD32)
@@ -2753,7 +2761,6 @@ opDELEGATECALL:
     %MAX_CNT_ARITH - CNT_ARITH - C - 32 :JMPN(outOfCounters)
     %MAX_CNT_BINARY - CNT_BINARY - C -32 :JMPN(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
-
     ;  Mem expansion gas cost return args
                     :CALL(saveMem)
 
@@ -2963,13 +2970,15 @@ opREVERT:
     GAS + B => GAS
 
     A => CTX; current context
-    $ => B          :MLOAD(retCallOffset)
     $ => D          :MLOAD(retCallLength)
-    C - D           :JMPN(opRETURN32) ; Take the smaller one
+    C => A
+    D => B
+    $               :LT,JMPC(opREVERT32)
     D => C
 
 ; Copy from memory current CTX to memory origin CTX
 opREVERT32:
+    $ => B          :MLOAD(retCallOffset)
     C - 1           :JMPN(opREVERTend)
     C - 32          :JMPN(opREVERTfinal)
                     :CALL(MLOAD32)
