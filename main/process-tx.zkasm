@@ -10,7 +10,6 @@ INCLUDE "ecrecover/ecrecover.zkasm"
 ;         E.1 - call contract
 ;         E.2 - deploy contract
 
-
 processTx:
 ;;;;;;;;;;;;;;;;;;
 ;; A - Verify ecdsa signature
@@ -94,7 +93,7 @@ endCheckChainId:
                                         :JMP(getCalldataGasCost)
 
 addDeploymentGasCost:
-        E + BASE_TX_DEPLOY_GAS => E ; Add 32000 if transaction is a create
+        E + %BASE_TX_DEPLOY_GAS => E ; Add 32000 if transaction is a create
 
 getCalldataGasCost:
         $ => A                          :MLOAD(txCalldataLen)
@@ -201,6 +200,7 @@ getContractAddress:
         ; Check if create is with CREATE2 opcode
         $ => A                          :MLOAD(isCreate2)
         0 - A                           :JMPN(create2)
+;; compute new contract address as CREATE spec: keccak256(RLP(from, nonce))[12:]
         $ => A                          :MLOAD(txSrcAddr)
         $ => B                          :MLOAD(txNonce)
         B - 0x80                        :JMPN(nonce1byte)
@@ -247,6 +247,7 @@ endContractAddress:
         ; TODO: Add check CREATE or deployment with constructor reverted
                                         :JMP(deploy)
 
+;; compute new contract address as CREATE2 spec: keccak256(0xff ++ address ++ salt ++ keccak256(init_code))[12:] (https://eips.ethereum.org/EIPS/eip-1014)
 create2:
         $ => C                          :MLOAD(txCalldataLen)
         ${(C+31)/32} => A
@@ -289,7 +290,6 @@ create2end:
         0 => HASHPOS
         $ => E                          :MLOAD(lastHashKIdUsed)
         E+1 => E                        :MSTORE(lastHashKIdUsed)
-        ;keccak256( 0xff ++ address ++ salt ++ keccak256(init_code))[12:]
         1 => D
         0xff                            :HASHK(E)
         20 => D
