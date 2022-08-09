@@ -266,8 +266,9 @@ endChainId:
 sizeVerification:
         C => A
         $ => B                          :MLOAD(txRLPLength)
-        A - B                           :JMPN(invalidTxRLP)
-        B - A                           :JMPN(invalidTxRLP)
+        $                               :EQ,JMPC(sizeVerificationSuccess)
+                                        :JMP(invalidTxRLP)
+sizeVerificationSuccess:
         HASHPOS                         :HASHKLEN(E)
 
 ;;;;;;;;;;;;;;;;;;
@@ -323,7 +324,7 @@ invalidTxRLP:
         $ => E                          :MLOAD(batchHashDataId)
 
 appendTxs:
-        B - C - 32                      :JMPN(finalAppendTxs)
+        B - C - 32                      :JMPN(finalAppendTxs) ; TODO check, JUMPN only chekcs first 64 bits
         32 => D
         ${getTxs(p,D)} => A
         $${p = p + D}
@@ -333,7 +334,7 @@ appendTxs:
 
 finalAppendTxs:
         B - C => D
-        D - 1                           :JMPN(endAppendTxs)
+        D - 1                           :JMPN(endAppendTxs) ; TODO check, JUMPN only chekcs first 64 bits
         ${getTxs(p,D)} => A
         $${p = p + D}
         A                               :HASHK(E)
