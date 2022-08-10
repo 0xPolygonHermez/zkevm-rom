@@ -2834,10 +2834,13 @@ opCREATE2:
     E                   :MSTORE(lastMemOffset)
     C                   :MSTORE(lastMemLength)
                         :CALL(saveMem)
-
+    C => E
     CTX                 :MSTORE(originAuxCTX)
     $ => B              :MLOAD(txDestAddr)
     GAS - 32000 => GAS  :JMPN(outOfGas)
+    ; Cost to hash the initialisation code before
+    ${(C+31)/32} => C
+    GAS - 6*C => GAS    :JMPN(outOfGas)
     GAS => C            :MSTORE(gasCall)
     SP                  :MSTORE(lastSP)
     PC                  :MSTORE(lastPC)
@@ -2946,8 +2949,6 @@ opSTATICCALL:
     C               :MSTORE(txGasPrice)
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txCalldataLen)
-    $ => E          :MLOAD(argsOffsetCall) ;offset
-    $ => C          :MLOAD(argsLengthCall) ;length
                     :CALL(copySP)
                     :JMP(txType)
 
