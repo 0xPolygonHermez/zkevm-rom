@@ -2388,11 +2388,13 @@ opCREATE:
     A                   :MSTORE(originCTX)
 
     ; get nonce & update SR
-    C => A
-    0 => C
-    B                  :MSTORE(txNonce)
+    B                   :MSTORE(txNonce)
+                        :CALL(getLenBytes)
+    A                   :MSTORE(lengthNonce)
     B + 1 => D
+    C => A
     %SMT_KEY_NONCE => B                                                  ; Constant for nonce
+    0 => C
     $ => SR             :SSTORE
     SR                  :MSTORE(initSR)
 
@@ -2407,9 +2409,6 @@ opCREATE:
     B                   :MSTORE(txSrcAddr)
                         :CALL(copySP)
 
-    $ => B              :MLOAD(txNonce)
-                        :CALL(getLenBytes)
-    A                   :MSTORE(lengthNonce)
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
@@ -2875,15 +2874,16 @@ opCREATE2:
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
 
+    ; Substract gas cost
+
     ; Mem expansion gas cost
     E                   :MSTORE(lastMemOffset)
     C                   :MSTORE(lastMemLength)
                         :CALL(saveMem)
     CTX                 :MSTORE(originAuxCTX)
-    $ => E              :MLOAD(txDestAddr)
     GAS - 32000 => GAS  :JMPN(outOfGas)
-    ; Cost to hash the initialisation code before
-    ; Div operation with Arith
+
+    ; Cost to hash the initialisation code
     ${C+31}             :MSTORE(arithA)
     32                  :MSTORE(arithB)
                         :CALL(divARITH)
@@ -2892,11 +2892,31 @@ opCREATE2:
     6*C => B
     $                   :LT,JMPC(outOfGas)
     A - B => GAS
+    GAS                 :MSTORE(gasCall)
 
-    GAS => C            :MSTORE(gasCall)
+    ; Check correctness of Create: depth, can transfer, nonce overlfow, 
+    ; can transfer
+    $ => A              :MLOAD(txDestAddr)
+    %SMT_KEY_BALANCE => B                                             ; balance key smt
+    0 => C                                                            ; 3rd parameter does not apply to nonce or balance
+    $ => A              :SLOAD
+    $ => B              :MLOAD(valueCall)
+    $                   :LT,JMPC(opCreateFail)
+
+    ; nonce overlow
+    $ => A             :MLOAD(txDestAddr)
+    %SMT_KEY_NONCE => B                                                  ; Constant for nonce
+    $ => B              :SLOAD
+    A => C
+    %MAX_NONCE => A
+    $                   :EQ,JMPC(opCreateFail)
+
+    ;change new CTX
+    ; B Nonce
+    ; C dest Addr
+    ; D salt
     SP                  :MSTORE(lastSP)
     PC                  :MSTORE(lastPC)
-    ;change new CTX
     $ => A              :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
     A+1 => CTX          :MSTORE(lastCtxUsed)
     CTX                 :MSTORE(currentCTX)
@@ -2906,34 +2926,31 @@ opCREATE2:
     D                   :MSTORE(salt)
     $ => A              :MLOAD(originAuxCTX)
     A                   :MSTORE(originCTX)
-    C => GAS
+
+    ; get nonce & update SR
+    B                   :MSTORE(txNonce)
+                        :CALL(getLenBytes)
+    A                   :MSTORE(lengthNonce)
+    B + 1 => D
+    C => A
+    %SMT_KEY_NONCE => B                                                  ; Constant for nonce
+    0 => C
+    $ => SR             :SSTORE
+    SR                  :MSTORE(initSR)
+    A                   :MSTORE(txSrcAddr)
+
                         :CALL(computeGasSendCall)
     $ => CTX            :MLOAD(originCTX)
     GAS - A             :MSTORE(gasCTX)
     $ => CTX            :MLOAD(currentCTX)
     A => GAS
-    E                   :MSTORE(txSrcAddr)
                         :CALL(copySP)
-    E => A
-    %SMT_KEY_NONCE => B
-    0 => C                                                                                  ; 3rd parameter does not apply to nonce
-    $ => B              :SLOAD
-    B                   :MSTORE(txNonce)
-    B + 1 => D
-    %SMT_KEY_NONCE => B
-    0 => C
-    $ => SR             :SSTORE
-    SR                  :MSTORE(initSR)
-    $ => B              :MLOAD(txNonce)
-                        :CALL(getLenBytes)
-    A                   :MSTORE(lengthNonce)
+   
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
     A                   :MSTORE(txValue)
-; TODO: memory?
-;    $ => B             :MLOAD(memLength)
-;    B - X              :JMPN(saveMemLength)
+
                         :JMP(txType)
 
 ;TODO same as other calls
