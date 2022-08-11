@@ -2834,13 +2834,20 @@ opCREATE2:
     E                   :MSTORE(lastMemOffset)
     C                   :MSTORE(lastMemLength)
                         :CALL(saveMem)
-    C => E
     CTX                 :MSTORE(originAuxCTX)
-    $ => B              :MLOAD(txDestAddr)
+    $ => E              :MLOAD(txDestAddr)
     GAS - 32000 => GAS  :JMPN(outOfGas)
     ; Cost to hash the initialisation code before
-    ${(C+31)/32} => C
-    GAS - 6*C => GAS    :JMPN(outOfGas)
+    ; Div operation with Arith
+    ${C+31}             :MSTORE(arithA)
+    32                  :MSTORE(arithB)
+                        :CALL(divARITH)
+    $ => C              :MLOAD(arithRes1)
+    GAS => A
+    6*C => B
+    $                   :LT,JMPC(outOfGas)
+    A - B => GAS
+
     GAS => C            :MSTORE(gasCall)
     SP                  :MSTORE(lastSP)
     PC                  :MSTORE(lastPC)
@@ -2860,10 +2867,9 @@ opCREATE2:
     GAS - A             :MSTORE(gasCTX)
     $ => CTX            :MLOAD(currentCTX)
     A => GAS
-    B                   :MSTORE(txSrcAddr)
-    ; TODO is not encesesaary to load and store GAS, bc is global var
+    E                   :MSTORE(txSrcAddr)
                         :CALL(copySP)
-    B => A
+    $ => A              :MLOAD(txSrcAddr)
     %SMT_KEY_NONCE => B
     0 => C                                                                                  ; 3rd parameter does not apply to nonce
     $ => B              :SLOAD
