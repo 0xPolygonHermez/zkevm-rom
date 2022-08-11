@@ -34,10 +34,13 @@ processTx:
         ; Check result is non-zero
 checkAndSaveFrom:
         0 => B
-        $                               :EQ,JMPC(invalidIntrinsicTx)
         A                               :MSTORE(txSrcAddr)
         A                               :MSTORE(txSrcOriginAddr)
         ${eventLog(onProcessTx)}
+        $                               :EQ,JMPC(invalidIntrinsicTx)
+;;;;;;;;;
+;; Store init state
+;;;;;;;;;
 
         ; Store initial state at the beginning of the transaction
         SR                              :MSTORE(originSR)
@@ -254,14 +257,6 @@ endContractAddress:
 ;; compute new contract address as CREATE2 spec: keccak256(0xff ++ address ++ salt ++ keccak256(init_code))[12:] (https://eips.ethereum.org/EIPS/eip-1014)
 create2:
         $ => C                          :MLOAD(txCalldataLen)
-        ; Div operation with Arith
-        ${(C+31)/32} => A
-        ${C+31}                         :MSTORE(arithA)
-        32                              :MSTORE(arithB)
-                                        :CALL(divARITH)
-        $ => A                          :MLOAD(arithRes1)
-
-        GAS - 6*A => GAS                :JMPN(outOfGas)
         $ => CTX                        :MLOAD(originCTX)
         $ => B                          :MLOAD(argsOffsetCall)
 
@@ -299,8 +294,8 @@ create2end:
         20 => D
         $ => A                          :MLOAD(txSrcAddr)
         A                               :HASHK(E)
-        $ => B                          :MLOAD(salt)
         32 => D
+        $ => B                          :MLOAD(salt)
         B                               :HASHK(E)
         32 => D
         C                               :HASHK(E)
@@ -340,7 +335,7 @@ readDeployBytecode:
         0 - B                           :JMPN(readDeployBytecodeCreate)
         ; check enough bytes to read in calldata
         $ => B                          :MLOAD(txCalldataLen)
-        B - PC - 1                      :JMPN(defaultOpCode)
+        B - PC - 1                      :JMPN(defaultOpCode) 
         $ => HASHPOS                    :MLOAD(dataStarts)
         HASHPOS + PC => HASHPOS
         $ => E                          :MLOAD(batchHashDataId)
@@ -352,8 +347,8 @@ readDeployBytecode:
 
 ;; read calldata bytes of a CREATE/CREATE2 call and process them
 readDeployBytecodeCreate:
+        $ => E                          :MLOAD(txCalldataLen)
         $ => CTX                        :MLOAD(originCTX)
-        $ => E                          :MLOAD(argsLengthCall)
         ; check enough bytes to read in memory
         E - PC - 1                      :JMPN(readDeployBytecodeCreateDefault)
 
@@ -548,4 +543,4 @@ invalidIntrinsicTx:
 ;; handle error no more bytecode to read
 defaultOpCode:
         ${eventLog(onOpcode(0))}
-                                        :JMP(opSTOP)
+                                        :JMP(opSTOP) 
