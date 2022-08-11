@@ -710,7 +710,7 @@ opCALLDATACOPY:
     E               :MSTORE(lastMemOffset)
     C               :MSTORE(lastMemLength)
     GAS - 3 => GAS  :JMPN(outOfGas)
-    GAS - ${3*((C+31)/32)} => GAS    :JMPN(outOfGas) ; same as utils
+    GAS - ${3*((C+31)/32)} => GAS    :JMPN(outOfGas) ; Arith
                     :CALL(saveMem)
     SP              :MSTORE(SPw)
                     :JMP(opCALLDATACOPYinit)
@@ -1355,7 +1355,6 @@ opSLOAD:
                     :JMP(readCode)
 
 opSSTORE:
-
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 765 :JMPN(outOfCounters)
     %MAX_CNT_BINARY - CNT_BINARY - 10 :JMPN(outOfCounters)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1 :JMPN(outOfCounters)
@@ -2357,22 +2356,24 @@ opCREATE:
     GAS - 32000 => GAS  :JMPN(outOfGas)
     GAS                 :MSTORE(gasCall)
 
-    ;Check correctness of Create: nonce overlfow, can transfer, depth
-    ; nonce overlow
-    $ => A             :MLOAD(txDestAddr)
-    %SMT_KEY_NONCE => B                                                  ; Constant for nonce
-    0 => C                                                                 ; 3rd parameter does not apply to nonce
-    $ => B              :SLOAD
-    %MAX_NONCE => A
-    $                   :EQ,JMPC(opCreateFail)
+    ; Check correctness of Create: depth, can transfer, nonce overlfow, 
+    ; depth overflow
 
     ; can transfer
-    $ => A             :MLOAD(txDestAddr)
+    $ => A              :MLOAD(txDestAddr)
     %SMT_KEY_BALANCE => B                                             ; balance key smt
+    0 => C                                                            ; 3rd parameter does not apply to nonce or balance
     $ => A              :SLOAD
     D => B              
     $                   :LT,JMPC(opCreateFail)
-    ; depth overflow
+
+    ; nonce overlow
+    $ => A             :MLOAD(txDestAddr)
+    %SMT_KEY_NONCE => B                                                  ; Constant for nonce
+    $ => B              :SLOAD
+    A => C
+    %MAX_NONCE => A
+    $                   :EQ,JMPC(opCreateFail)
 
 
     ;change to a new CTX
@@ -2386,6 +2387,15 @@ opCREATE:
     $ => A              :MLOAD(originAuxCTX)
     A                   :MSTORE(originCTX)
 
+    ; get nonce & update SR
+    C => A
+    0 => C
+    B                  :MSTORE(txNonce)
+    B + 1 => D
+    %SMT_KEY_NONCE => B                                                  ; Constant for nonce
+    $ => SR             :SSTORE
+    SR                  :MSTORE(initSR)
+
                         :CALL(computeGasSendCall)
     $ => CTX            :MLOAD(originCTX)
     $ => C              :MLOAD(txGasPrice)
@@ -2397,19 +2407,8 @@ opCREATE:
     B                   :MSTORE(txSrcAddr)
     ; TODO is not encesesaary to load and store GAS, bc is global var
                         :CALL(copySP)
-    B => A
-    ; get nonce & update SR
-    %SMT_KEY_NONCE => B                                                  ; Constant for nonce
-    0 => C                                                                 ; 3rd parameter does not apply to nonce
-    $ => B              :SLOAD
-    B                   :MSTORE(txNonce)
-    B + 1 => D
-    %SMT_KEY_NONCE => B
-    0 => C
-    $ => SR             :SSTORE
-    SR                  :MSTORE(initSR)
-    $ => B              :MLOAD(txNonce)
 
+    $ => B              :MLOAD(txNonce)
                         :CALL(getLenBytes)
     A                   :MSTORE(lengthNonce)
     $ => A              :MLOAD(argsLengthCall)
@@ -2484,6 +2483,7 @@ opCALL2:
     $ => A          :MLOAD(originAuxCTX)
     A               :MSTORE(originCTX)
     C               :MSTORE(txSrcAddr)
+    SR              :MSTORE(initSR)
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
     A               :MSTORE(storageAddr)
@@ -2511,8 +2511,6 @@ opCALL2:
     GAS - 25000*E => GAS :JMPN(outOfGas)
 
 opCALLend:
-    SR                  :MSTORE(initSR) ; Store SR once the gas is substracted
-
                         :CALL(computeGasSendCall)
     ; Add estipend (2300) in case of tx with value
     $ => CTX            :MLOAD(originCTX)
