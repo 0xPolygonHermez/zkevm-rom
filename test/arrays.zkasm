@@ -1,0 +1,66 @@
+CONST %TABLE_ELEMENTS = 1024
+CONST %TABLE_SIZE = 2 * %TABLE_ELEMENTS
+CONST %MAX_VALUE_HASH = (2 ** 32) / %TABLE_ELEMENTS
+
+VAR GLOBAL hashTable[2048]
+VAR GLOBAL hashTableLastIndex
+
+start:
+    ; insert values
+    0x01 => A
+                    :CALL(insert)
+
+    0x02 => A
+                    :CALL(insert)
+    ; insert value with same index and different value
+    0x1002 => A
+                    :CALL(insert)
+
+    ; search values
+    0x01 => A
+                    :CALL(search)
+
+    0x02 => A
+                    :CALL(search)
+
+    0x1002 => A
+                    :CALL(search)
+
+    ; search value same index but different value
+    0x03 => A
+                    :CALL(search)
+    ; search value same index but different value
+    0x2002 => A
+                    :CALL(search)
+    ${log(B, isFound)}
+
+    ; add same element again to the table
+    0x1002 => A
+                    :CALL(insert)
+
+; print hash table and end the program
+    @hashTable => E
+    0 => A
+    8 => B
+printArrayLoop:
+    $                       :EQ, JMPC(printLastValue)
+    $ => D                  :MLOAD(MEM:E)
+    ${log(D, arrayElement)}
+    $ => D                  :MLOAD(MEM:E+1)
+    ${log(D, linkedElement)}
+    A + 1 => A
+    E + 2 => E
+                            :JMP(printArrayLoop)
+
+printLastValue:
+    $ => D                  :MLOAD(hashTableLastIndex)
+    ${log(D, hashTableLastIndex)}
+
+finalizeExecution:
+0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR                 ; Set all registers to 0
+
+finalWait:
+    ${beforeLast()}     :JMPN(finalWait)
+                        :JMP(start)
+
+INCLUDE "array-touched.zkasm"

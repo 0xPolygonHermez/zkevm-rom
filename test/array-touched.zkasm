@@ -1,0 +1,100 @@
+; @info Insert value to the hash table
+; @in A => Key to add
+insert:
+    ${(A & 0xFFFFFFFF) % const.TABLE_ELEMENTS} => B
+    ${(A & 0xFFFFFFFF) / const.TABLE_ELEMENTS} => C
+
+; check B inside %TABLE_ELEMENTS
+    B - %TABLE_ELEMENTS     :JMPN(checkC)
+                            :JMP(error)
+
+; check C inside %MAX_VALUE_HASH
+checkC:
+    C - %MAX_VALUE_HASH - 1     :JMPN(ok)
+                                :JMP(error)
+
+ok:
+    C * %TABLE_ELEMENTS + B     :ASSERT
+    ; B is the prior index to insert the value
+    ; compute array memory position to insert the value
+    @hashTable + 2 * B => E
+
+loop:
+    $ => D                  :MLOAD(MEM:E)
+    D - 1                   :JMPN(writeValue)
+    D => B
+    $                       :EQ, JMPC(breakInsert)
+
+    E + 2 => E
+    ; restart index on next iteration
+    E - @hashTable - %TABLE_SIZE         :JMP(loop)
+    ; restart index on next iteration if overflow
+    @hashTable => E
+                            :JMP(loop)
+
+writeValue:
+    ; write value
+    A                       :MSTORE(MEM:E)
+    ; write previous last element writen
+    $ => D                  :MLOAD(hashTableLastIndex)
+    E + 1 => E
+    D                       :MSTORE(MEM:E)
+    ; write last index writen
+    E                       :MSTORE(hashTableLastIndex)
+                            :RETURN
+
+; @info Compute hash table index
+; @in A => Key
+; @out E ==> hash table index
+; hashFunction:
+
+
+; @info Search value into the hash table
+; @in A => Key to search
+; @out B = 1 if found, B = 0 if not found
+search:
+    ${(A & 0xFFFFFFFF) % const.TABLE_ELEMENTS} => B
+    ${(A & 0xFFFFFFFF) / const.TABLE_ELEMENTS} => C
+
+; check B inside %TABLE_ELEMENTS
+    B - %TABLE_ELEMENTS     :JMPN(checkCSearch)
+                            :JMP(error)
+
+; check C inside %MAX_VALUE_HASH
+checkCSearch:
+    C - %MAX_VALUE_HASH - 1     :JMPN(okSearch)
+                                :JMP(error)
+
+okSearch:
+    C * %TABLE_ELEMENTS + B     :ASSERT
+    ; B is the prior index to look for the value
+    ; compute array memory position to search the value
+    @hashTable + 2 * B => E
+loopSearch:
+    $ => D                  :MLOAD(MEM:E)
+    D - 1                   :JMPN(searchFalse)
+    D => B
+    $                       :EQ, JMPC(searchTrue)
+
+    E + 2 => E
+    E - @hashTable - %TABLE_SIZE        :JMP(loopSearch)
+    ; restart index on next iteration if overflow
+    @hashTable => E
+                                        :JMP(loopSearch)
+
+searchFalse:
+    0 => B
+                            :RETURN
+
+searchTrue:
+    1 => B
+                            :RETURN
+
+; force assert error
+error:
+    0 => A
+    1       :ASSERT
+
+; stops insert execution
+breakInsert:
+            :RETURN
