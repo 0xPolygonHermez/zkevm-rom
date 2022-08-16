@@ -211,25 +211,26 @@ getContractAddress:
         ; Check if create is with CREATE2 opcode
         $ => A                          :MLOAD(isCreate2)
         0 - A                           :JMPN(create2)
-;; compute new contract address as CREATE spec: keccak256(RLP(from, nonce))[12:]
-        $ => A                          :MLOAD(txSrcAddr)
-        $ => B                          :MLOAD(txNonce)
-        B - 0x80                        :JMPN(nonce1byte)
+        $ => A                          :MLOAD(txNonce)
+        0x80 => B                     
+        $                               :LT,JMPC(nonce1byte)
         $ => C                          :MLOAD(lengthNonce)
         1 => D
         ; 1 byte length address + 20 bytes address + 1 byte length nonce + C bytes nonce
         0xc0 + 22 + C                   :HASHK(E)
         0x94                            :HASHK(E)
         20 => D
-        A                               :HASHK(E)
+        $ => B                          :MLOAD(txSrcAddr)
+        B                               :HASHK(E)
         1 => D
         0x80 + C                        :HASHK(E)
         C => D
-        B                               :HASHK(E)
+        A                               :HASHK(E)
                                         :JMP(endContractAddress)
 
 nonce1byte:
-        ; 1 byte length address + 20 bytes address + 1 bytes nonce
+        $ => A                          :MLOAD(txSrcAddr)
+        $ => B                          :MLOAD(txNonce)
         1 => D
         0xc0 + 22                       :HASHK(E)
         0x94                            :HASHK(E)
@@ -313,7 +314,7 @@ deploy:
         A => E
         ; check address to deploy is empty
                                        :CALL(isEmptyAccount)
-        E - 1                          :JMPN(invalidDeploy)
+        E - 1                          :JMPN(deployAddressCollision)
         ; set contract nonce to 1
         0 => C
         1 => D
