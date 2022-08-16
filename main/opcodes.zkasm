@@ -820,9 +820,13 @@ opCODECOPY:
     C               :MSTORE(lastMemOffset)
     E               :MSTORE(lastMemLength)
 
-    ; Check counters
-    %MAX_CNT_BINARY - CNT_BINARY - 2*E :JMPN(outOfCounters)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2*E :JMPN(outOfCounters)
+    ;Check counters
+    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
+    2*E => B
+    $                                      :LT,JMPC(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 32 => A
+    $                                      :LT,JMPC(outOfCounters)
+
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCounters)
 
     GAS - 3 => GAS  :JMPN(outOfGas)
@@ -932,10 +936,14 @@ opEXTCODECOPY:
     $ => E          :MLOAD(SP)   ; bytes to read from bytecode
     D               :MSTORE(lastMemOffset)
     E               :MSTORE(lastMemLength)
-    
-    ; Check counters
-    %MAX_CNT_BINARY - CNT_BINARY - 2*E :JMPN(outOfCounters)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2*E :JMPN(outOfCounters)
+
+    ;Check counters should be before than do all the operations! TODO
+    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
+    2*E => B
+    $                                      :LT,JMPC(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 32 => A
+    $                                      :LT,JMPC(outOfCounters)
+
 
     GAS - ${3*((E+31)/32)} => GAS    :JMPN(outOfGas)
                     :CALL(saveMem)
@@ -1041,19 +1049,22 @@ opRETURNDATACOPY:
     GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => D          :MLOAD(SP--)            ;destOffset
-    $ => B          :MLOAD(SP--)            ;offset - offset in return data
+    $ => E          :MLOAD(SP--)            ;offset - offset in return data
     $ => C          :MLOAD(SP)              ;length - length return data
     D               :MSTORE(lastMemOffset)
     C               :MSTORE(lastMemLength)
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - C*4 :JMPN(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - C*4 :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
+    C*4 => B
+    $                                      :LT,JMPC(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
+    $                                      :LT,JMPC(outOfCounters)
+
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2 :JMPN(outOfCounters)
 
                     :CALL(saveMem)
     ; if retDataCTX is 0, end opcode execution
-    B => E
     $ => B          :MLOAD(retDataCTX)
     0 => A
     $               :EQ, JMPC(opRETURNDATACOPYEmpty)
@@ -2341,8 +2352,11 @@ opCREATE:
     C                   :MSTORE(argsLengthCall)
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - C - 32 :JMPN(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - C -32 :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
+    C => B
+    $                                      :LT,JMPC(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
+    $                                      :LT,JMPC(outOfCounters)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
 
@@ -2360,7 +2374,7 @@ opCREATE:
     ; depth overflow
 
     ; can transfer
-    $ => A              :MLOAD(txDestAddr)
+    $ => A              :MLOAD(storageAddr)
     %SMT_KEY_BALANCE => B                                             ; balance key smt
     0 => C                                                            ; 3rd parameter does not apply to nonce or balance
     $ => A              :SLOAD
@@ -2368,7 +2382,7 @@ opCREATE:
     $                   :LT,JMPC(opCreateFail)
 
     ; nonce overlow
-    $ => A             :MLOAD(txDestAddr)
+    $ => A             :MLOAD(storageAddr)
     %SMT_KEY_NONCE => B                                                  ; Constant for nonce
     $ => B              :SLOAD
     A => C
@@ -2401,7 +2415,7 @@ opCREATE:
                         :CALL(computeGasSendCall)
     $ => CTX            :MLOAD(originCTX)
     $ => C              :MLOAD(txGasPrice)
-    $ => B              :MLOAD(txDestAddr)
+    $ => B              :MLOAD(storageAddr)
     GAS - A             :MSTORE(gasCTX)
     $ => CTX            :MLOAD(currentCTX)
     C                   :MSTORE(txGasPrice)
@@ -2467,9 +2481,14 @@ opCALL2:
                     :CALL(saveMem)
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - C - 32 :JMPN(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - C -32 :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
+    C => B
+    $                                      :LT,JMPC(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
+    $                                      :LT,JMPC(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
+
+    $ => B                   :MLOAD(lastMemOffset)
 
     ; Substract gas cost
 
@@ -2575,9 +2594,14 @@ opCALLCODE2:
                     :CALL(saveMem)
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - C - 32 :JMPN(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - C -32 :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
+    C => B
+    $                                      :LT,JMPC(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
+    $                                      :LT,JMPC(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
+
+    $ => B                   :MLOAD(lastMemOffset)
 
     ; Substract gas cost
 
@@ -2645,12 +2669,11 @@ opRETURN:
     ;Check counters
     %MAX_CNT_ARITH - CNT_ARITH - 32 => A
     C => B
-    $ => B                  :SUB
-    B                       :JMPN(outOfCounters)
+    $                                      :LT,JMPC(outOfCounters)
+
     %MAX_CNT_BINARY - CNT_BINARY - 32 => A
-    C => B
-    $ => B                  :SUB
-    B                       :JMPN(outOfCounters)
+    $                                      :LT,JMPC(outOfCounters)
+
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
 
     E               :MSTORE(retDataOffset)
@@ -2806,10 +2829,14 @@ opDELEGATECALL:
                     :CALL(saveMem)
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - C - 32 :JMPN(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - C -32 :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
+    C => B
+    $                                      :LT,JMPC(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
+    $                                      :LT,JMPC(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
 
+    $ => B                   :MLOAD(lastMemOffset)
     $ => A                   :MLOAD(addrCall)
     ${touchedAddress(A)} => C
     ;gas_cost = base_gas + gas_sent_with_call
@@ -2869,8 +2896,13 @@ opCREATE2:
     $ => D              :MLOAD(SP)    ;salt
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - C - 32 :JMPN(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - C -32 :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
+    C => B
+    $                                      :LT,JMPC(outOfCounters)
+
+    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
+    $                                      :LT,JMPC(outOfCounters)
+
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
 
@@ -2896,7 +2928,7 @@ opCREATE2:
 
     ; Check correctness of Create: depth, can transfer, nonce overlfow, 
     ; can transfer
-    $ => A              :MLOAD(txDestAddr)
+    $ => A              :MLOAD(storageAddr)
     %SMT_KEY_BALANCE => B                                             ; balance key smt
     0 => C                                                            ; 3rd parameter does not apply to nonce or balance
     $ => A              :SLOAD
@@ -2904,7 +2936,7 @@ opCREATE2:
     $                   :LT,JMPC(opCreateFail)
 
     ; nonce overlow
-    $ => A             :MLOAD(txDestAddr)
+    $ => A              :MLOAD(storageAddr)
     %SMT_KEY_NONCE => B                                                  ; Constant for nonce
     $ => B              :SLOAD
     A => C
@@ -2972,8 +3004,10 @@ opSTATICCALL:
     B               :MSTORE(lastMemLength)
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - B - 32 :JMPN(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - B -32 :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
+    $                                      :LT,JMPC(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
+    $                                      :LT,JMPC(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
 
     ; Mem expansion gas cost call args
