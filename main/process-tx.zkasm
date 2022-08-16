@@ -311,12 +311,26 @@ create2end:
 deploy:
         ; add address to touched addresses
         ${touchedAddress(A)}
+
+        ; check if address is deployable ( nonce == bytecode == 0)
         A => E
-        ; check address to deploy is empty
-                                       :CALL(isEmptyAccount)
-        E - 1                          :JMPN(deployAddressCollision)
-        ; set contract nonce to 1
+
+        ; read nonce
         0 => C
+        %SMT_KEY_NONCE => B
+        $ => B                      :SLOAD
+        0 => A
+        $                           :LT,JMPC(deployAddressCollision)
+
+        ; read bytecode
+        E => A
+        %SMT_KEY_SC_CODE => B
+        $ => B                      :SLOAD
+        0 => A
+        $                           :LT,JMPC(deployAddressCollision)
+
+        ; set contract nonce to 1
+        E => A
         1 => D
         %SMT_KEY_NONCE => B
         $ => SR                         :SSTORE

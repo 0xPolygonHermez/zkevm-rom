@@ -689,13 +689,22 @@ opCALLDATALOAD2:
                     :JMP(readCode)
 
 opCALLDATASIZE:
+    $ => A          :MLOAD(isCreateContract)
+    0 - A           :JMPN(opCALLDATASIZEdep)
     $ => B          :MLOAD(txCalldataLen)
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
     GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
-; // TODO: check overflow length datacopy
+opCALLDATASIZEdep: 
+    0               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
+
+
+; // TODO: if ins deployment only write 0
 opCALLDATACOPY:
 
     %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCounters)
@@ -2414,11 +2423,9 @@ opCREATE:
 
                         :CALL(computeGasSendCall)
     $ => CTX            :MLOAD(originCTX)
-    $ => C              :MLOAD(txGasPrice)
     $ => B              :MLOAD(storageAddr)
     GAS - A             :MSTORE(gasCTX)
     $ => CTX            :MLOAD(currentCTX)
-    C                   :MSTORE(txGasPrice)
     A => GAS
     B                   :MSTORE(txSrcAddr)
                         :CALL(copySP)
@@ -2537,10 +2544,8 @@ opCALLend:
     $ => CTX            :MLOAD(originCTX)
     GAS - A             :MSTORE(gasCTX)
     A + 2300*C => A
-    $ => C              :MLOAD(txGasPrice)
     $ => D              :MLOAD(isStaticCall)
     $ => CTX            :MLOAD(currentCTX)
-    C                   :MSTORE(txGasPrice)
     D                   :MSTORE(isStaticCall)
     A => GAS
 
@@ -2647,13 +2652,11 @@ opCALLCODEend:
                     :CALL(computeGasSendCall)
     ; Add estipend (2300) in case of tx with value
     $ => CTX        :MLOAD(originCTX)
-    $ => B          :MLOAD(txGasPrice)
     GAS - A         :MSTORE(gasCTX)
     A + 2300*C => A
     $ => D          :MLOAD(isStaticCall)
     $ => CTX        :MLOAD(currentCTX)
     A => GAS
-    B               :MSTORE(txGasPrice)
     D               :MSTORE(isStaticCall)
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txCalldataLen)
@@ -2864,14 +2867,12 @@ opDELEGATECALL:
 
                     :CALL(computeGasSendCall)
     $ => CTX        :MLOAD(originCTX)
-    $ => C          :MLOAD(txGasPrice)
     GAS - A         :MSTORE(gasCTX)
     $ => B          :MLOAD(txValue)
     $ => D          :MLOAD(isStaticCall)
     $ => CTX        :MLOAD(currentCTX)
     D               :MSTORE(isStaticCall)
     B               :MSTORE(txValue)
-    C               :MSTORE(txGasPrice)
     A => GAS
 
 opDELEGATECALLend:
@@ -3045,11 +3046,9 @@ opSTATICCALL:
     GAS-100-D*2500 => GAS    :JMPN(outOfGas)
                     :CALL(computeGasSendCall)
     $ => CTX        :MLOAD(originCTX)
-    $ => C          :MLOAD(txGasPrice)
     GAS - A         :MSTORE(gasCTX)
     $ => CTX        :MLOAD(currentCTX)
     A => GAS
-    C               :MSTORE(txGasPrice)
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txCalldataLen)
                     :CALL(copySP)
