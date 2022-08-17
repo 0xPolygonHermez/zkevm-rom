@@ -1083,13 +1083,18 @@ opRETURNDATACOPY:
     $ => A          :MLOAD(retDataLength)
     $ => E          :MLOAD(retDataOffset)
     $ => CTX        :MLOAD(currentCTX)
-    ; if retdataOffset + dataLen > retDataSize -> OOG
-    E + B => E
-    A + 1 => A
-    B + C => B
+
+    E + B => E ; E ret data offset (memory pointer) of last context, B offset in return data  that want to retrive
+
+
+    ; if retDataSize <= retdataOffset + dataLen -> OOG
+    ;A retDataSize
+    B + C => B ; total offset (retdataOffset + dataLen)
     $               :LT, JMPC(outOfGas)
     $               :EQ, JMPC(outOfGas)
-    E => B
+
+    E => B ; memory pointer where start to copy memory
+
     ;${3*((C+31)/32)}
     C+31 => A
     ;(C+31)/32
@@ -1129,8 +1134,8 @@ opRETURNDATACOPYfinal:
                     :CALL(MLOADX)
     ; Save memory to the current context
     $ => CTX        :MLOAD(currentCTX)
-    E => B
-    D => E
+    E => B ; offset retDataCTX
+    D => E ; offset current CTX
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
                     :JMP(readCode)
@@ -3023,7 +3028,6 @@ opSTATICCALL:
                     :CALL(saveMem)
 
     $ => C          :MLOAD(txDestAddr)
-    SR              :MSTORE(initSR)
     SP              :MSTORE(lastSP)
     PC              :MSTORE(lastPC)
     ;change new CTX
@@ -3035,6 +3039,7 @@ opSTATICCALL:
     0               :MSTORE(txValue)
     1               :MSTORE(isStaticCall)
     C               :MSTORE(txSrcAddr)
+    SR              :MSTORE(initSR)
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
     A               :MSTORE(storageAddr)
@@ -3167,6 +3172,7 @@ opSELFDESTRUCT:
 opSELFDESTRUCT2:
     ; gas: check touched address
     C => A
+                              :CALL(maskAddress) ; Mask address to 20 bytes
     ${touchedAddress(A)} => E
     GAS - 2600 * E => GAS     :JMPN(outOfGas)
 
