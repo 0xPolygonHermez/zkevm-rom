@@ -726,7 +726,6 @@ opCALLDATACOPY:
 
 opCALLDATACOPYinit:
 
-
     %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCounters)
     %MAX_CNT_BINARY - CNT_BINARY - 192 :JMPN(outOfCounters)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1 :JMPN(outOfCounters)
@@ -825,7 +824,7 @@ opCODECOPY:
     SP - 1 => SP
     $ => C          :MLOAD(SP--) ;destOffset, memory offset
     $ => D          :MLOAD(SP--) ;offset, bytecode offset
-    $ => E          :MLOAD(SP)   ;bytecode length
+    $ => E          :MLOAD(SP)   ;bytes to copy
     C               :MSTORE(lastMemOffset)
     E               :MSTORE(lastMemLength)
 
@@ -845,16 +844,19 @@ opCODECOPY:
     0x200000 => A
     C + E => B
     $               :LT,JMPC(errorMLOADMSTORE)
+    ; Check if offset is above data len
+    D => A
+    $ => B          :MLOAD(bytecodeLength)
+    $               :LT, JMPC(opCODECOPY2)
+    B => A
+opCODECOPY2:
     ; init vars for copy the code
-    D => HASHPOS
-    C => A ; memory offset
-    E => B ; bytes to copy
+    A => HASHPOS
     $ => D          :MLOAD(contractHashId)
     D               :MSTORE(codecopyHashId) ; set hashId to get bytes from
-    $ => D          :MLOAD(bytecodeLength)
-    D               :MSTORE(codecopyBytecodeLength) ; set contract bytecode length
-    A               :MSTORE(memOffset)
-    B               :MSTORE(remainingBytes)
+    B               :MSTORE(codecopyBytecodeLength) ; set contract bytecode length
+    C               :MSTORE(memOffset)
+    E               :MSTORE(remainingBytes)
 
 opCODECOPYinit:
     $ => B          :MLOAD(remainingBytes)
@@ -960,16 +962,21 @@ opEXTCODECOPY:
     0x200000 => A
     C + E => B
     $               :LT,JMPC(errorMLOADMSTORE)
+
+    ; Check if offset is above data len
+    D => A
+    $ => B          :MLOAD(tmpContractLength)
+    $               :LT, JMPC(opEXTCODECOPY2)
+    B => A
+
+opEXTCODECOPY2:
     ; init vars for copy the code
-    D => HASHPOS
-    C => A ; memory offset
-    E => B ; bytes to copy
+    A => HASHPOS
     $ => D          :MLOAD(tmpContractHashId)
     D               :MSTORE(codecopyHashId) ; set hashId to get bytes from
-    $ => D          :MLOAD(tmpContractLength)
-    D               :MSTORE(codecopyBytecodeLength) ; set contract bytecode length
-    A               :MSTORE(memOffset)
-    B               :MSTORE(remainingBytes)
+    B               :MSTORE(codecopyBytecodeLength) ; set contract bytecode length
+    C               :MSTORE(memOffset)
+    E               :MSTORE(remainingBytes)
                     :JMP(opCODECOPYinit)
 
 opEXTCODECOPYCheckHash:
