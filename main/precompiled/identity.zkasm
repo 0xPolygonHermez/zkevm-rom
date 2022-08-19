@@ -5,32 +5,99 @@ IDENTITY:
     zkPC+2 => RR
     $                               :LT, JMPC(moveBalances)
     
-    
-    GAS - 15 => GAS     :JMPN(outOfGas)
+    GAS - 15 => GAS :JMPN(outOfGas)
     $ => C          :MLOAD(argsLengthCall)
     ${(C+31)/32} => A
-    GAS - 3*A => GAS    :JMPN(outOfGas)
+    GAS - 3*A => GAS:JMPN(outOfGas)
     CTX             :MSTORE(currentCTX)
-    $ => B          :MLOAD(retCallOffset)
+    CTX => A
     $ => CTX        :MLOAD(originCTX)
-    $ => E          :MLOAD(argsOffsetCall)
+    A               :MSTORE(retDataCTX)
+    A => CTX
+    0 => B
+    0 => E
+    B               :MSTORE(retDataOffset)
+    C               :MSTORE(retDataLength)
 
-IDENTITY32:
-    C - 1           :JMPN(preEnd)
+IDENTITYinit:
+    ; Copy from Stack to memory
+    C - 1           :JMPN(IDENTITYreturn)
     C - 32          :JMPN(IDENTITYfinal)
+    B               :MSTORE(arithA)
+    32              :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => D          :MLOAD(arithRes2)
+    $ => A          :MLOAD(arithRes1)
+    1024 + A => SP
+    $ => A          :MLOAD(SP)
+                    :CALL(SHLarith)
+    C               :MSTORE(tmpVarC3)
+    A => C
+    $ => A          :MLOAD(arithRes1)
+    1024 + A + 1 => SP
+    32 - D => D
+    $ => A          :MLOAD(SP)
+                    :CALL(SHRarith)
+    A + C           :MSTORE(bytesToStore)
+                    :CALL(MSTORE32)
+    $ => C          :MLOAD(tmpVarC3)
+    C - 32 => C
+    B + 32 => B
+                    :JMP(IDENTITYinit)
+IDENTITYfinal:
+    ${B%32} => D
+    1024 + ${B/32} => SP
+    $ => A          :MLOAD(SP)
+                    :CALL(SHLarith)
+    1024 + ${B/32} + 1 => SP
+    C - 32 + D => D
+    D               :JMPN(IDENTITYxor)
+    A => B
+    $ => A          :MLOAD(SP)
+    32 - D => D
+                    :CALL(SHRarith)
+    32 - C => D
+                    :CALL(SHLarith)
+    B + A => A
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
+                    :JMP(IDENTITYreturn)
+IDENTITYxor:
+    32 - C => D
+                    ;SHR/SHL could be optimized
+                    :CALL(SHRarith)
+                    :CALL(SHLarith)
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
+IDENTITYreturn:
+    ; Copy from memory current CTX to memory origin CTX
+    0 => E
+    $ => C          :MLOAD(retCallLength)
+    $ => B          :MLOAD(retCallOffset)
+
+IDENTITYreturnLoop:
+    C - 1           :JMPN(IDENTITYend)
+    C - 32          :JMPN(IDENTITYreturnFinal)
                     :CALL(MLOAD32)
     E => D
+    $ => CTX        :MLOAD(originCTX)
     B => E
     A               :MSTORE(bytesToStore)
                     :CALL(MSTORE32)
     E => B
     D => E
     C - 32 => C
-                    :JMP(IDENTITY32)
-
-IDENTITYfinal:
+    $ => CTX        :MLOAD(currentCTX)
+                    :JMP(IDENTITYreturnLoop)
+IDENTITYreturnFinal:
                     :CALL(MLOADX)
+    $ => CTX        :MLOAD(originCTX)
     B => E
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
+    $ => CTX        :MLOAD(currentCTX)
+
+IDENTITYend:
+    $ => CTX        :MLOAD(originCTX)
+    CTX             :MSTORE(currentCTX)
                     :JMP(preEnd)
