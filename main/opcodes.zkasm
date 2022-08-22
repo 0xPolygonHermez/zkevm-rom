@@ -1083,13 +1083,17 @@ opRETURNDATACOPY:
     $ => A          :MLOAD(retDataLength)
     $ => E          :MLOAD(retDataOffset)
     $ => CTX        :MLOAD(currentCTX)
-    ; if retdataOffset + dataLen > retDataSize -> OOG
-    E + B => E
-    A + 1 => A
-    B + C => B
+
+    E + B => E ; E ret data offset (memory pointer) of last context, B offset in return data  that want to retrive
+
+
+    ; if retDataSize <= retdataOffset + dataLen -> OOG
+    ;A retDataSize
+    B + C => B ; total offset (retdataOffset + dataLen)
     $               :LT, JMPC(outOfGas)
-    $               :EQ, JMPC(outOfGas)
-    E => B
+
+    E => B ; memory pointer where start to copy memory
+
     ;${3*((C+31)/32)}
     C+31 => A
     ;(C+31)/32
@@ -1129,8 +1133,8 @@ opRETURNDATACOPYfinal:
                     :CALL(MLOADX)
     ; Save memory to the current context
     $ => CTX        :MLOAD(currentCTX)
-    E => B
-    D => E
+    E => B ; offset retDataCTX
+    D => E ; offset current CTX
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
                     :JMP(readCode)
@@ -2570,15 +2574,7 @@ opCALLCODE: ; TODO check staticCall
     ; Store value call
     $ => A          :MLOAD(SP--)
     A               :MSTORE(valueCall)
-    ; If is static and value is not 0 -> revert
-    $ => B          :MLOAD(isStaticCall)
-    B - 1           :JMPN(opCALLCODE2)
 
-    0 => B
-    $               :EQ,JMPC(opCALLCODE2)
-                    :JMP(invalidStaticTx)
-
-opCALLCODE2:
     ; Store bytes offset int the memory, the calldata of the subcontext
     $ => A          :MLOAD(SP--)
     A               :MSTORE(argsOffsetCall)
@@ -3003,6 +2999,14 @@ opSTATICCALL:
     $ => B          :MLOAD(SP--)
     B               :MSTORE(argsLengthCall)
     B               :MSTORE(lastMemLength)
+                    :CALL(saveMem)
+
+    $ => C          :MLOAD(SP--)
+    C               :MSTORE(lastMemOffset)
+
+    $ => D          :MLOAD(SP)
+    D               :MSTORE(lastMemLength)
+                    :CALL(saveMem)
 
     ;Check counters
     %MAX_CNT_ARITH - CNT_ARITH - 32 => A
@@ -3011,19 +3015,15 @@ opSTATICCALL:
     $                                      :LT,JMPC(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
 
-    ; Mem expansion gas cost call args
-                    :CALL(saveMem)
 
-    $ => B          :MLOAD(SP--)
-    B               :MSTORE(lastMemOffset)
+    ; Substract gas cost
 
-    $ => D          :MLOAD(SP)
-    D               :MSTORE(lastMemLength)
-    ;  Mem expansion gas cost return args
-                    :CALL(saveMem)
+    $ => A          :MLOAD(addrCall)
+    ${touchedAddress(A)} => E
+    ;gas_cost = base_gas + gas_sent_with_call
+    GAS-100-E*2500 => GAS    :JMPN(outOfGas)
 
-    $ => C          :MLOAD(txDestAddr)
-    SR              :MSTORE(initSR)
+    $ => E          :MLOAD(storageAddr)
     SP              :MSTORE(lastSP)
     PC              :MSTORE(lastPC)
     ;change new CTX
@@ -3034,16 +3034,14 @@ opSTATICCALL:
     A               :MSTORE(originCTX)
     0               :MSTORE(txValue)
     1               :MSTORE(isStaticCall)
-    C               :MSTORE(txSrcAddr)
+    E               :MSTORE(txSrcAddr)
+    SR              :MSTORE(initSR)
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
     A               :MSTORE(storageAddr)
-    B               :MSTORE(retCallOffset)
+    C               :MSTORE(retCallOffset)
     D               :MSTORE(retCallLength)
 
-    ${touchedAddress(A)} => D
-    ;gas_cost = base_gas + gas_sent_with_call
-    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
                     :CALL(computeGasSendCall)
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
@@ -3167,6 +3165,7 @@ opSELFDESTRUCT:
 opSELFDESTRUCT2:
     ; gas: check touched address
     C => A
+                              :CALL(maskAddress) ; Mask address to 20 bytes
     ${touchedAddress(A)} => E
     GAS - 2600 * E => GAS     :JMPN(outOfGas)
 
