@@ -1,36 +1,84 @@
 IDENTITY:
     ; Move balances if value > 0 just before executing the contract CALL
-    $ => B                          :MLOAD(txValue)
+    $ => B          :MLOAD(txValue)
     0 => A
     zkPC+2 => RR
-    $                               :LT, JMPC(moveBalances)
+    $               :LT, JMPC(moveBalances)
     
-    
-    GAS - 15 => GAS     :JMPN(outOfGas)
+    GAS - 15 => GAS :JMPN(outOfGas)
     $ => C          :MLOAD(argsLengthCall)
     ${(C+31)/32} => A
-    GAS - 3*A => GAS    :JMPN(outOfGas)
+    GAS - 3*A => GAS:JMPN(outOfGas)
     CTX             :MSTORE(currentCTX)
-    $ => B          :MLOAD(retCallOffset)
+    CTX => A
     $ => CTX        :MLOAD(originCTX)
-    $ => E          :MLOAD(argsOffsetCall)
+    CTX - 1         :JMPN(handleGas)
+    A               :MSTORE(retDataCTX)
+    A => CTX
+    0 => B
+    0 => E
+    0 => A
+    B               :MSTORE(retDataOffset)
+    C               :MSTORE(retDataLength)
 
-IDENTITY32:
-    C - 1           :JMPN(preEnd)
+IDENTITYinit:
+    ; Copy from calldata to memory
+    C - 1           :JMPN(IDENTITYreturn)
     C - 32          :JMPN(IDENTITYfinal)
+    1024 + A => SP
+    $ => B          :MLOAD(SP)
+    B               :MSTORE(bytesToStore)
+                    :CALL(MSTORE32)
+    A + 1 => A
+    C - 32 => C
+                    :JMP(IDENTITYinit)
+IDENTITYfinal:
+    1024 + A => SP
+    $ => A          :MLOAD(SP)
+    32 - C => D
+                    :CALL(SHRarith)
+                    :CALL(SHLarith)
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
+IDENTITYreturn:
+    ; Copy from memory current CTX to memory origin CTX
+    0 => E
+    $ => B          :MLOAD(retCallLength)
+    
+    ; Get lower between retCallLength and 
+    $ => A          :MLOAD(retDataLength)
+    $               :LT, JMPC(IDENTITYreturn2)
+    B => C
+    $ => B          :MLOAD(retCallOffset)
+                    :JMP(IDENTITYreturnLoop)
+
+IDENTITYreturn2:
+    A => C
+    $ => B          :MLOAD(retCallOffset)
+
+IDENTITYreturnLoop:
+    C - 1           :JMPN(IDENTITYend)
+    C - 32          :JMPN(IDENTITYreturnFinal)
                     :CALL(MLOAD32)
     E => D
+    $ => CTX        :MLOAD(originCTX)
     B => E
     A               :MSTORE(bytesToStore)
                     :CALL(MSTORE32)
     E => B
     D => E
     C - 32 => C
-                    :JMP(IDENTITY32)
-
-IDENTITYfinal:
+    $ => CTX        :MLOAD(currentCTX)
+                    :JMP(IDENTITYreturnLoop)
+IDENTITYreturnFinal:
                     :CALL(MLOADX)
+    $ => CTX        :MLOAD(originCTX)
     B => E
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
+    $ => CTX        :MLOAD(currentCTX)
+
+IDENTITYend:
+    $ => CTX        :MLOAD(originCTX)
+    CTX             :MSTORE(currentCTX)
                     :JMP(preEnd)
