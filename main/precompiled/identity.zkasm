@@ -22,7 +22,7 @@ IDENTITY:
     C               :MSTORE(retDataLength)
 
 IDENTITYinit:
-    ; Copy from Stack to memory
+    ; Copy from calldata to memory
     C - 1           :JMPN(IDENTITYreturn)
     C - 32          :JMPN(IDENTITYfinal)
     1024 + A => SP
@@ -31,7 +31,6 @@ IDENTITYinit:
                     :CALL(MSTORE32)
     A + 1 => A
     C - 32 => C
-    B + 32 => B
                     :JMP(IDENTITYinit)
 IDENTITYfinal:
     1024 + A => SP
@@ -44,7 +43,17 @@ IDENTITYfinal:
 IDENTITYreturn:
     ; Copy from memory current CTX to memory origin CTX
     0 => E
-    $ => C          :MLOAD(retCallLength)
+    $ => B          :MLOAD(retCallLength)
+    
+    ; Get lower between retCallLength and 
+    $ => A          :MLOAD(retDataLength)
+    $               :LT, JMPC(IDENTITYreturn2)
+    B => C
+    $ => B          :MLOAD(retCallOffset)
+                    :JMP(IDENTITYreturnLoop)
+
+IDENTITYreturn2:
+    A => C
     $ => B          :MLOAD(retCallOffset)
 
 IDENTITYreturnLoop:
