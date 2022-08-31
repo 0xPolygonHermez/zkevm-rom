@@ -593,10 +593,8 @@ opSHA3:
 
 opSHA3Loop:
 
-    %MAX_CNT_ARITH - CNT_ARITH - 32 :JMPN(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - 32 :JMPN(outOfCounters)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 1 :JMPN(outOfCounters)
-    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCounters)
 
     C - 1           :JMPN(opSHA3End)
     C - 32          :JMPN(opSHA3Final)
@@ -875,13 +873,7 @@ opCODECOPY:
     E               :MSTORE(lastMemLength)
 
     ;Check counters
-    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
-    2*E => B
-    $                                      :LT,JMPC(outOfCounters)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 32 => A
-    $                                      :LT,JMPC(outOfCounters)
-
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCounters)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCounters)
 
     GAS - 3 => GAS  :JMPN(outOfGas)
@@ -906,8 +898,10 @@ opCODECOPY2:
     E               :MSTORE(remainingBytes)
 
 opCODECOPYinit:
-
-    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 200                :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2    :JMPN(outOfCounters)
 
     $ => B          :MLOAD(remainingBytes)
     B - 1           :JMPN(readCode)
@@ -1004,11 +998,9 @@ opEXTCODECOPY:
     E               :MSTORE(lastMemLength)
 
     ;Check counters should be before than do all the operations! TODO
-    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
-    2*E => B
-    $                                      :LT,JMPC(outOfCounters)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 32 => A
-    $                                      :LT,JMPC(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 200                :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2    :JMPN(outOfCounters)
 
 
     GAS - ${3*((E+31)/32)} => GAS    :JMPN(outOfGas)
@@ -1064,7 +1056,7 @@ opEXTCODECOPYCheckHash:
 ; TODO: it could be improved by computing how many 32 bytes slots are needed
 opEXTCODECOPYCheckHashLoop:
 
-        %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCounters)
+        %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCounters)
 
         B - 1                                   :JMPN(opEXTCODECOPYCheckHashLoopEnd) ; finish reading bytecode
         1 => D
@@ -1133,14 +1125,11 @@ opRETURNDATACOPY:
     C               :MSTORE(lastMemLength)
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
-    C*4 => B
-    $                                      :LT,JMPC(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
-    $                                      :LT,JMPC(outOfCounters)
-
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2 :JMPN(outOfCounters)
-    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2    :JMPN(outOfCounters)
 
                     :CALL(saveMem)
     ; if retDataCTX is 0, end opcode execution
@@ -1756,7 +1745,9 @@ opAuxPUSHB:
     0 => A
 
 opAuxPUSHBloop:
-    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 4 :JMPN(outOfCounters)
 
     1 => D
     $ => HASHPOS                    :MLOAD(dataStarts)
@@ -1772,6 +1763,7 @@ opAuxPUSHBloop:
 opAuxPUSHBend:
     GAS-3 => GAS                    :JMPN(outOfGas)
     A                               :MSTORE(SP++)
+    1024 - SP                       :JMPN(stackOverflow)
                                     :JMP(readCode)
 
 opAuxPUSHBcreate:
@@ -2550,10 +2542,8 @@ opLOG4:
 
 opLOGLoop:
 
-    %MAX_CNT_ARITH - CNT_ARITH - 32 :JMPN(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - 32 :JMPN(outOfCounters)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2 :JMPN(outOfCounters)
-    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCounters)
 
     C - 1           :JMPN(opSaveTopicsInit)
     C - 32          :JMPN(opLOGFinal)
@@ -2571,7 +2561,7 @@ opSaveTopicsInit:
 
 opSaveTopicsLoop:
 
-    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCounters)
 
     A - 1               :JMPN(readCode)
     SP - 1 => SP        :JMPN(stackUnderflow)
@@ -2597,15 +2587,11 @@ opCREATE:
     C                   :MSTORE(argsLengthCall)
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
-    C => B
-    $                                      :LT,JMPC(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
-    $                                      :LT,JMPC(outOfCounters)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2     :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
-    %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCounters)
-
+    %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCounters)
     ; Substract gas cost
 
     ; Mem expansion gas cost
@@ -2729,12 +2715,10 @@ opCALL2:
                     :CALL(saveMem)
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
-    C => B
-    $                                      :LT,JMPC(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
-    $                                      :LT,JMPC(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCounters)
 
     $ => B                   :MLOAD(lastMemOffset)
 
@@ -2835,12 +2819,10 @@ opCALLCODE: ; TODO check staticCall
                     :CALL(saveMem)
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
-    C => B
-    $                                      :LT,JMPC(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
-    $                                      :LT,JMPC(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCounters)
 
     $ => B                   :MLOAD(lastMemOffset)
 
@@ -2906,15 +2888,10 @@ opRETURN:
     $ => C          :MLOAD(SP)   ;length
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
-    C => B
-    $                                      :LT,JMPC(outOfCounters)
-
-    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
-    $                                      :LT,JMPC(outOfCounters)
-
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
-    %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCounters)
 
     E               :MSTORE(retDataOffset)
     C               :MSTORE(retDataLength)
@@ -2945,7 +2922,9 @@ opRETURN:
 ; Copy from memory current CTX to memory origin CTX
 opRETURN32:
 
+    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCounters)
     %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCounters)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
 
     $ => B          :MLOAD(retCallOffset)
     C - 1           :JMPN(opRETURNend)
@@ -3076,12 +3055,11 @@ opDELEGATECALL:
                     :CALL(saveMem)
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
-    C => B
-    $                                      :LT,JMPC(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
-    $                                      :LT,JMPC(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCounters)
+
 
     $ => B                   :MLOAD(lastMemOffset)
     $ => A                   :MLOAD(addrCall)
@@ -3141,16 +3119,10 @@ opCREATE2:
     $ => D              :MLOAD(SP)    ;salt
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
-    C => B
-    $                                      :LT,JMPC(outOfCounters)
-
-    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
-    $                                      :LT,JMPC(outOfCounters)
-
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
-    %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCounters)
 
     ; Substract gas cost
 
@@ -3258,16 +3230,12 @@ opSTATICCALL:
                     :CALL(saveMem)
 
     ;Check counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32 => A
-    $                                      :LT,JMPC(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - 32 => A
-    $                                      :LT,JMPC(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
-    %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCounters)
-
+    %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCounters)
 
     ; Substract gas cost
-
     $ => A          :MLOAD(addrCall)
     ${touchedAddress(A)} => E
     ;gas_cost = base_gas + gas_sent_with_call
