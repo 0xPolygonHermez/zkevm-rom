@@ -14,8 +14,7 @@ opSTOPend:
     CTX             :MSTORE(currentCTX)
     0               :MSTORE(retDataCTX)
     $ => B          :MLOAD(gasCTX)
-    $ => C          :MLOAD(gasRefund)
-    A + C           :MSTORE(gasRefund)
+    A               :MSTORE(gasRefund)
     GAS + B => GAS
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
@@ -2647,10 +2646,12 @@ opCREATE:
                         :CALL(computeGasSendCall)
     $ => CTX            :MLOAD(originCTX)
     $ => B              :MLOAD(storageAddr)
+    $ => C              :MLOAD(gasRefund)
     GAS - A             :MSTORE(gasCTX)
     $ => CTX            :MLOAD(currentCTX)
     A => GAS
     B                   :MSTORE(txSrcAddr)
+    C                   :MSTORE(gasRefund)
                         :CALL(copySP)
 
     $ => A              :MLOAD(argsLengthCall)
@@ -2746,6 +2747,7 @@ opCALLend:
     $ => B          :MLOAD(lastMemOffset)
     $ => D          :MLOAD(lastMemLength)
     $ => C          :MLOAD(storageAddr)
+    $ => E          :MLOAD(gasRefund)
     SP              :MSTORE(lastSP)
     PC              :MSTORE(lastPC)
     $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
@@ -2754,6 +2756,7 @@ opCALLend:
     $ => A          :MLOAD(originAuxCTX)
     A               :MSTORE(originCTX)
     C               :MSTORE(txSrcAddr)
+    E               :MSTORE(gasRefund)
     SR              :MSTORE(initSR)
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
@@ -2846,6 +2849,7 @@ opCALLCODEend:
     $ => B          :MLOAD(lastMemOffset)
     $ => D          :MLOAD(lastMemLength)
     $ => E          :MLOAD(storageAddr)
+    $ => C          :MLOAD(gasRefund)
     SP              :MSTORE(lastSP)
     PC              :MSTORE(lastPC)
     ;change new CTX
@@ -2856,6 +2860,7 @@ opCALLCODEend:
     A               :MSTORE(originCTX)
     E               :MSTORE(txSrcAddr)
     E               :MSTORE(storageAddr)
+    C               :MSTORE(gasRefund)
     SR              :MSTORE(initSR)
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
@@ -2907,8 +2912,7 @@ opRETURN:
     $ => CTX        :MLOAD(originCTX)
     ; Add return data context value to origin context
     A               :MSTORE(retDataCTX)
-    $ => A          :MLOAD(gasRefund)
-    A + B           :MSTORE(gasRefund)
+    B               :MSTORE(gasRefund)
     $ => B          :MLOAD(gasCTX)
     B + GAS => GAS
 
@@ -2983,8 +2987,7 @@ opRETURNcreate:
     CTX             :MSTORE(currentCTX)
     $ => B          :MLOAD(gasRefund)
     $ => CTX        :MLOAD(originCTX)
-    $ => A          :MLOAD(gasRefund)
-    A + B           :MSTORE(gasRefund)
+    B               :MSTORE(gasRefund)
     $ => B          :MLOAD(gasCTX)
     ; TODO Should be substracted first the gas
     B + GAS => GAS
@@ -3091,10 +3094,12 @@ opDELEGATECALL:
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     $ => B          :MLOAD(txValue)
+    $ => C          :MLOAD(gasRefund)
     $ => D          :MLOAD(isStaticCall)
     $ => CTX        :MLOAD(currentCTX)
     D               :MSTORE(isStaticCall)
     B               :MSTORE(txValue)
+    C               :MSTORE(gasRefund)
     A => GAS
 
 opDELEGATECALLend:
@@ -3191,8 +3196,10 @@ opCREATE2:
 
                         :CALL(computeGasSendCall)
     $ => CTX            :MLOAD(originCTX)
+    $ => C              :MLOAD(gasRefund)
     GAS - A             :MSTORE(gasCTX)
     $ => CTX            :MLOAD(currentCTX)
+    C                   :MSTORE(gasRefund)
     A => GAS
                         :CALL(copySP)
    
@@ -3242,6 +3249,7 @@ opSTATICCALL:
     GAS-100-E*2500 => GAS    :JMPN(outOfGas)
 
     $ => E          :MLOAD(storageAddr)
+    $ => B          :MLOAD(gasRefund)
     SP              :MSTORE(lastSP)
     PC              :MSTORE(lastPC)
     ;change new CTX
@@ -3250,6 +3258,7 @@ opSTATICCALL:
     CTX             :MSTORE(currentCTX)
     $ => A          :MLOAD(originAuxCTX)
     A               :MSTORE(originCTX)
+    B               :MSTORE(gasRefund)
     0               :MSTORE(txValue)
     1               :MSTORE(isStaticCall)
     E               :MSTORE(txSrcAddr)
@@ -3289,6 +3298,7 @@ opREVERT:
 
     $ => B          :MLOAD(originCTX)
     ${eventLog(onError, revert)}
+    0               :MSTORE(gasRefund)
     B - 1           :JMPN(handleGas)
     $ => A          :MLOAD(currentCTX)
     B => CTX
@@ -3426,8 +3436,7 @@ opSELFDESTRUCTCend:
     A => CTX
     0                       :MSTORE(retDataCTX)
     CTX                     :MSTORE(currentCTX)
-    $ => A                  :MLOAD(gasRefund)
-    A + B                   :MSTORE(gasRefund)
+    B                       :MSTORE(gasRefund)
     $ => C                  :MLOAD(gasCTX)
     GAS + C => GAS
     $ => SP                 :MLOAD(lastSP)
@@ -3438,10 +3447,4 @@ opSELFDESTRUCTCend:
 
 opINVALID:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCounters)
-
-    ; Equivalent to REVERT with 0,0 as stack parameters
-    ; Remaining gas is consumed
-    0 => GAS
-    ; if main context, halt execution
-    $ => B          :MLOAD(originCTX)
-                    :JMP(invalidProcess)
+                                :JMP(invalidProcess)
