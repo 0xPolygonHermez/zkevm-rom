@@ -31,14 +31,9 @@ opADD:
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
     $ => B          :MLOAD(SP)
-    ${log(A)}
-    ${log(B)}
-    ${log(A)}
 
     ; Add operation with Arith
     $ => E          :ADD
-    ${log(E)}
-    ${log(A + B)}
 
     E               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
@@ -221,7 +216,7 @@ opADDMOD:
     $ => A          :MLOAD(SP--)
     $ => B          :MLOAD(SP--)
     ; Add operation with Arith
-    $${var _addMod = A + B}
+    ${var _addMod = A + B} ; TODO $$
 
     1 => D
     $ => A          :ADD, JMPC(AddModJumpCarry) ; or arith
@@ -275,7 +270,7 @@ opMULMOD:
     $ => B          :MLOAD(SP--)
 
     ; Mul operation with Arith
-    $${var _mulMod = A * B}
+    ${var _mulMod = A * B} ; TODO $$
     A               :MSTORE(arithA)
     B               :MSTORE(arithB)
     ; here we perform the: A * B + 0 = D*2^256 + E
@@ -283,7 +278,6 @@ opMULMOD:
                     :CALL(mulARITH)
                     
     $ => A          :MLOAD(SP) ; Modulus N
-
     ; Check if modulus is 0 or 1
     2 => B 
     $               :LT, JMPC(zeroOneMod)
@@ -299,10 +293,11 @@ opMULMOD:
     ;k.h * 2²⁵⁶ * N  = D2 * 2²⁵⁶ --> k.h  * N  = D2 
 
     ; k.h  * N  = D2 
-    ; B * A + 0 = D*2^256 + 0
+    ; B * A + 0 = 0 * 2²⁵⁶ + E
+    ; D2 must be less than 2²⁵⁶
     C => A ; Modulus
-    0 => C, E
-    ${B * A} => D   :MSTORE(tmpVarD) ; D2
+    0 => C, D
+    ${B * A} => E   :MSTORE(tmpVarD) ; D2
     E               :ARITH
 
     ; k.l * N + mulModResult = D1 * 2²⁵⁶ + E 
@@ -310,7 +305,7 @@ opMULMOD:
     ; remember that:
     ; result of mul is stored in: arithRes1(E) and arithOverflow(D)
 
-    ${(_mulMod / A) % 2**256} => B   ; k.l
+    ${(_mulMod / A) % (2 << 256)} => B   ; k.l
     ${_mulMod % A} => C        ; mulModResult
     ${(B * A + C) >> 256} => D ; D1
     $ => E          :MLOAD(arithRes1)
@@ -330,7 +325,7 @@ opMULMOD:
     D => A ; D1
     $ => B          :MLOAD(tmpVarD) ;D2
     $ => A          :ADD
-    $ => B          :MLOAD(tmpVarD) ;D
+    $ => B          :MLOAD(arithOverflow) ;D
     B               :ASSERT
 
     C               :MSTORE(SP++)
