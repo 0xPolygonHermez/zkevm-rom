@@ -308,8 +308,7 @@ opMULMOD:
     ${(_mulMod / A) % (2 << 256)} => B   ; k.l
     ${_mulMod % A} => C        ; mulModResult
     ${(B * A + C) >> 256} => D ; D1
-    $ => E          :MLOAD(arithRes1)
-    E               :ARITH
+    $               :MLOAD(arithRes1), ARITH
 
     ; Finally we need to assert the following:
     ; N>resultModulus
@@ -325,8 +324,7 @@ opMULMOD:
     D => A ; D1
     $ => B          :MLOAD(tmpVarD) ;D2
     $ => A          :ADD
-    $ => B          :MLOAD(arithOverflow) ;D
-    B               :ASSERT
+    $               :MLOAD(arithOverflow), ASSERT
 
     C               :MSTORE(SP++)
                     :JMP(readCode)
@@ -340,8 +338,7 @@ mulModNoKH:
     ${(_mulMod / A)} => B   ; k
     ${_mulMod % A} => C     ; mulModResult
     $ => D         :MLOAD(arithOverflow)
-    $ => E         :MLOAD(arithRes1)
-    E              :ARITH ; Can this be on the same line of MLOAD?
+    $              :MLOAD(arithRes1), ARITH ; Can this be on the same line of MLOAD?
 
     A => B          ; modulus
     C => A          ; mulModResult
@@ -395,7 +392,7 @@ opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-mon
     $               :EQ, JMPC(opSIGNEXTENDPositive) ; If 0 means the sign bit was 0 --> positive
     C => A ; mask
     0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn => B
-    $ => B          :XOR
+    $ => B          :XOR ; not mask
     D => A
     $ => D          :OR
                     :JMP(opSIGNEXTENDEnd)
