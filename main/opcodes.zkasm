@@ -377,32 +377,31 @@ opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-mon
 
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-    $ => D          :MLOAD(SP)
-    31 => B
-    $ => B          :LT
-    B - 1           :JMPN(opSIGNEXTENDEnd)
-    D => B
-    ; Add operation with Arith
-    ${A * 8}        :MSTORE(arithA)
-    7               :MSTORE(arithB)
-                    :CALL(addARITH)
-    $ => A          :MLOAD(arithRes1)
-    ${exp(2, A)} => C ; signBit
-    C => A
-    $ => B          :AND
+    $ => B          :MLOAD(SP--) ; sign byte --> sign bit = 8 * A + 7
+    $ => D          :MLOAD(SP)   ; number to convert
+    30 => A
+    $               :LT, JMPC(opSIGNEXTENDEnd); if signByte is 31 or more, means basically let the number as it is
+    ; TODO we could divide this opcode in a table with constants, only 31 cases 
+    B * 8  + 7 => B ; B is less than 31, no need for binary
+    ${exp(2, B)} => A  ; signBit TODO table for shifting + multipliyng
+
+    ;Store mask
+    1 => B
+    $ => C          :SUB ; mask
+
+    D => B               ; number to convert
+    $ => B          :AND ; check sign bit
     0 => A
-    $ => A          :LT
-    A - 1           :JMPN(opSIGNEXTENDPositive) ; 0 if negative, -1 if positive
-    C - 1 => A
-    0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn => B
+    $               :EQ, JMPC(opSIGNEXTENDPositive) ; If 0 means the sign bit was 0 --> positive
+    C => A ; mask
+    0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn => B
     $ => B          :XOR
     D => A
     $ => D          :OR
                     :JMP(opSIGNEXTENDEnd)
 
 opSIGNEXTENDPositive:
-    C - 1 => B
+    C => B
     D => A
     $ => D          :AND
 
