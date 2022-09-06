@@ -70,11 +70,11 @@ endCheckChainId:
 
 ;; Reset warm/cold information
         $ => A                          :MLOAD(txSrcOriginAddr)
-        ${resetTouchedAddress()} ; clean touchedAddresses since there is a new transaction
-        ${resetStorageSlots()} ; clean storageSlots since there is a new transaction
-        ${touchedAddress(A)} ; add tx.origin to touched addresses
+        ${clearWarmedStorage()} ; clear accessed since there is a new transaction
+        ${isWarmedAddress(A)} ; add tx.origin to touched addresses
+        0                               :MSTORE(depth) ; Initial depth is 0
 
-;; Set gasPrice global var
+;; Set gasPrice global var 
         $ => A                          :MLOAD(txGasPriceRLP)
         A                               :MSTORE(txGasPrice)
 ;;;;;;;;;;;;;;;;;;
@@ -201,7 +201,8 @@ txType:
         0 - A                           :JMPN(getContractAddress)
         $ => A                          :MLOAD(txDestAddr)
         ; Add 'to' to touched addresses
-        ${touchedAddress(A)}
+        ${isWarmedAddress(A)}
+        ${checkpoint()}
         ; Check 'to' is zero or precompiled contract
         ; Check zero address since zero address is not a precompiled contract
         0 => B
@@ -346,8 +347,8 @@ create2end:
 ;; deploy contract in state-tree
 deploy:
         ; add address to touched addresses
-        ${touchedAddress(A)}
-
+        ${isWarmedAddress(A)}
+        ${checkpoint()}
         ; check if address is deployable ( nonce == bytecode == 0)
         A => E
 
