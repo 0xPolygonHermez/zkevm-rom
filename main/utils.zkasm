@@ -14,6 +14,7 @@ VAR GLOBAL arithA
 VAR GLOBAL arithB
 VAR GLOBAL arithRes1
 VAR GLOBAL arithRes2
+VAR GLOBAL arithOverflow
 VAR GLOBAL tmpZkPC
 VAR GLOBAL tmpZkPC2
 
@@ -400,7 +401,7 @@ subARITH:
     $ => B          :MLOAD(arithB)
     $ => A          :SUB
 
-    A                :MSTORE(arithRes1)
+    A               :MSTORE(arithRes1)
 
     zkPC+1 => RR    :JMP(loadTmp)
     $ => RR         :MLOAD(tmpZkPC)
@@ -414,10 +415,12 @@ mulARITH:
     $ => A          :MLOAD(arithA)
     $ => B          :MLOAD(arithB)
     0 => C
-    0 => D
-    ${A*B} => E     :ARITH
+    $${var _mulArith = A * B}
+    ${_mulArith >> 256} => D
+    ${_mulArith} => E :ARITH
 
     E               :MSTORE(arithRes1)
+    D               :MSTORE(arithOverflow)
 
     zkPC+1 => RR    :JMP(loadTmp)
     $ => RR         :MLOAD(tmpZkPC)

@@ -30,13 +30,11 @@ opADD:
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
-    $ => C          :MLOAD(SP)
+    $ => B          :MLOAD(SP)
 
     ; Add operation with Arith
-    A               :MSTORE(arithA)
-    C               :MSTORE(arithB)
-                    :CALL(addARITH)
-    $ => E          :MLOAD(arithRes1)
+    $ => E          :ADD
+
     E               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
     GAS-3 => GAS    :JMPN(outOfGas)
@@ -68,15 +66,10 @@ opSUB:
 
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => E          :MLOAD(SP--)
-    $ => C          :MLOAD(SP)
-    ; Sub operation with Arith
-    E               :MSTORE(arithA)
-    C               :MSTORE(arithB)
-                    :CALL(subARITH)
-    $ => A          :MLOAD(arithRes1)
-    A               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
+    $ => A          :MLOAD(SP--)
+    $ => B          :MLOAD(SP)
+    $ => E          :SUB
+    E               :MSTORE(SP++)
     GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
@@ -213,53 +206,148 @@ opSMODNeg:
 opADDMOD:
 
     %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCounters)
-    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 80 :JMPN(outOfCounters)
+
+    GAS-8 => GAS    :JMPN(outOfGas)
 
     SP - 3          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
     $ => B          :MLOAD(SP--)
     ; Add operation with Arith
-    A               :MSTORE(arithA)
-    B               :MSTORE(arithB)
-                    :CALL(addARITH)
-    $ => E          :MLOAD(arithRes1)
-    $ => A          :MLOAD(SP)
-    ; Div operation with Arith
-    E               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(divARITH)
-    $ => C          :MLOAD(arithRes2)
+    ${var _addMod = A + B} ; TODO $$
+
+    1 => D
+    $ => A          :ADD, JMPC(AddModJumpCarry) ; or arith
+    0 => D 
+       
+AddModJumpCarry:
+    A => E          ; Store sumResult on E
+
+    $ => A          :MLOAD(SP) ; load modulus
+    2 => B 
+    $               :LT, JMPC(zeroOneMod)
+
+    ${_addMod / A} => B        ; k: Max should be (2^256 -1) * 2 / 2 --> smaller than 2^256
+    ${_addMod % A} => C        ; addModResult
+
+    ; k * N + addModResult = D*2^256 + sumResult
+    ; B * A + C = D*2^256 + E
+
+    ; Check addModResult is less than modulus
+    E               :ARITH
+
+    A => B          ; modulus
+    C => A          ; addModResult
+    $ => A          :LT
+    1               :ASSERT
     C               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-    GAS-8 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opMULMOD:
+    %MAX_CNT_ARITH - CNT_ARITH - 3 :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 150 :JMPN(outOfCounters)
 
-    %MAX_CNT_ARITH - CNT_ARITH - 2 :JMPN(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCounters)
-    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCounters)
-
+    GAS-8 => GAS    :JMPN(outOfGas)
     SP - 3          :JMPN(stackUnderflow)
     SP - 1 => SP
+
+    ; The following approahc will be followed in order to verify the mulmod operation
+    ; A * B + 0 = D*2^256 + E 
+    ; K * N + mulModResult = D*2^256 + E
+
+    ; Since the k can be bigger than 2²⁵⁶ and therefore does not fit in a register we divedit in the
+    ; most significan and less significant part:
+
+    ; (k.l + k.h * 2²⁵⁶) * N + mulModResult = (D1 + D2) * 2²⁵⁶ + E 
+    ; And divide this operation in 2 which fits in 2²⁵⁶ digits
+    
+    ;k.l * N + mulModResult = D1 * 2²⁵⁶ + E 
+    ;k.h * 2²⁵⁶ * N  = D2 * 2²⁵⁶ --> k.h  * N  = D2 
     $ => A          :MLOAD(SP--)
     $ => B          :MLOAD(SP--)
+
     ; Mul operation with Arith
+    ${var _mulMod = A * B} ; TODO $$
     A               :MSTORE(arithA)
     B               :MSTORE(arithB)
+    ; here we perform the: A * B + 0 = D*2^256 + E
+    ; result is stored in: arithRes1(E) and arithOverflow(D)
                     :CALL(mulARITH)
-    $ => E          :MLOAD(arithRes1)
-    $ => A          :MLOAD(SP)
-    ; Div operation with Arith
-    E               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(divARITH)
-    $ => C          :MLOAD(arithRes2)
+                    
+    $ => A          :MLOAD(SP) ; Modulus N
+    ; Check if modulus is 0 or 1
+    2 => B 
+    $               :LT, JMPC(zeroOneMod)
+    
+    ; Now we will try to perform the following equation:
+    ; (k.l + k.h * 2²⁵⁶) * N + mulModResult = (D1 + D2) * 2²⁵⁶ + E 
+    A => C ; modulus on C
+    ${(_mulMod / C) >> 256} => B     ; k.h
+    ; We can jump with Js, because later it's all verified by the ARITH
+    ${cond(B == 0)}  :JMPN(mulModNoKH) 
+
+    ; Since there's k.h we will split the equation in those 2
+    ;k.l * N + mulModResult = D1 * 2²⁵⁶ + E 
+    ;k.h * 2²⁵⁶ * N  = D2 * 2²⁵⁶ --> k.h  * N  = D2 
+
+    ; k.h  * N  = D2 
+    ; B * A + 0 = 0 * 2²⁵⁶ + E
+    ; D2 must be less than 2²⁵⁶
+    C => A ; Modulus
+    0 => C, D
+    ${B * A} => E   :MSTORE(tmpVarD), ARITH ; D2
+
+    ; k.l * N + mulModResult = D1 * 2²⁵⁶ + E 
+    ; B * A + C = D*2^256 + E
+    ; remember that:
+    ; result of mul is stored in: arithRes1(E) and arithOverflow(D)
+
+    ${(_mulMod / A) % (2 << 256)} => B   ; k.l
+    ${_mulMod % A} => C        ; mulModResult
+    ${(B * A + C) >> 256} => D ; D1
+    $               :MLOAD(arithRes1), ARITH
+
+    ; Finally we need to assert the following:
+    ; N>resultModulus
+    ; D1 + D2 = D
+    
+    ; N>resultModulus   ; LT; ASSERT
+    A => B          ; modulus
+    C => A          ; mulModResult
+    $ => A          :LT
+    1               :ASSERT
+
+    ; Assert D1 + D2 = D ; ADD ;ASSERT
+    D => A ; D1
+    $ => B          :MLOAD(tmpVarD) ;D2
+    $ => A          :ADD
+    $               :MLOAD(arithOverflow), ASSERT
+
     C               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-    GAS-8 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
+
+mulModNoKH:
+    ; if theres no K.h the equation is simplified as:
+    ; K * N + mulModResult = D*2^256 + E 
+    ; B * A + C = D*2^256 + E
+
+    C => A ; Modulus on A
+    ${(_mulMod / A)} => B   ; k
+    ${_mulMod % A} => C     ; mulModResult
+    $ => D         :MLOAD(arithOverflow)
+    $              :MLOAD(arithRes1), ARITH ; Can this be on the same line of MLOAD?
+
+    A => B          ; modulus
+    C => A          ; mulModResult
+    $ => A          :LT
+    1               :ASSERT
+    C               :MSTORE(SP++)
+                    :JMP(readCode)
+zeroOneMod:
+    0               :MSTORE(SP++)
                     :JMP(readCode)
 
 opEXP: ; //TODO: test exp == 0
@@ -286,32 +374,31 @@ opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-mon
 
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-    $ => D          :MLOAD(SP)
-    31 => B
-    $ => B          :LT
-    B - 1           :JMPN(opSIGNEXTENDEnd)
-    D => B
-   ; Add operation with Arith
-   ${A * 8}         :MSTORE(arithA)
-   7                :MSTORE(arithB)
-                    :CALL(addARITH)
-   $ => A           :MLOAD(arithRes1)
-   ${exp(2, A)} => C ; signBit
-    C => A
-    $ => B          :AND
+    $ => B          :MLOAD(SP--) ; sign byte --> sign bit = 8 * A + 7
+    $ => D          :MLOAD(SP)   ; number to convert
+    30 => A
+    $               :LT, JMPC(opSIGNEXTENDEnd); if signByte is 31 or more, means basically let the number as it is
+    ; TODO we could divide this opcode in a table with constants, only 31 cases 
+    B * 8  + 7 => B ; B is less than 31, no need for binary
+    ${exp(2, B)} => A  ; signBit TODO table for shifting + multipliyng
+
+    ;Store mask
+    1 => B
+    $ => C          :SUB ; mask
+
+    D => B               ; number to convert
+    $ => B          :AND ; check sign bit
     0 => A
-    $ => A          :LT
-    A - 1           :JMPN(opSIGNEXTENDPositive) ; 0 if negative, -1 if positive
-    C - 1 => A
-    0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn => B
-    $ => B          :XOR
+    $               :EQ, JMPC(opSIGNEXTENDPositive) ; If 0 means the sign bit was 0 --> positive
+    C => A ; mask
+    0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn => B
+    $ => B          :XOR ; not mask
     D => A
     $ => D          :OR
                     :JMP(opSIGNEXTENDEnd)
 
 opSIGNEXTENDPositive:
-    C - 1 => B
+    C => B
     D => A
     $ => D          :AND
 
@@ -793,7 +880,7 @@ opCALLDATACOPYinit:
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP)   ;length
     C - 32 => C
-    C               :MSTORE(SP)
+    C               :MSTORE(SP) 
     B + 32 => B
                     :JMP(opCALLDATACOPYinit)
 
@@ -3281,8 +3368,6 @@ opSTATICCALL:
                     :CALL(copySP)
                     :JMP(txType)
 
-; TODO logs, creates (shpoudl revert the call also?), calls(back to initSR)
-; TODO memExpansion just like Return
 opREVERT:
 
     %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCounters)
