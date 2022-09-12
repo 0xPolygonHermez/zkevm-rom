@@ -850,7 +850,14 @@ opCALLDATACOPY:
     GAS - ${3*((C+31)/32)} => GAS    :JMPN(outOfGas) ; Arith
                     :CALL(saveMem)
     SP              :MSTORE(SPw)
+    $ => A          :MLOAD(txCalldataLen)
+    $               :LT,JMPC(opCALLDATACOPY0)
+    A + C => A
+    $               :LT,JMPC(opCALLDATACOPYX0)
                     :JMP(opCALLDATACOPYinit)
+
+opCALLDATACOPYX0:
+    $ => C          :MLOAD(txCalldataLen)
 
 opCALLDATACOPYinit:
 
@@ -859,19 +866,23 @@ opCALLDATACOPYinit:
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1 :JMPN(outOfCounters)
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCounters)
 
-    C - 1           :JMPN(opCALLDATACOPYend)
+    C - 1           :JMPN(opCALLDATACOPYcheckLen)
     C - 32          :JMPN(opCALLDATACOPYfinal)
     B               :MSTORE(arithA)
     32              :MSTORE(arithB)
                     :CALL(divARITH)
     $ => D          :MLOAD(arithRes2)
     $ => A          :MLOAD(arithRes1)
-    1024 + A => SP
+    A               :MSTORE(arithA)
+    1024            :MSTORE(arithB)
+                    :CALL(addARITH)
+    $ => A          :MLOAD(arithRes1)
+    A => SP
     $ => A          :MLOAD(SP)
                     :CALL(SHLarith)
     A => C
     $ => A          :MLOAD(arithRes1)
-    1024 + A + 1 => SP
+    A + 1 => SP
     32 - D => D
     $ => A          :MLOAD(SP)
                     :CALL(SHRarith)
@@ -885,13 +896,21 @@ opCALLDATACOPYinit:
                     :JMP(opCALLDATACOPYinit)
 
 opCALLDATACOPYfinal:
-    ${B%32} => D
-    1024 + ${B/32} => SP
+    B               :MSTORE(arithA)
+    32              :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => D          :MLOAD(arithRes2)
+    $ => B          :MLOAD(arithRes1)
+    1024            :MSTORE(arithA)
+    B               :MSTORE(arithB)
+                    :CALL(addARITH)
+    $ => B          :MLOAD(arithRes1)
+    B => SP
     $ => A          :MLOAD(SP)
                     :CALL(SHLarith)
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP)   ;length
-    1024 + ${B/32} + 1 => SP
+    B + 1 => SP
     C - 32 + D => D
     D               :JMPN(opCALLDATACOPYxor)
     A => B
@@ -903,7 +922,19 @@ opCALLDATACOPYfinal:
     B + A => A
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
+                    :JMP(opCALLDATACOPYcheckLen)
+
+opCALLDATACOPY0:
+    32 - C          :JMPN(opCALLDATACOPY320)
+    0               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
                     :JMP(opCALLDATACOPYend)
+
+opCALLDATACOPY320:
+    0               :MSTORE(bytesToStore)
+                    :CALL(MSTORE32)
+    C - 32 => C
+                    :JMP(opCALLDATACOPY0)
 
 opCALLDATACOPYxor:
     32 - C => D
@@ -912,6 +943,13 @@ opCALLDATACOPYxor:
                     :CALL(SHLarith)
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
+
+opCALLDATACOPYcheckLen:
+    $ => C          :MLOAD(lastMemLength)
+    $ => A          :MLOAD(txCalldataLen)
+    C - A => C      :JMPN(opCALLDATACOPYend)
+                    :JMP(opCALLDATACOPY0)
+
 
 opCALLDATACOPYend:
     $ => SP         :MLOAD(SPw)
