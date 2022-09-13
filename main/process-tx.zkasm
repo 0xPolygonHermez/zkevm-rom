@@ -16,7 +16,9 @@ processTx:
 ;; A - Verify ecdsa signature
 ;;;;;;;;;;;;;;;;;;
 
-
+        ${eventLog(onProcessTx)}
+        ; Minimum of 100000 steps left to process a tx
+        %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCounters)
         ; Get sigDataSize
         $ => HASHPOS                     :MLOAD(sigDataSize)
         
@@ -45,11 +47,8 @@ processTx:
 checkAndSaveFrom:
         0 => B
         A                               :MSTORE(txSrcAddr)
-        A                               :MSTORE(txSrcOriginAddr)
-        ${eventLog(onProcessTx)}
+        A                               :MSTORE(txSrcOriginAddr)       
         $                               :EQ,JMPC(invalidIntrinsicTx)
-        ; Minimum of 100000 steps left to process a tx
-        %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCounters)
 
 ;;;;;;;;;
 ;; Store init state
