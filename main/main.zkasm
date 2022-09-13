@@ -48,7 +48,7 @@ start: ; main zkROM entry point
         A - 1                               :HASHK(E)
         %STATE_ROOT_STORAGE_POS             :HASHK(E) ; Storage position of the batch hash
         HASHPOS                             :HASHKLEN(E)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 2:JMPN(outOfCounters)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - %MIN_CNT_KECCAK_BATCH - 2:JMPN(outOfCounters)
         $ => C                              :HASHKDIGEST(E)
         ${eventLog(onStartBatch, C)}
 
@@ -67,7 +67,7 @@ start: ; main zkROM entry point
         A                                   :HASHK(E)
         %GLOBAL_EXIT_ROOT_STORAGE_POS       :HASHK(E) ; Storage position of the global exit root map
         HASHPOS                             :HASHKLEN(E)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 2:JMPN(outOfCounters)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - %MIN_CNT_KECCAK_BATCH - 2:JMPN(outOfCounters)
         $ => C                              :HASHKDIGEST(E)
 
         %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2 => A
@@ -159,14 +159,6 @@ assertNewLocalExitRoot:
         A                               :HASHK(E)
 
         HASHPOS                         :HASHKLEN(E)
-        ; Check keccak counters
-        HASHPOS                          :MSTORE(arithA)
-        136                              :MSTORE(arithB)
-                                         :CALL(divARITH)
-        $ => B                           :MLOAD(arithRes1)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F => A
-        $                                :LT, JMPC(outOfCounters)
-        
         $ => A                          :MLOAD(batchHashData)
         
         $                               :HASHKDIGEST(E), ASSERT
