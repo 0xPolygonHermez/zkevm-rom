@@ -67,7 +67,6 @@ start: ; main zkROM entry point
         A                                   :HASHK(E)
         %GLOBAL_EXIT_ROOT_STORAGE_POS       :HASHK(E) ; Storage position of the global exit root map
         HASHPOS                             :HASHKLEN(E)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - %MIN_CNT_KECCAK_BATCH - 2:JMPN(outOfCounters)
         $ => C                              :HASHKDIGEST(E)
 
         %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2 => A
@@ -75,6 +74,16 @@ start: ; main zkROM entry point
         $ => D                              :MLOAD(numBatch)
         $ => SR                             :SSTORE ; Store 'numBatch' in storage position 'keccak256(globalExitRoot, 0)'
         SR                                  :MSTORE(batchSR)
+        ; Set necessary keccak counters to finish batch
+        $ => A          :MLOAD(batchL2DataLength)
+        A + 52 + %MIN_CNT_KECCAK_BATCH => A
+        A               :MSTORE(arithA)
+        136             :MSTORE(arithB)
+                        :CALL(divARITH)
+        $ => B          :MLOAD(arithRes1)
+        B               :MSTORE(cntKeccakPreProcess)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F => A
+        $               :LT, JMPC(outOfCounters)
 ;;;;;;;;;;;;;;;;;;
 ;; C - Loop parsing RLP transactions
 ;;      - Load transaction RLP data and ensure it has correct RLP encoding
