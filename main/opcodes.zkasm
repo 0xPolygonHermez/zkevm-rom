@@ -594,7 +594,7 @@ opSHL:
                     :JMP(readCode)
 
 ; TODO: Adapt to multiplication
-; https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/vm/src/evm/opcodes/functions.ts#L342
+; https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/evm/src/opcodes/functions.ts#L336
 opSAR:
 
     %MAX_CNT_ARITH - CNT_ARITH - 2 :JMPN(outOfCounters)
@@ -604,17 +604,16 @@ opSAR:
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
-    ${D/8} => D
-    D => B
+    ${D/8} => B
     32 => A
     $ => A          :LT
     1 => B
     $ => B          :XOR
-    ${A * 32 + B * D} => D
+    ${A * 256 + B * D} => D
     $ => A          :MLOAD(SP)
                     :CALL(abs)
                     ; if more than 32 set to 32
-                    :CALL(SHRarith)
+                    :CALL(SHRarithBit)
     A => C
     B => A
     1 => B
