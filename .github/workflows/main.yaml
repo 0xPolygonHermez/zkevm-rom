@@ -5,7 +5,7 @@ name: Test executor inputs
 
 on:
   push:
-    branches: [main, develop, feature/test-steps]
+    branches: [main]
   pull_request:
     branches: [main, develop]
 
@@ -15,8 +15,10 @@ jobs:
     strategy:
       matrix:
         node-version: [16.x]
+    env:
+        BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
     steps:
-      - name: Checkout code 
+      - name: Checkout code
         uses: actions/checkout@v2
       - name: setup zkevm-rom N = 23
         run: |
@@ -37,11 +39,11 @@ jobs:
       - name: setup zkevm-testvectors
         run: |
           cd zkevm-testvectors
-          git checkout develop
+          git checkout $BRANCH_NAME
       - name: setup zkevm-proverjs
         run: |
           cd zkevm-proverjs
-          git checkout feature/test-steps
+          git checkout $BRANCH_NAME
           npm i
       - name: Run tests
         run:  |
