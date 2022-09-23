@@ -352,7 +352,8 @@ saveMem:
     0 => A
     ; If no len, no memory expansion
     $                           :EQ, JMPC(saveMemEnd)
-    E + B => B
+    E => A
+    $ => B                      :ADD
     $ => A                      :MLOAD(memLength)
     $                           :LT, JMPC(saveMemGAS)
                                 :JMP(saveMemEnd)
@@ -496,17 +497,21 @@ storeTmp:
 ;@in D - (A >> D) D bytes
 ;@out A -  A >> D => A
 SHRarith:
+    A                       :MSTORE(tmpVarA2)
     B                       :MSTORE(tmpVarB2)
     C                       :MSTORE(tmpVarC2)
     D                       :MSTORE(tmpVarD2)
     E                       :MSTORE(tmpVarE2)
-    A => E
     D => A
     8 => B
     0 => C
     0 => D
-    ${A*B} => D             :ARITH
-    E => A
+    $${var _mulArith = A * B}
+    ${_mulArith >> 256} => D
+    ${_mulArith} => E :ARITH
+    E => D
+    
+    $ => A                  :MLOAD(tmpVarA2)
                             :JMP(SHRarithinit)
 
 ;@in A - (A >> D)
