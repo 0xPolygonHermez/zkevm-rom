@@ -16,17 +16,35 @@ MODEXP:
     A               :MSTORE(Msize)
     $ => C          :MLOAD(Bsize)
                     :CALL(MLOADX)
+    32 - C => D
+    zkPC+1 => RR    :JMP(SHRarith)
     A => B
     $ => C          :MLOAD(Esize)
                     :CALL(MLOADX)
+    32 - C => D
+    zkPC+1 => RR    :JMP(SHRarith)
     A               :MSTORE(exp)
     A => D
     $ => C          :MLOAD(Msize)
                     :CALL(MLOADX)
+    D => E
+    32 - C => D
+    zkPC+1 => RR    :JMP(SHRarith)
+    E => D
+    B => E
+    0 => B
+    $               :EQ,JMPC(MODEXPreturn0)
+    E => B
     ${exp(B,D)} => B
     ${B%A} => A
     C => D
+                    :JMP(MODEXPfinal)
 
+MODEXPreturn0:
+    0 => A
+    C => D
+
+MODEXPfinal:
     $ => CTX        :MLOAD(currentCTX)
     $ => E          :MLOAD(retCallOffset)
     $ => C          :MLOAD(retCallLength)
