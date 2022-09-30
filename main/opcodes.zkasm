@@ -257,7 +257,7 @@ opMULMOD:
     SP - 3          :JMPN(stackUnderflow)
     SP - 1 => SP
 
-    ; The following approahc will be followed in order to verify the mulmod operation
+    ; The following approach will be followed in order to verify the mulmod operation
     ; A * B + 0 = D*2^256 + E 
     ; K * N + mulModResult = D*2^256 + E
 
@@ -1131,8 +1131,8 @@ opEXTCODECOPY:
                     :CALL(opEXTCODECOPYCheckHash)
     $ => C          :MLOAD(SP--) ;destOffset, memory offset
     $ => D          :MLOAD(SP--) ;offset to read from bytecode
-    $ => E          :MLOAD(SP)   ; bytes to read from bytecode
-    D               :MSTORE(lastMemOffset)
+    $ => E          :MLOAD(SP)   ;bytes to read from bytecode
+    C               :MSTORE(lastMemOffset)
     E               :MSTORE(lastMemLength)
 
     ;Check counters should be before than do all the operations! TODO
@@ -2984,8 +2984,6 @@ opCALLCODE: ; TODO check staticCall
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
     %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCounters)
 
-    $ => B                   :MLOAD(lastMemOffset)
-
     ; Substract gas cost
 
     ; If addr in touched addres D = 0, else D = 1
@@ -3027,7 +3025,7 @@ opCALLCODEend:
     B               :MSTORE(txValue)
     0 => A
     $ => C          :LT
-    
+
 
                     :CALL(computeGasSendCall)
     ; Add estipend (2300) in case of tx with value
@@ -3077,8 +3075,11 @@ opRETURN:
     $ => D          :MLOAD(retCallLength)
     C => A
     D => B
-    $               :LT,JMPC(opRETURN32) ; Take the smaller one
+    $               :LT,JMPC(preRETURN32) ; Take the smaller one
     D => C
+
+preRETURN32:
+    $ => B          :MLOAD(retCallOffset)
 
 ; Copy from memory current CTX to memory origin CTX
 opRETURN32:
@@ -3087,7 +3088,6 @@ opRETURN32:
     %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
 
-    $ => B          :MLOAD(retCallOffset)
     C - 1           :JMPN(opRETURNend)
     C - 32          :JMPN(opRETURNfinal)
                     :CALL(MLOAD32)
