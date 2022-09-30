@@ -49,7 +49,7 @@ checkAndSaveFrom:
         0 => B
         A                               :MSTORE(txSrcAddr)
         A                               :MSTORE(txSrcOriginAddr)
-        $                               :EQ,JMPC(invalidIntrinsicTx)
+        $                               :EQ,JMPC(invalidIntrinsicTxSignature)
 
 ;;;;;;;;;
 ;; Store init state
@@ -66,7 +66,7 @@ checkAndSaveFrom:
         $ => A                          :MLOAD(txChainId)
         $ => B                          :MLOAD(chainId)                                       ; A: chainId tx
         $                               :EQ,JMPC(endCheckChainId)                               ; If A == B --> endCheckChainId
-                                        :JMP(invalidIntrinsicTx)                                         ; If A != B --> invalidIntrinsicTx
+                                        :JMP(invalidIntrinsicTxChainId)                                         ; If A != B --> invalidIntrinsicTx
 endCheckChainId:
 
 ;; Reset warm/cold information
@@ -88,7 +88,7 @@ endCheckChainId:
         $ => A                          :SLOAD
         $ => B                          :MLOAD(txNonce)
         $ => C                          :EQ
-        C - 1                           :JMPN(invalidIntrinsicTx) ; Compare nonce state tree with nonce transaction
+        C - 1                           :JMPN(invalidIntrinsicTxNonce) ; Compare nonce state tree with nonce transaction
         B                               :ASSERT ; sanity check
         A + 1 => D
         E => A
@@ -104,7 +104,7 @@ endCheckChainId:
         $ => B                          :MLOAD(txGasLimit)
         ; Check batch gas limit is not exceeded by transaction
         %BATCH_GAS_LIMIT => A
-        $                               :LT,JMPC(invalidIntrinsicTx)
+        $                               :LT,JMPC(handleIntrinsicError)
 
         ; Intrinsic gas --> gas Limit >= 21000 + calldata cost + deployment cost
         %BASE_TX_GAS => E ; Store init intrinsic gas at E
@@ -149,7 +149,7 @@ endCalldataIntrinsicGas:
         ; Compare gas limit >= intrinsic gas
         $ => A                          :MLOAD(txGasLimit)
         E => B
-        $                               :LT, JMPC(invalidIntrinsicTx)
+        $                               :LT, JMPC(invalidIntrinsicTxGasLimit)
         ; Store calculated gas for later usage
         E                               :MSTORE(gasCalldata)
 
@@ -172,7 +172,7 @@ endCalldataIntrinsicGas:
         $ => B                          :MLOAD(arithRes1)
         ; Comparison
         C => A
-        $                               :LT, JMPC(invalidIntrinsicTx)
+        $                               :LT, JMPC(invalidIntrinsicTxBalance)
 
         ; Substract (gas price * gas limit) from caller balance
         C                               :MSTORE(arithA)
@@ -592,8 +592,22 @@ sendGasSeq:
 
 
 ;; handle invalid transaction due to intrinsic checks
-invalidIntrinsicTx:
-        ${eventLog(onError, intrinsic_invalid)}
+invalidIntrinsicTxSignature:
+        ${eventLog(onError, intrinsic_invalid_signature)}
+                        :JMP(handleIntrinsicError)
+invalidIntrinsicTxChainId:
+        ${eventLog(onError, intrinsic_invalid_chain_id)}
+                        :JMP(handleIntrinsicError)
+invalidIntrinsicTxNonce:
+        ${eventLog(onError, intrinsic_invalid_nonce)}
+                        :JMP(handleIntrinsicError)
+invalidIntrinsicTxGasLimit:
+        ${eventLog(onError, intrinsic_invalid_gas_limit)}
+                        :JMP(handleIntrinsicError) 
+invalidIntrinsicTxBalance:
+        ${eventLog(onError, intrinsic_invalid_balance)}
+                        :JMP(handleIntrinsicError)                                                  
+handleIntrinsicError:
         $ => SR                         :MLOAD(originSR)
                                         :JMP(processTxEnd)
 
