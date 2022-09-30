@@ -556,14 +556,17 @@ opBYTE:
     SP - 1 => SP
     $ => B          :MLOAD(SP--)
     $ => A          :MLOAD(SP)
-    31 - B => D
-                    :CALL(SHRarith)
     GAS-3 => GAS    :JMPN(outOfGas)
+    31 - B => D     :JMPN(opBYTE0)
+                    :CALL(SHRarith)
     255 => B
     $               :AND,MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
-
+opBYTE0:
+    0               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)
 opSHR:
 
     %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCounters)
@@ -2576,7 +2579,10 @@ opLOG0:
     0                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
     GAS => A
-    8 * C => B
+    8                   :MSTORE(arithA)
+    C                   :MSTORE(arithB)
+                        :CALL(mulARITH)
+    $ => B              :MLOAD(arithRes1)
     $                   :LT,JMPC(outOfGas)
     GAS - B => GAS                                  ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
@@ -2599,7 +2605,10 @@ opLOG1:
     1                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
     GAS => A
-    8 * C => B
+    8                   :MSTORE(arithA)
+    C                   :MSTORE(arithB)
+                        :CALL(mulARITH)
+    $ => B              :MLOAD(arithRes1)
     $                   :LT,JMPC(outOfGas)
     GAS - B => GAS                                  ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
@@ -2622,7 +2631,10 @@ opLOG2:
     2                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
     GAS => A
-    8 * C => B
+    8                   :MSTORE(arithA)
+    C                   :MSTORE(arithB)
+                        :CALL(mulARITH)
+    $ => B              :MLOAD(arithRes1)
     $                   :LT,JMPC(outOfGas)
     GAS - B => GAS                                  ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
@@ -2645,7 +2657,10 @@ opLOG3:
     3                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
     GAS => A
-    8 * C => B
+    8                   :MSTORE(arithA)
+    C                   :MSTORE(arithB)
+                        :CALL(mulARITH)
+    $ => B              :MLOAD(arithRes1)
     $                   :LT,JMPC(outOfGas)
     GAS - B => GAS                                  ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
@@ -2668,7 +2683,10 @@ opLOG4:
     4                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
     GAS => A
-    8 * C => B
+    8                   :MSTORE(arithA)
+    C                   :MSTORE(arithB)
+                        :CALL(mulARITH)
+    $ => B              :MLOAD(arithRes1)
     $                   :LT,JMPC(outOfGas)
     GAS - B => GAS                                  ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex

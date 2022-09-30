@@ -348,11 +348,13 @@ saveMem:
     C                           :MSTORE(tmpVarC)
     E                           :MSTORE(tmpVarE)
     $ => E                      :MLOAD(lastMemOffset)
-    $ => B                      :MLOAD(lastMemLength)
-    0 => A
+    $ => A                      :MLOAD(lastMemLength)
+    0 => B
     ; If no len, no memory expansion
     $                           :EQ, JMPC(saveMemEnd)
-    E + B => B
+    ; If the binary has a carry, means the mem expansion is very big. We can jump to oog directly
+    E => B
+    $ => B                      :ADD, JMPC(outOfGas)
     $ => A                      :MLOAD(memLength)
     $                           :LT, JMPC(saveMemGAS)
                                 :JMP(saveMemEnd)
@@ -494,7 +496,7 @@ storeTmp:
 
 ;@in A - (A >> D)
 ;@in D - (A >> D) D bytes
-;@out A -  A >> D => A
+;@out A - A >> D => A
 SHRarith:
     B                       :MSTORE(tmpVarB2)
     C                       :MSTORE(tmpVarC2)
