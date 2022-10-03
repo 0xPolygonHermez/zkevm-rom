@@ -47,8 +47,8 @@ copySP:
     $ => C          :MLOAD(argsLengthCall) ;length
 
 copyInit:
-    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCounters)
-    %MAX_CNT_STEPS - STEP - 200         :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 200         :JMPN(outOfCountersStep)
     C - 1           :JMPN(copyEnd)
     C - 32          :JMPN(copyFinal)
     zkPC+1 => RR    :JMP(MLOAD32)
@@ -81,9 +81,9 @@ getLenBytes:
     B => A
 
 getLenBytesLoop:
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - 8 :JMPN(outOfCounters)
-    %MAX_CNT_ARITH - CNT_ARITH - 4 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 8 :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 4 :JMPN(outOfCountersArith)
     0 => B
     $               :EQ,JMPC(getLenEnd)
     1 => D
@@ -615,9 +615,27 @@ SHLarithfinal:
     $ => E                  :MLOAD(tmpVarE2)
                             :JMP(RR)
 
-outOfCounters:
-    ${eventLog(onError, OOC)}
+outOfCountersStep:
+    ${eventLog(onError, OOCS)}
                     :JMP(handleBatchError)
+outOfCountersKeccak:
+    ${eventLog(onError, OOCK)}
+                    :JMP(handleBatchError)
+outOfCountersBinary:
+    ${eventLog(onError, OOCB)}
+                    :JMP(handleBatchError)
+outOfCountersMemalign:
+    ${eventLog(onError, OOCM)}
+                    :JMP(handleBatchError)
+outOfCountersArith:
+    ${eventLog(onError, OOCA)}
+                    :JMP(handleBatchError)
+outOfCountersPadding:
+    ${eventLog(onError, OOCPA)}
+                    :JMP(handleBatchError) 
+outOfCountersPoseidon:
+    ${eventLog(onError, OOCPO)}
+                    :JMP(handleBatchError)                                                                                                                          
 outOfGas:
     ${eventLog(onError, OOG)}
                     :JMP(handleError)
@@ -634,13 +652,13 @@ stackOverflow:
     ${eventLog(onError, overflow)}
                     :JMP(handleError)
 deployAddressCollision:
-${eventLog(onError, invalid)}
+    ${eventLog(onError, invalid)}
                     :JMP(handleError)
 invalidStaticTx:
-${eventLog(onError, invalid)}
+    ${eventLog(onError, invalid)}
                     :JMP(handleError)
 invalidCodeSize:
-${eventLog(onError, invalid)}
+    ${eventLog(onError, invalid)}
                     :JMP(handleError)
 handleError:
     ;revert all state changes
@@ -789,7 +807,7 @@ doRotate:
                                 :JMP(doRotateLoop)
 
 doRotateLoop:
-    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     A                           :JMPN(endRotate)
     ROTL_C => C
     A - 1 => A
@@ -811,8 +829,8 @@ endPushInit:
 
 
 endPushLoop:
-    %MAX_CNT_STEPS - STEP - 40 :JMPN(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 40 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCountersBinary)
 
     $ => A                          :MLOAD(leftBytes)
     $                               :EQ, JMPC(endPushFinal)
@@ -843,7 +861,7 @@ doRotate2:
                                 :JMP(doRotateLoop2)
 
 doRotateLoop2:
-    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     A                           :JMPN(endRotate2)
     ROTL_C => C
     A - 1 => A
@@ -911,8 +929,8 @@ hashPoseidonLinearFromMemory:
     0 => HASHPOS
 
 hashPoseidonLoop:
-    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCounters)
-    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCounters)
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
 
     C - 1           :JMPN(hashPoseidonEnd)
     C - 32          :JMPN(hashPoseidonFinal)

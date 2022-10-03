@@ -18,7 +18,7 @@ processTx:
 
         ${eventLog(onProcessTx)}
         ; Minimum of 100000 steps left to process a tx
-        %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCounters)
+        %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCountersStep)
         ; Get sigDataSize
         $ => HASHPOS                     :MLOAD(sigDataSize)
 
@@ -29,7 +29,7 @@ processTx:
         $ => B                           :MLOAD(arithRes1)
         $ => A                           :MLOAD(cntKeccakPreProcess)
         %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A => A
-        $                                :LT, JMPC(outOfCounters)
+        $                                :LT, JMPC(outOfCountersKeccak)
 
         ; Get hash address previously stored in RLP parsing
         $ => E                          :MLOAD(lastTxHashId)
@@ -125,7 +125,7 @@ addGas:
         0 => C
                                         :JMP(loopBytes)
 loopBytes:
-        %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCounters)
+        %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
         A - C - 1                       :JMPN(endCalldataIntrinsicGas)
         E => B
         HASHPOS => D
@@ -266,7 +266,7 @@ endContractAddress:
         ; end contract address hash and get the 20 first bytes
         HASHPOS                         :HASHKLEN(E)
         $ => A                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 :JMPN(outOfCounters)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 :JMPN(outOfCountersKeccak)
         $ => A                          :HASHKDIGEST(E)
                                         :CALL(maskAddress) ; Mask address to 20 bytes
         A                               :MSTORE(createContractAddress)
@@ -282,8 +282,8 @@ create2:
         $ => B                          :MLOAD(argsOffsetCall)
 
 loopCreate2:
-        %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCounters)
-        %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCounters)
+        %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCountersBinary)
 
         C - 1                           :JMPN(create2end)
         C - 32                          :JMPN(endloopCreate2)
@@ -315,7 +315,7 @@ create2end:
         $ => B                          :MLOAD(arithRes1)
         $ => A                          :MLOAD(cntKeccakPreProcess)
         %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A => A
-        $                               :LT, JMPC(outOfCounters)
+        $                               :LT, JMPC(outOfCountersKeccak)
         $ => C                          :HASHKDIGEST(E)
         ; new hash with position 0 is started
         0 => HASHPOS
@@ -340,7 +340,7 @@ create2end:
         $ => B                          :MLOAD(arithRes1)
         $ => A                          :MLOAD(cntKeccakPreProcess)
         %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A => A
-        $                               :LT, JMPC(outOfCounters)
+        $                               :LT, JMPC(outOfCountersKeccak)
 
         $ => A                          :HASHKDIGEST(E)
                                         :CALL(maskAddress) ; Mask address to 20 bytes
@@ -464,7 +464,7 @@ callContract:
         E+1                             :MSTORE(nextHashPId)
 
 checkHashBytecodeLoop:
-        %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCounters)
+        %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
         B - 1 - HASHPOS                         :JMPN(checkHashBytecodeEnd) ; finish reading bytecode
         ${getBytecode(A, HASHPOS, 1)}           :HASHP(E) ; hash contract bytecode
                                                 :JMP(checkHashBytecodeLoop)
