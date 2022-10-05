@@ -382,8 +382,12 @@ opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-mon
     30 => A
     $               :LT, JMPC(opSIGNEXTENDEnd); if signByte is 31 or more, means basically let the number as it is
     ; TODO we could divide this opcode in a table with constants, only 31 cases 
-    B * 8  + 7 => B ; B is less than 31, no need for binary
-    ${exp(2, B)} => A  ; signBit TODO table for shifting + multipliyng
+    B * 8  + 7 => D ; B is less than 31, no need for binary
+    D*2 => RR
+    zkPC+2                  :MSTORE(tmpSHXZkPC)
+                            :JMP(@exp_num + RR)  ; signBit TODO table for shifting + multipliyng
+    D => A
+    $ => D          :MLOAD(SP)   ; number to convert
 
     ;Store mask
     1 => B
