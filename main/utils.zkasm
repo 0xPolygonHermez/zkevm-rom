@@ -258,7 +258,7 @@ sliceA:
     zkPC+1 => RR    :JMP(SHRarith)
     zkPC+1 => RR    :JMP(SHLarith)
     0               :MSTORE(isMLOADX)
-    E*32 + C => E
+    E + C => E
                     :JMP(endMLOAD)
 
 offsetMLOAD32:
@@ -348,11 +348,13 @@ saveMem:
     C                           :MSTORE(tmpVarC)
     E                           :MSTORE(tmpVarE)
     $ => E                      :MLOAD(lastMemOffset)
-    $ => B                      :MLOAD(lastMemLength)
-    0 => A
+    $ => A                      :MLOAD(lastMemLength)
+    0 => B
     ; If no len, no memory expansion
     $                           :EQ, JMPC(saveMemEnd)
-    E + B => B
+    ; If the binary has a carry, means the mem expansion is very big. We can jump to oog directly
+    E => B
+    $ => B                      :ADD, JMPC(outOfGas)
     $ => A                      :MLOAD(memLength)
     $                           :LT, JMPC(saveMemGAS)
                                 :JMP(saveMemEnd)
@@ -494,7 +496,7 @@ storeTmp:
 
 ;@in A - (A >> D)
 ;@in D - (A >> D) D bytes
-;@out A -  A >> D => A
+;@out A - A >> D => A
 SHRarith:
     B                       :MSTORE(tmpVarB2)
     C                       :MSTORE(tmpVarC2)
@@ -578,7 +580,8 @@ SHLarithinit:
     E => A
     ${exp(2,D)} => B
     ${A*B} => E
-    256 - D => D            :JMPN(SHLarith0) ; if D > 256 --> return 0
+    255 - D                 :JMPN(SHLarith0) ; if D >= 256 --> return 0
+    256 - D => D
     ${exp(2,D)} => B
     ${B-1} => B
     A => C
@@ -641,7 +644,6 @@ ${eventLog(onError, invalid)}
                     :JMP(handleError)
 handleError:
     ;revert all state changes
-    ;initSR --> balance = balance - gas, nonce + 1
     $ => SR         :MLOAD(initSR)
 
 handleInvalidStatic:
@@ -658,6 +660,9 @@ handleInvalidStatic:
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     0               :MSTORE(SP++)
+    $ => A          :MLOAD(depth)
+    A - 1           :MSTORE(depth)
+    ${revert()}
                     :JMP(readCode)
 
 handleBatchError:

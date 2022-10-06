@@ -20,6 +20,9 @@ opSTOPend:
     $ => PC         :MLOAD(lastPC)
     D               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
+    $ => A          :MLOAD(depth)
+    A - 1           :MSTORE(depth)
+    ${commit()}
                     :JMP(readCode)
 
 opADD:
@@ -254,7 +257,7 @@ opMULMOD:
     SP - 3          :JMPN(stackUnderflow)
     SP - 1 => SP
 
-    ; The following approahc will be followed in order to verify the mulmod operation
+    ; The following approach will be followed in order to verify the mulmod operation
     ; A * B + 0 = D*2^256 + E 
     ; K * N + mulModResult = D*2^256 + E
 
@@ -553,14 +556,17 @@ opBYTE:
     SP - 1 => SP
     $ => B          :MLOAD(SP--)
     $ => A          :MLOAD(SP)
-    31 - B => D
-                    :CALL(SHRarith)
     GAS-3 => GAS    :JMPN(outOfGas)
+    31 - B => D     :JMPN(opBYTE0)
+                    :CALL(SHRarith)
     255 => B
     $               :AND,MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
-
+opBYTE0:
+    0               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)
 opSHR:
 
     %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCounters)
@@ -594,7 +600,7 @@ opSHL:
                     :JMP(readCode)
 
 ; TODO: Adapt to multiplication
-; https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/vm/src/evm/opcodes/functions.ts#L342
+; https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/evm/src/opcodes/functions.ts#L336
 opSAR:
 
     %MAX_CNT_ARITH - CNT_ARITH - 2 :JMPN(outOfCounters)
@@ -604,17 +610,16 @@ opSAR:
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
-    ${D/8} => D
-    D => B
+    ${D/8} => B
     32 => A
     $ => A          :LT
     1 => B
     $ => B          :XOR
-    ${A * 32 + B * D} => D
+    ${A * 256 + B * D} => D
     $ => A          :MLOAD(SP)
                     :CALL(abs)
                     ; if more than 32 set to 32
-                    :CALL(SHRarith)
+                    :CALL(SHRarithBit)
     A => C
     B => A
     1 => B
@@ -642,7 +647,8 @@ opSHA3:
     %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCounters)
     %MAX_CNT_BINARY - CNT_BINARY - 193 :JMPN(outOfCounters)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - %MIN_CNT_KECCAK_BATCH - 2 :JMPN(outOfCounters)
+    $ => A           :MLOAD(cntKeccakPreProcess)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2 :JMPN(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 10 :JMPN(outOfCounters)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCounters)
 
@@ -708,7 +714,8 @@ opSHA3End:
     136             :MSTORE(arithB)
                     :CALL(divARITH)
     $ => B          :MLOAD(arithRes1)
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - %MIN_CNT_KECCAK_BATCH => A
+    $ => A          :MLOAD(cntKeccakPreProcess)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A => A
     $               :LT, JMPC(outOfCounters)
     
     $ => A          :HASHKDIGEST(E)
@@ -745,7 +752,7 @@ opBALANCE:
     $ => D          :SLOAD
     D               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    ${touchedAddress(A)} => D
+    ${isWarmedAddress(A)} => D
     GAS-100-D*2500 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
@@ -859,7 +866,14 @@ opCALLDATACOPY:
     GAS - ${3*((C+31)/32)} => GAS    :JMPN(outOfGas) ; Arith
                     :CALL(saveMem)
     SP              :MSTORE(SPw)
+    $ => A          :MLOAD(txCalldataLen)
+    $               :LT,JMPC(opCALLDATACOPY0)
+    A + C => A
+    $               :LT,JMPC(opCALLDATACOPYX0)
                     :JMP(opCALLDATACOPYinit)
+
+opCALLDATACOPYX0:
+    $ => C          :MLOAD(txCalldataLen)
 
 opCALLDATACOPYinit:
 
@@ -868,19 +882,23 @@ opCALLDATACOPYinit:
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1 :JMPN(outOfCounters)
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCounters)
 
-    C - 1           :JMPN(opCALLDATACOPYend)
+    C - 1           :JMPN(opCALLDATACOPYcheckLen)
     C - 32          :JMPN(opCALLDATACOPYfinal)
     B               :MSTORE(arithA)
     32              :MSTORE(arithB)
                     :CALL(divARITH)
     $ => D          :MLOAD(arithRes2)
     $ => A          :MLOAD(arithRes1)
-    1024 + A => SP
+    A               :MSTORE(arithA)
+    1024            :MSTORE(arithB)
+                    :CALL(addARITH)
+    $ => A          :MLOAD(arithRes1)
+    A => SP
     $ => A          :MLOAD(SP)
                     :CALL(SHLarith)
     A => C
     $ => A          :MLOAD(arithRes1)
-    1024 + A + 1 => SP
+    A + 1 => SP
     32 - D => D
     $ => A          :MLOAD(SP)
                     :CALL(SHRarith)
@@ -894,13 +912,21 @@ opCALLDATACOPYinit:
                     :JMP(opCALLDATACOPYinit)
 
 opCALLDATACOPYfinal:
-    ${B%32} => D
-    1024 + ${B/32} => SP
+    B               :MSTORE(arithA)
+    32              :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => D          :MLOAD(arithRes2)
+    $ => B          :MLOAD(arithRes1)
+    1024            :MSTORE(arithA)
+    B               :MSTORE(arithB)
+                    :CALL(addARITH)
+    $ => B          :MLOAD(arithRes1)
+    B => SP
     $ => A          :MLOAD(SP)
                     :CALL(SHLarith)
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP)   ;length
-    1024 + ${B/32} + 1 => SP
+    B + 1 => SP
     C - 32 + D => D
     D               :JMPN(opCALLDATACOPYxor)
     A => B
@@ -912,7 +938,19 @@ opCALLDATACOPYfinal:
     B + A => A
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
+                    :JMP(opCALLDATACOPYcheckLen)
+
+opCALLDATACOPY0:
+    32 - C          :JMPN(opCALLDATACOPY320)
+    0               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
                     :JMP(opCALLDATACOPYend)
+
+opCALLDATACOPY320:
+    0               :MSTORE(bytesToStore)
+                    :CALL(MSTORE32)
+    C - 32 => C
+                    :JMP(opCALLDATACOPY0)
 
 opCALLDATACOPYxor:
     32 - C => D
@@ -921,6 +959,13 @@ opCALLDATACOPYxor:
                     :CALL(SHLarith)
     A               :MSTORE(bytesToStore)
                     :CALL(MSTOREX)
+
+opCALLDATACOPYcheckLen:
+    $ => C          :MLOAD(lastMemLength)
+    $ => A          :MLOAD(txCalldataLen)
+    C - A => C      :JMPN(opCALLDATACOPYend)
+                    :JMP(opCALLDATACOPY0)
+
 
 opCALLDATACOPYend:
     $ => SP         :MLOAD(SPw)
@@ -1056,7 +1101,7 @@ opEXTCODESIZE:
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
                     :CALL(maskAddress) ; Mask address to 20 bytes
-    ${touchedAddress(A)} => D
+    ${isWarmedAddress(A)} => D
     %SMT_KEY_SC_LENGTH => B
     0 => C
     $ => A          :SLOAD
@@ -1083,13 +1128,13 @@ opEXTCODECOPY:
     SP - 1 => SP
     $ => A          :MLOAD(SP--) ;addr
                     :CALL(maskAddress) ; Mask address to 20 bytes
-    ${touchedAddress(A)} => D
+    ${isWarmedAddress(A)} => D
     GAS-100-D*2500 => GAS            :JMPN(outOfGas)
                     :CALL(opEXTCODECOPYCheckHash)
     $ => C          :MLOAD(SP--) ;destOffset, memory offset
     $ => D          :MLOAD(SP--) ;offset to read from bytecode
-    $ => E          :MLOAD(SP)   ; bytes to read from bytecode
-    D               :MSTORE(lastMemOffset)
+    $ => E          :MLOAD(SP)   ;bytes to read from bytecode
+    C               :MSTORE(lastMemOffset)
     E               :MSTORE(lastMemLength)
 
     ;Check counters should be before than do all the operations! TODO
@@ -1308,7 +1353,7 @@ opEXTCODEHASH:
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
                     :CALL(maskAddress) ; Mask address to 20 bytes
-    ${touchedAddress(A)} => D
+    ${isWarmedAddress(A)} => D
     GAS-100-D*2500 => GAS    :JMPN(outOfGas)
     %SMT_KEY_SC_CODE => B
     0 => C
@@ -1322,7 +1367,7 @@ opEXTCODEHASH:
 ;opEXTCODEHASHL2:
 ;    SP - 1 => SP    :JMPN(stackUnderflow)
 ;    $ => A          :MLOAD(SP)
-;    ${touchedAddress(A)} => D
+;    ${isWarmedAddress(A)} => D
 ;    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
 ;    %SMT_KEY_SC_CODE => B
 ;    0 => C
@@ -1359,7 +1404,8 @@ opEXTCODEHASH:
 opBLOCKHASH:
 
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCounters)
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - %MIN_CNT_KECCAK_BATCH - 2 :JMPN(outOfCounters)
+    $ => A          :MLOAD(cntKeccakPreProcess)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2 :JMPN(outOfCounters)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCounters)
 
     SP - 1 => SP    :JMPN(stackUnderflow)
@@ -1452,7 +1498,7 @@ opCHAINID:
 
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCounters)
 
-    %ZKEVM_CHAINID => A
+    $ => A          :MLOAD(chainId)
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
     GAS-2 => GAS    :JMPN(outOfGas)
@@ -1558,7 +1604,7 @@ opSLOAD:
     $ => E          :SLOAD ;current value
     E               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    ${touchedStorageSlots(A,C)} => A
+    ${isWarmedStorage(A,C)} => A
     GAS - %SLOAD_GAS - A*2000 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
@@ -1592,7 +1638,7 @@ opSSTOREinit:
     $ => SR         :MLOAD(originSR)
     $ => B          :SLOAD ;origin value
     $ => SR         :MLOAD(auxSR)
-    ${touchedStorageSlots(A,C)} => A
+    ${isWarmedStorage(A,C)} => A
     B => C           ;origin value
     GAS - A*2100 => GAS    :JMPN(outOfGas)
     E => A
@@ -2536,7 +2582,10 @@ opLOG0:
     0                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
     GAS => A
-    8 * C => B
+    8                   :MSTORE(arithA)
+    C                   :MSTORE(arithB)
+                        :CALL(mulARITH)
+    $ => B              :MLOAD(arithRes1)
     $                   :LT,JMPC(outOfGas)
     GAS - B => GAS                                  ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
@@ -2559,7 +2608,10 @@ opLOG1:
     1                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
     GAS => A
-    8 * C => B
+    8                   :MSTORE(arithA)
+    C                   :MSTORE(arithB)
+                        :CALL(mulARITH)
+    $ => B              :MLOAD(arithRes1)
     $                   :LT,JMPC(outOfGas)
     GAS - B => GAS                                  ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
@@ -2582,7 +2634,10 @@ opLOG2:
     2                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
     GAS => A
-    8 * C => B
+    8                   :MSTORE(arithA)
+    C                   :MSTORE(arithB)
+                        :CALL(mulARITH)
+    $ => B              :MLOAD(arithRes1)
     $                   :LT,JMPC(outOfGas)
     GAS - B => GAS                                  ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
@@ -2605,7 +2660,10 @@ opLOG3:
     3                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
     GAS => A
-    8 * C => B
+    8                   :MSTORE(arithA)
+    C                   :MSTORE(arithB)
+                        :CALL(mulARITH)
+    $ => B              :MLOAD(arithRes1)
     $                   :LT,JMPC(outOfGas)
     GAS - B => GAS                                  ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
@@ -2628,7 +2686,10 @@ opLOG4:
     4                   :MSTORE(numTopics)
     GAS - 375 => GAS    :JMPN(outOfGas)                 ; static gas
     GAS => A
-    8 * C => B
+    8                   :MSTORE(arithA)
+    C                   :MSTORE(arithB)
+                        :CALL(mulARITH)
+    $ => B              :MLOAD(arithRes1)
     $                   :LT,JMPC(outOfGas)
     GAS - B => GAS                                  ; add gas depending on data bytes
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
@@ -2670,6 +2731,8 @@ opSaveTopicsLoop:
 ; // TODO Check with DElEGATE CALL txDestAddr/txSrcAddr ( same as other calls)
 ; // TODO check revert create
 opCREATE:
+    $ => A              :MLOAD(depth)
+    A + 1               :MSTORE(depth)
     SP - 3              :JMPN(stackUnderflow)
     $ => A              :MLOAD(isStaticCall)
     0 - A               :JMPN(invalidStaticTx)
@@ -2766,7 +2829,8 @@ opCreateFail:
 opCALL:
 
     %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCounters)
-
+    $ => A          :MLOAD(depth)
+    A + 1           :MSTORE(depth)
     SP - 7          :JMPN(stackUnderflow)
     SP - 1 => SP
     CTX             :MSTORE(originAuxCTX)
@@ -2823,8 +2887,7 @@ opCALL2:
 
     ; If addr in touched addres D = 0, else D = 1
     $ => A          :MLOAD(addrCall)
-    ${touchedAddress(A)} => D ; TODO
-
+    ${isWarmedAddress(A)} => D ; TODO
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
     GAS-100-D*2500 => GAS :JMPN(outOfGas)
@@ -2883,7 +2946,8 @@ opCALLend:
 opCALLCODE: ; TODO check staticCall
 
     %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCounters)
-
+    $ => A          :MLOAD(depth)
+    A + 1           :MSTORE(depth)
     SP - 7          :JMPN(stackUnderflow)
     SP - 1 => SP
     CTX             :MSTORE(originAuxCTX)
@@ -2923,13 +2987,11 @@ opCALLCODE: ; TODO check staticCall
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
     %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCounters)
 
-    $ => B                   :MLOAD(lastMemOffset)
-
     ; Substract gas cost
 
     ; If addr in touched addres D = 0, else D = 1
     $ => A                   :MLOAD(addrCall)
-    ${touchedAddress(A)} => D
+    ${isWarmedAddress(A)} => D
 
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
@@ -2966,7 +3028,7 @@ opCALLCODEend:
     B               :MSTORE(txValue)
     0 => A
     $ => C          :LT
-    
+
 
                     :CALL(computeGasSendCall)
     ; Add estipend (2300) in case of tx with value
@@ -3016,8 +3078,11 @@ opRETURN:
     $ => D          :MLOAD(retCallLength)
     C => A
     D => B
-    $               :LT,JMPC(opRETURN32) ; Take the smaller one
+    $               :LT,JMPC(preRETURN32) ; Take the smaller one
     D => C
+
+preRETURN32:
+    $ => B          :MLOAD(retCallOffset)
 
 ; Copy from memory current CTX to memory origin CTX
 opRETURN32:
@@ -3026,7 +3091,6 @@ opRETURN32:
     %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
 
-    $ => B          :MLOAD(retCallOffset)
     C - 1           :JMPN(opRETURNend)
     C - 32          :JMPN(opRETURNfinal)
                     :CALL(MLOAD32)
@@ -3056,6 +3120,9 @@ opRETURNend:
     $ => PC         :MLOAD(lastPC)
     1               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
+    $ => A          :MLOAD(depth)
+    A - 1           :MSTORE(depth)
+    ${commit()}
                     :JMP(readCode)
 
 
@@ -3123,7 +3190,8 @@ opRETURNcreateEnd:
 opDELEGATECALL:
 
     %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCounters)
-
+    $ => A          :MLOAD(depth)
+    A + 1           :MSTORE(depth)
     SP - 6          :JMPN(stackUnderflow)
     SP - 1 => SP
     CTX             :MSTORE(originAuxCTX)
@@ -3164,7 +3232,7 @@ opDELEGATECALL:
 
     $ => B                   :MLOAD(lastMemOffset)
     $ => A                   :MLOAD(addrCall)
-    ${touchedAddress(A)} => C
+    ${isWarmedAddress(A)} => C
     ;gas_cost = base_gas + gas_sent_with_call
     GAS-100-C*2500 => GAS    :JMPN(outOfGas)
 
@@ -3209,6 +3277,8 @@ opDELEGATECALLend:
 ; // TODO Check with DElEGATE CALL txDestAddr/txSrcAddr ( same as other calls)
 ; // TODO check revert create
 opCREATE2:
+    $ => A              :MLOAD(depth)
+    A + 1               :MSTORE(depth)
     SP - 4              :JMPN(stackUnderflow)
     $ => A              :MLOAD(isStaticCall)
     0 - A               :JMPN(invalidStaticTx)
@@ -3310,6 +3380,8 @@ opCREATE2:
 
 ;TODO same as other calls
 opSTATICCALL:
+    $ => A          :MLOAD(depth)
+    A + 1           :MSTORE(depth)
     SP - 6          :JMPN(stackUnderflow)
     SP - 1 => SP
     CTX             :MSTORE(originAuxCTX)
@@ -3342,7 +3414,7 @@ opSTATICCALL:
 
     ; Substract gas cost
     $ => A          :MLOAD(addrCall)
-    ${touchedAddress(A)} => E
+    ${isWarmedAddress(A)} => E
     ;gas_cost = base_gas + gas_sent_with_call
     GAS-100-E*2500 => GAS    :JMPN(outOfGas)
 
@@ -3445,6 +3517,9 @@ opREVERTend:
     $ => PC         :MLOAD(lastPC)
     0               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
+    $ => A          :MLOAD(depth)
+    A - 1           :MSTORE(depth)
+    ${revert()}
                     :JMP(readCode)
 
 ; // TODO: handle if depth is over 0
@@ -3496,7 +3571,7 @@ opSELFDESTRUCT2:
     ; gas: check touched address
     C => A
                               :CALL(maskAddress) ; Mask address to 20 bytes
-    ${touchedAddress(A)} => E
+    ${isWarmedAddress(A)} => E
     GAS - 2600 * E => GAS     :JMPN(outOfGas)
 
     ; read previous balance receiver
@@ -3521,7 +3596,7 @@ opSELFDESTRUCT2:
     $ => SR                 :SSTORE
 
     $ => A                  :MLOAD(originCTX)
-    $                       :EQ,JMPC(handleGas)
+    $                       :EQ,JMPC(handleGas)    
     $ => B                  :MLOAD(gasRefund)
     $ => C                  :MLOAD(isCreate)
     1 => D
@@ -3539,6 +3614,9 @@ opSELFDESTRUCTCend:
     $ => PC                 :MLOAD(lastPC)
     D                       :MSTORE(SP++)
     1024 - SP               :JMPN(stackOverflow)
+    $ => A                  :MLOAD(depth)
+    A - 1                   :MSTORE(depth)
+    ${commit()}
                             :JMP(readCode)
 
 opINVALID:

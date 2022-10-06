@@ -27,7 +27,8 @@ processTx:
         136                              :MSTORE(arithB)
                                          :CALL(divARITH)
         $ => B                           :MLOAD(arithRes1)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - %MIN_CNT_KECCAK_BATCH => A
+        $ => A                           :MLOAD(cntKeccakPreProcess)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A => A
         $                                :LT, JMPC(outOfCounters)
 
         ; Get hash address previously stored in RLP parsing
@@ -62,19 +63,19 @@ checkAndSaveFrom:
 ;; B - Verify chainID
 ;;;;;;;;;;;;;;;;;;
 
-        $ => A                          :MLOAD(txChainId)                                       ; A: chainId tx
-        %ZKEVM_CHAINID => B                                                               ; B: defaultChainId, A: chainId tx
+        $ => A                          :MLOAD(txChainId)
+        $ => B                          :MLOAD(chainId)                                       ; A: chainId tx
         $                               :EQ,JMPC(endCheckChainId)                               ; If A == B --> endCheckChainId
                                         :JMP(invalidIntrinsicTx)                                         ; If A != B --> invalidIntrinsicTx
 endCheckChainId:
 
 ;; Reset warm/cold information
         $ => A                          :MLOAD(txSrcOriginAddr)
-        ${resetTouchedAddress()} ; clean touchedAddresses since there is a new transaction
-        ${resetStorageSlots()} ; clean storageSlots since there is a new transaction
-        ${touchedAddress(A)} ; add tx.origin to touched addresses
+        ${clearWarmedStorage()} ; clear accessed since there is a new transaction
+        ${isWarmedAddress(A)} ; add tx.origin to touched addresses
+        0                               :MSTORE(depth) ; Initial depth is 0
 
-;; Set gasPrice global var
+;; Set gasPrice global var 
         $ => A                          :MLOAD(txGasPriceRLP)
         A                               :MSTORE(txGasPrice)
 ;;;;;;;;;;;;;;;;;;
@@ -201,7 +202,8 @@ txType:
         0 - A                           :JMPN(getContractAddress)
         $ => A                          :MLOAD(txDestAddr)
         ; Add 'to' to touched addresses
-        ${touchedAddress(A)}
+        ${isWarmedAddress(A)}
+        ${checkpoint()}
         ; Check 'to' is zero or precompiled contract
         ; Check zero address since zero address is not a precompiled contract
         0 => B
@@ -263,7 +265,8 @@ nonceIs0:
 endContractAddress:
         ; end contract address hash and get the 20 first bytes
         HASHPOS                         :HASHKLEN(E)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - %MIN_CNT_KECCAK_BATCH - 1 :JMPN(outOfCounters)
+        $ => A                          :MLOAD(cntKeccakPreProcess)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 :JMPN(outOfCounters)
         $ => A                          :HASHKDIGEST(E)
                                         :CALL(maskAddress) ; Mask address to 20 bytes
         A                               :MSTORE(createContractAddress)
@@ -310,7 +313,8 @@ create2end:
         136                             :MSTORE(arithB)
                                         :CALL(divARITH)
         $ => B                          :MLOAD(arithRes1)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - %MIN_CNT_KECCAK_BATCH => A
+        $ => A                          :MLOAD(cntKeccakPreProcess)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A => A
         $                               :LT, JMPC(outOfCounters)
         $ => C                          :HASHKDIGEST(E)
         ; new hash with position 0 is started
@@ -334,7 +338,8 @@ create2end:
         136                             :MSTORE(arithB)
                                         :CALL(divARITH)
         $ => B                          :MLOAD(arithRes1)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - %MIN_CNT_KECCAK_BATCH => A
+        $ => A                          :MLOAD(cntKeccakPreProcess)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A => A
         $                               :LT, JMPC(outOfCounters)
 
         $ => A                          :HASHKDIGEST(E)
@@ -346,8 +351,8 @@ create2end:
 ;; deploy contract in state-tree
 deploy:
         ; add address to touched addresses
-        ${touchedAddress(A)}
-
+        ${isWarmedAddress(A)}
+        ${checkpoint()}
         ; check if address is deployable ( nonce == bytecode == 0)
         A => E
 

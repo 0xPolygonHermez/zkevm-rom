@@ -5,7 +5,7 @@ name: Test executor inputs
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
     branches: [main, develop]
 
@@ -15,6 +15,8 @@ jobs:
     strategy:
       matrix:
         node-version: [16.x]
+    env:
+        BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -34,11 +36,18 @@ jobs:
         with:
           owner: '0xPolygonHermez'
           repository: 'zkevm-proverjs'
+      - name: setup zkevm-testvectors
+        run: |
+          cd zkevm-testvectors
+          git checkout $BRANCH_NAME
       - name: setup zkevm-proverjs
         run: |
           cd zkevm-proverjs
+          git checkout $BRANCH_NAME
           npm i
       - name: Run tests
-        run:  |
+        run: |
           cd zkevm-proverjs
-          npm run test:all-inputs
+          npm run test:gen-parallel
+          npm run test:run-parallel
+          sh tools/run-test/checker.sh
