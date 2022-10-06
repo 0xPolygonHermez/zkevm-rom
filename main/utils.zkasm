@@ -18,6 +18,8 @@ VAR GLOBAL arithOverflow
 VAR GLOBAL tmpZkPC
 VAR GLOBAL tmpZkPC2
 VAR GLOBAL tmpSHXZkPC
+VAR GLOBAL tmpSHXZkPC2
+VAR GLOBAL result
 
 ; @info Get absolute value and sign
 ; @in A => number to convert
@@ -499,7 +501,7 @@ storeTmp:
 ;@in D - (A >> D) D bytes
 ;@out A - A >> D => A
 SHRarith:
-    RR                      :MSTORE(tmpZkPC2)
+    RR                      :MSTORE(tmpSHXZkPC2)
     B                       :MSTORE(tmpVarB2)
     C                       :MSTORE(tmpVarC2)
     D                       :MSTORE(tmpVarD2)
@@ -517,7 +519,7 @@ SHRarith:
 ;@in D - (A >> D) D bits
 ;@out A -  A >> D => A
 SHRarithBit:
-    RR                      :MSTORE(tmpZkPC2)
+    RR                      :MSTORE(tmpSHXZkPC2)
     B                       :MSTORE(tmpVarB2)
     C                       :MSTORE(tmpVarC2)
     D                       :MSTORE(tmpVarD2)
@@ -537,7 +539,8 @@ SHRarithinit:
     B => D                                          ; D = 2**D
     ${B-1} => B                                     ; B = 2**D - 1
     $ => C                  :AND                    ; C = A & B, C = init number & 2**D - 1
-    ${E/D} => A                                     ; A = init number / 2**D
+    D => B
+    ${E/B} => A                                     ; A = init number / 2**D
     0 => D
     E                       :ARITH                  ; A * B + C = op, (A >> D) * 2**D + (init number & (2**D - 1)) = init number
                             :JMP(SHRarithfinal)
@@ -550,14 +553,14 @@ SHRarithfinal:
     $ => C                  :MLOAD(tmpVarC2)
     $ => D                  :MLOAD(tmpVarD2)
     $ => E                  :MLOAD(tmpVarE2)
-    $ => RR                 :MLOAD(tmpZkPC2)
+    $ => RR                 :MLOAD(tmpSHXZkPC2)
                             :JMP(RR)
 
 ;@in A - (A << D)
 ;@in D - (A << D) D bytes
 ;@out A -  A << D => A
 SHLarith:
-    RR                      :MSTORE(tmpZkPC2)
+    RR                      :MSTORE(tmpSHXZkPC2)
     B                       :MSTORE(tmpVarB2)
     C                       :MSTORE(tmpVarC2)
     D                       :MSTORE(tmpVarD2)
@@ -574,7 +577,7 @@ SHLarith:
 ;@in D - (A << D) D bits
 ;@out A -  A << D => A
 SHLarithBit:
-    RR                      :MSTORE(tmpZkPC2)
+    RR                      :MSTORE(tmpSHXZkPC2)
     B                       :MSTORE(tmpVarB2)
     C                       :MSTORE(tmpVarC2)
     D                       :MSTORE(tmpVarD2)
@@ -591,20 +594,20 @@ SHLarithinit:
     D*2 => RR
     zkPC+2                  :MSTORE(tmpSHXZkPC)
                             :JMP(@exp_num + RR)     ; B = 2**D
-    ${A*B} => E                                     ; E = init nubmer * 2**D (result)
+    ${A*B} => E                                     ; E = init number * 2**D (result)
+    E                       :MSTORE(result)
     256 - D => D                                    ; D = 256 - D
     D*2 => RR
     zkPC+2                  :MSTORE(tmpSHXZkPC)
-                            :JMP(@exp_num + RR)     ; B = 2**D
-    B                       :MSTORE(arithA)
-    1                       :MSTORE(arithB)
-                            :CALL(subARITH)
-    $ => B                  :MLOAD(arithRes1)       ; B = 2**D-1
-    A => C
+                            :JMP(@exp_num + RR)     ; B = 2**(256-D)
+    A => E
     B => A
-    C => B
-    $ => C                  :LT                     ; A < B, 2**D-1 < init number
-    B => A                                          ; A init number
+    1 => B
+    $ => A                  :SUB
+    E => B
+    $ => C                  :LT                     ; A < B, 2**(256-D) - 1 < init number
+    E => A                                          ; A init number
+    $ => E                  :MLOAD(result)          ; E result
     256 - D => D                                    ; D = 256 - D
     D*2 => RR
     zkPC+2                  :MSTORE(tmpSHXZkPC)
@@ -635,7 +638,7 @@ SHLarithfinal:
     $ => C                  :MLOAD(tmpVarC2)
     $ => D                  :MLOAD(tmpVarD2)
     $ => E                  :MLOAD(tmpVarE2)
-    $ => RR                 :MLOAD(tmpZkPC2)
+    $ => RR                 :MLOAD(tmpSHXZkPC2)
                             :JMP(RR)
 
 outOfCountersStep:
