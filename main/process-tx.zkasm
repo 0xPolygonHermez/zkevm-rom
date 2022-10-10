@@ -3,13 +3,14 @@ INCLUDE "precompiled/selector.zkasm"
 INCLUDE "ecrecover/ecrecover.zkasm"
 ; Blocks process txs
 ;       A - Verify ecdsa signature
-;       B - Verify chainID
-;       C - Verify and increase nonce
-;       D - Verify upfront cost
-;       E - Check transaction type
-;         E.1 - call contract
-;         E.2 - deploy contract
-;       F - Handle Gas
+;       B - Verify tx.sender does not have any code deployed (EIP3607)
+;       C - Verify chainID
+;       D - Verify and increase nonce
+;       E - Verify upfront cost
+;       F - Check transaction type
+;         F.1 - call contract
+;         F.2 - deploy contract
+;       G - Handle Gas
 
 processTx:
 ;;;;;;;;;;;;;;;;;;
@@ -60,7 +61,19 @@ checkAndSaveFrom:
         SR                              :MSTORE(initSR)
 
 ;;;;;;;;;;;;;;;;;;
-;; B - Verify chainID
+;; B - Verify tx.sender does not have any code deployed (EIP3607)
+;;;;;;;;;;;;;;;;;;
+
+        %SMT_KEY_SC_CODE => B
+        0 => C
+        $ => B                          :SLOAD
+                                        :CALL(getLenBytes)
+        A => B
+        0 => A
+        $                               :LT,JMPC(invalidIntrinsicTx)
+
+;;;;;;;;;;;;;;;;;;
+;; C - Verify chainID
 ;;;;;;;;;;;;;;;;;;
 
         $ => A                          :MLOAD(txChainId)
@@ -79,7 +92,7 @@ endCheckChainId:
         $ => A                          :MLOAD(txGasPriceRLP)
         A                               :MSTORE(txGasPrice)
 ;;;;;;;;;;;;;;;;;;
-;; C - Verify and increase nonce
+;; D - Verify and increase nonce
 ;;;;;;;;;;;;;;;;;;
 
         $ => A, E                       :MLOAD(txSrcOriginAddr) ; Address of the origin to A and E
@@ -97,7 +110,7 @@ endCheckChainId:
         $ => SR                         :SSTORE ; Store the nonce plus one
 
 ;;;;;;;;;;;;;;;;;;
-;; D - Verify upfront cost
+;; E - Verify upfront cost
 ;;;;;;;;;;;;;;;;;;
 
         ; Verify batch gas limit
@@ -193,7 +206,7 @@ endCalldataIntrinsicGas:
         GAS - A => GAS
 
 ;;;;;;;;;;;;;;;;;;
-;; E - Check transaction type
+;; F - Check transaction type
 ;;;;;;;;;;;;;;;;;;
 txType:
 
@@ -213,7 +226,7 @@ txType:
                                         :JMP(callContract)
 
 ;;;;;;;;;;;;;;;;;;
-;; E.2 - Deploy contract
+;; F.2 - Deploy contract
 ;;     - Compute new contract address
 ;;     - Process bytecode
 ;;     - End deploy: add state-tree hash bytecode and bytecode length
@@ -426,7 +439,7 @@ readDeployBytecodeCreateDefault:
                                         :JMP(defaultOpCode)
 
 ;;;;;;;;;;;;;;;;;;
-;; E.1 - Call contract
+;; F.1 - Call contract
 ;;     - Check bytecode to process against state-tree hash bytecode
 ;;     - Process bytecode
 ;;     - End deploy: add state-tree hash bytecode and bytecode length
@@ -518,7 +531,7 @@ endDeploy:
         $ => SR                         :SSTORE
 
 ;;;;;;;;;;;;;;;;;;
-;; F - Handle GAS
+;; G - Handle GAS
 ;;   - Check refund gas
 ;;   - Return gas not used to caller
 ;;   - Pay gas to sequencer
