@@ -956,3 +956,88 @@ maskAddress:
     $ => A          :AND
     $ => B          :MLOAD(tmpVarB)
                     :RETURN
+
+;@info exp(A,D) --> A^D
+;@in A, D => A
+;@out A => exp(A,D) = A
+;expAD:
+;    RR              :MSTORE(tmpZkPC2)
+;    D               :MSTORE(tmpVarD)
+;    D - 1           :JMPN(expAD0)
+;
+;expADloop:
+;    D - 1 => D
+;    D - 1           :JMPN(expADend)
+;    A               :MSTORE(arithA)
+;    B               :MSTORE(arithB)
+;                    :CALL(mulARITH)
+;    $ => A          :MLOAD(arithRes1)
+;                    :JMP(expADloop)
+;
+;expAD0:
+;    1 => A
+;
+;expADend:
+;    $ => D          :MLOAD(tmpVarD)
+;    $ => RR         :MLOAD(tmpZkPC2)
+;                    :RETURN
+
+;@info exp(A,D) --> A^D
+;@in A, D => A^D
+;@out A => result
+;@out D => overflow
+expAD:
+    RR              :MSTORE(tmpZkPC2)
+    B               :MSTORE(tmpVarB)
+    C               :MSTORE(tmpVarC)
+    E               :MSTORE(tmpVarE)
+    D               :MSTORE(tmpVarD)
+    D - 1           :JMPN(expAD0)
+    0 => D
+    A => B
+    $${var _numExp = 0}
+    $${var _mulArith = A}
+
+expADloop:
+    $ => E          :MLOAD(tmpVarD)
+    E - 1 => E
+    E - 1           :JMPN(expADend)
+    E               :MSTORE(tmpVarD)
+    0 => C
+    ;${log(A)}
+    ;${log(D)}
+    ;${log(B)}
+    ${log(E)}
+    ${_numExp = _mulArith}
+    ${_numExp >> 256} - 1       :JMPN(expADloop2)
+    $${var _mulArith2 = A * B}
+    ${_mulArith2 >> 256} => D
+    ${_mulArith2} => E          :ARITH
+    D => A
+    ${_mulArith = D * B}
+    ${_mulArith >> 256} => D
+    ${_mulArith} => E           :ARITH
+    ${_mulArith = _mulArith + _mulArith2}
+    ${_mulArith >> 256} => D
+    ${_mulArith} => A
+                                :JMP(expADloop)
+
+expADloop2:
+    ${_mulArith = _numExp * B}
+    ${_mulArith >> 256} => D
+    ;${log(D)}
+    ${_mulArith} => E :ARITH
+    ;${log(E)}
+    E => A
+                    :JMP(expADloop)
+
+expAD0:
+    1 => A
+    0 => D
+
+expADend:
+    $ => B          :MLOAD(tmpVarB)
+    $ => C          :MLOAD(tmpVarC)
+    $ => E          :MLOAD(tmpVarE)
+    $ => RR         :MLOAD(tmpZkPC2)
+                    :RETURN

@@ -2,6 +2,7 @@ VAR CTX Bsize
 VAR CTX Esize
 VAR CTX Msize
 VAR CTX exp
+VAR CTX mod
 ;TODO: incorrect inputs (argslength < 32 + 32 + 32 + lenB + lenE + lenM)
 ;TODO: size > 32
 MODEXP:
@@ -16,6 +17,7 @@ MODEXP:
     A               :MSTORE(Msize)
     $ => C          :MLOAD(Bsize)
                     :CALL(MLOADX)
+    ;${log(A)}
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
     A => B
@@ -24,9 +26,12 @@ MODEXP:
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
     A               :MSTORE(exp)
+    ;${log(A)}
     A => D
     $ => C          :MLOAD(Msize)
                     :CALL(MLOADX)
+    A               :MSTORE(mod)
+    ;${log(A)}
     D => E
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
@@ -35,16 +40,40 @@ MODEXP:
     0 => B
     $               :EQ,JMPC(MODEXPreturn0)
     E => B
-    ${exp(B,D)} => B
-    ${B%A} => A
-    C => D
+    1 => E
+
+MODEXPloop:
+    D - 1 => D      :JMPN(MODEXPloopEnd)
+    E               :MSTORE(arithA)
+    B               :MSTORE(arithB)
+                    :CALL(mulARITH)
+    $ => E          :MLOAD(arithRes1)
+    E               :MSTORE(arithA)
+    A               :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => E          :MLOAD(arithRes2)
+                    :JMP(MODEXPloop)
+
+MODEXPloopEnd:
+    E => A
                     :JMP(MODEXPfinal)
+
+;    $${var _numAux = 1}
+;
+;MODEXPloop:
+;    D - 1 => D      :JMPN(MODEXPloopEnd)
+;    ${_numAux = (_numAux * B) % A}
+;                    :JMP(MODEXPloop)
+;
+;MODEXPloopEnd:
+;    ${_numAux} => A
+;                    :JMP(MODEXPfinal)
 
 MODEXPreturn0:
     0 => A
-    C => D
 
 MODEXPfinal:
+    C => D
     $ => CTX        :MLOAD(currentCTX)
     $ => E          :MLOAD(retCallOffset)
     $ => C          :MLOAD(retCallLength)
