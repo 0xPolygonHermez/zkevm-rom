@@ -40,40 +40,25 @@ MODEXP:
     0 => B
     $               :EQ,JMPC(MODEXPreturn0)
     E => B
-    1 => E
+    1 => C
 
+;E*B => E%A
 MODEXPloop:
     D - 1 => D      :JMPN(MODEXPloopEnd)
-    E               :MSTORE(arithA)
-    B               :MSTORE(arithB)
-                    :CALL(mulARITH)
-    $ => E          :MLOAD(arithRes1)
-    E               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(divARITH)
-    $ => E          :MLOAD(arithRes2)
+    C => A
+    $ => C          :MLOAD(mod)
+                    :CALL(utilMULMOD)
                     :JMP(MODEXPloop)
 
 MODEXPloopEnd:
-    E => A
+    C => A
                     :JMP(MODEXPfinal)
-
-;    $${var _numAux = 1}
-;
-;MODEXPloop:
-;    D - 1 => D      :JMPN(MODEXPloopEnd)
-;    ${_numAux = (_numAux * B) % A}
-;                    :JMP(MODEXPloop)
-;
-;MODEXPloopEnd:
-;    ${_numAux} => A
-;                    :JMP(MODEXPfinal)
 
 MODEXPreturn0:
     0 => A
 
 MODEXPfinal:
-    C => D
+    $ => D          :MLOAD(Msize)
     $ => CTX        :MLOAD(currentCTX)
     $ => E          :MLOAD(retCallOffset)
     $ => C          :MLOAD(retCallLength)
