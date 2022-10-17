@@ -10,6 +10,16 @@ VAR GLOBAL tmpVarB2
 VAR GLOBAL tmpVarC2
 VAR GLOBAL tmpVarD2
 VAR GLOBAL tmpVarE2
+VAR GLOBAL tmpVarA3
+VAR GLOBAL tmpVarB3
+VAR GLOBAL tmpVarC3
+VAR GLOBAL tmpVarD3
+VAR GLOBAL tmpVarE3
+VAR GLOBAL tmpVarA4
+VAR GLOBAL tmpVarB4
+VAR GLOBAL tmpVarC4
+VAR GLOBAL tmpVarD4
+VAR GLOBAL tmpVarE4
 VAR GLOBAL arithA
 VAR GLOBAL arithB
 VAR GLOBAL arithRes1
@@ -17,6 +27,9 @@ VAR GLOBAL arithRes2
 VAR GLOBAL arithOverflow
 VAR GLOBAL tmpZkPC
 VAR GLOBAL tmpZkPC2
+VAR GLOBAL tmpZkPC3
+VAR GLOBAL tmpZkPC4
+
 
 ; @info Get absolute value and sign
 ; @in A => number to convert
@@ -987,60 +1000,43 @@ maskAddress:
 ;@out A => result
 ;@out D => overflow
 expAD:
-    RR              :MSTORE(tmpZkPC2)
-    B               :MSTORE(tmpVarB)
-    C               :MSTORE(tmpVarC)
-    E               :MSTORE(tmpVarE)
-    D               :MSTORE(tmpVarD)
-    D - 1           :JMPN(expAD0)
-    0 => D
-    A => B
-    $${var _numExp = 0}
-    $${var _mulArith = A}
+    RR              :MSTORE(tmpZkPC3)
+    A               :MSTORE(tmpVarA3)
+    B               :MSTORE(tmpVarB3)
+    C               :MSTORE(tmpVarC3)
+    E               :MSTORE(tmpVarE3)
+    D               :MSTORE(tmpVarD3)
+    A => E
+    D => B
+    0 => A
+    $               :EQ,JMPC(expAD0)
+    E => A
+    1 => C
 
 expADloop:
-    $ => E          :MLOAD(tmpVarD)
-    E - 1 => E
-    E - 1           :JMPN(expADend)
-    E               :MSTORE(tmpVarD)
-    0 => C
-    ;${log(A)}
-    ;${log(D)}
-    ;${log(B)}
-    ;${log(E)}
-    ${_numExp = _mulArith}
-    ${_numExp >> 256} - 1       :JMPN(expADloop2)
-    $${var _mulArith2 = A * B}
-    ${_mulArith2 >> 256} => D
-    ${_mulArith2} => E          :ARITH
-    D => A
-    ${_mulArith = D * B}
-    ${_mulArith >> 256} => D
-    ${_mulArith} => E           :ARITH
-    ${_mulArith = _mulArith + _mulArith2}
-    ${_mulArith >> 256} => D
-    ${_mulArith} => A
-                                :JMP(expADloop)
-
-expADloop2:
-    ${_mulArith = _numExp * B}
-    ${_mulArith >> 256} => D
-    ;${log(D)}
-    ${_mulArith} => E :ARITH
-    ;${log(E)}
-    E => A
+    $ => A          :MLOAD(tmpVarD3)
+    0 => B
+    $               :EQ,JMPC(expADend)
+    ${log(A)}
+    A - 1           :MSTORE(tmpVarD3)
+    C => B
+    0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn => C
+    $ => A          :MLOAD(tmpVarA3)
+    zkPC+1 => RR    :JMP(utilMULMOD)
                     :JMP(expADloop)
 
 expAD0:
-    1 => A
+    1 => C
     0 => D
 
 expADend:
-    $ => B          :MLOAD(tmpVarB)
-    $ => C          :MLOAD(tmpVarC)
-    $ => E          :MLOAD(tmpVarE)
-    $ => RR         :MLOAD(tmpZkPC2)
-                    :RETURN
+    C => A
+    $ => B          :MLOAD(tmpVarB3)
+    $ => C          :MLOAD(tmpVarC3)
+    $ => E          :MLOAD(tmpVarE3)
+    $ => RR         :MLOAD(tmpZkPC3)
+        ${log(B)}
+                    :JMP(RR)
 
 ; @info (A*B)%C
 ; @in A
@@ -1048,9 +1044,9 @@ expADend:
 ; @in C
 ; @out C
 utilMULMOD:
-    RR              :MSTORE(tmpZkPC2)
-    D               :MSTORE(tmpVarD2)
-    E               :MSTORE(tmpVarE2)
+    RR              :MSTORE(tmpZkPC4)
+    D               :MSTORE(tmpVarD4)
+    E               :MSTORE(tmpVarE4)
 
     ; The following approach will be followed in order to verify the mulmod operation
     ; A * B + 0 = D*2^256 + E 
@@ -1092,7 +1088,7 @@ utilMULMOD:
     ; D2 must be less than 2²⁵⁶
     C => A ; Modulus
     0 => C, D
-    ${B * A} => E   :MSTORE(tmpVarD), ARITH ; D2
+    ${B * A} => E   :MSTORE(tmpVarD4), ARITH ; D2
 
     ; k.l * N + mulModResult = D1 * 2²⁵⁶ + E 
     ; B * A + C = D*2^256 + E
@@ -1115,7 +1111,7 @@ utilMULMOD:
 
     ; Assert D1 + D2 = D ; ADD ;ASSERT
     D => A ; D1
-    $ => B          :MLOAD(tmpVarD) ;D2
+    $ => B          :MLOAD(tmpVarD4) ;D2
     $ => A          :ADD
     $               :MLOAD(arithOverflow), ASSERT
                     :JMP(utilMULMODend)
@@ -1141,7 +1137,7 @@ zeroOneMod:
     0 => C
 
 utilMULMODend:
-    $ => D          :MLOAD(tmpVarD)
-    $ => E          :MLOAD(tmpVarE)
-    $ => RR         :MLOAD(tmpZkPC2)
-                    :RETURN
+    $ => D          :MLOAD(tmpVarD4)
+    $ => E          :MLOAD(tmpVarE4)
+    $ => RR         :MLOAD(tmpZkPC4)
+                    :JMP(RR)
