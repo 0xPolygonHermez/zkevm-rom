@@ -104,7 +104,7 @@ endCheckChainId:
         $ => B                          :MLOAD(txGasLimit)
         ; Check batch gas limit is not exceeded by transaction
         %BATCH_GAS_LIMIT => A
-        $                               :LT,JMPC(handleIntrinsicError)
+        $                               :LT,JMPC(invalidIntrinsicBatchGasLimit)
 
         ; Intrinsic gas --> gas Limit >= 21000 + calldata cost + deployment cost
         %BASE_TX_GAS => E ; Store init intrinsic gas at E
@@ -606,7 +606,10 @@ invalidIntrinsicTxGasLimit:
                         :JMP(handleIntrinsicError) 
 invalidIntrinsicTxBalance:
         ${eventLog(onError, intrinsic_invalid_balance)}
-                        :JMP(handleIntrinsicError)                                                  
+                        :JMP(handleIntrinsicError)     
+invalidIntrinsicBatchGasLimit:
+        ${eventLog(onError, intrinsic_invalid_batch_gas_limit)}
+                        :JMP(handleIntrinsicError)                                       
 handleIntrinsicError:
         $ => SR                         :MLOAD(originSR)
                                         :JMP(processTxEnd)
