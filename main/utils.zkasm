@@ -10,6 +10,11 @@ VAR GLOBAL tmpVarB2
 VAR GLOBAL tmpVarC2
 VAR GLOBAL tmpVarD2
 VAR GLOBAL tmpVarE2
+VAR GLOBAL tmpVarA3
+VAR GLOBAL tmpVarB3
+VAR GLOBAL tmpVarC3
+VAR GLOBAL tmpVarD3
+VAR GLOBAL tmpVarE3
 VAR GLOBAL arithA
 VAR GLOBAL arithB
 VAR GLOBAL arithRes1
@@ -17,6 +22,8 @@ VAR GLOBAL arithRes2
 VAR GLOBAL arithOverflow
 VAR GLOBAL tmpZkPC
 VAR GLOBAL tmpZkPC2
+VAR GLOBAL tmpZkPC3
+VAR GLOBAL tmpZkPC4
 
 ; @info Get absolute value and sign
 ; @in A => number to convert
@@ -1000,3 +1007,162 @@ updateSystemData:
     SR => D
     $ => SR                             :SSTORE
                                         :RETURN
+
+; @info (A*B)%C
+; @in A
+; @in B
+; @in C
+; @out C
+utilMULMOD:
+    RR              :MSTORE(tmpZkPC4)
+    A               :MSTORE(tmpVarA)
+    B               :MSTORE(tmpVarB)
+    D               :MSTORE(tmpVarD)
+    E               :MSTORE(tmpVarE)
+
+    ; The following approach will be followed in order to verify the mulmod operation
+    ; A * B + 0 = D*2^256 + E 
+    ; K * N + mulModResult = D*2^256 + E
+
+    ; Since the k can be bigger than 2²⁵⁶ and therefore does not fit in a register we divedit in the
+    ; most significan and less significant part:
+
+    ; (k.l + k.h * 2²⁵⁶) * N + mulModResult = (D1 + D2) * 2²⁵⁶ + E 
+    ; And divide this operation in 2 which fits in 2²⁵⁶ digits
+
+    ;k.l * N + mulModResult = D1 * 2²⁵⁶ + E 
+    ;k.h * 2²⁵⁶ * N  = D2 * 2²⁵⁶ --> k.h  * N  = D2 
+
+    ; Mul operation with Arith
+    ${var _mulMod = A * B} ; TODO $$
+    A               :MSTORE(arithA)
+    B               :MSTORE(arithB)
+    ; here we perform the: A * B + 0 = D*2^256 + E
+    ; result is stored in: arithRes1(E) and arithOverflow(D)
+                    :CALL(mulARITH)
+    C => A
+    ; Check if modulus is 0 or 1
+    2 => B 
+    $               :LT, JMPC(zeroOneMod)
+    ; Now we will try to perform the following equation:
+    ; (k.l + k.h * 2²⁵⁶) * N + mulModResult = (D1 + D2) * 2²⁵⁶ + E 
+
+    ${(_mulMod / C) >> 256} => B     ; k.h
+    ; We can jump with Js, because later it's all verified by the ARITH
+    ${cond(B == 0)}  :JMPN(mulModNoKH) 
+
+    ; Since there's k.h we will split the equation in those 2
+    ;k.l * N + mulModResult = D1 * 2²⁵⁶ + E 
+    ;k.h * 2²⁵⁶ * N  = D2 * 2²⁵⁶ --> k.h  * N  = D2 
+
+    ; k.h  * N  = D2 
+    ; B * A + 0 = 0 * 2²⁵⁶ + E
+    ; D2 must be less than 2²⁵⁶
+    C => A ; Modulus
+    0 => C, D
+    ${B * A} => E   :MSTORE(tmpVarD), ARITH ; D2
+
+    ; k.l * N + mulModResult = D1 * 2²⁵⁶ + E 
+    ; B * A + C = D*2^256 + E
+    ; remember that:
+    ; result of mul is stored in: arithRes1(E) and arithOverflow(D)
+
+    ${(_mulMod / A) % (2 << 256)} => B   ; k.l
+    ${_mulMod % A} => C        ; mulModResult
+    ${(B * A + C) >> 256} => D ; D1
+    $               :MLOAD(arithRes1), ARITH
+
+    ; Finally we need to assert the following:
+    ; N>resultModulus
+    ; D1 + D2 = D
+    ; N>resultModulus   ; LT; ASSERT
+    A => B          ; modulus
+    C => A          ; mulModResult
+    $ => A          :LT
+    1               :ASSERT
+
+    ; Assert D1 + D2 = D ; ADD ;ASSERT
+    D => A ; D1
+    $ => B          :MLOAD(tmpVarD) ;D2
+    $ => A          :ADD
+    $               :MLOAD(arithOverflow), ASSERT
+                    :JMP(utilMULMODend)
+
+mulModNoKH:
+    ; if theres no K.h the equation is simplified as:
+    ; K * N + mulModResult = D*2^256 + E 
+    ; B * A + C = D*2^256 + E
+
+    C => A ; Modulus on A
+    ${(_mulMod / A)} => B   ; k
+    ${_mulMod % A} => C     ; mulModResult
+    $ => D         :MLOAD(arithOverflow)
+    $              :MLOAD(arithRes1), ARITH ; Can this be on the same line of MLOAD?
+
+    A => B          ; modulus
+    C => A          ; mulModResult
+    $ => A          :LT
+    1               :ASSERT
+                    :JMP(utilMULMODend)
+
+zeroOneMod:
+    0 => C
+
+utilMULMODend:
+    $ => A          :MLOAD(tmpVarA)
+    $ => B          :MLOAD(tmpVarB)
+    $ => D          :MLOAD(tmpVarD)
+    $ => E          :MLOAD(tmpVarE)
+    $ => RR         :MLOAD(tmpZkPC4)
+                    :JMP(RR)
+
+;@info exp(A,D) --> A^D
+;@in A, D => A^D
+;@out A => result
+;@out D => overflow
+expAD:
+    RR              :MSTORE(tmpZkPC3)
+    A               :MSTORE(tmpVarA3)
+    B               :MSTORE(tmpVarB3)
+    C               :MSTORE(tmpVarC3)
+    E               :MSTORE(tmpVarE3)
+    D               :MSTORE(tmpVarD3)
+    A => E
+    D => B
+    0 => A
+    $               :EQ,JMPC(expAD0)
+    E => A
+    0 => B
+    $               :EQ,JMPC(expA0D)
+    1 => C
+
+expADloop:
+    $ => A          :MLOAD(tmpVarD3)
+    0 => B
+    $               :EQ,JMPC(expADend)
+    A - 1           :MSTORE(tmpVarD3)
+    C => A
+    $               :EQ,JMPC(expA0D)
+    C               :MSTORE(arithB)
+    $ => A          :MLOAD(tmpVarA3)
+    A               :MSTORE(arithA)
+    zkPC+1 => RR    :JMP(mulARITH)
+    $ => C          :MLOAD(arithRes1)
+                    :JMP(expADloop)
+
+expA0D:
+    0 => C
+    0 => D
+                    :JMP(expADend)
+
+expAD0:
+    1 => C
+    0 => D
+
+expADend:
+    C => A
+    $ => B          :MLOAD(tmpVarB3)
+    $ => C          :MLOAD(tmpVarC3)
+    $ => E          :MLOAD(tmpVarE3)
+    $ => RR         :MLOAD(tmpZkPC3)
+                    :JMP(RR)
