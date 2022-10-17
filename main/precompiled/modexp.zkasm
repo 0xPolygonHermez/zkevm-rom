@@ -2,6 +2,7 @@ VAR CTX Bsize
 VAR CTX Esize
 VAR CTX Msize
 VAR CTX exp
+VAR CTX mod
 ;TODO: incorrect inputs (argslength < 32 + 32 + 32 + lenB + lenE + lenM)
 ;TODO: size > 32
 MODEXP:
@@ -27,6 +28,7 @@ MODEXP:
     A => D
     $ => C          :MLOAD(Msize)
                     :CALL(MLOADX)
+    A               :MSTORE(mod)
     D => E
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
@@ -35,9 +37,17 @@ MODEXP:
     0 => B
     $               :EQ,JMPC(MODEXPreturn0)
     E => B
-    ${exp(B,D)} => B
-    ${B%A} => A
-    C => D
+    1 => C
+
+MODEXPloop:
+    D - 1 => D      :JMPN(MODEXPloopEnd)
+    C => A
+    $ => C          :MLOAD(mod)
+                    :CALL(utilMULMOD)
+                    :JMP(MODEXPloop)
+
+MODEXPloopEnd:
+    C => A
                     :JMP(MODEXPfinal)
 
 MODEXPreturn0:
@@ -45,6 +55,7 @@ MODEXPreturn0:
     C => D
 
 MODEXPfinal:
+    $ => D          :MLOAD(Msize)
     $ => CTX        :MLOAD(currentCTX)
     $ => E          :MLOAD(retCallOffset)
     $ => C          :MLOAD(retCallLength)
