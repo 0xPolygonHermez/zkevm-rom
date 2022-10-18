@@ -228,7 +228,10 @@ readDataFinal:
                                         :CALL(addBatchHashByteByByte)
 
 endData:
-
+        ; Check all bytes read to detect pre EIP-155 tx
+        C => A
+        $ => B                          :MLOAD(txRLPLength)
+        $                               :EQ,JMPC(RLPDigest)
 
 ;; Read RLP 'chainId'
         ; 64 bits max
@@ -254,6 +257,7 @@ shortChainId:
 endChainId:
         A                               :MSTORE(txChainId)
 
+lastRLPValues:
 ;; Read RLP last two values (0, 0)
         ; 64 bits max
         2 => D
@@ -304,7 +308,7 @@ vREADTx:
 ;;;;;;;;;
 ;; D - Finish RLP parsing
 ;;;;;;;;;
-
+RLPDigest:
 ;; update bytes parsed
         $ => A                          :MLOAD(batchL2DataParsed)
         A + C => A                      :MSTORE(batchL2DataParsed)
