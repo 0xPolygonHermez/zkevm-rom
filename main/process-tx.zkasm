@@ -64,13 +64,10 @@ checkAndSaveFrom:
 ;; B - Verify tx.sender does not have any code deployed (EIP3607)
 ;;;;;;;;;;;;;;;;;;
 
-        %SMT_KEY_SC_CODE => B
+        %SMT_KEY_SC_LENGTH => B
         0 => C
         $ => B                          :SLOAD
-                                        :CALL(getLenBytes)
-        A => B
-        0 => A
-        $                               :LT,JMPC(invalidIntrinsicTx)
+        0 - B                           :JMPN(invalidIntrinsicTxSenderCode)
 
 ;;;;;;;;;;;;;;;;;;
 ;; C - Verify chainID
@@ -622,7 +619,10 @@ invalidIntrinsicTxBalance:
                         :JMP(handleIntrinsicError)     
 invalidIntrinsicBatchGasLimit:
         ${eventLog(onError, intrinsic_invalid_batch_gas_limit)}
-                        :JMP(handleIntrinsicError)                                       
+                        :JMP(handleIntrinsicError)
+invalidIntrinsicTxSenderCode:
+        ${eventLog(onError, intrinsic_invalid_sender_code)}
+                        :JMP(handleIntrinsicError)
 handleIntrinsicError:
         $ => SR                         :MLOAD(originSR)
                                         :JMP(processTxEnd)
