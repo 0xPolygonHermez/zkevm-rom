@@ -228,7 +228,10 @@ readDataFinal:
                                         :CALL(addBatchHashByteByByte)
 
 endData:
-
+        ; Check all bytes read to detect pre EIP-155 tx
+        C => A
+        $ => B                          :MLOAD(txRLPLength)
+        $                               :EQ,JMPC(setPreEIP155Flag)
 
 ;; Read RLP 'chainId'
         ; 64 bits max
@@ -237,11 +240,11 @@ chainREAD:
                                         :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(endChainId)
-        A - 0x81                        :JMPN(chanId0)
+        A - 0x81                        :JMPN(chainId0)
         A - 0x89                        :JMPN(shortChainId)
                                         :JMP(invalidTxRLP)
 
-chanId0:
+chainId0:
         0 => A
                                         :JMPN(endChainId)
 
@@ -262,7 +265,9 @@ endChainId:
         0x8080 => B
         $                               :EQ,JMPC(sizeVerification)
                                         :JMP(invalidTxRLP)
-
+                                        
+setPreEIP155Flag:
+        1                               :MSTORE(isPreEIP155)
 ;; size verification
         ; checks RLP lenght read at the RLP header with bytes read during RLP parsing
 sizeVerification:
@@ -304,7 +309,6 @@ vREADTx:
 ;;;;;;;;;
 ;; D - Finish RLP parsing
 ;;;;;;;;;
-
 ;; update bytes parsed
         $ => A                          :MLOAD(batchL2DataParsed)
         A + C => A                      :MSTORE(batchL2DataParsed)
