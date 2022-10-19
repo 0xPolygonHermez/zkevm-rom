@@ -4,50 +4,27 @@
 name: Test executor inputs
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main, develop]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [16.x]
-    env:
-        BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+    runs-on: [self-hosted, linux, X64, hc]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
       - name: setup zkevm-rom N = 23
         run: |
           npm i
           npm run build -- -s 23
-          mkdir -p zkevm-rom/build
-          cp build/rom.json zkevm-rom/build
-      - name: Clone zkevm-testvectors
-        uses: GuillaumeFalourd/clone-github-repo-action@v2
-        with:
-          owner: '0xPolygonHermez'
-          repository: 'zkevm-testvectors'
-      - name: Clone zkevm-proverjs
-        uses: GuillaumeFalourd/clone-github-repo-action@v2
-        with:
-          owner: '0xPolygonHermez'
-          repository: 'zkevm-proverjs'
-      - name: setup zkevm-testvectors
+      - name: Generate tests
         run: |
-          cd zkevm-testvectors
-          git checkout $BRANCH_NAME
-      - name: setup zkevm-proverjs
-        run: |
-          cd zkevm-proverjs
-          git checkout $BRANCH_NAME
-          npm i
+          npm run test:gen
       - name: Run tests
         run: |
-          cd zkevm-proverjs
-          npm run test:gen-parallel
-          npm run test:run-parallel
-          sh tools/run-test/checker.sh
+          export NUM_CPUS=31
+          npm run test:start
+          sh tools/checker.sh
