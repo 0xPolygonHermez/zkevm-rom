@@ -1,8 +1,13 @@
 VAR CTX Bsize
 VAR CTX Esize
 VAR CTX Msize
+VAR CTX base
 VAR CTX exp
+VAR CTX newExp
 VAR CTX mod
+VAR CTX exp2
+VAR CTX res
+VAR CTX bp
 ;TODO: incorrect inputs (argslength < 32 + 32 + 32 + lenB + lenE + lenM)
 ;TODO: size > 32
 MODEXP:
@@ -19,47 +24,119 @@ MODEXP:
                     :CALL(MLOADX)
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
-    A => B
+    A               :MSTORE(base)
     $ => C          :MLOAD(Esize)
                     :CALL(MLOADX)
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
     A               :MSTORE(exp)
-    A => D
+    A               :MSTORE(newExp)
     $ => C          :MLOAD(Msize)
                     :CALL(MLOADX)
-    A               :MSTORE(mod)
-    D => E
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
-    E => D
-    B => E
+    A               :MSTORE(mod)
     0 => B
     $               :EQ,JMPC(MODEXPreturn0)
-    E => B
+    $ => A          :MLOAD(exp)
+    $               :EQ,JMPC(MODEXPexp0)
+    $ => B          :MLOAD(base)
+    0 => A
+    $               :EQ,JMPC(MODEXPreturn0)
     1 => C
+    $ => D          :MLOAD(exp)
+    ;$ => E          :MLOAD(base)
+    1               :MSTORE(exp2)
+    1               :MSTORE(res)
+    D => A
 
-MODEXPloop:
-    D - 1 => D      :JMPN(MODEXPloopEnd)
+;MODEXPloop:
+;    E => B
+;    C => A
+;    $ => C          :MLOAD(mod)
+;                    :CALL(utilMULMOD)
+;    D => A
+;    1 => B
+;    $ => A          :SUB
+;    0 => B
+;    $               :EQ,JMPC(MODEXPloopEnd)
+;    A => D
+;                    :JMP(MODEXPloop)
+
+MODEXPloop1:
+    $ => A          :MLOAD(newExp)
+    0 => B
+    $               :EQ,JMPC(MODEXPloopEnd)
+    A               :MSTORE(arithA)
+    2               :MSTORE(arithB)
+    zkPC+1 => RR    :JMP(divARITH)
+    $ => D          :MLOAD(arithRes1)
+    D               :MSTORE(newExp)
+    $ => A          :MLOAD(arithRes2)
+    0 => B
+    $               :EQ,JMPC(MODEXPloop10)
+    1 => C
+    $ => D          :MLOAD(exp2)
+    $ => E          :MLOAD(base)
+
+MODEXPloop2:
+    E => B
     C => A
     $ => C          :MLOAD(mod)
                     :CALL(utilMULMOD)
-                    :JMP(MODEXPloop)
+    D => A
+    1 => B
+    $ => A          :SUB
+    0 => B
+    $               :EQ,JMPC(MODEXPloop2End)
+    A => D
+                    :JMP(MODEXPloop2)
+
+MODEXPloop2End:
+    $ => E          :MLOAD(res)
+    E               :MSTORE(arithA)
+    C               :MSTORE(arithB)
+    zkPC+1 => RR    :JMP(mulARITH)
+    $ => C          :MLOAD(arithRes1)
+    C               :MSTORE(res)
+
+MODEXPloop10:
+    $ => E          :MLOAD(bp)
+    E               :MSTORE(arithA)
+    E               :MSTORE(arithB)
+    zkPC+1 => RR    :JMP(mulARITH)
+    $ => E          :MLOAD(arithRes1)
+    E               :MSTORE(bp)
+    $ => E          :MLOAD(exp2)
+    E*2             :MSTORE(exp2)
+                    :JMP(MODEXPloop1)
+
+MODEXPexp0:
+    1 => A
+    $ => B          :MLOAD(mod)
+    $               :EQ,JMPC(MODEXPreturn0)
+    1 => C
 
 MODEXPloopEnd:
-    C => A
+    C               :MSTORE(arithA)
+    $ => A          :MLOAD(mod)
+    A               :MSTORE(arithB)
+    zkPC+1 => RR    :JMP(divARITH)
+    $ => A          :MLOAD(arithRes2)
                     :JMP(MODEXPfinal)
 
 MODEXPreturn0:
     0 => A
-    C => D
 
 MODEXPfinal:
     $ => D          :MLOAD(Msize)
     $ => CTX        :MLOAD(currentCTX)
+    D               :MSTORE(retDataLength)
     $ => E          :MLOAD(retCallOffset)
     $ => C          :MLOAD(retCallLength)
     $ => CTX        :MLOAD(originCTX)
+    CTX             :MSTORE(currentCTX)
+    B               :MSTORE(retDataCTX)
 
     ;ASSERT C == D
     ;Result of the computation, with the same number of bytes as M
@@ -81,9 +158,10 @@ MODEXPgas:
     B => A
 
 MODEXPgas2:
-    0 => D ;iteration_count
     ${(A+7)/8} => A ;words
-    ${exp(A,2)} => A ;multiplication_complexity
+    2 => D
+    zkPC+1 => RR        :JMP(expAD)
+    0 => D ;iteration_count
     A                   :MSTORE(tmpVarA)
     $ => C              :MLOAD(Esize)
     $ => B              :MLOAD(exp)
