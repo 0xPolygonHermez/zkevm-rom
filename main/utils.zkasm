@@ -982,7 +982,7 @@ maskAddress:
     $ => B          :MLOAD(tmpVarB)
                     :RETURN
 
-; @info (A*B)%C
+; @info (A*B)%C => C
 ; @in A
 ; @in B
 ; @in C
@@ -995,7 +995,7 @@ utilMULMOD:
     E               :MSTORE(tmpVarE)
 
     ; The following approach will be followed in order to verify the mulmod operation
-    ; A * B + 0 = D*2^256 + E 
+    ; A * B + 0 = D*2^256 + E
     ; K * N + mulModResult = D*2^256 + E
 
     ; Since the k can be bigger than 2²⁵⁶ and therefore does not fit in a register we divedit in the
@@ -1093,14 +1093,12 @@ utilMULMODend:
 ;@info exp(A,D) --> A^D
 ;@in A, D => A^D
 ;@out A => result
-;@out D => overflow
+
 expAD:
     RR              :MSTORE(tmpZkPC3)
-    A               :MSTORE(tmpVarA3)
     B               :MSTORE(tmpVarB3)
     C               :MSTORE(tmpVarC3)
     E               :MSTORE(tmpVarE3)
-    D               :MSTORE(tmpVarD3)
     A => E
     D => B
     0 => A
@@ -1111,17 +1109,29 @@ expAD:
     1 => C
 
 expADloop:
-    $ => A          :MLOAD(tmpVarD3)
+
+    %MAX_CNT_ARITH - CNT_ARITH - 3 :JMPN(outOfCountersArith)
+
+    D => A
     0 => B
     $               :EQ,JMPC(expADend)
-    A - 1           :MSTORE(tmpVarD3)
-    C => A
-    $               :EQ,JMPC(expA0D)
-    C               :MSTORE(arithB)
-    $ => A          :MLOAD(tmpVarA3)
     A               :MSTORE(arithA)
+    2               :MSTORE(arithB)
+    zkPC+1 => RR    :JMP(divARITH)
+    $ => D          :MLOAD(arithRes1)
+    $ => A          :MLOAD(arithRes2)
+    0 => B
+    $               :EQ,JMPC(expADloop0)
+    E               :MSTORE(arithA)
+    C               :MSTORE(arithB)
     zkPC+1 => RR    :JMP(mulARITH)
     $ => C          :MLOAD(arithRes1)
+
+expADloop0:
+    E               :MSTORE(arithA)
+    E               :MSTORE(arithB)
+    zkPC+1 => RR    :JMP(mulARITH)
+    $ => E          :MLOAD(arithRes1)
                     :JMP(expADloop)
 
 expA0D:
