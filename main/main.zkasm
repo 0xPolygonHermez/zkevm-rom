@@ -13,10 +13,9 @@ start: ; main zkROM entry point
 ;;;;;;;;;;;;;;;;;;
 ;; A - Load input variabales
 ;;;;;;;;;;;;;;;;;;
-        ${getGlobalHash()}                  :MSTORE(globalHash)
         STEP => A
-        1                                   :ASSERT ; Ensure it is the begining of the execution
-        ${getGlobalExitRoot()}              :MSTORE(globalExitRoot)
+        0                                   :ASSERT ; Ensure it is the begining of the execution
+        B              :MSTORE(globalExitRoot)
         ${getOldStateRoot()}                :MSTORE(oldStateRoot)
         ${getOldLocalExitRoot()}            :MSTORE(oldLocalExitRoot)
         ${getSequencerAddr()}               :MSTORE(sequencerAddr)
@@ -212,8 +211,14 @@ assertNewStateRoot:
 ;; F - Finalize execution
 ;;;;;;;;;;;;;;;;;;
 finalizeExecution:
-        0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR ; Set all registers to 0
-                                                                        :JMP(finalWait)
+        $ => C                          :MLOAD(newAccInputHash)
+        $ => D                          :MLOAD(newLocalExitRoot)
+        $ => PC                         :MLOAD(newNumBatch)
+        $ => A                          :MLOAD(oldStateRoot)
+        $ => B                          :MLOAD(oldAccInputHash)
+        $ => SP                         :MLOAD(oldBatchNum)
+        $ => GAS                        :MLOAD(chainID)
+                                        :JMP(finalWait)
 
 INCLUDE "end.zkasm"
 INCLUDE "load-tx-rlp.zkasm"
