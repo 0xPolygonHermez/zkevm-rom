@@ -15,17 +15,10 @@ VAR GLOBAL tmpVarB3
 VAR GLOBAL tmpVarC3
 VAR GLOBAL tmpVarD3
 VAR GLOBAL tmpVarE3
-VAR GLOBAL arithA
-VAR GLOBAL arithB
-VAR GLOBAL arithRes1
-VAR GLOBAL arithRes2
-VAR GLOBAL arithOverflow
 VAR GLOBAL tmpZkPC
 VAR GLOBAL tmpZkPC2
 VAR GLOBAL tmpZkPC3
 VAR GLOBAL tmpZkPC4
-VAR GLOBAL tmpSHXZkPC
-VAR GLOBAL tmpSHXZkPC2
 VAR GLOBAL result
 
 ; @info Get absolute value and sign
@@ -389,9 +382,21 @@ saveMemEnd:
     $ => E                      :MLOAD(tmpVarE)
                                 :RETURN
 
+VAR GLOBAL tmpVarAArith
+VAR GLOBAL tmpVarBArith
+VAR GLOBAL tmpVarCArith
+VAR GLOBAL tmpVarDArith
+VAR GLOBAL tmpVarEArith
+VAR GLOBAL tmpZkPCArith
+VAR GLOBAL arithA
+VAR GLOBAL arithB
+VAR GLOBAL arithRes1
+VAR GLOBAL arithRes2
+VAR GLOBAL arithOverflow
+
 addARITH:
 
-    RR              :MSTORE(tmpZkPC)
+    RR              :MSTORE(tmpZkPCArith)
     zkPC+1 => RR    :JMP(storeTmp)
 
     $ => A          :MLOAD(arithA)
@@ -401,12 +406,12 @@ addARITH:
     E               :MSTORE(arithRes1)
 
     zkPC+1 => RR    :JMP(loadTmp)
-    $ => RR         :MLOAD(tmpZkPC)
+    $ => RR         :MLOAD(tmpZkPCArith)
                     :JMP(RR)
 
 subARITH:
 
-    RR              :MSTORE(tmpZkPC)
+    RR              :MSTORE(tmpZkPCArith)
     zkPC+1 => RR    :JMP(storeTmp)
 
     $ => A          :MLOAD(arithA)
@@ -416,12 +421,12 @@ subARITH:
     A               :MSTORE(arithRes1)
 
     zkPC+1 => RR    :JMP(loadTmp)
-    $ => RR         :MLOAD(tmpZkPC)
+    $ => RR         :MLOAD(tmpZkPCArith)
                     :JMP(RR)
 
 mulARITH:
 
-    RR              :MSTORE(tmpZkPC)
+    RR              :MSTORE(tmpZkPCArith)
     zkPC+1 => RR    :JMP(storeTmp)
 
     $ => A          :MLOAD(arithA)
@@ -435,11 +440,11 @@ mulARITH:
     D               :MSTORE(arithOverflow)
 
     zkPC+1 => RR    :JMP(loadTmp)
-    $ => RR         :MLOAD(tmpZkPC)
+    $ => RR         :MLOAD(tmpZkPCArith)
                     :JMP(RR)
 
 divARITH:
-    RR              :MSTORE(tmpZkPC)
+    RR              :MSTORE(tmpZkPCArith)
     zkPC+1 => RR    :JMP(storeTmp)
 
     $ => E          :MLOAD(arithA)
@@ -470,7 +475,7 @@ divARITH:
     1               :ASSERT
 
     zkPC+1 => RR    :JMP(loadTmp)
-    $ => RR         :MLOAD(tmpZkPC)
+    $ => RR         :MLOAD(tmpZkPCArith)
                     :JMP(RR)
 
 zeroDiv:
@@ -478,7 +483,7 @@ zeroDiv:
     0               :MSTORE(arithRes2)
 
     zkPC+1 => RR    :JMP(loadTmp)
-    $ => RR         :MLOAD(tmpZkPC)
+    $ => RR         :MLOAD(tmpZkPCArith)
                     :JMP(RR)
 
 divisorSmallerDiv:
@@ -486,24 +491,26 @@ divisorSmallerDiv:
     E               :MSTORE(arithRes2)
 
     zkPC+1 => RR    :JMP(loadTmp)
-    $ => RR         :MLOAD(tmpZkPC)
+    $ => RR         :MLOAD(tmpZkPCArith)
                     :JMP(RR)
 
 loadTmp:
-    $ => A                  :MLOAD(tmpVarA)
-    $ => B                  :MLOAD(tmpVarB)
-    $ => C                  :MLOAD(tmpVarC)
-    $ => D                  :MLOAD(tmpVarD)
-    $ => E                  :MLOAD(tmpVarE)
+    $ => A                  :MLOAD(tmpVarAArith)
+    $ => B                  :MLOAD(tmpVarBArith)
+    $ => C                  :MLOAD(tmpVarCArith)
+    $ => D                  :MLOAD(tmpVarDArith)
+    $ => E                  :MLOAD(tmpVarEArith)
                             :JMP(RR)
 storeTmp:
-    A                   :MSTORE(tmpVarA)
-    B                   :MSTORE(tmpVarB)
-    C                   :MSTORE(tmpVarC)
-    D                   :MSTORE(tmpVarD)
-    E                   :MSTORE(tmpVarE)
+    A                   :MSTORE(tmpVarAArith)
+    B                   :MSTORE(tmpVarBArith)
+    C                   :MSTORE(tmpVarCArith)
+    D                   :MSTORE(tmpVarDArith)
+    E                   :MSTORE(tmpVarEArith)
                         :JMP(RR)
 
+VAR GLOBAL tmpSHXZkPC
+VAR GLOBAL tmpSHXZkPC2
 ;@in A - (A >> D)
 ;@in D - (A >> D) D bytes
 ;@out A - A >> D => A
@@ -543,13 +550,10 @@ SHRarithinit:
     D*2 => RR                                       ; RR = bits * 2
     zkPC+2                  :MSTORE(tmpSHXZkPC)
                             :JMP(@exp_num + RR)     ; B = 2**D
-    B => D                                          ; D = 2**D
-    ${B-1} => B                                     ; B = 2**D - 1
-    $ => C                  :AND                    ; C = A & B, C = init number & 2**D - 1
-    D => B
-    ${E/B} => A                                     ; A = init number / 2**D
-    0 => D
-    E                       :ARITH                  ; A * B + C = op, (A >> D) * 2**D + (init number & (2**D - 1)) = init number
+    E                       :MSTORE(arithA)
+    B                       :MSTORE(arithB)
+    zkPC+1 => RR            :JMP(divARITH)
+    $ => A                  :MLOAD(arithRes1)
                             :JMP(SHRarithfinal)
 
 SHRarith0:
