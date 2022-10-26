@@ -50,24 +50,11 @@ MODEXP:
     1               :MSTORE(res)
     D => A
 
-;MODEXPloop:
-;    E => B
-;    C => A
-;    $ => C          :MLOAD(mod)
-;                    :CALL(utilMULMOD)
-;    D => A
-;    1 => B
-;    $ => A          :SUB
-;    0 => B
-;    $               :EQ,JMPC(MODEXPloopEnd)
-;    A => D
-;                    :JMP(MODEXPloop)
-
 MODEXPloop1:
 
-    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCounters)
-    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCounters)
-    %MAX_CNT_ARITH - CNT_ARITH - 3      :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+    %MAX_CNT_ARITH - CNT_ARITH - 3      :JMPN(outOfCountersArith)
 
     $ => A          :MLOAD(newExp)
     0 => B
@@ -86,7 +73,7 @@ MODEXPloop1:
 
 MODEXPloop2:
 
-    %MAX_CNT_BINARY - CNT_BINARY - 2   :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 2   :JMPN(outOfCountersBinary)
 
     E => B
     C => A
@@ -102,7 +89,7 @@ MODEXPloop2:
 
 MODEXPloop2End:
 
-    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
 
     $ => E          :MLOAD(res)
     E               :MSTORE(arithA)
@@ -113,7 +100,7 @@ MODEXPloop2End:
 
 MODEXPloop10:
 
-    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
 
     $ => E          :MLOAD(bp)
     E               :MSTORE(arithA)
@@ -127,7 +114,7 @@ MODEXPloop10:
 
 MODEXPexp0:
 
-    %MAX_CNT_BINARY - CNT_BINARY - 2   :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 2   :JMPN(outOfCountersBinary)
 
     1 => A
     $ => B          :MLOAD(mod)
@@ -136,7 +123,7 @@ MODEXPexp0:
 
 MODEXPloopEnd:
 
-    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCounters)
+    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
 
     C               :MSTORE(arithA)
     $ => A          :MLOAD(mod)
@@ -171,6 +158,12 @@ MODEXPstoreX:
                     :CALL(MSTOREX)
 
 MODEXPgas:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 8    :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+    %MAX_CNT_ARITH - CNT_ARITH - 2      :JMPN(outOfCountersArith)
+
+
     $ => A              :MLOAD(Bsize)
     $ => B              :MLOAD(Msize)
     $ => D              :LT
@@ -178,35 +171,51 @@ MODEXPgas:
     B => A
 
 MODEXPgas2:
-    ${(A+7)/8} => A ;words
+    7 => B
+    $ => A              :ADD,MSTORE(arithA)
+    8 => B              :MSTORE(arithB)
+    zkPC+1 => RR        :JMP(divARITH)
+    $ => A              :MLOAD(arithRes1);words
     2 => D
     zkPC+1 => RR        :JMP(expAD)
-    0 => D ;iteration_count
+    0 => D              ;iteration_count
     A                   :MSTORE(tmpVarA)
-    $ => C              :MLOAD(Esize)
     $ => B              :MLOAD(exp)
-    C - 32              :JMPN(MODEXPgas3)
+                        :CALL(getLenBytes)
+    A => C
+    32 => B
+    $                   :LT,JMPC(MODEXPgas3)
+    $                   :EQ,JMPC(MODEXPgas3)
     ;TODO +32 bytes
                         :JMP(MODEXPgas4)
 
 MODEXPgas3:
+    $ => B              :MLOAD(exp)
     0 => A
     $                   :EQ,JMPC(MODEXPgas4)
-    8*C - 1 => D ;iteration_count
+    8*C - 1 => D        ;iteration_count
 
 MODEXPgas4:
     1 => B
     D => A
     $ => A              :LT
     A - 1               :JMPN(MODEXPgasEnd)
-    1 => D ;iteration_count
+    1 => D              ;iteration_count
 
 MODEXPgasEnd:
     $ => A              :MLOAD(tmpVarA)
-    ${A*D/3} => A ;multiplication_complexity * iteration_count / 3 TODO: This is UNSAFE!!
+    A                   :MSTORE(arithA)
+    D                   :MSTORE(arithB)
+    zkPC+1 => RR        :JMP(mulARITH)
+    $ => A              :MLOAD(arithRes1)
+    A                   :MSTORE(arithA)
+    3                   :MSTORE(arithB)
+    zkPC+1 => RR        :JMP(divARITH)
+    $ => A              :MLOAD(arithRes1)
     200 => B
-    $ => A              :LT
-    A - 1               :JMPN(MODEXPend)
+    $ => C              :LT
+    A => B
+    C - 1               :JMPN(MODEXPend)
     200 => B
 
 MODEXPend:
