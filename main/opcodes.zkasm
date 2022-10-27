@@ -1692,13 +1692,14 @@ opJUMPI:
     ; Check PC is a JUMPDEST
                                     :JMP(checkJumpDest)
 
-; TODO check do not overflow
 checkJumpDest:
     ; If it is a deploy we have to check the data from the calldata (not the bytecode)
     $ => A                          :MLOAD(isCreateContract)
     -A                              :JMPN(checkJumpDestDeployment)
     PC => HASHPOS
-    HASHPOS => D
+    HASHPOS => B
+    $ => A                          :MLOAD(bytecodeLength)
+    $                               :LT,JMPC(invalidJump)
     1 => D
     $ => E                          :MLOAD(contractHashId) ; hash index
     $ => A                          :HASHP(E)
