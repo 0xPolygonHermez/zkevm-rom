@@ -21,9 +21,9 @@ MODEXP:
                     :CALL(MLOAD32)
     A               :MSTORE(Msize)
     $ => C          :MLOAD(Bsize)
-                    :CALL(MLOADX)
+                    :CALL(MLOADX) ; Load 32 bytes, A value, E new offset
     32 - C => D
-    zkPC+1 => RR    :JMP(SHRarith)
+    zkPC+1 => RR    :JMP(SHRarith) ; Shift the value, this is supposing that the value has 32bytes or less
     A               :MSTORE(base)
     $ => C          :MLOAD(Esize)
                     :CALL(MLOADX)
@@ -35,7 +35,7 @@ MODEXP:
                     :CALL(MLOADX)
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
-    A               :MSTORE(mod)
+    A               :MSTORE(mod) ; Same for the rest of parameters
     0 => B
     $               :EQ,JMPC(MODEXPreturn0)
     $ => A          :MLOAD(exp)
@@ -46,7 +46,7 @@ MODEXP:
     1 => C
     $ => D          :MLOAD(exp)
     ;$ => E          :MLOAD(base)
-    1               :MSTORE(exp2)
+    1               :MSTORE(exp2) ; dont know what is this
     1               :MSTORE(res)
     D => A
 
@@ -56,34 +56,35 @@ MODEXPloop1:
     %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
     %MAX_CNT_ARITH - CNT_ARITH - 3      :JMPN(outOfCountersArith)
 
-    $ => A          :MLOAD(newExp)
+    $ => A          :MLOAD(newExp) ; newExp will be the updated exponent, shifting bits and stuff
     0 => B
     $               :EQ,JMPC(MODEXPloopEnd)
     A               :MSTORE(arithA)
     2               :MSTORE(arithB)
     zkPC+1 => RR    :JMP(divARITH)
     $ => D          :MLOAD(arithRes1)
-    D               :MSTORE(newExp)
+    D               :MSTORE(newExp); store the newExp for futre interations after shifted 1 bit
     $ => A          :MLOAD(arithRes2)
     0 => B
-    $               :EQ,JMPC(MODEXPloop10)
+    $               :EQ,JMPC(MODEXPloop10) ; chekc if bit is 0 or not
     1 => C
-    $ => D          :MLOAD(exp2)
+    $ => D          :MLOAD(exp2) ; i dont know wtf is happening here, it's 1 for first iteration
     $ => E          :MLOAD(base)
 
 MODEXPloop2:
 
     %MAX_CNT_BINARY - CNT_BINARY - 2   :JMPN(outOfCountersBinary)
 
-    E => B
-    C => A
-    $ => C          :MLOAD(mod)
-                    :CALL(utilMULMOD)
-    D => A
-    1 => B
+    E => B          ; base
+    C => A          ; 1
+    $ => C          :MLOAD(mod) ; modulus
+                    :CALL(utilMULMOD) ; A*B mod C --> result on C
+                    ;seems that is doing the modulus with the base
+    D => A          ; exp2 ( dont know what is this, 1 for first iteration)
+    1 => B      
     $ => A          :SUB
     0 => B
-    $               :EQ,JMPC(MODEXPloop2End)
+    $               :EQ,JMPC(MODEXPloop2End); dont understand these lines
     A => D
                     :JMP(MODEXPloop2)
 
@@ -93,7 +94,7 @@ MODEXPloop2End:
 
     $ => E          :MLOAD(res)
     E               :MSTORE(arithA)
-    C               :MSTORE(arithB)
+    C               :MSTORE(arithB) ; C if im not mistaken is the result of the base with the modulus so, A mod N ( inital parameters)
     zkPC+1 => RR    :JMP(mulARITH)
     $ => C          :MLOAD(arithRes1)
     C               :MSTORE(res)
@@ -102,14 +103,14 @@ MODEXPloop10:
 
     %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
 
-    $ => E          :MLOAD(bp)
+    $ => E          :MLOAD(bp) ; this seems that is 0 always D:
     E               :MSTORE(arithA)
     E               :MSTORE(arithB)
     zkPC+1 => RR    :JMP(mulARITH)
     $ => E          :MLOAD(arithRes1)
-    E               :MSTORE(bp)
-    $ => E          :MLOAD(exp2)
-    E*2             :MSTORE(exp2)
+    E               :MSTORE(bp) ; this will be 0 always again
+    $ => E          :MLOAD(exp2) ; This will be always 0 then
+    E*2             :MSTORE(exp2) ; this seems to be needed to do with arith
                     :JMP(MODEXPloop1)
 
 MODEXPexp0:
