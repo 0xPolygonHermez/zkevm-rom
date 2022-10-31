@@ -3,7 +3,7 @@ INCLUDE "vars.zkasm"
 
 ; Blocks zkROM
 ;       A - Load input variables
-;       B - Set batch storage state-tree: batchHash (oldStateRoot) & globalExitRoot
+;       B - Set batch global variables
 ;       C - Loop parsing RLP transactions
 ;       D - Loop processing transactions
 ;       E - Batch asserts: localExitRoot, transactions size, batchHashData & globalHash
@@ -37,7 +37,10 @@ start: ; main zkROM entry point
         HASHPOS                             :MSTORE(oldHashPos) ; Save globalHash data position
 
 ;;;;;;;;;;;;;;;;;;
-;; B - Set batch storage state-tree: globalExitRoot
+;; B - Set batch global variables
+;;     - set globalExitRoot in Bridge contract
+;;     - load transaction count from system smart contract
+;;     - compute keccaks needed to finish the batch
 ;;;;;;;;;;;;;;;;;;
         ${eventLog(onStartBatch, C)}
 ;; Set global exit root
@@ -57,19 +60,19 @@ start: ; main zkROM entry point
         $ => D                              :MLOAD(numBatch)
         $ => SR                             :SSTORE ; Store 'numBatch' in storage position 'keccak256(globalExitRoot, 0)'
         SR                                  :MSTORE(batchSR)
-        
+
         ; Load current tx count
         %LAST_TX_STORAGE_POS => C
         %ADDRESS_SYSTEM => A
         %SMT_KEY_SC_STORAGE => B
         $ => D          :SLOAD
         D               :MSTORE(txCount)
-        
-        ; Set necessary keccak counters to finish batch
+
+        ; Compute necessary keccak counters to finish batch
         $ => A          :MLOAD(batchL2DataLength)
         ; batchHashData: batchL2DataLength + 32 (globalExitRoot) + 20 (sequencerAddress)
         A + 52  => A
-        ; Divide the total data length by 136 to obtain de keccak counter increment.
+        ; Divide the total data length by 136 to obtain the keccak counter increment.
         ; 136 is the value used by the prover to increment keccak counters
         A               :MSTORE(arithA)
         136             :MSTORE(arithB)
