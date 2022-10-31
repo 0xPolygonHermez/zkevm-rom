@@ -1404,34 +1404,32 @@ opEXTCODEHASH:
 opBLOCKHASH:
 
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
-    $ => A          :MLOAD(cntKeccakPreProcess)
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2 :JMPN(outOfCountersKeccak)
+    $ => A                                     :MLOAD(cntKeccakPreProcess)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2   :JMPN(outOfCountersKeccak)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
 
-    SP - 1 => SP    :JMPN(stackUnderflow)
-    GAS-20 => GAS   :JMPN(outOfGas)
-    $ => A          :MLOAD(SP) ; batch number
+    SP - 1 => SP     :JMPN(stackUnderflow)
+    GAS - 20 => GAS  :JMPN(outOfGas)
 
     ; Check batch number is lt current batch number, else return 0
-    $ => B          :MLOAD(numBatch)
+    ; Get last tx count
+    $ => B          :MLOAD(txCount)
+    B + 1 => B
+    $ => A          :MLOAD(SP) ; batch number
     B - A - 1       :JMPN(opBLOCKHASHzero)
-
     ; Create key for the batch hash mapping key
-    $ => E          :MLOAD(lastHashKIdUsed)
-    E+1 => E        :MSTORE(lastHashKIdUsed)
-    ; A new hash with position 0 is started
-    0 => HASHPOS
     32 => D
-    A               :HASHK(E)
-    0               :HASHK(E) ; Storage position of the batch hash
-    HASHPOS         :HASHKLEN(E)
-    $ => C          :HASHKDIGEST(E)
-    ; Load value from hashed key
+    0 => HASHPOS ; A new hash with position 0 is started
+    $ => E                              :MLOAD(lastHashKIdUsed)
+    E+1 => E                            :MSTORE(lastHashKIdUsed)
+    A                                   :HASHK(E)
+    %STATE_ROOT_STORAGE_POS             :HASHK(E)
+    HASHPOS                             :HASHKLEN(E)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - %MIN_CNT_KECCAK_BATCH - 2:JMPN(outOfCountersKeccak)
+    $ => C                              :HASHKDIGEST(E)
     %ADDRESS_SYSTEM => A
-    ; Set B to 3 to load from storage of address stored in A
     %SMT_KEY_SC_STORAGE => B
-    $ => E          :SLOAD
-
+    $ => E                              :SLOAD
     ; Store result value in the stack
     E               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
@@ -1468,10 +1466,11 @@ opNUMBER:
 
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
-    $ => A          :MLOAD(numBatch)
-    A               :MSTORE(SP++)
+    ; Get current tx count
+    $ => D          :MLOAD(txCount)
+    D + 1           :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-2 => GAS    :JMPN(outOfGas)
+    GAS - 2 => GAS  :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDIFFICULTY:

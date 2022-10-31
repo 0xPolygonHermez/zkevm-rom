@@ -632,10 +632,10 @@ outOfCountersArith:
                     :JMP(handleBatchError)
 outOfCountersPadding:
     ${eventLog(onError, OOCPA)}
-                    :JMP(handleBatchError) 
+                    :JMP(handleBatchError)
 outOfCountersPoseidon:
     ${eventLog(onError, OOCPO)}
-                    :JMP(handleBatchError)                                                                                                                          
+                    :JMP(handleBatchError)
 outOfGas:
     ${eventLog(onError, OOG)}
                     :JMP(handleError)
@@ -974,3 +974,29 @@ maskAddress:
     $ => A          :AND
     $ => B          :MLOAD(tmpVarB)
                     :RETURN
+
+updateSystemData:
+    ; Get last tx count
+    %LAST_TX_STORAGE_POS => C
+    %ADDRESS_SYSTEM => A
+    %SMT_KEY_SC_STORAGE => B
+    $ => D                              :MLOAD(txCount)
+    ;Update last tx Count at system storage
+    D + 1 => D                          :MSTORE(txCount)
+    $ => SR                             :SSTORE
+
+    ;Update state root mapping
+    D => A
+    32 => D
+    0 => HASHPOS ; A new hash with position 0 is started
+    $ => E                              :MLOAD(lastHashKIdUsed)
+    E + 1 => E                          :MSTORE(lastHashKIdUsed)
+    A                                   :HASHK(E)
+    %STATE_ROOT_STORAGE_POS             :HASHK(E)
+    HASHPOS                             :HASHKLEN(E)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - %MIN_CNT_KECCAK_BATCH - 2:JMPN(outOfCountersKeccak)
+    $ => C                              :HASHKDIGEST(E)
+    %ADDRESS_SYSTEM => A
+    SR => D
+    $ => SR                             :SSTORE
+                                        :RETURN
