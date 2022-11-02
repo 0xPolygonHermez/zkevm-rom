@@ -1,3 +1,55 @@
+/**
+ * Comptutation modexp: A^B mod C
+ * @param - A - Base
+ * @param - B - Exponent
+ * @param - C - Modulo
+ * @returns - acc - accumulate final value operation
+function modExp(A, B, C){
+    // rom: (divARITH) --> B % 2 --> get last bit
+    const arrayBitsB = convertToBits(B);
+
+    let acc = 1;
+    let bp = {
+        base: B,
+        exp: 1
+    };
+
+    // first loop ROM
+    // rom: until B != 0
+    for (let i = 0; i < arrayBitsB.length; i++){ -----> MODEXPloop1
+         const bit = arrayBitsB[i];
+         if (bit == 1) {
+             // start new loop in rom
+             const res = computeExpMemoryEfficiencyMethod(bp, C);
+             acc = acc * res;   -------> MODEXPloop2End
+         }
+         // rom: mulArith
+         bp.exp = 2 * bp.exp;   ---------> MODEXPloop10
+    }
+
+    return acc;
+}
+
+
+ * Calculate modexp (memory efficient method)
+ * @param - bp - bp = { exp, base }
+ * @param - C - Modulo
+ * @returns - c - c = bp.base ^ bp.exp mod C
+
+function computeExpMemoryEfficiencyMethod(bp, C){
+    const baseBP = bp.base;
+    const expBP = bp.exp;
+    const c = 1;
+
+    for(let i = 0; i < expBP; i++) { -----> MODEXPloop2
+        // rom: mulMod
+        c = (c * baseBP) mod C
+    }
+
+    return c;
+}
+*/
+
 VAR CTX Bsize
 VAR CTX Esize
 VAR CTX Msize
@@ -5,7 +57,7 @@ VAR CTX base
 VAR CTX exp
 VAR CTX newExp
 VAR CTX mod
-VAR CTX exp2
+VAR CTX expbp
 VAR CTX res
 VAR CTX bp
 ;TODO: incorrect inputs (argslength < 32 + 32 + 32 + lenB + lenE + lenM)
@@ -15,11 +67,11 @@ MODEXP:
     $ => CTX        :MLOAD(originCTX)
     $ => E          :MLOAD(argsOffsetCall)
                     :CALL(MLOAD32)
-    A               :MSTORE(Bsize)
+    A               :MSTORE(Bsize)          ;Bsize = base size
                     :CALL(MLOAD32)
-    A               :MSTORE(Esize)
+    A               :MSTORE(Esize)          ;Esize = exp size
                     :CALL(MLOAD32)
-    A               :MSTORE(Msize)
+    A               :MSTORE(Msize)          ;Msize = mod size
     $ => C          :MLOAD(Bsize)
                     :CALL(MLOADX)
     32 - C => D
@@ -37,18 +89,16 @@ MODEXP:
     zkPC+1 => RR    :JMP(SHRarith)
     A               :MSTORE(mod)
     0 => B
-    $               :EQ,JMPC(MODEXPreturn0)
+    $               :EQ,JMPC(MODEXPreturn0) ;if mod == 0 --> MODEXPreturn0
     $ => A          :MLOAD(exp)
-    $               :EQ,JMPC(MODEXPexp0)
+    $               :EQ,JMPC(MODEXPexp0)    ;if exp == 0 --> MODEXPexp0
     $ => B          :MLOAD(base)
     0 => A
-    $               :EQ,JMPC(MODEXPreturn0)
+    $               :EQ,JMPC(MODEXPreturn0) ;if base == 0 --> MODEXPreturn0
     1 => C
     $ => D          :MLOAD(exp)
-    ;$ => E          :MLOAD(base)
-    1               :MSTORE(exp2)
+    1               :MSTORE(expbp)
     1               :MSTORE(res)
-    D => A
 
 MODEXPloop1:
 
@@ -58,32 +108,32 @@ MODEXPloop1:
 
     $ => A          :MLOAD(newExp)
     0 => B
-    $               :EQ,JMPC(MODEXPloopEnd)
+    $               :EQ,JMPC(MODEXPloopEnd) ;if exp = 0 --> MODEXPloopEnd
     A               :MSTORE(arithA)
     2               :MSTORE(arithB)
-    zkPC+1 => RR    :JMP(divARITH)
-    $ => D          :MLOAD(arithRes1)
+    zkPC+1 => RR    :JMP(divARITH)          ;divARITH --> exp/2
+    $ => D          :MLOAD(arithRes1)       ;D = exp/2
     D               :MSTORE(newExp)
-    $ => A          :MLOAD(arithRes2)
+    $ => A          :MLOAD(arithRes2)       ;A = exp%2 (0 or 1)
     0 => B
-    $               :EQ,JMPC(MODEXPloop10)
+    $               :EQ,JMPC(MODEXPloop10)  ;if A = 0 --> MODEXPloop10
     1 => C
-    $ => D          :MLOAD(exp2)
+    $ => D          :MLOAD(expbp)
     $ => E          :MLOAD(base)
 
 MODEXPloop2:
 
     %MAX_CNT_BINARY - CNT_BINARY - 2   :JMPN(outOfCountersBinary)
 
-    E => B
-    C => A
-    $ => C          :MLOAD(mod)
-                    :CALL(utilMULMOD)
-    D => A
-    1 => B
-    $ => A          :SUB
+    E => B                                  ; B = base
+    C => A                                  ; A (acc)
+    $ => C          :MLOAD(mod)             ; C = mod
+                    :CALL(utilMULMOD)       ; (A*B)%C => C
+    D => A                                  ; A = expbp
+    1 => B                                  ; B = 1
+    $ => A          :SUB                    ; A = expbp - 1
     0 => B
-    $               :EQ,JMPC(MODEXPloop2End)
+    $               :EQ,JMPC(MODEXPloop2End); if A == 0 --> MODEXPloop2End
     A => D
                     :JMP(MODEXPloop2)
 
@@ -95,21 +145,12 @@ MODEXPloop2End:
     E               :MSTORE(arithA)
     C               :MSTORE(arithB)
     zkPC+1 => RR    :JMP(mulARITH)
-    $ => C          :MLOAD(arithRes1)
+    $ => C          :MLOAD(arithRes1)       ;C = E*C (acc = bp*acc)
     C               :MSTORE(res)
 
 MODEXPloop10:
-
-    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
-
-    $ => E          :MLOAD(bp)
-    E               :MSTORE(arithA)
-    E               :MSTORE(arithB)
-    zkPC+1 => RR    :JMP(mulARITH)
-    $ => E          :MLOAD(arithRes1)
-    E               :MSTORE(bp)
-    $ => E          :MLOAD(exp2)
-    E*2             :MSTORE(exp2)
+    $ => E          :MLOAD(expbp)        ; update expbp (bp exp --> bp = bp*bp --> bp exp = bp exp * 2)
+    E*2             :MSTORE(expbp)       ; bp1 = bp0*bp0 (bp²), bp2 = bp1*bp1 (bp⁴), bp3 = bp2*bp2 (bp⁸), ... (expbp = bp exp)
                     :JMP(MODEXPloop1)
 
 MODEXPexp0:
