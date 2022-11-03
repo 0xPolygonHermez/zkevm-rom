@@ -25,22 +25,35 @@ opSTOPend:
     ${commit()}
                     :JMP(readCode)
 
+/**
+ * @link [Link EVM behaviour --> evm.codes?]
+ * @zk-counters
+ *  - 1 binary
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [a, b]
+ *  - stack output: [a + b]
+ */
 opADD:
-
+    ; checks zk-counters
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
+    ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
-    SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-    $ => B          :MLOAD(SP)
 
-    ; Add operation with Arith
-    $ => E          :ADD
-
-    E               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
+    ; check out-of-gas
     GAS-3 => GAS    :JMPN(outOfGas)
+
+    ; read two items from the stack
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--) ; [a => A]
+    $ => B          :MLOAD(SP) ; [b => B]
+
+    ; call arith state machine and push to the stack
+    $               :ADD, MSTORE(SP++) ; [a + b => SP]
+
+    ; continue read bytecode
                     :JMP(readCode)
 
 opMUL:
@@ -248,6 +261,10 @@ AddModJumpCarry:
     C               :MSTORE(SP++)
                     :JMP(readCode)
 
+
+/**
+ * 
+ */
 opMULMOD:
     %MAX_CNT_ARITH - CNT_ARITH - 3 :JMPN(outOfCountersArith)
     %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCountersBinary)
