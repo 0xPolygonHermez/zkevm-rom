@@ -27,13 +27,6 @@ start: ; main zkROM entry point
 
         B => SR ;set initial state root
 
-        ; Fill newAccHashInput: oldAccInputHash
-        32 => D
-        $ => A                              :MLOAD(oldAccInputHash)
-        A                                   :HASHK(0) ; 'newAccHashInput' hashK address is 0
-
-        HASHPOS                             :MSTORE(oldHashPos) ; Save 'newAccHashInput' data position
-
         ; Increase batch number
         SP + 1                              :MSTORE(newNumBatch)
 
@@ -167,9 +160,12 @@ processTxsEnd:
         A                               :MSTORE(batchHashData)
 
 ;; Compute 'newAccInputHash'
-        $ => HASHPOS                    :MLOAD(oldHashPos) ; Retrieve 'newAccInputHash' hash postion
+        0 => HASHPOS
 
         32 => D
+        $ => A                          :MLOAD(oldAccInputHash)
+        A                               :HASHK(0)
+
         $ => A                          :MLOAD(batchHashData)
         A                               :HASHK(0)
 
