@@ -2,39 +2,33 @@ INCLUDE "constants.zkasm"
 INCLUDE "vars.zkasm"
 
 ; Blocks zkROM
-;       A - Load input variables
+;       A - Load initial registers into memory: oldStateRoot (B), oldAccInputHash (C), oldNumBatch (SP) & chainID (GAS)
 ;       B - Set batch global variables
 ;       C - Loop parsing RLP transactions
 ;       D - Loop processing transactions
-;       E - Batch asserts: localExitRoot, transactions size, batchHashData & globalHash
+;       E - Batch computations: get newLocalExitRoot, assert transactions size, compute batchHashData & compute newAccInputHash
 ;       F - Finalize execution
 
 start: ; main zkROM entry point
 ;;;;;;;;;;;;;;;;;;
 ;; A - Load input variabales
 ;;;;;;;;;;;;;;;;;;
-        ${getGlobalHash()}                  :MSTORE(globalHash)
         STEP => A
-        1                                   :ASSERT ; Ensure it is the begining of the execution
+        0                                   :ASSERT ; Ensure it is the beginning of the execution
+        B                                   :MSTORE(oldStateRoot)
+        C                                   :MSTORE(oldAccInputHash)
+        SP                                  :MSTORE(oldNumBatch)
+        GAS                                 :MSTORE(chainID)
+
         ${getGlobalExitRoot()}              :MSTORE(globalExitRoot)
-        ${getOldStateRoot()}                :MSTORE(oldStateRoot)
-        ${getOldLocalExitRoot()}            :MSTORE(oldLocalExitRoot)
         ${getSequencerAddr()}               :MSTORE(sequencerAddr)
-        ${getBatchHashData()}               :MSTORE(batchHashData)
-        ${getNumBatch()}                    :MSTORE(numBatch)
         ${getTimestamp()}                   :MSTORE(timestamp)
-        ${getChainId()}                     :MSTORE(chainId)
         ${getTxsLen()}                      :MSTORE(batchL2DataLength)
 
-        ; Fill globalHash: oldStateRoot & oldLocalExitRoot
-        32 => D
-        $ => A                              :MLOAD(oldStateRoot)
-        A                                   :HASHK(0) ; GlobalHash address is 0
-        A => SR
-        $ => A                              :MLOAD(oldLocalExitRoot)
-        A                                   :HASHK(0)
+        B => SR ;set initial state root
 
-        HASHPOS                             :MSTORE(oldHashPos) ; Save globalHash data position
+        ; Increase batch number
+        SP + 1                              :MSTORE(newNumBatch)
 
 ;;;;;;;;;;;;;;;;;;
 ;; B - Set batch global variables
@@ -45,20 +39,20 @@ start: ; main zkROM entry point
         ${eventLog(onStartBatch, C)}
 ;; Set global exit root
         0 => HASHPOS
-        $ => E                              :MLOAD(lastHashKIdUsed)
-        E+1 => E                            :MSTORE(lastHashKIdUsed)
+        $ => E                                  :MLOAD(lastHashKIdUsed)
+        E+1 => E                                :MSTORE(lastHashKIdUsed)
 
         32 => D
-        $ => A                              :MLOAD(globalExitRoot)
-        A                                   :HASHK(E)
-        %GLOBAL_EXIT_ROOT_STORAGE_POS       :HASHK(E) ; Storage position of the global exit root map
-        HASHPOS                             :HASHKLEN(E)
-        $ => C                              :HASHKDIGEST(E)
+        $ => A                                  :MLOAD(globalExitRoot)
+        A                                       :HASHK(E)
+        %GLOBAL_EXIT_ROOT_STORAGE_POS           :HASHK(E) ; Storage position of the global exit root map
+        HASHPOS                                 :HASHKLEN(E)
+        $ => C                                  :HASHKDIGEST(E)
 
         %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2 => A
         %SMT_KEY_SC_STORAGE => B
-        $ => D                              :MLOAD(numBatch)
-        $ => SR                             :SSTORE ; Store 'numBatch' in storage position 'keccak256(globalExitRoot, 0)'
+        $ => D                              :MLOAD(newNumBatch)
+        $ => SR                             :SSTORE ; Store 'newNumBatch' in storage position 'keccak256(globalExitRoot, 0)'
         SR                                  :MSTORE(batchSR)
 
         ; Load current tx count
@@ -74,14 +68,15 @@ start: ; main zkROM entry point
         A + 52  => A
         ; Divide the total data length by 136 to obtain the keccak counter increment.
         ; 136 is the value used by the prover to increment keccak counters
-        A               :MSTORE(arithA)
-        136             :MSTORE(arithB)
-                        :CALL(divARITH)
-        $ => B          :MLOAD(arithRes1)
+        A                                       :MSTORE(arithA)
+        136                                     :MSTORE(arithB)
+                                                :CALL(divARITH)
+        $ => B                                  :MLOAD(arithRes1)
         ; Compute minimum necessary keccaks to finish the batch
-        B + %MIN_CNT_KECCAK_BATCH :MSTORE(cntKeccakPreProcess)
+        B + %MIN_CNT_KECCAK_BATCH               :MSTORE(cntKeccakPreProcess)
         %MAX_CNT_KECCAK_F - CNT_KECCAK_F => A
-        $               :LT, JMPC(outOfCountersKeccak)
+        $                                       :LT, JMPC(outOfCountersKeccak)
+
 ;;;;;;;;;;;;;;;;;;
 ;; C - Loop parsing RLP transactions
 ;;      - Load transaction RLP data and ensure it has correct RLP encoding
@@ -133,82 +128,79 @@ processTxFinished:
 processTxsEnd:
 
 ;;;;;;;;;;;;;;;;;;
-;; E - Batch asserts: localExitRoot, transactions size, batchHashData & globalHash
+;; E - Batch asserts & computations:
+;;      - get newLocalExitRoot
+;;      - assert transactions size
+;;      - compute batchHashData
+;;      - compute newAccInputHash
 ;;;;;;;;;;;;;;;;;;
 
-;; Assert local exit root
-        ; Read 'localExitRoot' variable from GLOBAL_EXIT_ROOT_MANAGER_L2 and check
-        ; it is equal to the 'newLocalExitRoot' input
+;; Get local exit root
+        ; Read 'localExitRoot' variable from GLOBAL_EXIT_ROOT_MANAGER_L2 and store
+        ; it to the 'newLocalExitRoot' input
         %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2  => A
         %SMT_KEY_SC_STORAGE => B
         %LOCAL_EXIT_ROOT_STORAGE_POS => C
         $ => A                                          :SLOAD
         A                                               :MSTORE(newLocalExitRoot)
-assertNewLocalExitRoot:
-        ${getNewLocalExitRoot()}                        :ASSERT
-
 
 ;; Transactions size verification
         ; Ensure bytes added to compute the 'batchHashData' matches the number of bytes loaded from input
         $ => A                          :MLOAD(batchHashPos)
         $                               :MLOAD(batchL2DataLength), ASSERT
 
-;; Compute and check 'batchHashData'
+;; Compute 'batchHashData'
         ; Compute 'batchHashData'
-        ; Ensure hash result 'batchHashData' mathes the input
         A => HASHPOS
         $ => E                          :MLOAD(batchHashDataId)
 
-        32 => D
-        $ => A                          :MLOAD(globalExitRoot)
-        A                               :HASHK(E)
-
-        20 => D
-        $ => A                          :MLOAD(sequencerAddr)
-        A                               :HASHK(E)
-
         HASHPOS                         :HASHKLEN(E)
-        $ => A                          :MLOAD(batchHashData)
+        $ => A                          :HASHKDIGEST(E)
 
-        $                               :HASHKDIGEST(E), ASSERT
+        A                               :MSTORE(batchHashData)
 
-;; Compute and check 'globalHash'
-        $ => HASHPOS                    :MLOAD(oldHashPos) ; Retrieve 'globalHash' hash postion
+;; Compute 'newAccInputHash'
+        0 => HASHPOS
 
         32 => D
-        SR                              :HASHK(0) ; add 'newStateRoot' to `globalHash`
-
-        $ => A                          :MLOAD(newLocalExitRoot)
+        $ => A                          :MLOAD(oldAccInputHash)
         A                               :HASHK(0)
 
         $ => A                          :MLOAD(batchHashData)
+        A                               :HASHK(0)
+
+        $ => A                          :MLOAD(globalExitRoot)
         A                               :HASHK(0)
 
         8 => D
-        $ => A                          :MLOAD(numBatch)
-        A                               :HASHK(0)
-
         $ => A                          :MLOAD(timestamp)
         A                               :HASHK(0)
 
-        8 => D
-        $ => A                          :MLOAD(chainId)
+        20 => D
+        $ => A                          :MLOAD(sequencerAddr)
         A                               :HASHK(0)
 
         HASHPOS                         :HASHKLEN(0)
 
-        $ => A                          :MLOAD(globalHash)
+        $ => C                          :HASHKDIGEST(0)
+        C                               :MSTORE(newAccInputHash)
         ${eventLog(onFinishBatch)}
-assertNewStateRoot:
-        $                               :HASHKDIGEST(0), ASSERT
-
 
 ;;;;;;;;;;;;;;;;;;
 ;; F - Finalize execution
 ;;;;;;;;;;;;;;;;;;
-finalizeExecution:
-        0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR ; Set all registers to 0
-                                                                        :JMP(finalWait)
+        ; Set output registers
+        $ => D                          :MLOAD(newAccInputHash)
+        $ => E                          :MLOAD(newLocalExitRoot)
+        $ => PC                         :MLOAD(newNumBatch)
+
+        ; Set registers to its initials values
+        $ => B                          :MLOAD(oldStateRoot)
+        $ => C                          :MLOAD(oldAccInputHash)
+        $ => SP                         :MLOAD(oldNumBatch)
+        $ => GAS                        :MLOAD(chainID)
+        finalizeExecution:
+                                        :JMP(finalWait)
 
 INCLUDE "end.zkasm"
 INCLUDE "load-tx-rlp.zkasm"
