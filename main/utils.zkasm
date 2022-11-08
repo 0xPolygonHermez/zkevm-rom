@@ -102,6 +102,39 @@ getLenEnd:
     $ => RR         :MLOAD(tmpZkPC)
                     :RETURN
 
+; @info bits length of B
+; @in B => number
+; @out A => bits length
+getLenBits:
+    RR              :MSTORE(tmpZkPC)
+    B               :MSTORE(tmpVarB)
+    C               :MSTORE(tmpVarC)
+    D               :MSTORE(tmpVarD)
+    0 => C
+    B => A
+
+getLenBitsLoop:
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
+
+    0 => B
+    $               :EQ,JMPC(getLenBitsEnd)
+    A               :MSTORE(arithA)
+    2               :MSTORE(arithB)
+    zkPC+1 => RR    :JMP(divARITH)
+    $ => A          :MLOAD(arithRes1)
+    C + 1 => C
+                    :JMP(getLenBitsLoop)
+
+getLenBitsEnd:
+    C => A
+    $ => B          :MLOAD(tmpVarB)
+    $ => C          :MLOAD(tmpVarC)
+    $ => D          :MLOAD(tmpVarD)
+    $ => RR         :MLOAD(tmpZkPC)
+                    :RETURN
+
 VAR GLOBAL bytesToStore
 VAR GLOBAL isMSTOREX
 ; @info save value to memory < 32 bytes with offset

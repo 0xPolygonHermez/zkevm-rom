@@ -45,33 +45,31 @@ MODEXP:
     $ => E          :MLOAD(argsOffsetCall)
                     :CALL(MLOAD32)
     A               :MSTORE(Bsize)          ;Bsize = base size
-                    :CALL(MLOAD32)
-    A               :MSTORE(Esize)          ;Esize = exp size
-                    :CALL(MLOAD32)
-    A               :MSTORE(Msize)          ;Msize = mod size
-    $ => B          :MLOAD(Bsize)
-    0 => A
-    $               :EQ,JMPC(MODEXPreturn0)
+    A => B
     %MAX_SIZE => A
     $               :LT,JMPC(outOfGas)
-    B => C
+                    :CALL(MLOAD32)
+    A               :MSTORE(Esize)          ;Esize = exp size
+    A => B
+    %MAX_SIZE => A
+    $               :LT,JMPC(outOfGas)
+                    :CALL(MLOAD32)
+    A               :MSTORE(Msize)          ;Msize = mod size
+    A => B
+    %MAX_SIZE => A
+    $               :LT,JMPC(outOfGas)
+    $ => C          :MLOAD(Bsize)
                     :CALL(MLOADX)
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
     A               :MSTORE(base)
-    $ => B          :MLOAD(Esize)
-    %MAX_SIZE => A
-    $               :LT,JMPC(outOfGas)
-    B => C
+    $ => C          :MLOAD(Esize)
                     :CALL(MLOADX)
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
     A               :MSTORE(exp)
     A               :MSTORE(newExp)
-    $ => B          :MLOAD(Msize)
-    %MAX_SIZE => A
-    $               :LT,JMPC(outOfGas)
-    B => C
+    $ => C          :MLOAD(Msize)
                     :CALL(MLOADX)
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
@@ -80,10 +78,9 @@ MODEXP:
     $               :EQ,JMPC(MODEXPreturn0) ;if mod == 0 --> MODEXPreturn0
     $ => A          :MLOAD(exp)
     $               :EQ,JMPC(MODEXPexp0)    ;if exp == 0 --> MODEXPexp0
-    $ => B          :MLOAD(base)
-    0 => A
+    $ => A          :MLOAD(base)
     $               :EQ,JMPC(MODEXPreturn0) ;if base == 0 --> MODEXPreturn0
-    B               :MSTORE(bp)
+    A               :MSTORE(bp)
     1               :MSTORE(res)
 
 MODEXPloop1:
@@ -124,7 +121,7 @@ MODEXPexp0:
     1 => A
     $ => B          :MLOAD(mod)
     $               :EQ,JMPC(MODEXPreturn0)
-    1 => C
+    1               :MSTORE(res)
 
 MODEXPloopEnd:
     $ => A          :MLOAD(res)
@@ -173,14 +170,15 @@ MODEXPgas2:
     $ => A              :ADD,MSTORE(arithA)
     8 => B              :MSTORE(arithB)
     zkPC+1 => RR        :JMP(divARITH)
-    $ => A              :MLOAD(arithRes1);words
+    $ => A              :MLOAD(arithRes1)   ;words
     2 => D
-    zkPC+1 => RR        :JMP(expAD)
+    zkPC+1 => RR        :JMP(expAD)         ;A multiplication_complexity
     0 => D              ;iteration_count
     A                   :MSTORE(tmpVarA)
     $ => B              :MLOAD(exp)
-                        :CALL(getLenBytes)
+                        :CALL(getLenBits)
     A => C
+    $ => A              :MLOAD(Esize)
     32 => B
     $                   :LT,JMPC(MODEXPgas3)
     $                   :EQ,JMPC(MODEXPgas3)
@@ -191,7 +189,7 @@ MODEXPgas3:
     $ => B              :MLOAD(exp)
     0 => A
     $                   :EQ,JMPC(MODEXPgas4)
-    8*C - 1 => D        ;iteration_count
+    C - 1 => D        ;iteration_count
 
 MODEXPgas4:
     1 => B
