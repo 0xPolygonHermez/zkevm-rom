@@ -45,19 +45,28 @@ MODEXP:
     $ => E          :MLOAD(argsOffsetCall)
                     :CALL(MLOAD32)
     A               :MSTORE(Bsize)          ;Bsize = base size
-    A => B
-    %MAX_SIZE => A
-    $               :LT,JMPC(outOfGas)
                     :CALL(MLOAD32)
     A               :MSTORE(Esize)          ;Esize = exp size
-    A => B
-    %MAX_SIZE => A
-    $               :LT,JMPC(outOfGas)
                     :CALL(MLOAD32)
     A               :MSTORE(Msize)          ;Msize = mod size
-    A => B
+
+    $ => B          :MLOAD(Bsize)
     %MAX_SIZE => A
-    $               :LT,JMPC(outOfGas)
+    $               :LT,JMPC(MODEXPfinalOOG)
+
+    $ => B          :MLOAD(Esize)
+    0 => A
+    $               :EQ,JMPC(MODEXPexp0)
+    %MAX_SIZE => A
+    $               :LT,JMPC(MODEXPfinalOOG)
+
+    $ => B          :MLOAD(Msize)
+    0 => A
+    $               :EQ,JMPC(MODEXPreturn0)
+    %MAX_SIZE => A
+    $               :LT,JMPC(MODEXPfinalOOG)
+
+
     $ => C          :MLOAD(Bsize)
                     :CALL(MLOADX)
     32 - C => D
@@ -217,3 +226,7 @@ MODEXPgasEnd:
 MODEXPend:
     GAS - B => GAS      :JMPN(outOfGas)
                         :JMP(preEnd)
+
+MODEXPfinalOOG:
+    $ => CTX            :MLOAD(currentCTX)
+                        :JMP(outOfGas)
