@@ -1,8 +1,20 @@
-
+/**
+ * @link [https://www.evm.codes/#60?fork=berlin]
+ * @zk-counters
+ *  - dynamic binary
+ *  - dynamic steps
+ * @process-opcode
+ *  - stack input:
+ *  - stack output: pushed value
+ */
 opPUSH1:
+    ; number of bytes to push to D
     1 => D
+    ; check is a deploy
     $ => B                          :MLOAD(isCreateContract)
+    ; if is a deploy, get bytes from memory
     0 - B                           :JMPN(opAuxPUSHB)
+    ; else, get bytes from stack
                                     :JMP(opAuxPUSHA)
 
 opPUSH2:
@@ -193,79 +205,115 @@ opPUSH32:
 
 
 opAuxPUSHA:
-
+    ; checks zk-counters
     %MAX_CNT_BINARY - CNT_BINARY - 6 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
-
-    GAS-3 => GAS        :JMPN(outOfGas)
-                        :CALL(readPush)
+    
+    ; check out-of-gas
+    GAS - 3 => GAS      :JMPN(outOfGas)
+    ; read bytes from calldata
+                        :CALL(readPush); in: [D: bytes to read] out: [E: value read]
+    ; store stack output                        
     E                   :MSTORE(SP++)
+    ; check stack overflow
     1024 - SP           :JMPN(stackOverflow)
+    ; rectify PC
     PC + D => PC
                         :JMP(readCode)
 
 opAuxPUSHB:
-
+    ; checks zk-counters
     %MAX_CNT_BINARY - CNT_BINARY - 6 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCountersStep)
-
-    1 => A
-    $ => B                          :MLOAD(isCreate)
-    $                               :EQ,JMPC(opAuxPUSHBcreate)
+    ; check is a create/create2
+    $ => A                          :MLOAD(isCreate)
+    0 - A                           :JMPN(opAuxPUSHBcreate)
+    ; set bytes length to read to C
     D - 1 => C
     0 => A
 
 opAuxPUSHBloop:
+    ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCountersBinary)
     %MAX_CNT_ARITH - CNT_ARITH - 4 :JMPN(outOfCountersArith)
 
     1 => D
+    ; get position where data starts in the tx
     $ => HASHPOS                    :MLOAD(dataStarts)
+    ; add PC to data starts to  point the bytes to read for the push
     HASHPOS + PC => HASHPOS
     PC + 1 => PC
+    ; get memory pointer for hashing
     $ => E                          :MLOAD(batchHashDataId)
     $ => B                          :HASHK(E)
+    ; accumulate hash value
     A + B => A
+    ; decrease length for loop
     C - 1 => C                      :JMPN(opAuxPUSHBend)
-                                    :CALL(SHLarith)
+                                    :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
                                     :JMP(opAuxPUSHBloop)
 
 opAuxPUSHBend:
-    GAS-3 => GAS                    :JMPN(outOfGas)
+    ; check out-of-gas
+    GAS - 3 => GAS                  :JMPN(outOfGas)
+    ; store stack output (value)
     A                               :MSTORE(SP++)
+    ; check stack overflow
     1024 - SP                       :JMPN(stackOverflow)
                                     :JMP(readCode)
 
 opAuxPUSHBcreate:
-
+    ; PUSH in a create, we need to get bytes from memory (not calldata)
+    ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 224 :JMPN(outOfCountersArith)
     %MAX_CNT_BINARY - CNT_BINARY - 225 :JMPN(outOfCountersBinary)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCountersMemalign)
 
+    ; get pushed bytes from previous context memory
     0 => B
     $ => CTX                        :MLOAD(originCTX)
+    ; get offset call position
     $ => E                          :MLOAD(argsOffsetCall)
+    ; increase current program counter (PC) to offset for getting pushed bytes to read
     E + PC => E
+    ; set length to read to C for MOLADX call
     D => C
-                                    :CALL(MLOADX)
+                                    :CALL(MLOADX);in: [E: offset, C: length] out: [A: value, E: new offset]
+    ; increase to PC the length of the read bytes
     PC + C => PC
+    ; put in the lowest significant bytes, align value to right
     32 - C => D
                                     :CALL(SHRarith)
+    ; return to current context
     $ => CTX                        :MLOAD(currentCTX)
                                     :JMP(opAuxPUSHBend)
 
-
+/**
+ * @link [https://www.evm.codes/#80?fork=berlin]
+ * @zk-counters
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: value
+ *  - stack output: duplicated value, original value
+ */
 opDUP1:
-
+    ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
+    ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
-    $ => A          :MLOAD(SP++)
+
+    ; check out-of-gas
+    GAS - 3 => GAS  :JMPN(outOfGas)
+
+    $ => A          :MLOAD(SP++); value => A
+    ; check stack overflow
     1024 - SP       :JMPN(stackOverflow)
+    ; store duplicated value
     A               :MSTORE(SP++)
+    ; check stack overflow
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP2:
@@ -273,11 +321,11 @@ opDUP2:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 2 => SP    :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => A          :MLOAD(SP)
     SP + 2 => SP
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP3:
@@ -285,11 +333,11 @@ opDUP3:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 3 => SP    :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => A          :MLOAD(SP)
     SP + 3 => SP
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP4:
@@ -297,11 +345,11 @@ opDUP4:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 4 => SP    :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => A          :MLOAD(SP)
     SP + 4 => SP
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP5:
@@ -309,11 +357,11 @@ opDUP5:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 5 => SP    :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => A          :MLOAD(SP)
     SP + 5 => SP
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP6:
@@ -321,11 +369,11 @@ opDUP6:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 6 => SP    :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => A          :MLOAD(SP)
     SP + 6 => SP
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP7:
@@ -333,11 +381,11 @@ opDUP7:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 7 => SP    :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => A          :MLOAD(SP)
     SP + 7 => SP
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP8:
@@ -345,11 +393,11 @@ opDUP8:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 8 => SP    :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => A          :MLOAD(SP)
     SP + 8 => SP
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP9:
@@ -357,11 +405,11 @@ opDUP9:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 9 => SP    :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => A          :MLOAD(SP)
     SP + 9 => SP
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP10:
@@ -369,11 +417,11 @@ opDUP10:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 10 => SP   :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => A          :MLOAD(SP)
     SP + 10 => SP
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP11:
@@ -381,11 +429,11 @@ opDUP11:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 11 => SP   :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => A          :MLOAD(SP)
     SP + 11 => SP
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP12:
@@ -393,11 +441,11 @@ opDUP12:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 12 => SP   :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => A          :MLOAD(SP)
     SP + 12 => SP
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP13:
@@ -405,11 +453,11 @@ opDUP13:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 13 => SP   :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => A          :MLOAD(SP)
     SP + 13 => SP
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP14:
@@ -417,11 +465,11 @@ opDUP14:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 14 => SP   :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => A          :MLOAD(SP)
     SP + 14 => SP
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP15:
@@ -429,11 +477,11 @@ opDUP15:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 15 => SP   :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => A          :MLOAD(SP)
     SP + 15 => SP
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opDUP16:
@@ -441,26 +489,41 @@ opDUP16:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 16 => SP   :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     $ => A          :MLOAD(SP)
     SP + 16 => SP
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
-
+/**
+ * @link [https://www.evm.codes/#90?fork=berlin]
+ * @zk-counters
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: value to swap a, value to swap b
+ *  - stack output: swapped value a, swapped value b
+ */
 opSWAP1:
-
+    ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
+    ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
+
+    ; check out-of-gas
+    GAS - 3 => GAS  :JMPN(outOfGas)
+
     SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-    $ => B          :MLOAD(SP)
+    $ => A          :MLOAD(SP--); value to swap a => A
+    $ => B          :MLOAD(SP); value to swap b => B
+    ; store swapped value a
     A               :MSTORE(SP++)
+    ; check stack overflow
     1024 - SP       :JMPN(stackOverflow)
+    ; store swapped value b
     B               :MSTORE(SP++)
+    ; check stack overflow
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP2:
@@ -468,6 +531,7 @@ opSWAP2:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 3          :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 2 => SP
@@ -476,7 +540,6 @@ opSWAP2:
     SP + 2 => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP3:
@@ -484,6 +547,7 @@ opSWAP3:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 4          :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 3 => SP
@@ -492,7 +556,6 @@ opSWAP3:
     SP + 3 => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP4:
@@ -500,6 +563,7 @@ opSWAP4:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 5          :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 4 => SP
@@ -508,7 +572,6 @@ opSWAP4:
     SP + 4 => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP5:
@@ -516,6 +579,7 @@ opSWAP5:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 6          :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 5 => SP
@@ -524,7 +588,6 @@ opSWAP5:
     SP + 5 => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP6:
@@ -532,6 +595,7 @@ opSWAP6:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 7          :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 6 => SP
@@ -540,7 +604,6 @@ opSWAP6:
     SP + 6 => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP7:
@@ -548,6 +611,7 @@ opSWAP7:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 8          :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 7 => SP
@@ -556,7 +620,6 @@ opSWAP7:
     SP + 7 => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP8:
@@ -564,6 +627,7 @@ opSWAP8:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 9          :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 8 => SP
@@ -572,7 +636,6 @@ opSWAP8:
     SP + 8 => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP9:
@@ -580,6 +643,7 @@ opSWAP9:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 10         :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 9 => SP
@@ -588,7 +652,6 @@ opSWAP9:
     SP + 9 => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP10:
@@ -596,6 +659,7 @@ opSWAP10:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 11         :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 10 => SP
@@ -604,7 +668,6 @@ opSWAP10:
     SP + 10 => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP11:
@@ -612,6 +675,7 @@ opSWAP11:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 12         :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 11 => SP
@@ -620,7 +684,6 @@ opSWAP11:
     SP + 11 => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP12:
@@ -628,6 +691,7 @@ opSWAP12:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 13         :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 12 => SP
@@ -636,7 +700,6 @@ opSWAP12:
     SP + 12 => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP13:
@@ -644,6 +707,7 @@ opSWAP13:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 14         :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 13 => SP
@@ -652,7 +716,6 @@ opSWAP13:
     SP + 13 => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP14:
@@ -660,6 +723,7 @@ opSWAP14:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 15         :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 14 => SP
@@ -668,7 +732,6 @@ opSWAP14:
     SP + 14 => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP15:
@@ -676,6 +739,7 @@ opSWAP15:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 16         :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 15 => SP
@@ -684,7 +748,6 @@ opSWAP15:
     SP + 15 => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 opSWAP16:
@@ -692,6 +755,7 @@ opSWAP16:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 17         :JMPN(stackUnderflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => A          :MLOAD(SP)
     SP - 16 => SP
@@ -700,13 +764,22 @@ opSWAP16:
     SP + 16 => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#50?fork=berlin]
+ * @zk-counters
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: stack item
+ *  - stack output:
+ */
 opPOP:
-
+    ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
+    ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
+    ; check out-of-gas
     GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
