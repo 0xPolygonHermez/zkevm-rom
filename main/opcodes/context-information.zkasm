@@ -1,0 +1,92 @@
+opADDRESS:
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    $ => A          :MLOAD(isCreateContract)
+    0 - A           :JMPN(opADDRESSdeploy)
+    $ => A          :MLOAD(storageAddr)
+                    :JMP(opADDRESSend)
+
+opADDRESSdeploy:
+    $ => A          :MLOAD(createContractAddress)
+
+opADDRESSend:
+    A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
+
+opSELFBALANCE:
+
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    $ => A          :MLOAD(storageAddr)
+    0 => B,C        ; balance key smt
+    $ => D          :SLOAD
+    D               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-5 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
+opBALANCE:
+
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 252 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    SP - 1 => SP    :JMPN(stackUnderflow)
+    $ => A          :MLOAD(SP)
+                    :CALL(maskAddress) ; Mask address to 20 bytes
+    0 => B,C        ; balance smt key
+    $ => D          :SLOAD
+    D               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    ${isWarmedAddress(A)} => D
+    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
+
+opORIGIN:
+
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    $ => A          :MLOAD(txSrcOriginAddr)
+    A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
+
+opCALLER:
+
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    $ => A          :MLOAD(txSrcAddr)
+    A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
+
+opCALLVALUE:
+
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    $ => A          :MLOAD(txValue)
+    A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
+
+opGASPRICE:
+
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    $ => A          :MLOAD(txGasPrice)
+    A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
+opGAS:
+
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    GAS - 2 => GAS  :JMPN(outOfGas)
+    GAS             :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)

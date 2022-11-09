@@ -1,0 +1,109 @@
+
+opBLOCKHASH:
+
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
+    $ => A                                     :MLOAD(cntKeccakPreProcess)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2   :JMPN(outOfCountersKeccak)
+    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+
+    SP - 1 => SP     :JMPN(stackUnderflow)
+    GAS - 20 => GAS  :JMPN(outOfGas)
+
+    ; Check batch number is lt current batch number, else return 0
+    ; Get last tx count
+    $ => B          :MLOAD(txCount)
+    B + 1 => B
+    $ => A          :MLOAD(SP) ; batch number
+    B - A - 1       :JMPN(opBLOCKHASHzero)
+    ; Create key for the batch hash mapping key
+    32 => D
+    0 => HASHPOS ; A new hash with position 0 is started
+    $ => E                              :MLOAD(lastHashKIdUsed)
+    E+1 => E                            :MSTORE(lastHashKIdUsed)
+    A                                   :HASHK(E)
+    %STATE_ROOT_STORAGE_POS             :HASHK(E)
+    HASHPOS                             :HASHKLEN(E)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - %MIN_CNT_KECCAK_BATCH - 2:JMPN(outOfCountersKeccak)
+    $ => C                              :HASHKDIGEST(E)
+    %ADDRESS_SYSTEM => A
+    %SMT_KEY_SC_STORAGE => B
+    $ => E                              :SLOAD
+    ; Store result value in the stack
+    E               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)
+
+; Handle when is asking for the hash of a not computed batch, return 0
+opBLOCKHASHzero:
+    0               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+                    :JMP(readCode)
+
+opCOINBASE:
+
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    $ => A          :MLOAD(sequencerAddr)
+    A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
+
+opTIMESTAMP:
+
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    $ => A          :MLOAD(timestamp)
+    A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
+
+opNUMBER:
+
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    ; Get current tx count
+    $ => D          :MLOAD(txCount)
+    D + 1           :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS - 2 => GAS  :JMPN(outOfGas)
+                    :JMP(readCode)
+
+opDIFFICULTY:
+
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    %BATCH_DIFFICULTY => A
+    A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
+
+opGASLIMIT:
+
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    %BATCH_GAS_LIMIT => A
+    A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
+
+opCHAINID:
+
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    $ => A          :MLOAD(chainID)
+    A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)
+opBASEFEE:
+
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    0               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS-2 => GAS    :JMPN(outOfGas)
+                    :JMP(readCode)

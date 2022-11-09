@@ -1,0 +1,910 @@
+
+opSTOP:
+    $ => B          :MLOAD(originCTX)
+    B - 1           :JMPN(handleGas)
+    $ => A          :MLOAD(gasRefund)
+    $ => C          :MLOAD(isCreate)
+    1 => D
+    C - 1           :JMPN(opSTOPend)
+    $ => D          :MLOAD(createContractAddress)
+
+opSTOPend:
+    B => CTX
+    CTX             :MSTORE(currentCTX)
+    0               :MSTORE(retDataCTX)
+    $ => B          :MLOAD(gasCTX)
+    A               :MSTORE(gasRefund)
+    GAS + B => GAS
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    D               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    $ => A          :MLOAD(depth)
+    A - 1           :MSTORE(depth)
+    ${commit()}
+                    :JMP(readCode)
+
+; // TODO Check with DElEGATE CALL txDestAddr/txSrcAddr ( same as other calls)
+; // TODO check revert create
+opCREATE:
+    $ => A              :MLOAD(depth)
+    A + 1               :MSTORE(depth)
+    SP - 3              :JMPN(stackUnderflow)
+    $ => A              :MLOAD(isStaticCall)
+    0 - A               :JMPN(invalidStaticTx)
+    SP - 1 => SP
+    $ => D              :MLOAD(SP--)            ;value
+    D                   :MSTORE(valueCall)
+    $ => E              :MLOAD(SP--)            ;offset
+    E                   :MSTORE(argsOffsetCall)
+    $ => C              :MLOAD(SP)      ;length
+    C                   :MSTORE(argsLengthCall)
+
+    ;Check counters
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2     :JMPN(outOfCountersMemalign)
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCountersStep)
+    ; Substract gas cost
+
+    ; Mem expansion gas cost
+    E                   :MSTORE(lastMemOffset)
+    C                   :MSTORE(lastMemLength)
+                        :CALL(saveMem)
+    CTX                 :MSTORE(originAuxCTX)
+    GAS - 32000 => GAS  :JMPN(outOfGas)
+    GAS                 :MSTORE(gasCall)
+
+    ; Check correctness of Create: depth, can transfer, nonce overlfow, 
+    ; depth overflow
+
+    ; can transfer
+    $ => A              :MLOAD(storageAddr)
+    %SMT_KEY_BALANCE => B                                             ; balance key smt
+    0 => C                                                            ; 3rd parameter does not apply to nonce or balance
+    $ => A              :SLOAD
+    D => B              
+    $                   :LT,JMPC(opCreateFail)
+
+    ; nonce overlow
+    $ => A             :MLOAD(storageAddr)
+    %SMT_KEY_NONCE => B                                                  ; Constant for nonce
+    $ => B              :SLOAD
+    A => C
+    %MAX_NONCE => A
+    $                   :EQ,JMPC(opCreateFail)
+
+
+    ;change to a new CTX
+    SP                  :MSTORE(lastSP)
+    PC                  :MSTORE(lastPC)
+    $ => A              :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
+    A+1 => CTX          :MSTORE(lastCtxUsed)
+    CTX                 :MSTORE(currentCTX)
+    1                   :MSTORE(isCreateContract)
+    1                   :MSTORE(isCreate)
+    $ => A              :MLOAD(originAuxCTX)
+    A                   :MSTORE(originCTX)
+
+    ; get nonce & update SR
+    B                   :MSTORE(txNonce)
+                        :CALL(getLenBytes)
+    A                   :MSTORE(lengthNonce)
+    B + 1 => D
+    C => A
+    %SMT_KEY_NONCE => B                                                  ; Constant for nonce
+    0 => C
+    $ => SR             :SSTORE
+    SR                  :MSTORE(initSR)
+
+                        :CALL(computeGasSendCall)
+    $ => CTX            :MLOAD(originCTX)
+    $ => B              :MLOAD(storageAddr)
+    $ => C              :MLOAD(gasRefund)
+    GAS - A             :MSTORE(gasCTX)
+    $ => CTX            :MLOAD(currentCTX)
+    A => GAS
+    B                   :MSTORE(txSrcAddr)
+    C                   :MSTORE(gasRefund)
+                        :CALL(copySP)
+
+    $ => A              :MLOAD(argsLengthCall)
+    A                   :MSTORE(txCalldataLen)
+    $ => A              :MLOAD(valueCall)
+    A                   :MSTORE(txValue)
+
+                        :JMP(txType)
+
+opCreateFail:
+    0                   :MSTORE(retDataCTX)
+    0                   :MSTORE(SP++)
+                        :JMP(readCode)
+                                   
+; // https://eips.ethereum.org/EIPS/eip-211
+opCALL:
+
+    %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCountersStep)
+    $ => A          :MLOAD(depth)
+    A + 1           :MSTORE(depth)
+    SP - 7          :JMPN(stackUnderflow)
+    SP - 1 => SP
+    CTX             :MSTORE(originAuxCTX)
+    ; Store gas call
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(gasCall)
+    ; Store address call
+    $ => A          :MLOAD(SP--)
+                    :CALL(maskAddress) ; Mask address to 20 bytes
+    A               :MSTORE(addrCall)
+    ; Store value call
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(valueCall)
+    ; If is static and value is not 0 -> revert
+    $ => B          :MLOAD(isStaticCall)
+    B - 1           :JMPN(opCALL2)
+
+    0 => B
+    $               :EQ,JMPC(opCALL2)
+                    :JMP(invalidStaticTx)
+
+opCALL2:
+
+    ; Store bytes offset int the memory, the calldata of the subcontext
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(argsOffsetCall)
+    A               :MSTORE(lastMemOffset)
+
+    ; Byte size to copy, size of the calldata of the subcontext
+    $ => C          :MLOAD(SP--)
+    C               :MSTORE(argsLengthCall)
+    C               :MSTORE(lastMemLength)
+    ; Mem expansion gas cost call args
+                    :CALL(saveMem)
+
+    ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
+    $ => B          :MLOAD(SP--)
+    B               :MSTORE(lastMemOffset)
+
+    ; Store byte size to copy (size of the return data).
+    $ => D          :MLOAD(SP)
+    D               :MSTORE(lastMemLength)
+                    :CALL(saveMem)
+
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCountersStep)
+
+    $ => B                   :MLOAD(lastMemOffset)
+
+    ; Substract gas cost
+
+    ; If addr in touched addres D = 0, else D = 1
+    $ => A          :MLOAD(addrCall)
+    ${isWarmedAddress(A)} => D ; TODO
+    ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
+    ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
+    GAS-100-D*2500 => GAS :JMPN(outOfGas)
+    ; Calculate positive_value_cost, if value call > 0 -> 9000
+    $ => B          :MLOAD(valueCall)
+    0 => A
+    $               :EQ,JMPC(opCALLend)
+
+    GAS - 9000 => GAS :JMPN(outOfGas)
+    ; If destAddress is an empty account, we should add 25k of gas to base cost
+    $ => E               :MLOAD(addrCall)
+                         :CALL(isEmptyAccount)
+    GAS - 25000*E => GAS :JMPN(outOfGas)
+
+opCALLend:
+    $ => B          :MLOAD(lastMemOffset)
+    $ => D          :MLOAD(lastMemLength)
+    $ => C          :MLOAD(storageAddr)
+    $ => E          :MLOAD(gasRefund)
+    SP              :MSTORE(lastSP)
+    PC              :MSTORE(lastPC)
+    $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
+    A+1 => CTX      :MSTORE(lastCtxUsed)
+    CTX             :MSTORE(currentCTX)
+    $ => A          :MLOAD(originAuxCTX)
+    A               :MSTORE(originCTX)
+    C               :MSTORE(txSrcAddr)
+    E               :MSTORE(gasRefund)
+    SR              :MSTORE(initSR)
+    $ => A          :MLOAD(addrCall)
+    A               :MSTORE(txDestAddr)
+    A               :MSTORE(storageAddr)
+    B               :MSTORE(retCallOffset)
+    D               :MSTORE(retCallLength)
+    $ => B          :MLOAD(valueCall)
+    B               :MSTORE(txValue)
+    0 => A
+    $ => C          :LT
+                        :CALL(computeGasSendCall)
+    ; Add estipend (2300) in case of tx with value
+    $ => CTX            :MLOAD(originCTX)
+    GAS - A             :MSTORE(gasCTX)
+    A + 2300*C => A
+    $ => D              :MLOAD(isStaticCall)
+    $ => CTX            :MLOAD(currentCTX)
+    D                   :MSTORE(isStaticCall)
+    A => GAS
+
+    $ => A              :MLOAD(argsLengthCall)
+    A                   :MSTORE(txCalldataLen)
+                        :CALL(copySP)
+                        :JMP(txType)
+
+; TODO if theres a delegate call inside a callCode, who is the msg.sender?
+; should be the caller of the callCode? ( but we do not store this info yet)
+opCALLCODE: ; TODO check staticCall
+
+    %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCountersStep)
+    $ => A          :MLOAD(depth)
+    A + 1           :MSTORE(depth)
+    SP - 7          :JMPN(stackUnderflow)
+    SP - 1 => SP
+    CTX             :MSTORE(originAuxCTX)
+    ; Store gas call
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(gasCall)
+    ; Store address call
+    $ => A          :MLOAD(SP--)
+                    :CALL(maskAddress) ; Mask address to 20 bytes
+    A               :MSTORE(addrCall)
+    ; Store value call
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(valueCall)
+
+    ; Store bytes offset int the memory, the calldata of the subcontext
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(argsOffsetCall)
+    A               :MSTORE(lastMemOffset)
+    ; Byte size to copy, size of the calldata of the subcontext
+    $ => C          :MLOAD(SP--)
+    C               :MSTORE(argsLengthCall)
+    C               :MSTORE(lastMemLength)
+    ; Mem expansion gas cost call args
+                    :CALL(saveMem)
+
+    ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
+    $ => B          :MLOAD(SP--)
+    B               :MSTORE(lastMemOffset)
+    ; Store byte size to copy (size of the return data).
+    $ => D          :MLOAD(SP)
+    D               :MSTORE(lastMemLength)
+                    :CALL(saveMem)
+
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCountersStep)
+
+    ; Substract gas cost
+
+    ; If addr in touched addres D = 0, else D = 1
+    $ => A                   :MLOAD(addrCall)
+    ${isWarmedAddress(A)} => D
+
+    ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost
+    ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
+    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
+    ; Calculate positive_value_cost, if value call > 0 -> 9000
+    $ => B                   :MLOAD(valueCall)
+    0 => A
+    $                        :EQ,JMPC(opCALLCODEend)
+    ; Substract gas if the call has value
+    GAS - 9000 => GAS        :JMPN(outOfGas)
+
+opCALLCODEend:
+    $ => B          :MLOAD(lastMemOffset)
+    $ => D          :MLOAD(lastMemLength)
+    $ => E          :MLOAD(storageAddr)
+    $ => C          :MLOAD(gasRefund)
+    SP              :MSTORE(lastSP)
+    PC              :MSTORE(lastPC)
+    ;change new CTX
+    $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
+    A+1 => CTX      :MSTORE(lastCtxUsed)
+    CTX             :MSTORE(currentCTX)
+    $ => A          :MLOAD(originAuxCTX)
+    A               :MSTORE(originCTX)
+    E               :MSTORE(txSrcAddr)
+    E               :MSTORE(storageAddr)
+    C               :MSTORE(gasRefund)
+    SR              :MSTORE(initSR)
+    $ => A          :MLOAD(addrCall)
+    A               :MSTORE(txDestAddr)
+    B               :MSTORE(retCallOffset)
+    D               :MSTORE(retCallLength)
+    $ => B          :MLOAD(valueCall)
+    B               :MSTORE(txValue)
+    0 => A
+    $ => C          :LT
+
+
+                    :CALL(computeGasSendCall)
+    ; Add estipend (2300) in case of tx with value
+    $ => CTX        :MLOAD(originCTX)
+    GAS - A         :MSTORE(gasCTX)
+    A + 2300*C => A
+    $ => D          :MLOAD(isStaticCall)
+    $ => CTX        :MLOAD(currentCTX)
+    A => GAS
+    D               :MSTORE(isStaticCall)
+    $ => A          :MLOAD(argsLengthCall)
+    A               :MSTORE(txCalldataLen)
+                    :CALL(copySP)
+                    :JMP(txType)
+
+opRETURN:
+    SP - 2          :JMPN(stackUnderflow)
+    SP - 1 => SP
+    $ => E          :MLOAD(SP--) ;offset
+    $ => C          :MLOAD(SP)   ;length
+
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCountersStep)
+
+    E               :MSTORE(retDataOffset)
+    C               :MSTORE(retDataLength)
+    E               :MSTORE(lastMemOffset)
+    C               :MSTORE(lastMemLength)
+                    :CALL(saveMem)
+    $ => D          :MLOAD(isCreateContract)
+    0 - D           :JMPN(opRETURNdeploy)
+    $ => B          :MLOAD(originCTX)
+    B - 1           :JMPN(handleGas)
+    $ => B          :MLOAD(gasRefund)
+    $ => A          :MLOAD(currentCTX)
+    $ => CTX        :MLOAD(originCTX)
+    ; Add return data context value to origin context
+    A               :MSTORE(retDataCTX)
+    B               :MSTORE(gasRefund)
+    $ => B          :MLOAD(gasCTX)
+    B + GAS => GAS
+
+    $ => CTX        :MLOAD(currentCTX)
+    $ => D          :MLOAD(retCallLength)
+    C => A
+    D => B
+    $               :LT,JMPC(preRETURN32) ; Take the smaller one
+    D => C
+
+preRETURN32:
+    $ => B          :MLOAD(retCallOffset)
+
+; Copy from memory current CTX to memory origin CTX
+opRETURN32:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCountersStep)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+
+    C - 1           :JMPN(opRETURNend)
+    C - 32          :JMPN(opRETURNfinal)
+                    :CALL(MLOAD32)
+    E => D
+    $ => CTX        :MLOAD(originCTX)
+    B => E
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTORE32)
+    E => B
+    D => E
+    C - 32 => C
+    $ => CTX        :MLOAD(currentCTX)
+                    :JMP(opRETURN32)
+
+opRETURNfinal:
+                    :CALL(MLOADX)
+    $ => CTX        :MLOAD(originCTX)
+    B => E
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
+    $ => CTX        :MLOAD(currentCTX)
+
+opRETURNend:
+    $ => CTX        :MLOAD(originCTX)
+    CTX             :MSTORE(currentCTX)
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    1               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    $ => A          :MLOAD(depth)
+    A - 1           :MSTORE(depth)
+    ${commit()}
+                    :JMP(readCode)
+
+
+opRETURNdeploy:
+; TODO check what does return?  what assures returned_code_size is correct?
+    ; code size limit = 0x6000
+    0x6000 - C      :JMPN(invalidCodeSize)
+    GAS - 200 * C => GAS    :JMPN(outOfGas) ;code_deposit_cost = 200 * returned_code_size
+    $ => B          :MLOAD(originCTX)       ;last ctx
+    0 - B           :JMPN(opRETURNcreate)
+                    :JMP(endDeploy)
+
+; TODO: not in RETURN, but in CREATE process
+opRETURNcreate:
+
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 192 :JMPN(outOfCountersBinary)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCountersMemalign)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1020 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCountersStep)
+
+    ; save offset memory and length to compute contract hash
+    E               :MSTORE(memOffsetLinearPoseidon)
+    C               :MSTORE(memSizeLinearPoseidon)
+
+    CTX             :MSTORE(currentCTX)
+    $ => B          :MLOAD(gasRefund)
+    $ => CTX        :MLOAD(originCTX)
+    B               :MSTORE(gasRefund)
+    $ => B          :MLOAD(gasCTX)
+    ; TODO Should be substracted first the gas
+    B + GAS => GAS
+    $ => CTX        :MLOAD(currentCTX)
+    $ => A          :MLOAD(txSrcAddr)
+    $ => D          :MLOAD(txNonce)
+
+    ; set bytecode length
+    $ => A          :MLOAD(createContractAddress)
+    %SMT_KEY_SC_LENGTH => B
+    C => D
+    0 => C
+    $ => SR         :SSTORE
+
+    ; get bytecode and hash it
+                        :CALL(hashPoseidonLinearFromMemory)
+    $ => A              :MLOAD(createContractAddress)
+    0 => C
+    %SMT_KEY_SC_CODE => B
+
+    $ => SR                         :SSTORE
+
+opRETURNcreateEnd:
+    $ => A          :MLOAD(createContractAddress)
+    $ => CTX        :MLOAD(originCTX)
+    CTX             :MSTORE(currentCTX)
+    0               :MSTORE(retDataCTX)
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    A               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    $ => A          :MLOAD(depth)
+    A - 1           :MSTORE(depth)
+    ${commit()}
+                    :JMP(readCode)
+
+; TODO if theres a delegate call, there should be not moveBalances
+opDELEGATECALL:
+
+    %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCountersStep)
+    $ => A          :MLOAD(depth)
+    A + 1           :MSTORE(depth)
+    SP - 6          :JMPN(stackUnderflow)
+    SP - 1 => SP
+    CTX             :MSTORE(originAuxCTX)
+    ; Store gas call
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(gasCall)
+    ; Store address call
+    $ => A          :MLOAD(SP--)
+                    :CALL(maskAddress) ; Mask address to 20 bytes
+    A               :MSTORE(addrCall)
+    ; Store bytes offset int the memory, the calldata of the subcontext
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(argsOffsetCall)
+    A               :MSTORE(lastMemOffset)
+
+    ; Byte size to copy, size of the calldata of the subcontext
+    $ => C          :MLOAD(SP--)
+    C               :MSTORE(argsLengthCall)
+    C               :MSTORE(lastMemLength)
+    ; Mem expansion gas cost call args
+                    :CALL(saveMem)
+
+    ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
+    $ => B          :MLOAD(SP--)
+    B               :MSTORE(lastMemOffset)
+    ; Store byte size to copy (size of the return data).
+    $ => D          :MLOAD(SP)
+    D               :MSTORE(lastMemLength)
+    ;  Mem expansion gas cost return args
+                    :CALL(saveMem)
+
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCountersStep)
+
+
+    $ => B                   :MLOAD(lastMemOffset)
+    $ => A                   :MLOAD(addrCall)
+    ${isWarmedAddress(A)} => C
+    ;gas_cost = base_gas + gas_sent_with_call
+    GAS-100-C*2500 => GAS    :JMPN(outOfGas)
+
+    $ => C          :MLOAD(txSrcAddr)
+    $ => E          :MLOAD(storageAddr)
+    SP              :MSTORE(lastSP)
+    PC              :MSTORE(lastPC)
+    ;change new CTX
+    $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
+    A+1 => CTX      :MSTORE(lastCtxUsed)
+    CTX             :MSTORE(currentCTX)
+    $ => A          :MLOAD(originAuxCTX)
+    A               :MSTORE(originCTX)
+    C               :MSTORE(txSrcAddr)
+    E               :MSTORE(storageAddr)
+    1               :MSTORE(isDelegateCall)
+    SR              :MSTORE(initSR)
+    $ => A          :MLOAD(addrCall)
+    A               :MSTORE(txDestAddr)
+
+    B               :MSTORE(retCallOffset)
+    D               :MSTORE(retCallLength)
+
+                    :CALL(computeGasSendCall)
+    $ => CTX        :MLOAD(originCTX)
+    GAS - A         :MSTORE(gasCTX)
+    $ => B          :MLOAD(txValue)
+    $ => C          :MLOAD(gasRefund)
+    $ => D          :MLOAD(isStaticCall)
+    $ => CTX        :MLOAD(currentCTX)
+    D               :MSTORE(isStaticCall)
+    B               :MSTORE(txValue)
+    C               :MSTORE(gasRefund)
+    A => GAS
+
+opDELEGATECALLend:
+    $ => A          :MLOAD(argsLengthCall)
+    A               :MSTORE(txCalldataLen)
+                    :CALL(copySP)
+                    :JMP(txType)
+
+; // TODO Check with DElEGATE CALL txDestAddr/txSrcAddr ( same as other calls)
+; // TODO check revert create
+opCREATE2:
+    $ => A              :MLOAD(depth)
+    A + 1               :MSTORE(depth)
+    SP - 4              :JMPN(stackUnderflow)
+    $ => A              :MLOAD(isStaticCall)
+    0 - A               :JMPN(invalidStaticTx)
+    SP - 1 => SP
+    $ => A              :MLOAD(SP--)    ;value
+    A                   :MSTORE(valueCall)
+    $ => E              :MLOAD(SP--)    ;offset
+    E                   :MSTORE(argsOffsetCall)
+    $ => C              :MLOAD(SP--)      ;length
+    C                   :MSTORE(argsLengthCall)
+    $ => D              :MLOAD(SP)    ;salt
+
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCountersStep)
+
+    ; Substract gas cost
+
+    ; Mem expansion gas cost
+    E                   :MSTORE(lastMemOffset)
+    C                   :MSTORE(lastMemLength)
+                        :CALL(saveMem)
+    CTX                 :MSTORE(originAuxCTX)
+    GAS - 32000 => GAS  :JMPN(outOfGas)
+
+    ; Cost to hash the initialisation code
+    ${C+31}             :MSTORE(arithA)
+    32                  :MSTORE(arithB)
+                        :CALL(divARITH)
+    $ => C              :MLOAD(arithRes1)
+    GAS => A
+    6*C => B
+    $                   :LT,JMPC(outOfGas)
+    A - B => GAS
+    GAS                 :MSTORE(gasCall)
+
+    ; Check correctness of Create: depth, can transfer, nonce overlfow, 
+    ; can transfer
+    $ => A              :MLOAD(storageAddr)
+    %SMT_KEY_BALANCE => B                                             ; balance key smt
+    0 => C                                                            ; 3rd parameter does not apply to nonce or balance
+    $ => A              :SLOAD
+    $ => B              :MLOAD(valueCall)
+    $                   :LT,JMPC(opCreateFail)
+
+    ; nonce overlow
+    $ => A              :MLOAD(storageAddr)
+    %SMT_KEY_NONCE => B                                                  ; Constant for nonce
+    $ => B              :SLOAD
+    A => C
+    %MAX_NONCE => A
+    $                   :EQ,JMPC(opCreateFail)
+
+    ;change new CTX
+    ; B Nonce
+    ; C dest Addr
+    ; D salt
+    SP                  :MSTORE(lastSP)
+    PC                  :MSTORE(lastPC)
+    $ => A              :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
+    A+1 => CTX          :MSTORE(lastCtxUsed)
+    CTX                 :MSTORE(currentCTX)
+    1                   :MSTORE(isCreateContract)
+    1                   :MSTORE(isCreate)
+    1                   :MSTORE(isCreate2)
+    D                   :MSTORE(salt)
+    $ => A              :MLOAD(originAuxCTX)
+    A                   :MSTORE(originCTX)
+
+    ; get nonce & update SR
+    B                   :MSTORE(txNonce)
+                        :CALL(getLenBytes)
+    A                   :MSTORE(lengthNonce)
+    B + 1 => D
+    C => A
+    %SMT_KEY_NONCE => B                                                  ; Constant for nonce
+    0 => C
+    $ => SR             :SSTORE
+    SR                  :MSTORE(initSR)
+    A                   :MSTORE(txSrcAddr)
+
+                        :CALL(computeGasSendCall)
+    $ => CTX            :MLOAD(originCTX)
+    $ => C              :MLOAD(gasRefund)
+    GAS - A             :MSTORE(gasCTX)
+    $ => CTX            :MLOAD(currentCTX)
+    C                   :MSTORE(gasRefund)
+    A => GAS
+                        :CALL(copySP)
+   
+    $ => A              :MLOAD(argsLengthCall)
+    A                   :MSTORE(txCalldataLen)
+    $ => A              :MLOAD(valueCall)
+    A                   :MSTORE(txValue)
+
+                        :JMP(txType)
+
+;TODO same as other calls
+opSTATICCALL:
+    $ => A          :MLOAD(depth)
+    A + 1           :MSTORE(depth)
+    SP - 6          :JMPN(stackUnderflow)
+    SP - 1 => SP
+    CTX             :MSTORE(originAuxCTX)
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(gasCall)
+    $ => A          :MLOAD(SP--)
+                    :CALL(maskAddress) ; Mask address to 20 bytes
+    A               :MSTORE(addrCall)
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(argsOffsetCall)
+    A               :MSTORE(lastMemOffset)
+
+    $ => B          :MLOAD(SP--)
+    B               :MSTORE(argsLengthCall)
+    B               :MSTORE(lastMemLength)
+                    :CALL(saveMem)
+
+    $ => C          :MLOAD(SP--)
+    C               :MSTORE(lastMemOffset)
+
+    $ => D          :MLOAD(SP)
+    D               :MSTORE(lastMemLength)
+                    :CALL(saveMem)
+
+    ;Check counters
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCountersStep)
+
+    ; Substract gas cost
+    $ => A          :MLOAD(addrCall)
+    ${isWarmedAddress(A)} => E
+    ;gas_cost = base_gas + gas_sent_with_call
+    GAS-100-E*2500 => GAS    :JMPN(outOfGas)
+
+    $ => E          :MLOAD(storageAddr)
+    $ => B          :MLOAD(gasRefund)
+    SP              :MSTORE(lastSP)
+    PC              :MSTORE(lastPC)
+    ;change new CTX
+    $ => A          :MLOAD(lastCtxUsed)                           ; Set the CTX and store in system
+    A+1 => CTX      :MSTORE(lastCtxUsed)
+    CTX             :MSTORE(currentCTX)
+    $ => A          :MLOAD(originAuxCTX)
+    A               :MSTORE(originCTX)
+    B               :MSTORE(gasRefund)
+    0               :MSTORE(txValue)
+    1               :MSTORE(isStaticCall)
+    E               :MSTORE(txSrcAddr)
+    SR              :MSTORE(initSR)
+    $ => A          :MLOAD(addrCall)
+    A               :MSTORE(txDestAddr)
+    A               :MSTORE(storageAddr)
+    C               :MSTORE(retCallOffset)
+    D               :MSTORE(retCallLength)
+
+                    :CALL(computeGasSendCall)
+    $ => CTX        :MLOAD(originCTX)
+    GAS - A         :MSTORE(gasCTX)
+    $ => CTX        :MLOAD(currentCTX)
+    A => GAS
+    $ => A          :MLOAD(argsLengthCall)
+    A               :MSTORE(txCalldataLen)
+                    :CALL(copySP)
+                    :JMP(txType)
+
+opREVERT:
+
+    %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCountersStep)
+
+    SP - 2          :JMPN(stackUnderflow)
+    $ => SR         :MLOAD(initSR)
+    SP - 1 => SP
+    $ => E          :MLOAD(SP--) ;offset
+    $ => C          :MLOAD(SP) ;length
+    E               :MSTORE(retDataOffset)
+    C               :MSTORE(retDataLength)
+    E               :MSTORE(lastMemOffset)
+    C               :MSTORE(lastMemLength)
+                    :CALL(saveMem)
+
+    $ => B          :MLOAD(originCTX)
+    ${eventLog(onError, revert)}
+    0               :MSTORE(gasRefund)
+    B - 1           :JMPN(handleGas)
+    $ => A          :MLOAD(currentCTX)
+    B => CTX
+    ; Add return data context value to origin context
+    A               :MSTORE(retDataCTX)
+
+    $ => B          :MLOAD(gasCTX)
+    GAS + B => GAS
+
+    A => CTX; current context
+    $ => D          :MLOAD(retCallLength)
+    C => A
+    D => B
+    $               :LT,JMPC(opREVERT32)
+    D => C
+
+; Copy from memory current CTX to memory origin CTX
+opREVERT32:
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+
+    $ => B          :MLOAD(retCallOffset)
+    C - 1           :JMPN(opREVERTend)
+    C - 32          :JMPN(opREVERTfinal)
+                    :CALL(MLOAD32)
+    E => D
+    $ => CTX        :MLOAD(originCTX)
+    B => E
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTORE32)
+    E => B
+    D => E
+    C - 32 => C
+    $ => CTX        :MLOAD(currentCTX)
+                    :JMP(opREVERT32)
+
+opREVERTfinal:
+                    :CALL(MLOADX)
+    $ => CTX        :MLOAD(originCTX)
+    B => E
+    A               :MSTORE(bytesToStore)
+                    :CALL(MSTOREX)
+    $ => CTX        :MLOAD(currentCTX)
+
+opREVERTend:
+    $ => CTX        :MLOAD(originCTX)
+    CTX             :MSTORE(currentCTX)
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    0               :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    $ => A          :MLOAD(depth)
+    A - 1           :MSTORE(depth)
+    ${revert()}
+                    :JMP(readCode)
+
+; // TODO: handle if depth is over 0
+; SELFDESTRUCT is deprecated and EIP-4758 is implemented: https://eips.ethereum.org/EIPS/eip-4758
+; SELFDESTRUCT is now SENDALL
+opSENDALL:
+
+    ;Check counters
+    %MAX_CNT_BINARY - CNT_BINARY - 10 :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 2040 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCountersStep)
+
+    $ => A              :MLOAD(isStaticCall)
+    0 - A               :JMPN(invalidStaticTx)
+    GAS - 5000 => GAS   :JMPN(outOfGas)
+
+    $ => A              :MLOAD(storageAddr)
+    0 => B,C            ; balance key smt
+    $ => E              :SLOAD
+    E => D
+
+    ; read receiver
+    SP - 1 => SP        :JMPN(stackUnderflow)
+    $ => A              :MLOAD(SP)
+                        :CALL(maskAddress) ; Mask address to 20 bytes
+    ; gas: check receiver is empty and balance gt 0
+    A => C
+    A => E
+    0 => A
+    D => B
+    $                   :EQ,JMPC(opSENDALL2)
+                        :CALL(isEmptyAccount)
+    GAS - 25000 * E => GAS    :JMPN(outOfGas)
+    
+opSENDALL2:
+    ; gas: check touched address
+    C => A
+                              :CALL(maskAddress) ; Mask address to 20 bytes
+    ${isWarmedAddress(A)} => E
+    GAS - 2600 * E => GAS     :JMPN(outOfGas)
+
+    ; read previous balance receiver
+    0 => B,C            ; balance key smt
+    $ => E              :SLOAD
+
+    ; compute new receiver balance
+    ; Add operation with Arith
+    D               :MSTORE(arithA)
+    E               :MSTORE(arithB)
+                    :CALL(addARITH)
+    $ => D          :MLOAD(arithRes1)
+
+    ; transfer balance to receiver
+    $ => A                  :MLOAD(SP)
+    0 => B,C                ; balance key smt
+    $ => SR                 :SSTORE
+
+    ; set contract balance to 0
+    $ => A                  :MLOAD(storageAddr)
+    0 => D
+    $ => SR                 :SSTORE
+
+    $ => A                  :MLOAD(originCTX)
+    $                       :EQ,JMPC(handleGas)    
+    $ => B                  :MLOAD(gasRefund)
+    $ => C                  :MLOAD(isCreate)
+    1 => D
+    C - 1                   :JMPN(opSENDALLend)
+    $ => D                  :MLOAD(createContractAddress)
+
+opSENDALLend:
+    A => CTX
+    0                       :MSTORE(retDataCTX)
+    CTX                     :MSTORE(currentCTX)
+    B                       :MSTORE(gasRefund)
+    $ => C                  :MLOAD(gasCTX)
+    GAS + C => GAS
+    $ => SP                 :MLOAD(lastSP)
+    $ => PC                 :MLOAD(lastPC)
+    D                       :MSTORE(SP++)
+    1024 - SP               :JMPN(stackOverflow)
+    $ => A                  :MLOAD(depth)
+    A - 1                   :MSTORE(depth)
+    ${commit()}
+                            :JMP(readCode)
+
+opINVALID:
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+                                :JMP(invalidProcess)
