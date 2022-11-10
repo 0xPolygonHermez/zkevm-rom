@@ -53,7 +53,7 @@ opCALLDATASIZE:
     GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
-opCALLDATASIZEdep: 
+opCALLDATASIZEdep:
     0               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
     GAS-2 => GAS    :JMPN(outOfGas)
@@ -120,7 +120,7 @@ opCALLDATACOPYinit:
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP)   ;length
     C - 32 => C
-    C               :MSTORE(SP) 
+    C               :MSTORE(SP)
     B + 32 => B
                     :JMP(opCALLDATACOPYinit)
 
@@ -304,7 +304,7 @@ opEXTCODESIZE:
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
                     :CALL(maskAddress) ; Mask address to 20 bytes
-    ${isWarmedAddress(A)} => D
+                    :CALL(isWarmedAddress)
     %SMT_KEY_SC_LENGTH => B
     0 => C
     $ => A          :SLOAD
@@ -331,7 +331,7 @@ opEXTCODECOPY:
     SP - 1 => SP
     $ => A          :MLOAD(SP--) ;addr
                     :CALL(maskAddress) ; Mask address to 20 bytes
-    ${isWarmedAddress(A)} => D
+                    :CALL(isWarmedAddress)
     GAS-100-D*2500 => GAS            :JMPN(outOfGas)
                     :CALL(opEXTCODECOPYCheckHash)
     $ => C          :MLOAD(SP--) ;destOffset, memory offset
@@ -556,7 +556,7 @@ opEXTCODEHASH:
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP)
                     :CALL(maskAddress) ; Mask address to 20 bytes
-    ${isWarmedAddress(A)} => D
+                    :CALL(isWarmedAddress)
     GAS-100-D*2500 => GAS    :JMPN(outOfGas)
     %SMT_KEY_SC_CODE => B
     0 => C
@@ -564,42 +564,3 @@ opEXTCODEHASH:
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
-
-; @info opEXTCODEHASHL2 returns the keccak of the bytecode
-; opEXTCODEHASH returns the hash bytecode stored in the smt (poseidon linear hash)
-;opEXTCODEHASHL2:
-;    SP - 1 => SP    :JMPN(stackUnderflow)
-;    $ => A          :MLOAD(SP)
-;    ${isWarmedAddress(A)} => D
-;    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
-;    %SMT_KEY_SC_CODE => B
-;    0 => C
-;    $ => A          :SLOAD
-;    $${p = 0}
-;    ${getBytecodeLength(A)} => C
-;    $ => E           :MLOAD(lastHashKIdUsed)
-;    E+1 => E         :MSTORE(lastHashKIdUsed)
-;    ; A new hash with position 0 is started
-;    0 => HASHPOS
-;
-;opEXTCODEHASHinit:
-;    32 => D
-;    C - 1           :JMPN(opEXTCODEHASHend)
-;    C - 32          :JMPN(opEXTCODEHASHfinal)
-;    ${getBytecode(A,p,D)} => B
-;    B               :HASHK(E)
-;    C - D => C
-;    $${p = p + D}
-;                    :JMP(opEXTCODEHASHinit)
-;
-;opEXTCODEHASHfinal:
-;    C => D
-;    ${getBytecode(A,p,C)} => B
-;    B               :HASHK(E)
-;
-;opEXTCODEHASHend:
-;    HASHPOS         :HASHKLEN(E)
-;    $ => A          :HASHKDIGEST(E)
-;    A               :MSTORE(SP++)
-;    1024 - SP       :JMPN(stackOverflow)
-;                    :JMP(readCode)
