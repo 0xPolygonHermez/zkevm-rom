@@ -21,7 +21,6 @@ opSTOPend:
     1024 - SP       :JMPN(stackOverflow)
     $ => A          :MLOAD(depth)
     A - 1           :MSTORE(depth)
-    ${commit()}
                     :JMP(readCode)
 
 ; // TODO Check with DElEGATE CALL txDestAddr/txSrcAddr ( same as other calls)
@@ -56,7 +55,7 @@ opCREATE:
     GAS - 32000 => GAS  :JMPN(outOfGas)
     GAS                 :MSTORE(gasCall)
 
-    ; Check correctness of Create: depth, can transfer, nonce overlfow, 
+    ; Check correctness of Create: depth, can transfer, nonce overlfow,
     ; depth overflow
 
     ; can transfer
@@ -64,7 +63,7 @@ opCREATE:
     %SMT_KEY_BALANCE => B                                             ; balance key smt
     0 => C                                                            ; 3rd parameter does not apply to nonce or balance
     $ => A              :SLOAD
-    D => B              
+    D => B
     $                   :LT,JMPC(opCreateFail)
 
     ; nonce overlow
@@ -74,7 +73,6 @@ opCREATE:
     A => C
     %MAX_NONCE => A
     $                   :EQ,JMPC(opCreateFail)
-
 
     ;change to a new CTX
     SP                  :MSTORE(lastSP)
@@ -113,14 +111,14 @@ opCREATE:
     A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
     A                   :MSTORE(txValue)
-
+                        :CALL(checkpointTouched)
                         :JMP(txType)
 
 opCreateFail:
     0                   :MSTORE(retDataCTX)
     0                   :MSTORE(SP++)
                         :JMP(readCode)
-                                   
+
 ; // https://eips.ethereum.org/EIPS/eip-211
 opCALL:
 
@@ -183,7 +181,8 @@ opCALL2:
 
     ; If addr in touched addres D = 0, else D = 1
     $ => A          :MLOAD(addrCall)
-    ${isWarmedAddress(A)} => D ; TODO
+                    :CALL(isColdAddress)
+
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
     GAS-100-D*2500 => GAS :JMPN(outOfGas)
@@ -235,6 +234,7 @@ opCALLend:
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txCalldataLen)
                         :CALL(copySP)
+                        :CALL(checkpointTouched)
                         :JMP(txType)
 
 ; TODO if theres a delegate call inside a callCode, who is the msg.sender?
@@ -287,7 +287,7 @@ opCALLCODE: ; TODO check staticCall
 
     ; If addr in touched addres D = 0, else D = 1
     $ => A                   :MLOAD(addrCall)
-    ${isWarmedAddress(A)} => D
+                             :CALL(isColdAddress)
 
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
@@ -338,6 +338,7 @@ opCALLCODEend:
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txCalldataLen)
                     :CALL(copySP)
+                    :CALL(checkpointTouched)
                     :JMP(txType)
 
 opRETURN:
@@ -418,7 +419,6 @@ opRETURNend:
     1024 - SP       :JMPN(stackOverflow)
     $ => A          :MLOAD(depth)
     A - 1           :MSTORE(depth)
-    ${commit()}
                     :JMP(readCode)
 
 
@@ -482,7 +482,6 @@ opRETURNcreateEnd:
     1024 - SP       :JMPN(stackOverflow)
     $ => A          :MLOAD(depth)
     A - 1           :MSTORE(depth)
-    ${commit()}
                     :JMP(readCode)
 
 ; TODO if theres a delegate call, there should be not moveBalances
@@ -517,8 +516,8 @@ opDELEGATECALL:
     $ => B          :MLOAD(SP--)
     B               :MSTORE(lastMemOffset)
     ; Store byte size to copy (size of the return data).
-    $ => D          :MLOAD(SP)
-    D               :MSTORE(lastMemLength)
+    $ => E          :MLOAD(SP)
+    E               :MSTORE(lastMemLength)
     ;  Mem expansion gas cost return args
                     :CALL(saveMem)
 
@@ -531,12 +530,12 @@ opDELEGATECALL:
 
     $ => B                   :MLOAD(lastMemOffset)
     $ => A                   :MLOAD(addrCall)
-    ${isWarmedAddress(A)} => C
+                             :CALL(isColdAddress)
     ;gas_cost = base_gas + gas_sent_with_call
-    GAS-100-C*2500 => GAS    :JMPN(outOfGas)
+    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
 
     $ => C          :MLOAD(txSrcAddr)
-    $ => E          :MLOAD(storageAddr)
+    $ => D          :MLOAD(storageAddr)
     SP              :MSTORE(lastSP)
     PC              :MSTORE(lastPC)
     ;change new CTX
@@ -546,14 +545,14 @@ opDELEGATECALL:
     $ => A          :MLOAD(originAuxCTX)
     A               :MSTORE(originCTX)
     C               :MSTORE(txSrcAddr)
-    E               :MSTORE(storageAddr)
+    D               :MSTORE(storageAddr)
     1               :MSTORE(isDelegateCall)
     SR              :MSTORE(initSR)
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
 
     B               :MSTORE(retCallOffset)
-    D               :MSTORE(retCallLength)
+    E               :MSTORE(retCallLength)
 
                     :CALL(computeGasSendCall)
     $ => CTX        :MLOAD(originCTX)
@@ -571,6 +570,7 @@ opDELEGATECALLend:
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txCalldataLen)
                     :CALL(copySP)
+                    :CALL(checkpointTouched)
                     :JMP(txType)
 
 ; // TODO Check with DElEGATE CALL txDestAddr/txSrcAddr ( same as other calls)
@@ -616,7 +616,7 @@ opCREATE2:
     A - B => GAS
     GAS                 :MSTORE(gasCall)
 
-    ; Check correctness of Create: depth, can transfer, nonce overlfow, 
+    ; Check correctness of Create: depth, can transfer, nonce overlfow,
     ; can transfer
     $ => A              :MLOAD(storageAddr)
     %SMT_KEY_BALANCE => B                                             ; balance key smt
@@ -669,12 +669,12 @@ opCREATE2:
     C                   :MSTORE(gasRefund)
     A => GAS
                         :CALL(copySP)
-   
+
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
     A                   :MSTORE(txValue)
-
+                        :CALL(checkpointTouched)
                         :JMP(txType)
 
 ;TODO same as other calls
@@ -701,8 +701,8 @@ opSTATICCALL:
     $ => C          :MLOAD(SP--)
     C               :MSTORE(lastMemOffset)
 
-    $ => D          :MLOAD(SP)
-    D               :MSTORE(lastMemLength)
+    $ => E          :MLOAD(SP)
+    E               :MSTORE(lastMemLength)
                     :CALL(saveMem)
 
     ;Check counters
@@ -713,11 +713,11 @@ opSTATICCALL:
 
     ; Substract gas cost
     $ => A          :MLOAD(addrCall)
-    ${isWarmedAddress(A)} => E
+                    :CALL(isColdAddress)
     ;gas_cost = base_gas + gas_sent_with_call
-    GAS-100-E*2500 => GAS    :JMPN(outOfGas)
+    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
 
-    $ => E          :MLOAD(storageAddr)
+    $ => D          :MLOAD(storageAddr)
     $ => B          :MLOAD(gasRefund)
     SP              :MSTORE(lastSP)
     PC              :MSTORE(lastPC)
@@ -730,13 +730,13 @@ opSTATICCALL:
     B               :MSTORE(gasRefund)
     0               :MSTORE(txValue)
     1               :MSTORE(isStaticCall)
-    E               :MSTORE(txSrcAddr)
+    D               :MSTORE(txSrcAddr)
     SR              :MSTORE(initSR)
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
     A               :MSTORE(storageAddr)
     C               :MSTORE(retCallOffset)
-    D               :MSTORE(retCallLength)
+    E               :MSTORE(retCallLength)
 
                     :CALL(computeGasSendCall)
     $ => CTX        :MLOAD(originCTX)
@@ -746,6 +746,7 @@ opSTATICCALL:
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txCalldataLen)
                     :CALL(copySP)
+                    :CALL(checkpointTouched)
                     :JMP(txType)
 
 opREVERT:
@@ -754,6 +755,7 @@ opREVERT:
 
     SP - 2          :JMPN(stackUnderflow)
     $ => SR         :MLOAD(initSR)
+                    :CALL(revertTouched)
     SP - 1 => SP
     $ => E          :MLOAD(SP--) ;offset
     $ => C          :MLOAD(SP) ;length
@@ -818,7 +820,6 @@ opREVERTend:
     1024 - SP       :JMPN(stackOverflow)
     $ => A          :MLOAD(depth)
     A - 1           :MSTORE(depth)
-    ${revert()}
                     :JMP(readCode)
 
 ; // TODO: handle if depth is over 0
@@ -837,8 +838,7 @@ opSENDALL:
 
     $ => A              :MLOAD(storageAddr)
     0 => B,C            ; balance key smt
-    $ => E              :SLOAD
-    E => D
+    $ => D              :SLOAD
 
     ; read receiver
     SP - 1 => SP        :JMPN(stackUnderflow)
@@ -849,24 +849,23 @@ opSENDALL:
     A => E
     0 => A
     D => B
-    $                   :EQ,JMPC(opSENDALL2)
-                        :CALL(isEmptyAccount)
-    GAS - 25000 * E => GAS    :JMPN(outOfGas)
-    
+    $                           :EQ,JMPC(opSENDALL2)
+                                :CALL(isEmptyAccount)
+    GAS - 25000 * E => GAS      :JMPN(outOfGas)
+
 opSENDALL2:
     ; gas: check touched address
     C => A
-                              :CALL(maskAddress) ; Mask address to 20 bytes
-    ${isWarmedAddress(A)} => E
-    GAS - 2600 * E => GAS     :JMPN(outOfGas)
+                              :CALL(isColdAddress)
+    GAS - 2600 * D => GAS     :JMPN(outOfGas)
 
+    B                         :MSTORE(arithA)
     ; read previous balance receiver
     0 => B,C            ; balance key smt
     $ => E              :SLOAD
 
     ; compute new receiver balance
     ; Add operation with Arith
-    D               :MSTORE(arithA)
     E               :MSTORE(arithB)
                     :CALL(addARITH)
     $ => D          :MLOAD(arithRes1)
@@ -882,7 +881,7 @@ opSENDALL2:
     $ => SR                 :SSTORE
 
     $ => A                  :MLOAD(originCTX)
-    $                       :EQ,JMPC(handleGas)    
+    $                       :EQ,JMPC(handleGas)
     $ => B                  :MLOAD(gasRefund)
     $ => C                  :MLOAD(isCreate)
     1 => D
@@ -902,7 +901,6 @@ opSENDALLend:
     1024 - SP               :JMPN(stackOverflow)
     $ => A                  :MLOAD(depth)
     A - 1                   :MSTORE(depth)
-    ${commit()}
                             :JMP(readCode)
 
 opINVALID:
