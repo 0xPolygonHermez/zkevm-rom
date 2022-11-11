@@ -1,6 +1,8 @@
 INCLUDE "map-opcodes.zkasm"
 INCLUDE "precompiled/selector.zkasm"
 INCLUDE "ecrecover/ecrecover.zkasm"
+INCLUDE "touched.zkasm"
+
 ; Blocks process txs
 ;       A - Verify ecdsa signature
 ;       B - Verify tx.sender does not have any code deployed (EIP3607)
@@ -84,6 +86,8 @@ endCheckChainId:
         $ => A                          :MLOAD(txSrcOriginAddr)
         ${clearWarmedStorage()} ; clear accessed since there is a new transaction
         ${isWarmedAddress(A)} ; add tx.origin to touched addresses
+                                        :CALL(initTouchedTree)
+                                        :CALL(isWarmedAddress)
         0                               :MSTORE(depth) ; Initial depth is 0
 
 ;; Set gasPrice global var
@@ -214,6 +218,7 @@ txType:
         ; Add 'to' to touched addresses
         ${isWarmedAddress(A)}
         ${checkpoint()}
+                                        :CALL(isWarmedAddress)
         ; Check 'to' is zero or precompiled contract
         ; Check zero address since zero address is not a precompiled contract
         0 => B
@@ -363,6 +368,7 @@ deploy:
         ; add address to touched addresses
         ${isWarmedAddress(A)}
         ${checkpoint()}
+                                        :CALL(isWarmedAddress)
         ; check if address is deployable ( nonce == bytecode == 0)
         A => E
 

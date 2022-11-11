@@ -105,7 +105,11 @@ opSLOAD:
     $ => E          :SLOAD ;current value
     E               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
+                    :CALL(isWarmedSlot)
+    ${log(A, NEW)}
+    $ => A          :MLOAD(storageAddr)
     ${isWarmedStorage(A,C)} => A
+    ${log(A, OLD)}
     GAS - %SLOAD_GAS - A*2000 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
@@ -139,7 +143,11 @@ opSSTOREinit:
     $ => SR         :MLOAD(originSR)
     $ => B          :SLOAD ;origin value
     $ => SR         :MLOAD(auxSR)
+                    :CALL(isWarmedSlot)
+    ${log(A, NEW)}
+    $ => A          :MLOAD(storageAddr)
     ${isWarmedStorage(A,C)} => A
+    ${log(A, OLD)}
     B => C           ;origin value
     GAS - A*2100 => GAS    :JMPN(outOfGas)
     E => A

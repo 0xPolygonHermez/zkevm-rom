@@ -113,7 +113,7 @@ opCREATE:
     A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
     A                   :MSTORE(txValue)
-
+                        :CALL(commitTouched)
                         :JMP(txType)
 
 opCreateFail:
@@ -183,7 +183,10 @@ opCALL2:
 
     ; If addr in touched addres D = 0, else D = 1
     $ => A          :MLOAD(addrCall)
+                    :CALL(isWarmedAddress)
+    ${log(D, NEWCALL2)}
     ${isWarmedAddress(A)} => D ; TODO
+    ${log(D, OLDCALL2)}
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
     GAS-100-D*2500 => GAS :JMPN(outOfGas)
@@ -235,6 +238,7 @@ opCALLend:
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txCalldataLen)
                         :CALL(copySP)
+                        :CALL(commitTouched)
                         :JMP(txType)
 
 ; TODO if theres a delegate call inside a callCode, who is the msg.sender?
@@ -287,8 +291,10 @@ opCALLCODE: ; TODO check staticCall
 
     ; If addr in touched addres D = 0, else D = 1
     $ => A                   :MLOAD(addrCall)
+                    :CALL(isWarmedAddress)
+    ${log(D, NEWCALLCODE)}
     ${isWarmedAddress(A)} => D
-
+    ${log(D, OLDCALLCODE)}
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
     GAS-100-D*2500 => GAS    :JMPN(outOfGas)
@@ -338,6 +344,7 @@ opCALLCODEend:
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txCalldataLen)
                     :CALL(copySP)
+                    :CALL(commitTouched)
                     :JMP(txType)
 
 opRETURN:
@@ -531,10 +538,15 @@ opDELEGATECALL:
 
     $ => B                   :MLOAD(lastMemOffset)
     $ => A                   :MLOAD(addrCall)
+    D => E
+                             :CALL(isWarmedAddress)
+    ;${log(D, newDELEGATE)}
     ${isWarmedAddress(A)} => C
+    ;${log(C, oldDELEGATE)}
     ;gas_cost = base_gas + gas_sent_with_call
     GAS-100-C*2500 => GAS    :JMPN(outOfGas)
 
+    E => D
     $ => C          :MLOAD(txSrcAddr)
     $ => E          :MLOAD(storageAddr)
     SP              :MSTORE(lastSP)
@@ -571,6 +583,7 @@ opDELEGATECALLend:
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txCalldataLen)
                     :CALL(copySP)
+                    :CALL(commitTouched)
                     :JMP(txType)
 
 ; // TODO Check with DElEGATE CALL txDestAddr/txSrcAddr ( same as other calls)
@@ -674,7 +687,7 @@ opCREATE2:
     A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
     A                   :MSTORE(txValue)
-
+                        :CALL(commitTouched)
                         :JMP(txType)
 
 ;TODO same as other calls
@@ -714,6 +727,7 @@ opSTATICCALL:
     ; Substract gas cost
     $ => A          :MLOAD(addrCall)
     ${isWarmedAddress(A)} => E
+    ${log(E, oldSTATIC)}
     ;gas_cost = base_gas + gas_sent_with_call
     GAS-100-E*2500 => GAS    :JMPN(outOfGas)
 
@@ -746,6 +760,7 @@ opSTATICCALL:
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txCalldataLen)
                     :CALL(copySP)
+                    :CALL(commitTouched)
                     :JMP(txType)
 
 opREVERT:
@@ -754,6 +769,7 @@ opREVERT:
 
     SP - 2          :JMPN(stackUnderflow)
     $ => SR         :MLOAD(initSR)
+                    :CALL(revertTouched)
     SP - 1 => SP
     $ => E          :MLOAD(SP--) ;offset
     $ => C          :MLOAD(SP) ;length
@@ -858,6 +874,7 @@ opSENDALL2:
     C => A
                               :CALL(maskAddress) ; Mask address to 20 bytes
     ${isWarmedAddress(A)} => E
+    ${log(E, oldSENDALL)}
     GAS - 2600 * E => GAS     :JMPN(outOfGas)
 
     ; read previous balance receiver
