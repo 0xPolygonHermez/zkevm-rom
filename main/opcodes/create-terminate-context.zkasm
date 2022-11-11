@@ -111,7 +111,7 @@ opCREATE:
     A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
     A                   :MSTORE(txValue)
-                        :CALL(commitTouched)
+                        :CALL(checkpointTouched)
                         :JMP(txType)
 
 opCreateFail:
@@ -181,7 +181,7 @@ opCALL2:
 
     ; If addr in touched addres D = 0, else D = 1
     $ => A          :MLOAD(addrCall)
-                    :CALL(isWarmedAddress)
+                    :CALL(isColdAddress)
 
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
@@ -234,7 +234,7 @@ opCALLend:
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txCalldataLen)
                         :CALL(copySP)
-                        :CALL(commitTouched)
+                        :CALL(checkpointTouched)
                         :JMP(txType)
 
 ; TODO if theres a delegate call inside a callCode, who is the msg.sender?
@@ -287,7 +287,7 @@ opCALLCODE: ; TODO check staticCall
 
     ; If addr in touched addres D = 0, else D = 1
     $ => A                   :MLOAD(addrCall)
-                             :CALL(isWarmedAddress)
+                             :CALL(isColdAddress)
 
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
@@ -338,7 +338,7 @@ opCALLCODEend:
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txCalldataLen)
                     :CALL(copySP)
-                    :CALL(commitTouched)
+                    :CALL(checkpointTouched)
                     :JMP(txType)
 
 opRETURN:
@@ -516,8 +516,8 @@ opDELEGATECALL:
     $ => B          :MLOAD(SP--)
     B               :MSTORE(lastMemOffset)
     ; Store byte size to copy (size of the return data).
-    $ => D          :MLOAD(SP)
-    D               :MSTORE(lastMemLength)
+    $ => E          :MLOAD(SP)
+    E               :MSTORE(lastMemLength)
     ;  Mem expansion gas cost return args
                     :CALL(saveMem)
 
@@ -530,14 +530,12 @@ opDELEGATECALL:
 
     $ => B                   :MLOAD(lastMemOffset)
     $ => A                   :MLOAD(addrCall)
-    D => E
-                             :CALL(isWarmedAddress)
+                             :CALL(isColdAddress)
     ;gas_cost = base_gas + gas_sent_with_call
     GAS-100-D*2500 => GAS    :JMPN(outOfGas)
-    E => D
 
     $ => C          :MLOAD(txSrcAddr)
-    $ => E          :MLOAD(storageAddr)
+    $ => D          :MLOAD(storageAddr)
     SP              :MSTORE(lastSP)
     PC              :MSTORE(lastPC)
     ;change new CTX
@@ -547,14 +545,14 @@ opDELEGATECALL:
     $ => A          :MLOAD(originAuxCTX)
     A               :MSTORE(originCTX)
     C               :MSTORE(txSrcAddr)
-    E               :MSTORE(storageAddr)
+    D               :MSTORE(storageAddr)
     1               :MSTORE(isDelegateCall)
     SR              :MSTORE(initSR)
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
 
     B               :MSTORE(retCallOffset)
-    D               :MSTORE(retCallLength)
+    E               :MSTORE(retCallLength)
 
                     :CALL(computeGasSendCall)
     $ => CTX        :MLOAD(originCTX)
@@ -572,7 +570,7 @@ opDELEGATECALLend:
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txCalldataLen)
                     :CALL(copySP)
-                    :CALL(commitTouched)
+                    :CALL(checkpointTouched)
                     :JMP(txType)
 
 ; // TODO Check with DElEGATE CALL txDestAddr/txSrcAddr ( same as other calls)
@@ -676,7 +674,7 @@ opCREATE2:
     A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
     A                   :MSTORE(txValue)
-                        :CALL(commitTouched)
+                        :CALL(checkpointTouched)
                         :JMP(txType)
 
 ;TODO same as other calls
@@ -703,8 +701,8 @@ opSTATICCALL:
     $ => C          :MLOAD(SP--)
     C               :MSTORE(lastMemOffset)
 
-    $ => D          :MLOAD(SP)
-    D               :MSTORE(lastMemLength)
+    $ => E          :MLOAD(SP)
+    E               :MSTORE(lastMemLength)
                     :CALL(saveMem)
 
     ;Check counters
@@ -715,13 +713,11 @@ opSTATICCALL:
 
     ; Substract gas cost
     $ => A          :MLOAD(addrCall)
-    D => B
-                    :CALL(isWarmedAddress)
+                    :CALL(isColdAddress)
     ;gas_cost = base_gas + gas_sent_with_call
     GAS-100-D*2500 => GAS    :JMPN(outOfGas)
-    B => D
 
-    $ => E          :MLOAD(storageAddr)
+    $ => D          :MLOAD(storageAddr)
     $ => B          :MLOAD(gasRefund)
     SP              :MSTORE(lastSP)
     PC              :MSTORE(lastPC)
@@ -734,13 +730,13 @@ opSTATICCALL:
     B               :MSTORE(gasRefund)
     0               :MSTORE(txValue)
     1               :MSTORE(isStaticCall)
-    E               :MSTORE(txSrcAddr)
+    D               :MSTORE(txSrcAddr)
     SR              :MSTORE(initSR)
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
     A               :MSTORE(storageAddr)
     C               :MSTORE(retCallOffset)
-    D               :MSTORE(retCallLength)
+    E               :MSTORE(retCallLength)
 
                     :CALL(computeGasSendCall)
     $ => CTX        :MLOAD(originCTX)
@@ -750,7 +746,7 @@ opSTATICCALL:
     $ => A          :MLOAD(argsLengthCall)
     A               :MSTORE(txCalldataLen)
                     :CALL(copySP)
-                    :CALL(commitTouched)
+                    :CALL(checkpointTouched)
                     :JMP(txType)
 
 opREVERT:
@@ -842,8 +838,7 @@ opSENDALL:
 
     $ => A              :MLOAD(storageAddr)
     0 => B,C            ; balance key smt
-    $ => E              :SLOAD
-    E => D
+    $ => D              :SLOAD
 
     ; read receiver
     SP - 1 => SP        :JMPN(stackUnderflow)
@@ -854,25 +849,23 @@ opSENDALL:
     A => E
     0 => A
     D => B
-    $                   :EQ,JMPC(opSENDALL2)
-                        :CALL(isEmptyAccount)
-    GAS - 25000 * E => GAS    :JMPN(outOfGas)
+    $                           :EQ,JMPC(opSENDALL2)
+                                :CALL(isEmptyAccount)
+    GAS - 25000 * E => GAS      :JMPN(outOfGas)
 
 opSENDALL2:
     ; gas: check touched address
     C => A
-                              :CALL(maskAddress) ; Mask address to 20 bytes
-    D => B
-                              :CALL(isWarmedAddress)
+                              :CALL(isColdAddress)
     GAS - 2600 * D => GAS     :JMPN(outOfGas)
-    B => D
+
+    B                         :MSTORE(arithA)
     ; read previous balance receiver
     0 => B,C            ; balance key smt
     $ => E              :SLOAD
 
     ; compute new receiver balance
     ; Add operation with Arith
-    D               :MSTORE(arithA)
     E               :MSTORE(arithB)
                     :CALL(addARITH)
     $ => D          :MLOAD(arithRes1)

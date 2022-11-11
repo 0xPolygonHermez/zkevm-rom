@@ -9,7 +9,7 @@ initTouchedTree:
                     :RETURN
 
 ; @info Save touched root when a new context is created
-commitTouched:
+checkpointTouched:
     $ => A          :MLOAD(touchedSR)
     A               :MSTORE(initTouchedSR)
                     :RETURN
@@ -19,10 +19,10 @@ revertTouched:
     $ => A               :MLOAD(initTouchedSR)
     A                    :MSTORE(touchedSR)
 
-; @info Check if an address is warmed. If it is not, add it to the touched tree
+; @info Check if an address is cold. If it is, add it to the touched tree
 ; @in A => address
-; @out D => if the address is warmed [0 if warm, 1 if cold]
-isWarmedAddress:
+; @out D => if the address is cold [0 if warm, 1 if cold]
+isColdAddress:
     ; store previous registers values temporary
     B               :MSTORE(tmpB)
     C               :MSTORE(tmpC)
@@ -33,10 +33,10 @@ isWarmedAddress:
     $                           :EQ, JMPC(checkWarmed)
     ; if address is a precompiled considered as warm address
     10 => B
-    $                           :LT, JMPC(finishWarmPrecompiled)
+    $                           :LT, JMPC(finishColdPrecompiled)
 
 checkWarmed:
-    ; save current state root load touched root
+    ; save current state root & load touched root
     SR              :MSTORE(tmpStateRoot)
     $ => SR         :MLOAD(touchedSR)
 
@@ -49,16 +49,15 @@ checkWarmed:
 
     ; address is warm. D = 0
     0 => D
-                    :JMP(finishWarmedAddress)
+                    :JMP(finishColdAddress)
 
 ; set address to warm and return 0
 markWarmAddress:
     1 => D
     $ => SR         :SSTORE
-    ; address is cold. D = 1
-    1 => D
+    ; address is cold. D = 1, set before
 
-finishWarmedAddress:
+finishColdAddress:
     ; save touched tree and load state tree
     SR              :MSTORE(touchedSR)
     $ => SR         :MLOAD(tmpStateRoot)
@@ -69,7 +68,7 @@ finishWarmedAddress:
     $ => E          :MLOAD(tmpE)
                     :RETURN
 
-finishWarmPrecompiled:
+finishColdPrecompiled:
     0 => D
     ; restore tmp registers
     $ => B          :MLOAD(tmpB)
@@ -77,11 +76,11 @@ finishWarmPrecompiled:
     $ => E          :MLOAD(tmpE)
                     :RETURN
 
-; @info Check if storage slot is warmed. If it is not, add it to the touched tree
+; @info Check if storage slot is cold. If it is, add it to the touched tree
 ; @in A => address
 ; @in C => storage position
-; @out A => if the storage slot is warmed [0 if warm, 1 if cold]
-isWarmedSlot:
+; @out A => if the storage slot is cold [0 if warm, 1 if cold]
+isColdSlot:
 ; store previous registers values temporary
     B               :MSTORE(tmpB)
     D               :MSTORE(tmpD)
@@ -99,16 +98,16 @@ isWarmedSlot:
 
     ; slot is warm. A = 0
     0 => A
-                    :JMP(finishWarmedSlot)
+                    :JMP(finishColdSlot)
 
 ; set address to warm and return 0
 markWarmSlot:
     1 => D
     $ => SR         :SSTORE
-    ; slot is cold. A = 0
+    ; slot is cold. A = 1
     1 => A
 
-finishWarmedSlot:
+finishColdSlot:
     ; save touched tree and load state tree
     SR              :MSTORE(touchedSR)
     $ => SR         :MLOAD(tmpStateRoot)
