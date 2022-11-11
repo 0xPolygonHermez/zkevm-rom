@@ -1,87 +1,159 @@
-
+/**
+ * @link [https://www.evm.codes/#51?fork=berlin]
+ * @zk-counters
+ *  - 32 arith
+ *  - 32 binary
+ *  - 1 mem align
+ *  - 255 poseidon
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [offset]
+ *  - stack output: [value]
+ */
 opMLOAD:
-
+    ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 32 :JMPN(outOfCountersArith)
     %MAX_CNT_BINARY - CNT_BINARY - 32 :JMPN(outOfCountersBinary)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 1 :JMPN(outOfCountersMemalign)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
+    ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
-    $ => E          :MLOAD(SP)                  ;offset
-    E               :MSTORE(lastMemOffset)
-                    :CALL(MLOAD32)
-    32              :MSTORE(lastMemLength)
-                    :CALL(saveMem)
-    A               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
+
+    ; check out-of-gas
     GAS - 3 => GAS  :JMPN(outOfGas)
+    
+    $ => E          :MLOAD(SP); [offset => E]
+    ; store lastMemOffset for memory expansion gas cost
+    E               :MSTORE(lastMemOffset)
+                    :CALL(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
+    ; store lastMemLength for memory expansion gas cost
+    32              :MSTORE(lastMemLength)
+    ; compute memory expansion gas cost
+                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    ; store stack output                
+    A               :MSTORE(SP++); [value(A) => SP]
+    ; check stack overflow
+    1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
-;MSTORE 32 bytes
-opMSTORE:
-
+/**
+ * @link [https://www.evm.codes/#52?fork=berlin]
+ * @zk-counters
+ *  - 32 arith
+ *  - 32 binary
+ *  - 1 mem align
+ *  - 255 poseidon
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [offset, value]
+ *  - stack output: none
+ */
+ opMSTORE:
+    ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 32 :JMPN(outOfCountersArith)
     %MAX_CNT_BINARY - CNT_BINARY - 32 :JMPN(outOfCountersBinary)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 1 :JMPN(outOfCountersMemalign)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
+    ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => E          :MLOAD(SP--)                ;offset
-    $ => B          :MLOAD(SP)                  ;value
-    B               :MSTORE(bytesToStore)
-    E               :MSTORE(lastMemOffset)
-    E => A
-                    :CALL(MSTORE32)
-    32              :MSTORE(lastMemLength)
-                    :CALL(saveMem)
+
+    ; check out-of-gas
     GAS - 3 => GAS  :JMPN(outOfGas)
+
+    $ => E          :MLOAD(SP--); [offset => E]
+    $ => B          :MLOAD(SP); [value => B]
+
+    ; store bytesToStore for MSTORE32 execution
+    B               :MSTORE(bytesToStore)
+    ; store lastMemOffset for memory expansion gas cost
+    E               :MSTORE(lastMemOffset)
+
+                    :CALL(MSTORE32); in: [E: offset] out: [A: value]
+    ; store lastMemOffset for memory expansion gas cost
+    32              :MSTORE(lastMemLength)
+    ; compute memory expansion gas cost
+                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
                     :JMP(readCode)
 
-
+/**
+ * @link [https://www.evm.codes/#53?fork=berlin]
+ * @zk-counters
+ *  - 32 binary
+ *  - 1 mem align
+ *  - 255 poseidon
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [offset, value]
+ *  - stack output: none
+ */
 opMSTORE8:
-
+    ; checks zk-counters
     %MAX_CNT_BINARY - CNT_BINARY - 32 :JMPN(outOfCountersBinary)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 1 :JMPN(outOfCountersMemalign)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
+    ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => B          :MLOAD(SP--)                ;offset
+
+    ; check out-of-gas
+    GAS - 3 => GAS  :JMPN(outOfGas)
+
+    $ => B          :MLOAD(SP--); [offset => B]
+    ; store lastMemOffset for memory expansion gas cost
     B               :MSTORE(lastMemOffset)
+    ; store lastMemLength for memory expansion gas cost. In case of MSTORE8, always 1 byte
     1               :MSTORE(lastMemLength)
+    ; check offset is below memory limit
     0x200000 => A
     $               :LT,JMPC(errorMLOADMSTORE)
     B => A
-                    :CALL(offsetUtil)
-    $ => B          :MLOAD(SP)                  ;value
-    $ => A          :MLOAD(MEM:E) ; read M0
+                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    $ => B          :MLOAD(SP); [value => B]
+    ; read from memory position E
+    $ => A          :MLOAD(MEM:E)
     ${memAlignWR8_W0(A,B,C)} => D  ; no trust calculate W0
     B               :MEM_ALIGN_WR8 ; only use LSB of B, rest of bytes could be non zero.
-    D               :MSTORE(MEM:E)     ; write W0
-    GAS - 3 => GAS  :JMPN(outOfGas)
-                    :CALL(saveMem)
+    ; write at memory position E
+    D               :MSTORE(MEM:E)
+                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
                     :JMP(readCode)
 
-
+/**
+ * @link [https://www.evm.codes/#59?fork=berlin]
+ * @zk-counters
+ *  - 1 arith
+ *  - 3 binary
+ *  - 200 steps
+ * @process-opcode
+ *  - stack input: none
+ *  - stack output: [size]
+ */
 opMSIZE:
-
+    ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
     %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
 
+    ; check out-of-gas
     GAS - 2 => GAS      :JMPN(outOfGas)
+
+    ; load current memory length
     $ => E              :MLOAD(memLength)
     ; MSIZE should be multiple of a word (32 bytes)
     ; Div operation with Arith
     E               :MSTORE(arithA)
     32              :MSTORE(arithB)
-                    :CALL(divARITH)
+                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => C          :MLOAD(arithRes1)
     $ => B          :MLOAD(arithRes2)
+    ; check arithRes2 is 0, no need to round in this case
     0 => A
     $               :EQ, JMPC(MSIZEend)
     ; Round size to 32bytes multiple
@@ -89,113 +161,154 @@ opMSIZE:
     C * 32 => E
 
 MSIZEend:
-    E               :MSTORE(SP++)
+    E               :MSTORE(SP++); [size(E) => SP]
+    ; check stack overflow
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
-
+/**
+ * @link [https://www.evm.codes/#54?fork=berlin]
+ * @zk-counters
+ *  - 255 poseidon
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [key]
+ *  - stack output: [value]
+ */                    
 opSLOAD:
-
+    ; checks zk-counters
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
+    ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
-    $ => C          :MLOAD(SP) ;key
+
+    $ => C          :MLOAD(SP); [key => C]
+    ; get current storage address
     $ => A          :MLOAD(storageAddr)
+    ; set key for smt storage query
     %SMT_KEY_SC_STORAGE => B
-    $ => E          :SLOAD ;current value
-    E               :MSTORE(SP++)
+    $ => E          :SLOAD
+    E               :MSTORE(SP++); [value(E) => SP]
+    ; check stack overflow
     1024 - SP       :JMPN(stackOverflow)
+    ; set key(C) as warmed storage for address(A)
                     :CALL(isColdSlot)
+    ; check out-of-gas
     GAS - %SLOAD_GAS - A*2000 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#55?fork=berlin]
+ * @zk-counters
+ *  - 10 binary
+ *  - 1 mem align
+ *  - 765 poseidon
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [key, value]
+ *  - stack output: none
+ */
 opSSTORE:
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 765 :JMPN(outOfCountersPoseidon)
+    ; checks zk-counters
     %MAX_CNT_BINARY - CNT_BINARY - 10 :JMPN(outOfCountersBinary)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1 :JMPN(outOfCountersMemalign)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 765 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCountersStep)
-
+    
+    ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
-    ; If GAS <= 2300 --> OOG
+    ; check out-of-gas
     GAS - 2300 - 1  :JMPN(outOfGas)
+    ; check is static call
     $ => A          :MLOAD(isStaticCall)
     0 - A           :JMPN(invalidStaticTx)
+
     SP - 1 => SP
-    $ => C          :MLOAD(SP--) ;key
+    $ => C          :MLOAD(SP--) ; [key => C]
     C               :MSTORE(tmpVarC)
-    $ => D          :MLOAD(SP) ; new value
+    $ => D          :MLOAD(SP) ; [value => D]
+    ; check if is a create call
     $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPN(deploymentSSTORE)
+    ; load current storage address
     $ => A          :MLOAD(storageAddr)
                     :JMP(opSSTOREinit)
 
 deploymentSSTORE:
+    ; in case of create, the storage address is the create contract address
     $ => A          :MLOAD(createContractAddress)
 
 opSSTOREinit:
+    ; set key for smt storage query
     %SMT_KEY_SC_STORAGE => B
-    $ => E          :SLOAD ;current value
+    $ => E          :SLOAD
+    ; change context to check sotrage original value 
     SR              :MSTORE(auxSR)
     $ => SR         :MLOAD(originSR)
-    $ => B          :SLOAD ;origin value
+    $ => B          :SLOAD ; origin value
     $ => SR         :MLOAD(auxSR)
+    ; set key(C) as warmed storage for address(A)
                     :CALL(isColdSlot)
-    B => C           ;origin value
+    B => C           ; origin value
+    ; check out-of-gas
     GAS - A*2100 => GAS    :JMPN(outOfGas)
     E => A
     D => B
     $ => A          :EQ
     A - 1           :JMPN(opSSTOREdif)
-    ;if new_val == current_val
+    ; if new_val == current_val
+    ; check out-of-gas
     GAS - 100 => GAS:JMPN(outOfGas)
                     :JMP(opSSTOREend)
 
 opSSTOREdif:
-    ;if new_val != current_val
+    ; if new_val != current_val
     C => A
     E => B
     $ => A          :EQ
     A - 1           :JMPN(opSSTOREdifA)
-    ;if current_val == orig_val
+    ; if current_val == orig_val
     0 => A
     C => B
     $ => A          :EQ
     A - 1           :JMPN(opSSTOREdifB)
-    ;if origin_val == 0
+    ; if origin_val == 0
+    ; check out-of-gas
     GAS - %SSTORE_SET_GAS => GAS    :JMPN(outOfGas)
                     :JMP(opSSTOREend)
 
 opSSTOREdifA:
-    ;if current_val != orig_val
+    ; if current_val != orig_val
     GAS - 100 => GAS:JMPN(outOfGas)
     0 => A
     C => B
     $ => A          :EQ
     A - 1           :JMPN(opSSTOREdifA1)
-    ;if origin_value == 0
+    ; if origin_value == 0
 
 opSSTOREdifAB:
-    ;if origin_value == 0
+    ; if origin_value == 0
     D => A
     C => B
     $ => A          :EQ
     A - 1           :JMPN(opSSTOREend)
-    ;if new_val == orig_val
+    ; if new_val == orig_val
     0 => A
     $ => A          :EQ
     A - 1           :JMPN(opSSTOREdifA2)
-    ;if orig_val == 0
+    ; if orig_val == 0
     $ => A          :MLOAD(gasRefund)
     A + 19900 => A  :MSTORE(gasRefund)
                     :JMP(opSSTOREend)
 
 opSSTOREdifA1:
-    ;if orig_val != 0
+    ; if orig_val != 0
     0 => A
     E => B
     $ => A          :EQ
     A - 1           :JMPN(opSSTOREdifA12)
-    ;if current_val == 0
+    ; if current_val == 0
+    ; compute gas refund
     $ => A          :MLOAD(gasRefund)
     A - %SSTORE_CLEARS_SCHEDULE => A  :MSTORE(gasRefund)
                     :JMP(opSSTOREdifAB)
@@ -205,25 +318,29 @@ opSSTOREdifA12:
     D => B
     $ => A          :EQ
     A - 1           :JMPN(opSSTOREdifAB)
-    ;if new_val == 0
+    ; if new_val == 0
+    ; compute gas refund
     $ => A          :MLOAD(gasRefund)
     A + %SSTORE_CLEARS_SCHEDULE => A  :MSTORE(gasRefund)
                     :JMP(opSSTOREdifAB)
 
 opSSTOREdifA2:
-    ;if orig_val != 0
+    ; if orig_val != 0
+    ; compute gas refund
     $ => A          :MLOAD(gasRefund)
     A + 2800 => A   :MSTORE(gasRefund)
                     :JMP(opSSTOREend)
 
 opSSTOREdifB:
-    ;if orig_val != 0
+    ; if orig_val != 0
+    ; check out-of-gas
     GAS - %SSTORE_RESET_GAS => GAS    :JMPN(outOfGas)
     0 => A
     D => B
     $ => A          :EQ
     A - 1           :JMPN(opSSTOREend)
-    ;if new_val == 0
+    ; if new_val == 0
+    ; compute gas refund
     $ => A          :MLOAD(gasRefund)
     A + %SSTORE_CLEARS_SCHEDULE => A  :MSTORE(gasRefund)
                     :JMP(opSSTOREend)
@@ -235,10 +352,12 @@ opSSTOREend:
                     :JMP(opSSTOREsr)
 
 mloadContract:
+    ; if is a create, use create contract address storage
     $ => A          :MLOAD(createContractAddress)
 
 opSSTOREsr:
+    ; set key for smt storage query
     %SMT_KEY_SC_STORAGE => B
-    $ => C          :MLOAD(tmpVarC)
+    $ => C          :MLOAD(tmpVarC); key => C
     $ => SR         :SSTORE
                     :JMP(readCode)
