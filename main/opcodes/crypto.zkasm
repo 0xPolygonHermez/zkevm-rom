@@ -1,6 +1,18 @@
-
+/**
+ * @link [https://www.evm.codes/#20?fork=berlin]
+ * @zk-counters
+ *  - 192 arith
+ *  - dynamic binary: 193 + length
+ *  - 2 mem align
+ *  - 2 keccak
+ *  - 10 poseidon
+ *  - dynamic steps: 200 + 100 * length
+ * @process-opcode
+ *  - stack input: [offset, size]
+ *  - stack output: [hash]
+ */
 opSHA3:
-
+    ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCountersArith)
     %MAX_CNT_BINARY - CNT_BINARY - 193 :JMPN(outOfCountersBinary)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCountersMemalign)
@@ -9,73 +21,94 @@ opSHA3:
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 10 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
 
+    ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
+    
+    ; check out-of-gas
+    GAS - 30 => GAS :JMPN(outOfGas)
     SP - 1 => SP
-    $ => E          :MLOAD(SP--) ; offset
-    $ => C          :MLOAD(SP) ; length
+    $ => E          :MLOAD(SP--); [offset => E]
+    $ => C          :MLOAD(SP) ; [size => C]
+    ; store lastMemOffset for memory expansion gas cost
     E               :MSTORE(lastMemOffset)
+    ; store lastMemLength for memory expansion gas cost
     C               :MSTORE(lastMemLength)
-    ; gas
-    GAS - 30 => GAS :JMPN(outOfGas); gas static = 30
-                    :CALL(saveMem)
-    ; Div operation with Arith
+    ; compute memory expansion gas cost
+                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    ; check out-of-gas, dynamic                
     ;${6*((C+31)/32)}
     C+31 => A
     ;(C+31)/32
     A               :MSTORE(arithA)
     32              :MSTORE(arithB)
                     :CALL(divARITH)
-    $ => A          :MLOAD(arithRes1)
+    $ => A          :MLOAD(arithRes1); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     ; Mul operation with Arith
     ; 6*((C+31)/32)
     6               :MSTORE(arithA)
     A               :MSTORE(arithB)
                     :CALL(mulARITH)
     $ => A          :MLOAD(arithRes1)
-    GAS - A => GAS  :JMPN(outOfGas)  ; dynamic_gas = dynamic_gas = 6 * minimum_word_size + memory_expansion_cost
+    GAS - A => GAS  :JMPN(outOfGas)  ; dynamic_gas = 6 * minimum_word_size + memory_expansion_cost
     ; new hash id
     $ => B           :MLOAD(lastHashKIdUsed)
     B + 1 => B       :MSTORE(lastHashKIdUsed)
+    ; set bytes to hash at D
     32 => D
     ; A new hash with position 0 is started
     0 => HASHPOS
 
 opSHA3Loop:
-
+    ; checks zk-counters
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
     C - 1           :JMPN(opSHA3End)
     C - 32          :JMPN(opSHA3Final)
-                    :CALL(MLOAD32)
+    ; load next 32 bytes from memory
+                    :CALL(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
+    ; save new offset at B                   
     E => B
+    ; get current hash pointer
     $ => E          :MLOAD(lastHashKIdUsed)
+    ; append A to hash pointer E
     A               :HASHK(E)
+    ; restore new offset at E
     B => E
     C - 32 => C
                     :JMP(opSHA3Loop)
 opSHA3Final:
-                    :CALL(MLOADX)
+    ; load next C bytes from memory
+                    :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
+    ; set #bytes to right shift
     32 - C => D
-                    :CALL(SHRarith)
+                    :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    ; get current hash pointer
     $ => E          :MLOAD(lastHashKIdUsed)
+    ; set remaining bytes length to hash at D                    
     C => D
+    ; append A to hash pointer E
     A               :HASHK(E)
 
 opSHA3End:
+    ; get current hash pointer
     $ => E          :MLOAD(lastHashKIdUsed)
+    ; append A to hash pointer E
     HASHPOS         :HASHKLEN(E)
 
     ; Check keccak counters
     HASHPOS         :MSTORE(arithA)
     136             :MSTORE(arithB)
-                    :CALL(divARITH)
+                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
     $ => A          :MLOAD(cntKeccakPreProcess)
+    ; checks keccak counters
     %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A => A
     $               :LT, JMPC(outOfCountersKeccak)
-
+    ; compute hash
     $ => A          :HASHKDIGEST(E)
-    A               :MSTORE(SP++)
+    ; store hash
+    A               :MSTORE(SP++); [hash(A) => SP]
+    ; check stack overflow
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
