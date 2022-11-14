@@ -1,54 +1,153 @@
+/**
+ * Comptutation modexp: A^B mod C
+ * @param - A - Base
+ * @param - B - Exponent
+ * @param - C - Modulo
+ * @returns - acc - accumulate final value operation
+function modExp(A, B, C){
+    // rom: (divARITH) --> B % 2 --> get last bit
+    const arrayBitsB = convertToBits(B);
+    let acc = 1;
+    let bp = A;
+
+    // rom: until B != 0
+    for (let i = 0; i < arrayBitsB.length; i++){ -----> MODEXPloop1
+        const bit = arrayBitsB[i];
+        if (bit == 1) {
+            acc = acc * bp % C    
+        }
+        bp = bp * bp % C
+    }
+    return acc;
+}
+*/
+
 VAR CTX Bsize
 VAR CTX Esize
 VAR CTX Msize
+VAR CTX base
 VAR CTX exp
+VAR CTX newExp
+VAR CTX mod
+VAR CTX res
+VAR CTX bp
+
+CONST %MAX_SIZE = 0x7fffffffn
+
 ;TODO: incorrect inputs (argslength < 32 + 32 + 32 + lenB + lenE + lenM)
 ;TODO: size > 32
 MODEXP:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 3   :JMPN(outOfCountersBinary)
+
     $ => C          :MLOAD(argsLengthCall)
     $ => CTX        :MLOAD(originCTX)
     $ => E          :MLOAD(argsOffsetCall)
                     :CALL(MLOAD32)
-    A               :MSTORE(Bsize)
+    A               :MSTORE(Bsize)          ;Bsize = base size
                     :CALL(MLOAD32)
-    A               :MSTORE(Esize)
+    A               :MSTORE(Esize)          ;Esize = exp size
                     :CALL(MLOAD32)
-    A               :MSTORE(Msize)
+    A               :MSTORE(Msize)          ;Msize = mod size
+
+    $ => B          :MLOAD(Bsize)
+    %MAX_SIZE => A
+    $               :LT,JMPC(MODEXPfinalOOG)
+
+    $ => B          :MLOAD(Esize)
+    0 => A
+    $               :EQ,JMPC(MODEXPexp0)
+    %MAX_SIZE => A
+    $               :LT,JMPC(MODEXPfinalOOG)
+
+    $ => B          :MLOAD(Msize)
+    0 => A
+    $               :EQ,JMPC(MODEXPreturn0)
+    %MAX_SIZE => A
+    $               :LT,JMPC(MODEXPfinalOOG)
+
+
     $ => C          :MLOAD(Bsize)
                     :CALL(MLOADX)
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
-    A => B
+    A               :MSTORE(base)
     $ => C          :MLOAD(Esize)
                     :CALL(MLOADX)
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
     A               :MSTORE(exp)
-    A => D
+    A               :MSTORE(newExp)
     $ => C          :MLOAD(Msize)
                     :CALL(MLOADX)
-    D => E
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
-    E => D
-    B => E
+    A               :MSTORE(mod)
     0 => B
-    $               :EQ,JMPC(MODEXPreturn0)
+    $               :EQ,JMPC(MODEXPreturn0) ;if mod == 0 --> MODEXPreturn0
+    $ => A          :MLOAD(exp)
+    $               :EQ,JMPC(MODEXPexp0)    ;if exp == 0 --> MODEXPexp0
+    $ => A          :MLOAD(base)
+    $               :EQ,JMPC(MODEXPreturn0) ;if base == 0 --> MODEXPreturn0
+    A               :MSTORE(bp)
+    1               :MSTORE(res)
+
+MODEXPloop1:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 2    :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
+
+    $ => A          :MLOAD(newExp)
+    0 => B
+    $               :EQ,JMPC(MODEXPloopEnd) ;if exp = 0 --> MODEXPloopEnd
+    A               :MSTORE(arithA)
+    2               :MSTORE(arithB)
+    zkPC+1 => RR    :JMP(divARITH)          ;divARITH --> exp/2
+    $ => D          :MLOAD(arithRes1)       ;D = exp/2
+    D               :MSTORE(newExp)
+    $ => A          :MLOAD(arithRes2)       ;A = exp%2 (0 or 1)
+    0 => B
+    $               :EQ,JMPC(MODEXPloop10)  ;if A = 0 --> MODEXPloop10
+    $ => A          :MLOAD(res)
+    $ => B          :MLOAD(bp)
+    $ => C          :MLOAD(mod)
+                    :CALL(utilMULMOD)
+    C               :MSTORE(res)
+
+MODEXPloop10:
+    $ => E          :MLOAD(bp)
+    E => A                              ; bp1 = bp0*bp0 (bp²), bp2 = bp1*bp1 (bp⁴), bp3 = bp2*bp2 (bp⁸), ...
     E => B
-    ${exp(B,D)} => B
-    ${B%A} => A
-    C => D
+    $ => C          :MLOAD(mod)
+                    :CALL(utilMULMOD)
+    C               :MSTORE(bp)
+                    :JMP(MODEXPloop1)
+
+MODEXPexp0:
+    %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
+
+    1 => A
+    $ => B          :MLOAD(mod)
+    $               :EQ,JMPC(MODEXPreturn0)
+    1               :MSTORE(res)
+
+MODEXPloopEnd:
+    $ => A          :MLOAD(res)
                     :JMP(MODEXPfinal)
 
 MODEXPreturn0:
     0 => A
-    C => D
 
 MODEXPfinal:
+    $ => D          :MLOAD(Msize)
     $ => CTX        :MLOAD(currentCTX)
+    D               :MSTORE(retDataLength)
     $ => E          :MLOAD(retCallOffset)
     $ => C          :MLOAD(retCallLength)
     $ => CTX        :MLOAD(originCTX)
+    CTX             :MSTORE(currentCTX)
+    B               :MSTORE(retDataCTX)
 
     ;ASSERT C == D
     ;Result of the computation, with the same number of bytes as M
@@ -63,6 +162,12 @@ MODEXPstoreX:
                     :CALL(MSTOREX)
 
 MODEXPgas:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 8    :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+    %MAX_CNT_ARITH - CNT_ARITH - 3      :JMPN(outOfCountersArith)
+
+
     $ => A              :MLOAD(Bsize)
     $ => B              :MLOAD(Msize)
     $ => D              :LT
@@ -70,36 +175,58 @@ MODEXPgas:
     B => A
 
 MODEXPgas2:
-    0 => D ;iteration_count
-    ${(A+7)/8} => A ;words
-    ${exp(A,2)} => A ;multiplication_complexity
+    7 => B
+    $ => A              :ADD,MSTORE(arithA)
+    8 => B              :MSTORE(arithB)
+    zkPC+1 => RR        :JMP(divARITH)
+    $ => A              :MLOAD(arithRes1)   ;words
+    2 => D
+    zkPC+1 => RR        :JMP(expAD)         ;A multiplication_complexity
+    0 => D              ;iteration_count
     A                   :MSTORE(tmpVarA)
-    $ => C              :MLOAD(Esize)
     $ => B              :MLOAD(exp)
-    C - 32              :JMPN(MODEXPgas3)
+                        :CALL(getLenBits)
+    A => C
+    $ => A              :MLOAD(Esize)
+    32 => B
+    $                   :LT,JMPC(MODEXPgas3)
+    $                   :EQ,JMPC(MODEXPgas3)
     ;TODO +32 bytes
                         :JMP(MODEXPgas4)
 
 MODEXPgas3:
+    $ => B              :MLOAD(exp)
     0 => A
     $                   :EQ,JMPC(MODEXPgas4)
-    8*C - 1 => D ;iteration_count
+    C - 1 => D        ;iteration_count
 
 MODEXPgas4:
     1 => B
     D => A
     $ => A              :LT
     A - 1               :JMPN(MODEXPgasEnd)
-    1 => D ;iteration_count
+    1 => D              ;iteration_count
 
 MODEXPgasEnd:
     $ => A              :MLOAD(tmpVarA)
-    ${A*D/3} => A ;multiplication_complexity * iteration_count / 3 TODO: This is UNSAFE!!
+    A                   :MSTORE(arithA)
+    D                   :MSTORE(arithB)
+    zkPC+1 => RR        :JMP(mulARITH)
+    $ => A              :MLOAD(arithRes1)
+    A                   :MSTORE(arithA)
+    3                   :MSTORE(arithB)
+    zkPC+1 => RR        :JMP(divARITH)
+    $ => A              :MLOAD(arithRes1)
     200 => B
-    $ => A              :LT
-    A - 1               :JMPN(MODEXPend)
+    $ => C              :LT
+    A => B
+    C - 1               :JMPN(MODEXPend)
     200 => B
 
 MODEXPend:
     GAS - B => GAS      :JMPN(outOfGas)
                         :JMP(preEnd)
+
+MODEXPfinalOOG:
+    $ => CTX            :MLOAD(currentCTX)
+                        :JMP(outOfGas)
