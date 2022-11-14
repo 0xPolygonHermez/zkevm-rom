@@ -10,13 +10,16 @@ VAR GLOBAL tmpVarB2
 VAR GLOBAL tmpVarC2
 VAR GLOBAL tmpVarD2
 VAR GLOBAL tmpVarE2
-VAR GLOBAL arithA
-VAR GLOBAL arithB
-VAR GLOBAL arithRes1
-VAR GLOBAL arithRes2
-VAR GLOBAL arithOverflow
+VAR GLOBAL tmpVarA3
+VAR GLOBAL tmpVarB3
+VAR GLOBAL tmpVarC3
+VAR GLOBAL tmpVarD3
+VAR GLOBAL tmpVarE3
 VAR GLOBAL tmpZkPC
 VAR GLOBAL tmpZkPC2
+VAR GLOBAL tmpZkPC3
+VAR GLOBAL tmpZkPC4
+VAR GLOBAL result
 
 ; @info Get absolute value and sign
 ; @in A => number to convert
@@ -92,6 +95,39 @@ getLenBytesLoop:
                     :JMP(getLenBytesLoop)
 
 getLenEnd:
+    C => A
+    $ => B          :MLOAD(tmpVarB)
+    $ => C          :MLOAD(tmpVarC)
+    $ => D          :MLOAD(tmpVarD)
+    $ => RR         :MLOAD(tmpZkPC)
+                    :RETURN
+
+; @info bits length of B
+; @in B => number
+; @out A => bits length
+getLenBits:
+    RR              :MSTORE(tmpZkPC)
+    B               :MSTORE(tmpVarB)
+    C               :MSTORE(tmpVarC)
+    D               :MSTORE(tmpVarD)
+    0 => C
+    B => A
+
+getLenBitsLoop:
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
+
+    0 => B
+    $               :EQ,JMPC(getLenBitsEnd)
+    A               :MSTORE(arithA)
+    2               :MSTORE(arithB)
+    zkPC+1 => RR    :JMP(divARITH)
+    $ => A          :MLOAD(arithRes1)
+    C + 1 => C
+                    :JMP(getLenBitsLoop)
+
+getLenBitsEnd:
     C => A
     $ => B          :MLOAD(tmpVarB)
     $ => C          :MLOAD(tmpVarC)
@@ -379,9 +415,21 @@ saveMemEnd:
     $ => E                      :MLOAD(tmpVarE)
                                 :RETURN
 
+VAR GLOBAL tmpVarAArith
+VAR GLOBAL tmpVarBArith
+VAR GLOBAL tmpVarCArith
+VAR GLOBAL tmpVarDArith
+VAR GLOBAL tmpVarEArith
+VAR GLOBAL tmpZkPCArith
+VAR GLOBAL arithA
+VAR GLOBAL arithB
+VAR GLOBAL arithRes1
+VAR GLOBAL arithRes2
+VAR GLOBAL arithOverflow
+
 addARITH:
 
-    RR              :MSTORE(tmpZkPC)
+    RR              :MSTORE(tmpZkPCArith)
     zkPC+1 => RR    :JMP(storeTmp)
 
     $ => A          :MLOAD(arithA)
@@ -391,12 +439,12 @@ addARITH:
     E               :MSTORE(arithRes1)
 
     zkPC+1 => RR    :JMP(loadTmp)
-    $ => RR         :MLOAD(tmpZkPC)
+    $ => RR         :MLOAD(tmpZkPCArith)
                     :JMP(RR)
 
 subARITH:
 
-    RR              :MSTORE(tmpZkPC)
+    RR              :MSTORE(tmpZkPCArith)
     zkPC+1 => RR    :JMP(storeTmp)
 
     $ => A          :MLOAD(arithA)
@@ -406,12 +454,12 @@ subARITH:
     A               :MSTORE(arithRes1)
 
     zkPC+1 => RR    :JMP(loadTmp)
-    $ => RR         :MLOAD(tmpZkPC)
+    $ => RR         :MLOAD(tmpZkPCArith)
                     :JMP(RR)
 
 mulARITH:
 
-    RR              :MSTORE(tmpZkPC)
+    RR              :MSTORE(tmpZkPCArith)
     zkPC+1 => RR    :JMP(storeTmp)
 
     $ => A          :MLOAD(arithA)
@@ -425,11 +473,11 @@ mulARITH:
     D               :MSTORE(arithOverflow)
 
     zkPC+1 => RR    :JMP(loadTmp)
-    $ => RR         :MLOAD(tmpZkPC)
+    $ => RR         :MLOAD(tmpZkPCArith)
                     :JMP(RR)
 
 divARITH:
-    RR              :MSTORE(tmpZkPC)
+    RR              :MSTORE(tmpZkPCArith)
     zkPC+1 => RR    :JMP(storeTmp)
 
     $ => E          :MLOAD(arithA)
@@ -460,7 +508,7 @@ divARITH:
     1               :ASSERT
 
     zkPC+1 => RR    :JMP(loadTmp)
-    $ => RR         :MLOAD(tmpZkPC)
+    $ => RR         :MLOAD(tmpZkPCArith)
                     :JMP(RR)
 
 zeroDiv:
@@ -468,7 +516,7 @@ zeroDiv:
     0               :MSTORE(arithRes2)
 
     zkPC+1 => RR    :JMP(loadTmp)
-    $ => RR         :MLOAD(tmpZkPC)
+    $ => RR         :MLOAD(tmpZkPCArith)
                     :JMP(RR)
 
 divisorSmallerDiv:
@@ -476,45 +524,49 @@ divisorSmallerDiv:
     E               :MSTORE(arithRes2)
 
     zkPC+1 => RR    :JMP(loadTmp)
-    $ => RR         :MLOAD(tmpZkPC)
+    $ => RR         :MLOAD(tmpZkPCArith)
                     :JMP(RR)
 
 loadTmp:
-    $ => A                  :MLOAD(tmpVarA)
-    $ => B                  :MLOAD(tmpVarB)
-    $ => C                  :MLOAD(tmpVarC)
-    $ => D                  :MLOAD(tmpVarD)
-    $ => E                  :MLOAD(tmpVarE)
+    $ => A                  :MLOAD(tmpVarAArith)
+    $ => B                  :MLOAD(tmpVarBArith)
+    $ => C                  :MLOAD(tmpVarCArith)
+    $ => D                  :MLOAD(tmpVarDArith)
+    $ => E                  :MLOAD(tmpVarEArith)
                             :JMP(RR)
 storeTmp:
-    A                   :MSTORE(tmpVarA)
-    B                   :MSTORE(tmpVarB)
-    C                   :MSTORE(tmpVarC)
-    D                   :MSTORE(tmpVarD)
-    E                   :MSTORE(tmpVarE)
+    A                   :MSTORE(tmpVarAArith)
+    B                   :MSTORE(tmpVarBArith)
+    C                   :MSTORE(tmpVarCArith)
+    D                   :MSTORE(tmpVarDArith)
+    E                   :MSTORE(tmpVarEArith)
                         :JMP(RR)
 
+VAR GLOBAL tmpSHXZkPC
+VAR GLOBAL tmpSHXZkPC2
 ;@in A - (A >> D)
 ;@in D - (A >> D) D bytes
 ;@out A - A >> D => A
 SHRarith:
+    RR                      :MSTORE(tmpSHXZkPC2)
     B                       :MSTORE(tmpVarB2)
     C                       :MSTORE(tmpVarC2)
     D                       :MSTORE(tmpVarD2)
     E                       :MSTORE(tmpVarE2)
-    A => E
-    D => A
-    8 => B
+    A => E                                      ; E init number
+    D => A                                      ; A bytes
+    8 => B                                      ; B = 8 (1 byte = 8 bits)
     0 => C
     0 => D
-    ${A*B} => D             :ARITH
-    E => A
+    ${A*B} => D             :ARITH              ; A * B = op --> D = op (D bits)
+    E => A                                      ; A init number
                             :JMP(SHRarithinit)
 
 ;@in A - (A >> D)
 ;@in D - (A >> D) D bits
 ;@out A -  A >> D => A
 SHRarithBit:
+    RR                      :MSTORE(tmpSHXZkPC2)
     B                       :MSTORE(tmpVarB2)
     C                       :MSTORE(tmpVarC2)
     D                       :MSTORE(tmpVarD2)
@@ -522,78 +574,91 @@ SHRarithBit:
 
 SHRarithinit:
     0 => B
-    $                       :EQ,JMPC(SHRarithfinal)
-    A => E
-    D => B
+    $                       :EQ,JMPC(SHRarithfinal) ; if A == 0 --> no shift
+    A => E                                          ; E init number
+    D => B                                          ; B bits
     255 => A
-    $                       :LT,JMPC(SHRarith0)
-    E => A
-    ${exp(2,D)} => B
-    ${B-1} => B
-    $ => C                  :AND
-    ${exp(2,D)} => B
-    ${E/B} => A
-    0 => D
-    E                       :ARITH
+    $                       :LT,JMPC(SHRarith0)     ; A < B, 255 < bits
+    E => A                                          ; A init number
+    D*2 => RR                                       ; RR = bits * 2
+    zkPC+2                  :MSTORE(tmpSHXZkPC)
+                            :JMP(@exp_num + RR)     ; B = 2**D
+    E                       :MSTORE(arithA)
+    B                       :MSTORE(arithB)
+    zkPC+1 => RR            :JMP(divARITH)
+    $ => A                  :MLOAD(arithRes1)
                             :JMP(SHRarithfinal)
 
 SHRarith0:
     0 => A
 
 SHRarithfinal:
-    $ => B                      :MLOAD(tmpVarB2)
-    $ => C                      :MLOAD(tmpVarC2)
-    $ => D                      :MLOAD(tmpVarD2)
-    $ => E                      :MLOAD(tmpVarE2)
-                                :JMP(RR)
+    $ => B                  :MLOAD(tmpVarB2)
+    $ => C                  :MLOAD(tmpVarC2)
+    $ => D                  :MLOAD(tmpVarD2)
+    $ => E                  :MLOAD(tmpVarE2)
+    $ => RR                 :MLOAD(tmpSHXZkPC2)
+                            :JMP(RR)
 
 ;@in A - (A << D)
 ;@in D - (A << D) D bytes
 ;@out A -  A << D => A
 SHLarith:
+    RR                      :MSTORE(tmpSHXZkPC2)
     B                       :MSTORE(tmpVarB2)
     C                       :MSTORE(tmpVarC2)
     D                       :MSTORE(tmpVarD2)
     E                       :MSTORE(tmpVarE2)
-    A => E
-    D => A
+    A => E                                      ; E init number
+    D => A                                      ; A bytes
     8 => B
     0 => C
     0 => D
-    ${A*B} => D             :ARITH
-    E => A
+    ${A*B} => D             :ARITH              ; D = A * 8, D bits
+    E => A                                      ; A init number
                             :JMP(SHLarithinit)
 ;@in A - (A << D)
 ;@in D - (A << D) D bits
 ;@out A -  A << D => A
 SHLarithBit:
+    RR                      :MSTORE(tmpSHXZkPC2)
     B                       :MSTORE(tmpVarB2)
     C                       :MSTORE(tmpVarC2)
     D                       :MSTORE(tmpVarD2)
     E                       :MSTORE(tmpVarE2)
 
 SHLarithinit:
-    A => E
+    A => E                                          ; E init number
     0 => A
-    D => B
+    D => B                                          ; D --> B bits
     $                       :EQ,JMPC(SHLarithfinal) ; if D == 0 --> no shift
-    E => A
-    ${exp(2,D)} => B
-    ${A*B} => E
-    255 - D                 :JMPN(SHLarith0) ; if D >= 256 --> return 0
-    256 - D => D
-    ${exp(2,D)} => B
-    ${B-1} => B
-    A => C
+    255 => A
+    $                       :LT,JMPC(SHLarith0)     ; A < B, 255 < bits
+    E => A                                          ; A init number
+    D*2 => RR
+    zkPC+2                  :MSTORE(tmpSHXZkPC)
+                            :JMP(@exp_num + RR)     ; B = 2**D
+    ${A*B} => E                                     ; E = init number * 2**D (result)
+    E                       :MSTORE(result)
+    256 - D => D                                    ; D = 256 - D
+    D*2 => RR
+    zkPC+2                  :MSTORE(tmpSHXZkPC)
+                            :JMP(@exp_num + RR)     ; B = 2**(256-D)
+    A => E
     B => A
-    C => B
-    $ => C                  :LT
-    B => A
-    256 - D => D
-    ${exp(2,D)} => B
-    0 - C                   :JMPN(SHLarithBig)
+    1 => B
+    $ => A                  :SUB
+    E => B
+    $ => C                  :LT                     ; A < B, 2**(256-D) - 1 < init number
+    E => A                                          ; A init number
+    $ => E                  :MLOAD(result)          ; E result
+    256 - D => D                                    ; D = 256 - D
+    D*2 => RR
+    zkPC+2                  :MSTORE(tmpSHXZkPC)
+                            :JMP(@exp_num + RR)     ; B = 2**D
+    0 - C                   :JMPN(SHLarithBig)      ; if 2**D-1 < init number --> SHLarithBig
     0 => D,C
-    E                       :ARITH
+    E                       :ARITH                  ; init number * 2**D = init
                             :JMP(SHLarithfinal)
 
 SHLarith0:
@@ -602,8 +667,12 @@ SHLarith0:
 
 SHLarithBig:
     256 - D => D
-    ${exp(2,D)} => D
-    ${A/D} => D
+    B => C
+    D*2 => RR
+    zkPC+2                  :MSTORE(tmpSHXZkPC)
+                            :JMP(@exp_num + RR)
+    ${A/B} => D
+    C => B
     0 => C
     E                       :ARITH
 
@@ -613,6 +682,7 @@ SHLarithfinal:
     $ => C                  :MLOAD(tmpVarC2)
     $ => D                  :MLOAD(tmpVarD2)
     $ => E                  :MLOAD(tmpVarE2)
+    $ => RR                 :MLOAD(tmpSHXZkPC2)
                             :JMP(RR)
 
 outOfCountersStep:
@@ -1000,3 +1070,177 @@ updateSystemData:
     SR => D
     $ => SR                             :SSTORE
                                         :RETURN
+
+
+; @info (A*B)%C => C
+; @in A
+; @in B
+; @in C
+; @out C
+utilMULMOD:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 3      :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 3    :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 150         :JMPN(outOfCountersStep)
+
+    RR              :MSTORE(tmpZkPC4)
+    A               :MSTORE(tmpVarA)
+    B               :MSTORE(tmpVarB)
+    D               :MSTORE(tmpVarD)
+    E               :MSTORE(tmpVarE)
+
+    ; The following approach will be followed in order to verify the mulmod operation
+    ; A * B + 0 = D*2^256 + E
+    ; K * N + mulModResult = D*2^256 + E
+
+    ; Since the k can be bigger than 2²⁵⁶ and therefore does not fit in a register we divedit in the
+    ; most significan and less significant part:
+
+    ; (k.l + k.h * 2²⁵⁶) * N + mulModResult = (D1 + D2) * 2²⁵⁶ + E
+    ; And divide this operation in 2 which fits in 2²⁵⁶ digits
+
+    ;k.l * N + mulModResult = D1 * 2²⁵⁶ + E
+    ;k.h * 2²⁵⁶ * N  = D2 * 2²⁵⁶ --> k.h  * N  = D2
+
+    ; Mul operation with Arith
+    ${var _mulMod = A * B} ; TODO $$
+    A               :MSTORE(arithA)
+    B               :MSTORE(arithB)
+    ; here we perform the: A * B + 0 = D*2^256 + E
+    ; result is stored in: arithRes1(E) and arithOverflow(D)
+                    :CALL(mulARITH)
+    C => A
+    ; Check if modulus is 0 or 1
+    2 => B
+    $               :LT, JMPC(zeroOneMod)
+    ; Now we will try to perform the following equation:
+    ; (k.l + k.h * 2²⁵⁶) * N + mulModResult = (D1 + D2) * 2²⁵⁶ + E
+
+    ${(_mulMod / C) >> 256} => B     ; k.h
+    ; We can jump with Js, because later it's all verified by the ARITH
+    ${cond(B == 0)}  :JMPN(mulModNoKH)
+
+    ; Since there's k.h we will split the equation in those 2
+    ;k.l * N + mulModResult = D1 * 2²⁵⁶ + E
+    ;k.h * 2²⁵⁶ * N  = D2 * 2²⁵⁶ --> k.h  * N  = D2
+
+    ; k.h  * N  = D2
+    ; B * A + 0 = 0 * 2²⁵⁶ + E
+    ; D2 must be less than 2²⁵⁶
+    C => A ; Modulus
+    0 => C, D
+    ${B * A} => E   :MSTORE(tmpVarD), ARITH ; D2
+
+    ; k.l * N + mulModResult = D1 * 2²⁵⁶ + E
+    ; B * A + C = D*2^256 + E
+    ; remember that:
+    ; result of mul is stored in: arithRes1(E) and arithOverflow(D)
+
+    ${(_mulMod / A) % (2 << 256)} => B   ; k.l
+    ${_mulMod % A} => C        ; mulModResult
+    ${(B * A + C) >> 256} => D ; D1
+    $               :MLOAD(arithRes1), ARITH
+
+    ; Finally we need to assert the following:
+    ; N>resultModulus
+    ; D1 + D2 = D
+    ; N>resultModulus   ; LT; ASSERT
+    A => B          ; modulus
+    C => A          ; mulModResult
+    $ => A          :LT
+    1               :ASSERT
+
+    ; Assert D1 + D2 = D ; ADD ;ASSERT
+    D => A ; D1
+    $ => B          :MLOAD(tmpVarD) ;D2
+    $ => A          :ADD
+    $               :MLOAD(arithOverflow), ASSERT
+                    :JMP(utilMULMODend)
+
+mulModNoKH:
+    ; if theres no K.h the equation is simplified as:
+    ; K * N + mulModResult = D*2^256 + E
+    ; B * A + C = D*2^256 + E
+
+    C => A ; Modulus on A
+    ${(_mulMod / A)} => B   ; k
+    ${_mulMod % A} => C     ; mulModResult
+    $ => D         :MLOAD(arithOverflow)
+    $              :MLOAD(arithRes1), ARITH ; Can this be on the same line of MLOAD?
+
+    A => B          ; modulus
+    C => A          ; mulModResult
+    $ => A          :LT
+    1               :ASSERT
+                    :JMP(utilMULMODend)
+
+zeroOneMod:
+    0 => C
+
+utilMULMODend:
+    $ => A          :MLOAD(tmpVarA)
+    $ => B          :MLOAD(tmpVarB)
+    $ => D          :MLOAD(tmpVarD)
+    $ => E          :MLOAD(tmpVarE)
+    $ => RR         :MLOAD(tmpZkPC4)
+                    :JMP(RR)
+
+;@info exp(A,D) --> A^D
+;@in A, D => A^D
+;@out A => result
+expAD:
+    RR              :MSTORE(tmpZkPC3)
+    B               :MSTORE(tmpVarB3)
+    C               :MSTORE(tmpVarC3)
+    E               :MSTORE(tmpVarE3)
+    A => E                              ;E base
+    D => B                              ;B exp
+    0 => A
+    $               :EQ,JMPC(expAD0)    ;if exp == 0 --> expAD0
+    E => A                              ;A base
+    0 => B
+    $               :EQ,JMPC(expA0D)    ;if base == 0 --> expA0D
+    1 => C
+
+expADloop:
+
+    %MAX_CNT_ARITH - CNT_ARITH - 3 :JMPN(outOfCountersArith)
+
+    D => A                              ;A exp
+    0 => B
+    $               :EQ,JMPC(expADend)  ;if exp == 0 --> expADend
+    A               :MSTORE(arithA)
+    2               :MSTORE(arithB)
+    zkPC+1 => RR    :JMP(divARITH)      ;divARITH --> exp/2
+    $ => D          :MLOAD(arithRes1)   ;D = exp/2
+    $ => A          :MLOAD(arithRes2)   ;A = exp%2 (0 or 1)
+    0 => B
+    $               :EQ,JMPC(expADloop0);if exp%2 == 0 --> expADloop0
+    E               :MSTORE(arithA)
+    C               :MSTORE(arithB)
+    zkPC+1 => RR    :JMP(mulARITH)      ;mulARITH --> E*C
+    $ => C          :MLOAD(arithRes1)   ;C = E*C (acc = bp*acc)
+
+expADloop0:
+    E               :MSTORE(arithA)
+    E               :MSTORE(arithB)
+    zkPC+1 => RR    :JMP(mulARITH)      ;mulARITH --> E*E
+    $ => E          :MLOAD(arithRes1)   ;E = E*E (bp = bp*bp)
+                    :JMP(expADloop)
+
+expA0D:                                 ;if base == 0, result0
+    0 => C
+    0 => D
+                    :JMP(expADend)
+
+expAD0:                                 ;if exp == 0, result 1
+    1 => C
+    0 => D
+
+expADend:
+    C => A
+    $ => B          :MLOAD(tmpVarB3)
+    $ => C          :MLOAD(tmpVarC3)
+    $ => E          :MLOAD(tmpVarE3)
+    $ => RR         :MLOAD(tmpZkPC3)
+                    :JMP(RR)
