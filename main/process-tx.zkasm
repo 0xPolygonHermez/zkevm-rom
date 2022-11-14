@@ -271,19 +271,7 @@ nonce1byte:
 
 nonceIs0:
         0x80                            :HASHK(E)
-
-endContractAddress:
-        ; end contract address hash and get the 20 first bytes
-        HASHPOS                         :HASHKLEN(E)
-        $ => A                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 :JMPN(outOfCountersKeccak)
-        $ => A                          :HASHKDIGEST(E)
-                                        :CALL(maskAddress) ; Mask address to 20 bytes
-        A                               :MSTORE(createContractAddress)
-        A                               :MSTORE(txDestAddr)
-        A                               :MSTORE(storageAddr)
-        ; TODO: Add check CREATE or deployment with constructor reverted
-                                        :JMP(deploy)
+                                        :JMP(endContractAddress)
 
 ;; compute new contract address as CREATE2 spec: keccak256(0xff ++ address ++ salt ++ keccak256(init_code))[12:] (https://eips.ethereum.org/EIPS/eip-1014)
 create2:
@@ -341,6 +329,8 @@ create2end:
         B                               :HASHK(E)
         32 => D
         C                               :HASHK(E)
+
+endContractAddress:
         HASHPOS                         :HASHKLEN(E)
 
         ; Check keccak counters
