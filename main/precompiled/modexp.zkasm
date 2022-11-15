@@ -23,14 +23,25 @@ function modExp(A, B, C){
 */
 
 VAR CTX Bsize
+VAR CTX Binit
+VAR CTX Bpos
+VAR CTX Bend
 VAR CTX Esize
+VAR CTX Einit
+VAR CTX Epos
+VAR CTX Eend
 VAR CTX Msize
+VAR CTX Minit
+VAR CTX Mpos
+VAR CTX Mend
+
 VAR CTX base
 VAR CTX exp
 VAR CTX newExp
 VAR CTX mod
 VAR CTX res
 VAR CTX bp
+VAR CTX EsizeMin
 
 CONST %MAX_SIZE = 0x7fffffffn
 
@@ -49,48 +60,74 @@ MODEXP:
     A               :MSTORE(Esize)          ;Esize = exp size
                     :CALL(MLOAD32)
     A               :MSTORE(Msize)          ;Msize = mod size
-
+    E               :MSTORE(Binit)
+    E               :MSTORE(Bpos)
     $ => B          :MLOAD(Bsize)
     %MAX_SIZE => A
     $               :LT,JMPC(MODEXPfinalOOG)
+    E + B => E      :MSTORE(Bend)
 
+    E               :MSTORE(Einit)
     $ => B          :MLOAD(Esize)
     0 => A
     $               :EQ,JMPC(MODEXPexp0)
     %MAX_SIZE => A
     $               :LT,JMPC(MODEXPfinalOOG)
+    E + B => E      :MSTORE(Eend)
+    E               :MSTORE(Epos)
 
+    E               :MSTORE(Minit)
+    E               :MSTORE(Mpos)
     $ => B          :MLOAD(Msize)
     0 => A
     $               :EQ,JMPC(MODEXPreturn0)
     %MAX_SIZE => A
     $               :LT,JMPC(MODEXPfinalOOG)
+    E + B => E      :MSTORE(Mend)
 
-
+    $ => E          :MLOAD(Binit)
     $ => C          :MLOAD(Bsize)
                     :CALL(MLOADX)
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
     A               :MSTORE(base)
+
     $ => C          :MLOAD(Esize)
-                    :CALL(MLOADX)
-    32 - C => D
-    zkPC+1 => RR    :JMP(SHRarith)
-    A               :MSTORE(exp)
-    A               :MSTORE(newExp)
+    E + C => E
+
     $ => C          :MLOAD(Msize)
                     :CALL(MLOADX)
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
     A               :MSTORE(mod)
+
     0 => B
-    $               :EQ,JMPC(MODEXPreturn0) ;if mod == 0 --> MODEXPreturn0
-    $ => A          :MLOAD(exp)
-    $               :EQ,JMPC(MODEXPexp0)    ;if exp == 0 --> MODEXPexp0
+    $               :EQ,JMPC(MODEXPreturn0)    ;if mod == 0 --> MODEXPreturn0
     $ => A          :MLOAD(base)
-    $               :EQ,JMPC(MODEXPreturn0) ;if base == 0 --> MODEXPreturn0
     A               :MSTORE(bp)
     1               :MSTORE(res)
+
+MODEXPexpLoop:
+    $ => E          :MLOAD(Epos)
+    $ => A          :MLOAD(Einit)
+    ;E - 32 < Einit --> newExp MLOAD32
+    ;E - 32 > Einit --> newExp MLOADX C = Epos - Einit (if C > 0)
+    32 => C
+    E - 32 => E
+    E => B
+    $               :LT,JMPC(MODEXPexpX)
+    $ => E          :MLOAD(Epos)
+    E - A => C
+    E - C => E
+    C - 1           :JMPN(MODEXPloopEnd)
+
+MODEXPexpX:
+    E               :MSTORE(Epos)
+                    :CALL(MLOADX)
+    32 - C => D
+    zkPC+1 => RR    :JMP(SHRarith)
+    A               :MSTORE(exp)
+    A               :MSTORE(newExp)
 
 MODEXPloop1:
 
@@ -118,6 +155,8 @@ MODEXPloop1:
 MODEXPloop10:
     $ => E          :MLOAD(bp)
     E => A                              ; bp1 = bp0*bp0 (bp²), bp2 = bp1*bp1 (bp⁴), bp3 = bp2*bp2 (bp⁸), ...
+    0 => B
+    $               :EQ,JMPC(MODEXPreturn0)
     E => B
     $ => C          :MLOAD(mod)
                     :CALL(utilMULMOD)
@@ -131,8 +170,14 @@ MODEXPexp0:
     $ => B          :MLOAD(mod)
     $               :EQ,JMPC(MODEXPreturn0)
     1               :MSTORE(res)
+                    :JMP(MODEXPfinal)
 
 MODEXPloopEnd:
+    %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
+
+    $ => B          :MLOAD(bp)
+    $ => A          :MLOAD(base)
+    $               :EQ,JMPC(MODEXPexp0)
     $ => A          :MLOAD(res)
                     :JMP(MODEXPfinal)
 
@@ -144,10 +189,11 @@ MODEXPfinal:
     $ => CTX        :MLOAD(currentCTX)
     D               :MSTORE(retDataLength)
     $ => E          :MLOAD(retCallOffset)
-    $ => C          :MLOAD(retCallLength)
+    D => C
+    ;$ => C          :MLOAD(retCallLength)
     $ => CTX        :MLOAD(originCTX)
     CTX             :MSTORE(currentCTX)
-    B               :MSTORE(retDataCTX)
+    E               :MSTORE(retDataCTX)  ;(?)
 
     ;ASSERT C == D
     ;Result of the computation, with the same number of bytes as M
