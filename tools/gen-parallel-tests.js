@@ -59,6 +59,7 @@ async function main() {
     const pilConfig = {
         defines: { N: 4096 },
         namespaces: ['Main', 'Global'],
+        disableUnusedError: true
     };
 
     const pil = await compile(F, pathMainPil, null, pilConfig);
