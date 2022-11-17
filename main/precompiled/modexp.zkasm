@@ -41,7 +41,7 @@ VAR CTX newExp
 VAR CTX mod
 VAR CTX res
 VAR CTX bp
-VAR CTX EsizeMin
+VAR CTX exp0
 
 CONST %MAX_SIZE = 0x7fffffffn
 
@@ -91,7 +91,6 @@ MODEXP:
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
     A               :MSTORE(base)
-
     $ => C          :MLOAD(Esize)
     E + C => E
 
@@ -100,7 +99,6 @@ MODEXP:
     32 - C => D
     zkPC+1 => RR    :JMP(SHRarith)
     A               :MSTORE(mod)
-
     0 => B
     $               :EQ,JMPC(MODEXPreturn0)    ;if mod == 0 --> MODEXPreturn0
     $ => A          :MLOAD(base)
@@ -166,6 +164,7 @@ MODEXPloop10:
 MODEXPexp0:
     %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
 
+    1               :MSTORE(exp0)
     1 => A
     $ => B          :MLOAD(mod)
     $               :EQ,JMPC(MODEXPreturn0)
@@ -197,6 +196,14 @@ MODEXPfinal:
 
     ;ASSERT C == D
     ;Result of the computation, with the same number of bytes as M
+    A => B
+                    :CALL(getLenBytes)
+    C - A - 1       :JMPN(MODEXPfinal2)
+    zkPC+1 => RR    :JMP(MODEXPstore0)
+
+MODEXPfinal2:
+    C => D
+    B => A
     32 - D => D
                     :CALL(SHLarith)
     A               :MSTORE(bytesToStore)
@@ -230,21 +237,36 @@ MODEXPgas2:
     zkPC+1 => RR        :JMP(expAD)         ;A multiplication_complexity
     0 => D              ;iteration_count
     A                   :MSTORE(tmpVarA)
-    $ => B              :MLOAD(exp)
-                        :CALL(getLenBits)
+    ;$ => B              :MLOAD(exp)
+    ;                    :CALL(getLenBits)
+    $ => B              :MLOAD(Esize)
+    B*8 => A
+    zkPC+1 => RR        :JMP(checkSizeE)
     A => C
     $ => A              :MLOAD(Esize)
     32 => B
     $                   :LT,JMPC(MODEXPgas3)
     $                   :EQ,JMPC(MODEXPgas3)
     ;TODO +32 bytes
-                        :JMP(MODEXPgas4)
+
+MODEXPgas32:
+    $ => A              :SUB
+    8*A => A
+    A => C
+    $ => E              :MLOAD(Eend)
+    E => A
+    32 => B
+    E - 32 => E
+                        :CALL(MLOAD32)
+    A => B
+                        :CALL(getLenBits)
+    A + C => D          ;iteration_count
+                        :JMP(MODEXPgasEnd)
 
 MODEXPgas3:
-    $ => B              :MLOAD(exp)
-    0 => A
-    $                   :EQ,JMPC(MODEXPgas4)
-    C - 1 => D        ;iteration_count
+    $ => A              :MLOAD(exp0)
+    -A                  :JMPN(MODEXPgas4)
+    C - 1 => D          ;iteration_count
 
 MODEXPgas4:
     1 => B
@@ -274,5 +296,72 @@ MODEXPend:
                         :JMP(preEnd)
 
 MODEXPfinalOOG:
-    $ => CTX            :MLOAD(currentCTX)
                         :JMP(outOfGas)
+
+VAR CTX tmpZkPCMODEXP
+
+MODEXPstore0:
+    ; A = lenBytes
+    ; C = returnLength
+    RR                  :MSTORE(tmpZkPCMODEXP)
+    D                   :MSTORE(tmpVarD3)
+    B                   :MSTORE(tmpVarB3)
+    ;E                   :MSTORE(tmpVarE3)
+
+MODEXPstore0loop:
+    C => B
+    $                   :LT,JMPC(store0)
+                        :JMP(endStore0)
+
+store0:
+    0                   :MSTORE(bytesToStore)
+    1 => C
+                        :CALL(MSTOREX)
+    B - 1 => C
+                        :JMP(MODEXPstore0loop)
+
+endStore0:
+    $ => D              :MLOAD(tmpVarD3)
+    $ => B              :MLOAD(tmpVarB3)
+    ;$ => E              :MLOAD(tmpVarE3)
+    $ => RR             :MLOAD(tmpZkPCMODEXP)
+                        :JMP(RR)
+
+checkSizeE:
+    RR                  :MSTORE(tmpZkPCMODEXP)
+    A                   :MSTORE(tmpVarA3)
+    B                   :MSTORE(tmpVarB3)
+    C                   :MSTORE(tmpVarC3)
+    D                   :MSTORE(tmpVarD3)
+    E                   :MSTORE(tmpVarE3)
+    $ => D              :MLOAD(Esize)
+    $ => E              :MLOAD(Einit)
+    1 => C
+
+checkSizeLoop:
+    D - 1 => D          :JMPN(checkSizeEnd0)
+                        :CALL(MLOADX)
+    D => B
+    31 => D
+                        :CALL(SHRarith)
+    B => D
+    A => B
+                        :CALL(getLenBits)
+    0 => B
+    $                   :EQ,JMPC(checkSizeLoop)
+    8 => B
+    $                   :EQ,JMPC(checkSizeEnd0)
+    $ => D              :MLOAD(tmpVarA3)
+    D - 8 + A => A
+                        :JMP(checkSizeEnd)
+
+checkSizeEnd0:
+    $ => A              :MLOAD(tmpVarA3)
+
+checkSizeEnd:
+    $ => B              :MLOAD(tmpVarB3)
+    $ => C              :MLOAD(tmpVarC3)
+    $ => D              :MLOAD(tmpVarD3)
+    $ => E              :MLOAD(tmpVarE3)
+    $ => RR             :MLOAD(tmpZkPCMODEXP)
+                        :JMP(RR)

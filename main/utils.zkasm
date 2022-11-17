@@ -105,6 +105,7 @@ getLenEnd:
 ; @info bits length of B
 ; @in B => number
 ; @out A => bits length
+
 getLenBits:
     RR              :MSTORE(tmpZkPC)
     B               :MSTORE(tmpVarB)
@@ -137,6 +138,7 @@ getLenBitsEnd:
 
 VAR GLOBAL bytesToStore
 VAR GLOBAL isMSTOREX
+VAR GLOBAL aux
 ; @info save value to memory < 32 bytes with offset
 ; REQUIRE: set bytesToStore with value to use in MSTORE
 ; @in E => offset
@@ -181,7 +183,6 @@ initMSTORE:
     A + B           :MSTORE(bytesToStore)
     A + B => A
     0 => C
-    0               :MSTORE(isMSTOREX)
                     :JMP(finalMSTORE)
 
 MSTOREX2:
@@ -211,11 +212,12 @@ finalMSTORE:
     $ => A          :MLOAD(bytesToStore)
     A               :MSTORE(MEM:E)
     E*32 => E
+    $ => B          :MLOAD(isMSTOREX)
+    -B              :JMPN(offsetMSTOREX)
                     :JMP(offsetMSTORE32)
 
 memAlignOptionMSTORE:
-    E               :MSTORE(tmpVarE)
-
+    E               :MSTORE(aux)
     $ => A          :MLOAD(MEM:E) ; read M0
     $ => B          :MLOAD(MEM:E+1) ; read M1
 
@@ -223,16 +225,24 @@ memAlignOptionMSTORE:
     ${memAlignWR_W1(B,mem.bytesToStore,C)} => E                    ; no trust calculate W1
     $               :MEM_ALIGN_WR,MLOAD(bytesToStore)
     E => A
-    $ => E          :MLOAD(tmpVarE)
+    $ => E          :MLOAD(aux)
     D               :MSTORE(MEM:E)          ; write W0
     A               :MSTORE(MEM:E+1)        ; write W1
-    E*32 + C => E
+    $ => C          :MLOAD(tmpVarC)
+    $ => E          :MLOAD(tmpVarE)
+    E + C => E
     $ => A          :MLOAD(isMSTOREX)
     A - 1           :JMPN(offsetMSTORE32)
-    $ => C          :MLOAD(tmpVarC)
-    E*32 + C => E
     0               :MSTORE(isMSTOREX)
                     :JMP(endMSTORE)
+
+offsetMSTOREX:
+    $ => C          :MLOAD(tmpVarC)
+    $ => E          :MLOAD(tmpVarE)
+    E + C => E
+    0               :MSTORE(isMSTOREX)
+                    :JMP(endMSTORE)
+
 
 offsetMSTORE32:
     E + 32 => E
