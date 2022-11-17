@@ -37,13 +37,18 @@ start: ; main zkROM entry point
 ;;     - compute keccaks needed to finish the batch
 ;;;;;;;;;;;;;;;;;;
         ${eventLog(onStartBatch, C)}
+
+        $ => A                                  :MLOAD(globalExitRoot)
+        0 => B
+        $                                       :EQ, JMPC(skipSetGlobalExitRoot)
+
 ;; Set global exit root
+setGlobalExitRoot:
         0 => HASHPOS
         $ => E                                  :MLOAD(lastHashKIdUsed)
         E+1 => E                                :MSTORE(lastHashKIdUsed)
 
         32 => D
-        $ => A                                  :MLOAD(globalExitRoot)
         A                                       :HASHK(E)
         %GLOBAL_EXIT_ROOT_STORAGE_POS           :HASHK(E) ; Storage position of the global exit root map
         HASHPOS                                 :HASHKLEN(E)
@@ -51,10 +56,11 @@ start: ; main zkROM entry point
 
         %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2 => A
         %SMT_KEY_SC_STORAGE => B
-        $ => D                              :MLOAD(newNumBatch)
-        $ => SR                             :SSTORE ; Store 'newNumBatch' in storage position 'keccak256(globalExitRoot, 0)'
-        SR                                  :MSTORE(batchSR)
+        $ => D                                  :MLOAD(timestamp)
+        $ => SR                                 :SSTORE ; Store 'timestamp' in storage position 'keccak256(globalExitRoot, 0)'
 
+skipSetGlobalExitRoot:
+        SR                                      :MSTORE(batchSR)
         ; Load current tx count
         %LAST_TX_STORAGE_POS => C
         %ADDRESS_SYSTEM => A
