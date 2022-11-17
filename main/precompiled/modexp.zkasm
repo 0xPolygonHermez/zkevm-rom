@@ -80,7 +80,7 @@ MODEXP:
     E               :MSTORE(Mpos)
     $ => B          :MLOAD(Msize)
     0 => A
-    $               :EQ,JMPC(MODEXPreturn0)
+    $               :EQ,JMPC(MODEXPmod0)
     %MAX_SIZE => A
     $               :LT,JMPC(MODEXPfinalOOG)
     E + B => E      :MSTORE(Mend)
@@ -100,7 +100,7 @@ MODEXP:
     zkPC+1 => RR    :JMP(SHRarith)
     A               :MSTORE(mod)
     0 => B
-    $               :EQ,JMPC(MODEXPreturn0)    ;if mod == 0 --> MODEXPreturn0
+    $               :EQ,JMPC(MODEXPmod0)    ;if mod == 0 --> MODEXPreturn0
     $ => A          :MLOAD(base)
     A               :MSTORE(bp)
     1               :MSTORE(res)
@@ -179,6 +179,11 @@ MODEXPloopEnd:
     $               :EQ,JMPC(MODEXPexp0)
     $ => A          :MLOAD(res)
                     :JMP(MODEXPfinal)
+
+MODEXPmod0:
+    200 => B
+    0 => A
+                    :JMP(MODEXPend)
 
 MODEXPreturn0:
     0 => A
@@ -340,6 +345,8 @@ checkSizeE:
 
 checkSizeLoop:
     D - 1 => D          :JMPN(checkSizeEnd0)
+    $ => A              :MLOAD(tmpVarA3)
+    A - 8 => A          :MSTORE(tmpVarA3)
                         :CALL(MLOADX)
     D => B
     31 => D
@@ -352,11 +359,12 @@ checkSizeLoop:
     8 => B
     $                   :EQ,JMPC(checkSizeEnd0)
     $ => D              :MLOAD(tmpVarA3)
-    D - 8 + A => A
+    D + A => A
                         :JMP(checkSizeEnd)
 
 checkSizeEnd0:
     $ => A              :MLOAD(tmpVarA3)
+    A + 8 => A
 
 checkSizeEnd:
     $ => B              :MLOAD(tmpVarB3)
