@@ -208,12 +208,19 @@ opAuxPUSHA:
     ; checks zk-counters
     %MAX_CNT_BINARY - CNT_BINARY - 6 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
-    
+
+    $ => B              :MLOAD(bytecodeLength)
+    PC + D => A
+    $                   :LT,JMPC(opAuxPUSHA2)
+    PC => A
+    B - A => D
+
+opAuxPUSHA2:
     ; check out-of-gas
     GAS - 3 => GAS      :JMPN(outOfGas)
     ; read bytes from calldata
                         :CALL(readPush); in: [D: bytes to read] out: [E: value read]
-    ; store stack output                        
+    ; store stack output
     E                   :MSTORE(SP++); [pushed_value(E) => SP]
     ; check stack overflow
     1024 - SP           :JMPN(stackOverflow)
