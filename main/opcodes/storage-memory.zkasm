@@ -110,9 +110,7 @@ opMSTORE8:
     B               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost. In case of MSTORE8, always 1 byte
     1               :MSTORE(lastMemLength)
-    ; check offset is below memory limit
-    0x200000 => A
-    $               :LT,JMPC(errorMLOADMSTORE)
+                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
     B => A
                     :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     $ => B          :MLOAD(SP); [value => B]
@@ -122,7 +120,6 @@ opMSTORE8:
     B               :MEM_ALIGN_WR8 ; only use LSB of B, rest of bytes could be non zero.
     ; write at memory position E
     D               :MSTORE(MEM:E)
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
                     :JMP(readCode)
 
 /**

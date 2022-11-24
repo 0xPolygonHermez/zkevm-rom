@@ -16,8 +16,6 @@ opSHA3:
     %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCountersArith)
     %MAX_CNT_BINARY - CNT_BINARY - 193 :JMPN(outOfCountersBinary)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCountersMemalign)
-    $ => A           :MLOAD(cntKeccakPreProcess)
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 :JMPN(outOfCountersKeccak)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 10 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
 
@@ -29,6 +27,16 @@ opSHA3:
     SP - 1 => SP
     $ => E          :MLOAD(SP--); [offset => E]
     $ => C          :MLOAD(SP) ; [size => C]
+    ; check keccak counters
+    C               :MSTORE(arithA)
+    136             :MSTORE(arithB)
+                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => B          :MLOAD(arithRes1)
+    $ => A          :MLOAD(cntKeccakPreProcess)
+    ; checks keccak counters
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 => A
+    $               :LT, JMPC(outOfCountersKeccak)
+
     ; store lastMemOffset for memory expansion gas cost
     E               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
@@ -94,17 +102,7 @@ opSHA3End:
     ; get current hash pointer
     $ => E          :MLOAD(lastHashKIdUsed)
     ; append A to hash pointer E
-    HASHPOS         :HASHKLEN(E)
-
-    ; Check keccak counters
-    HASHPOS         :MSTORE(arithA)
-    136             :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => B          :MLOAD(arithRes1)
-    $ => A          :MLOAD(cntKeccakPreProcess)
-    ; checks keccak counters
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 => A
-    $               :LT, JMPC(outOfCountersKeccak)
+    HASHPOS         :HASHKLEN(E)   
     ; compute hash
     $ => A          :HASHKDIGEST(E)
     ; store hash
