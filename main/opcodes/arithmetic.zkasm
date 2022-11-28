@@ -24,8 +24,8 @@ opADD:
     $ => A          :MLOAD(SP--) ; [a => A]
     $ => B          :MLOAD(SP) ; [b => B]
 
-    ; call arith state machine and push to the stack
-    $               :ADD, MSTORE(SP++) ; [a + b => SP]
+    ; call binary:add state machine and push to the stack
+    $               :ADD, MSTORE(SP++)
 
     ; continue read bytecode
                     :JMP(readCode)
@@ -252,7 +252,7 @@ opMULMOD:
     C               :MSTORE(SP++)
                     :JMP(readCode)
 
-opEXP: ; //TODO: test exp == 0
+opEXP:
 
     %MAX_CNT_BINARY - CNT_BINARY - 5 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
@@ -280,7 +280,6 @@ opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-mon
     $ => D          :MLOAD(SP)   ; number to convert
     30 => A
     $               :LT, JMPC(opSIGNEXTENDEnd); if signByte is 31 or more, means basically let the number as it is
-    ; TODO we could divide this opcode in a table with constants, only 31 cases
     B * 8  + 7 => D ; B is less than 31, no need for binary
     D*2 => RR
     zkPC+2                  :MSTORE(tmpSHXZkPC)
@@ -297,7 +296,7 @@ opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-mon
     0 => A
     $               :EQ, JMPC(opSIGNEXTENDPositive) ; If 0 means the sign bit was 0 --> positive
     C => A ; mask
-    0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn => B
+    %MAX_UINT_256 => B
     $ => B          :XOR ; not mask
     D => A
     $ => D          :OR
