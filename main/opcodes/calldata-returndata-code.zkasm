@@ -7,7 +7,10 @@ opCALLDATALOAD:
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
 
     SP - 1 => SP    :JMPN(stackUnderflow)
-    $ => E          :MLOAD(SP)
+    $ => B          :MLOAD(SP)
+    $ => A          :MLOAD(txCalldataLen)
+    $               :LT,JMPC(CALLDATALOADreturn0)
+    B => E
     ; Div operation with Arith
     E               :MSTORE(arithA)
     32              :MSTORE(arithB)
@@ -37,6 +40,12 @@ opCALLDATALOAD2:
                     :CALL(SHRarith)
     C => SP
     B + A           :MSTORE(SP++)
+    1024 - SP       :JMPN(stackOverflow)
+    GAS - 3 => GAS  :JMPN(outOfGas)
+                    :JMP(readCode)
+
+CALLDATALOADreturn0:
+    0               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
     GAS - 3 => GAS  :JMPN(outOfGas)
                     :JMP(readCode)

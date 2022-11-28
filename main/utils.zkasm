@@ -27,9 +27,7 @@ VAR GLOBAL result
 ; @out B => Sign of A [1 if negative, 0 positive]
 abs:
     0 => B
-    ;TODO: fix `$ => B          :SLT,JMPC(absIsNeg)`
-    ;when zkproverjs has been updated
-    $ => B          :SLT,JMPC(absIsNeg)
+    $ => B          :SLT, JMPC(absIsNeg)
                     :RETURN
 
 absIsNeg:
@@ -40,7 +38,6 @@ absIsNeg:
                     :RETURN
 
 ; @info copy calldata A to ctxB SP = 1024
-; TODO: copy + 32 bytes
 copySP:
     RR              :MSTORE(tmpZkPC2)
     CTX             :MSTORE(currentCTX)
@@ -544,6 +541,8 @@ storeTmp:
 
 VAR GLOBAL tmpSHXZkPC
 VAR GLOBAL tmpSHXZkPC2
+
+;@info Shift right D bytes to A
 ;@in A - (A >> D)
 ;@in D - (A >> D) D bytes
 ;@out A - A >> D => A
@@ -1146,7 +1145,7 @@ utilMULMOD:
     ; remember that:
     ; result of mul is stored in: arithRes1(E) and arithOverflow(D)
 
-    ${(_mulMod / A) % (2 << 256)} => B   ; k.l
+    ${(_mulMod / A) % (1 << 256)} => B   ; k.l
     ${_mulMod % A} => C        ; mulModResult
     ${(B * A + C) >> 256} => D ; D1
     $               :MLOAD(arithRes1), ARITH

@@ -19,7 +19,7 @@ opJUMP:
     ; check out-of-gas
     GAS - 8 => GAS                  :JMPN(outOfGas)
 
-    $ => PC                         :MLOAD(SP); [counter => PC]
+    $ => B                         :MLOAD(SP); [counter => PC]
     ; Check PC is a JUMPDEST
     :JMP(checkJumpDest)
 /**
@@ -42,8 +42,7 @@ opJUMPI:
     0 => A
     $                               :EQ, JMPC(readCode)
     SP + 1 => SP
-    $ => PC                         :MLOAD(SP--); [counter => PC]
-    PC => B
+    $ => B                         :MLOAD(SP--); [counter => PC]
     ; Check PC is a JUMPDEST
                                     :JMP(checkJumpDest)
 
@@ -52,10 +51,10 @@ checkJumpDest:
     ; if it is a deploy we have to check the data from the calldata (not the bytecode)
     $ => A                          :MLOAD(isCreateContract)
     -A                              :JMPN(checkJumpDestDeployment)
-    PC => HASHPOS
-    HASHPOS => B
     $ => A                          :MLOAD(bytecodeLength)
     $                               :LT,JMPC(invalidJump)
+    B => PC
+    B => HASHPOS
     ; set number of bytes to hashP at D
     1 => D
     ; get hashP address pointer where contract bytecode is stored
@@ -72,6 +71,7 @@ checkJumpDestDeployment:
     ; get position where data starts in the tx
     $ => HASHPOS                    :MLOAD(dataStarts)
     ; add PC to data starts to  point the bytes to read for the push
+    B => PC
     HASHPOS + PC => HASHPOS
     ; get memory pointer for hashing
     $ => E                          :MLOAD(batchHashDataId)
@@ -93,6 +93,7 @@ checkJumpDestDeploymentCreate:
     ; get offset call position
     $ => E                          :MLOAD(argsOffsetCall)
     ; increase current program counter (PC) to offset for getting pushed bytes to read
+    B => PC
     E + PC => E
     ; set bytes to read from memory at C
     1 => C
