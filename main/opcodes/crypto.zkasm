@@ -27,15 +27,6 @@ opSHA3:
     SP - 1 => SP
     $ => E          :MLOAD(SP--); [offset => E]
     $ => C          :MLOAD(SP) ; [size => C]
-    ; check keccak counters
-    C + 1           :MSTORE(arithA)
-    136             :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => B          :MLOAD(arithRes1)
-    $ => A          :MLOAD(cntKeccakPreProcess)
-    ; checks keccak counters
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 => A
-    $               :LT, JMPC(outOfCountersKeccak)
 
     ; store lastMemOffset for memory expansion gas cost
     E               :MSTORE(lastMemOffset)
@@ -58,6 +49,17 @@ opSHA3:
                     :CALL(mulARITH)
     $ => A          :MLOAD(arithRes1)
     GAS - A => GAS  :JMPN(outOfGas)  ; dynamic_gas = 6 * minimum_word_size + memory_expansion_cost
+
+    ; check keccak counters
+    C + 1           :MSTORE(arithA)
+    136             :MSTORE(arithB)
+                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => B          :MLOAD(arithRes1)
+    $ => A          :MLOAD(cntKeccakPreProcess)
+    ; checks keccak counters
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 => A
+    $               :LT, JMPC(outOfCountersKeccak)
+
     ; new hash id
     $ => B           :MLOAD(lastHashKIdUsed)
     B + 1 => B       :MSTORE(lastHashKIdUsed)
