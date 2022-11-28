@@ -32,6 +32,7 @@ processTx:
 
         ; Minimum of 100000 steps left to process a tx
         %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCountersStep)
+
         ; Get sigDataSize
         $ => HASHPOS                     :MLOAD(sigDataSize)
 
@@ -49,7 +50,6 @@ processTx:
         E+1 => E                        :MSTORE(lastTxHashId)
 
         ; Check the signature
-
         $ => A                          :HASHKDIGEST(E)
         $ => B                          :MLOAD(txR)
         $ => C                          :MLOAD(txS)
@@ -441,6 +441,7 @@ callContract:
         0 => SP
 
         $ => A                          :MLOAD(txDestAddr)
+
         ; get contract length
         %SMT_KEY_SC_LENGTH => B
         0 => C
@@ -463,8 +464,11 @@ callContract:
         E                               :MSTORE(contractHashId)
         E+1                             :MSTORE(nextHashPId)
 
+        ; check steps used by checkHashBytecodeLoop
+        ; compute steps that will be consumed by 'checkHashBytecodeLoop'
+        %MAX_CNT_STEPS - STEP - 2 * B   :JMPN(outOfCountersStep)
+
 checkHashBytecodeLoop:
-        %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
         B - 1 - HASHPOS                         :JMPN(checkHashBytecodeEnd) ; finish reading bytecode
         ${getBytecode(A, HASHPOS, 1)}           :HASHP(E) ; hash contract bytecode
                                                 :JMP(checkHashBytecodeLoop)
