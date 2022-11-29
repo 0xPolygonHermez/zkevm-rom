@@ -32,9 +32,16 @@ processTx:
 
         ; Minimum of 100000 steps left to process a tx
         %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCountersStep)
-        ; check from address
+        $ => A                          :MLOAD(txHash)
+        ; Check the signature
+        $ => B                          :MLOAD(txR)
+        $ => C                          :MLOAD(txS)
+        $ => D                          :MLOAD(txV)
+                                        :CALL(ecrecover)
+        ; Check result is non-zero
+checkAndSaveFrom:
         0 => B
-        $ => A                          :MLOAD(txSrcAddr)
+        A                               :MSTORE(txSrcAddr)
         A                               :MSTORE(txSrcOriginAddr)
         $                               :EQ,JMPC(invalidIntrinsicTxSignature)
 
