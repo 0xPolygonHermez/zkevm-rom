@@ -52,7 +52,7 @@ endList:
                                         :CALL(divARITH)
         $ => B                          :MLOAD(arithRes1)
         $ => D                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B - D - 1:JMPN(outOfCounters)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B - D - 1:JMPN(handleOOCatRLP)
 
 
 ;; Read RLP 'nonce'
@@ -319,19 +319,18 @@ vREADTx:
 ;; increase number of transaction to process
         $ => A                          :MLOAD(pendingTxs)
         A + 1 => A                      :MSTORE(pendingTxs)
-        ;; check signature
+;; computte signature
         $ => A                          :HASHKDIGEST(E)
-        $ => B                          :MLOAD(txR)
-        $ => C                          :MLOAD(txS)
-        $ => D                          :MLOAD(txV)
-                                        :CALL(ecrecover)
-        A                               :MSTORE(txSrcAddr) 
+        A                               :MSTORE(txHash) 
                                         :JMP(txLoopRLP)
 
 ;;;;;;;;;
 ;; E - Handler error RLP fields
 ;;;;;;;;;
-
+handleOOCatRLP:
+        ${eventLog(onError, OOC)}
+        $ => SR         :MLOAD(batchSR)
+        
 invalidTxRLP:
 ;; Append all missing 'batchL2Data' to 'batchDataHash' bytes
         $ => B                          :MLOAD(batchL2DataLength)
