@@ -45,7 +45,17 @@ shortList:
         A - 0xc0 => A
 
 endList:
-        A + C                           :MSTORE(txRLPLength)
+        A + C => B                      :MSTORE(txRLPLength)
+        ; Check enough zk counters to digest tx hash
+        B + 1                           :MSTORE(arithA)
+        136                             :MSTORE(arithB)
+                                        :CALL(divARITH)
+        $ => B                          :MLOAD(arithRes1)
+        $ => D                          :MLOAD(txHashAccKeccacks)
+        D + B + 1 => B                  :MSTORE(txHashAccKeccacks)
+        $ => D                          :MLOAD(cntKeccakPreProcess)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B - D :JMPN(outOfCounters)
+
 
 ;; Read RLP 'nonce'
         ; 64 bits max
