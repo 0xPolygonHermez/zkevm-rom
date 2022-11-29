@@ -51,10 +51,8 @@ endList:
         136                             :MSTORE(arithB)
                                         :CALL(divARITH)
         $ => B                          :MLOAD(arithRes1)
-        $ => D                          :MLOAD(txHashAccKeccacks)
-        D + B + 1 => B                  :MSTORE(txHashAccKeccacks)
         $ => D                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B - D :JMPN(outOfCountersKeccak)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B - D - 1:JMPN(outOfCountersKeccak)
 
 ;; Read RLP 'nonce'
         ; 64 bits max
@@ -324,7 +322,13 @@ vREADTx:
 ;; increase number of transaction to process
         $ => A                          :MLOAD(pendingTxs)
         A + 1 => A                      :MSTORE(pendingTxs)
-        HASHPOS                         :MSTORE(sigDataSize) ; save bytes length added to ethereum transaction hash
+;; check signature
+        $ => A                          :HASHKDIGEST(E)
+        $ => B                          :MLOAD(txR)
+        $ => C                          :MLOAD(txS)
+        $ => D                          :MLOAD(txV)
+                                        :CALL(ecrecover)
+        A                               :MSTORE(txSrcAddr)        
                                         :JMP(txLoopRLP)
 
 ;;;;;;;;;
