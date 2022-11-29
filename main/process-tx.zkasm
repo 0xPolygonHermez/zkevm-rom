@@ -19,35 +19,9 @@ processTx:
         ${eventLog(onProcessTx)}
         ; Minimum of 100000 steps left to process a tx
         %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCounters)
-        ; Get sigDataSize
-        $ => HASHPOS                     :MLOAD(sigDataSize)
-
-        ; Check keccak counters
-        HASHPOS                          :MSTORE(arithA)
-        136                              :MSTORE(arithB)
-                                         :CALL(divARITH)
-        $ => B                           :MLOAD(arithRes1)
-        $ => A                           :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A => A
-        $                                :LT, JMPC(outOfCounters)
-
-        ; Get hash address previously stored in RLP parsing
-        $ => E                          :MLOAD(lastTxHashId)
-        E+1 => E                        :MSTORE(lastTxHashId)
-
-        ; Check the signature
-        $ => A                          :MLOAD(lastHashKIdUsed)
-        A + 1                           :MSTORE(lastHashKIdUsed)
-        A + 1                           :MSTORE(ecrecover_lastHashIdUsed)
-        $ => A                          :HASHKDIGEST(E)
-        $ => B                          :MLOAD(txR)
-        $ => C                          :MLOAD(txS)
-        $ => D                          :MLOAD(txV)
-                                        :CALL(ecrecover)
-        ; Check result is non-zero
-checkAndSaveFrom:
+        ; check from address
         0 => B
-        A                               :MSTORE(txSrcAddr)
+        $ => A                          :MLOAD(txSrcAddr)
         A                               :MSTORE(txSrcOriginAddr)
         $                               :EQ,JMPC(invalidIntrinsicTx)
 
