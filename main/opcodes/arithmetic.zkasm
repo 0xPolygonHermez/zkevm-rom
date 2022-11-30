@@ -3,7 +3,7 @@
  * @link [Link EVM behaviour --> evm.codes?]
  * @zk-counters
  *  - 1 binary
- *  - 120 steps
+ *  - 100 steps
  * @process-opcode
  *  - stack input: [a, b]
  *  - stack output: [a + b]
@@ -30,181 +30,249 @@ opADD:
     ; continue read bytecode
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#02?fork=berlin]
+ * @zk-counters
+ *  - 1 arith
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: [a, b]
+ *  - stack output: [a * b]
+ */
 opMUL:
-
+    ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
+    ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
+    
+    ; check out-of-gas
+    GAS-5 => GAS    :JMPN(outOfGas)
+
     SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-    $ => B          :MLOAD(SP)
+    $ => A          :MLOAD(SP--); [a => A]
+    $ => B          :MLOAD(SP); [b => B]
     ; Mul operation with Arith
     A               :MSTORE(arithA)
     B               :MSTORE(arithB)
-                    :CALL(mulARITH)
+                    :CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
     $ => E          :MLOAD(arithRes1)
-    E               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
+    E               :MSTORE(SP++); [a * b(E) => SP]
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#03?fork=berlin]
+ * @zk-counters
+ *  - 1 arith
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: [a, b]
+ *  - stack output: [a - b]
+ */
 opSUB:
-
+    ; checks zk-counters
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-
+    ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
-    SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-    $ => B          :MLOAD(SP)
-    $ => E          :SUB
-    E               :MSTORE(SP++)
+    ; check out-of-gas
     GAS-3 => GAS    :JMPN(outOfGas)
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--); [a => A]
+    $ => B          :MLOAD(SP); [b => B]
+    $ => E          :SUB
+    E               :MSTORE(SP++); [a - b(E) => SP]
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#04?fork=berlin]
+ * @zk-counters
+ *  - 1 arith
+ *  - 2 binary
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: [a, b]
+ *  - stack output: [a / b]
+ */
 opDIV:
-
+    ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
     %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
+    ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
+    ; check out-of-gas
+    GAS-5 => GAS    :JMPN(outOfGas)
+
     SP - 1 => SP
-    $ => E          :MLOAD(SP--)
-    $ => A          :MLOAD(SP)
+    $ => E          :MLOAD(SP--); [a => E]
+    $ => A          :MLOAD(SP); [b => A]
     ; Div operation with Arith
     E               :MSTORE(arithA)
     A               :MSTORE(arithB)
-                    :CALL(divARITH)
+                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
-    B               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
+    B               :MSTORE(SP++); [a / b(B) => SP]
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#05?fork=berlin]
+ * @zk-counters
+ *  - 1 arith
+ *  - 2 binary
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: [a, b]
+ *  - stack output: [a / b]
+ */
 opSDIV:
-
+    ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
     %MAX_CNT_BINARY - CNT_BINARY - 8 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-
+    ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
+    ; check out-of-gas
+    GAS-5 => GAS    :JMPN(outOfGas)
+
     SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-                    :CALL(abs)
+    $ => A          :MLOAD(SP--); [a => A]
+                    :CALL(abs); in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
     A => E
     B => C
-    $ => A          :MLOAD(SP)
-                    :CALL(abs)
+    $ => A          :MLOAD(SP); [b => A]
+                    :CALL(abs); in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
     A               :MSTORE(tmpVarA)
     C => A
-    $ => A          :XOR
+    $ => A          :XOR; [XOR(A,B) => A]
     1 => B
-    $ => B          :XOR
+    $ => B          :XOR; [XOR(A,B) => B]
     $ => A          :MLOAD(tmpVarA)
-    B - 1           :JMPN(opSDIVNeg) ;0 negative, 1 positive
-    ; Div operation with Arith
+    ; if is neg, jump to sdivneg
+    B - 1           :JMPN(opSDIVNeg)
     E               :MSTORE(arithA)
     A               :MSTORE(arithB)
-                    :CALL(divARITH)
+                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
-    B               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
+    B               :MSTORE(SP++); [a / b(B) => SP]
                     :JMP(readCode)
 
 opSDIVNeg:
-
-    ; Div operation with Arith
+    ; checks zk-counters
     E               :MSTORE(arithA)
     A               :MSTORE(arithB)
-                    :CALL(divARITH)
+                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
-
     0 => A
-    $ => A          :SUB
-    A               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
+    $ => A          :SUB; A - B => A
+    A               :MSTORE(SP++); [a / b(A) => SP]
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#06?fork=berlin]
+ * @zk-counters
+ *  - 1 arith
+ *  - 2 binary
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: [a, b]
+ *  - stack output: [a % b]
+ */
 opMOD:
-
+    ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
     %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-
+    ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
+    ; check out-of-gas
+    GAS-5 => GAS    :JMPN(outOfGas)
     SP - 1 => SP
-    $ => E          :MLOAD(SP--)
-    $ => A          :MLOAD(SP)
+    $ => E          :MLOAD(SP--); [a => E]
+    $ => A          :MLOAD(SP); [b => A]
     ; Mod operation with Arith
     E               :MSTORE(arithA)
     A               :MSTORE(arithB)
-                    :CALL(divARITH)
+                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => C          :MLOAD(arithRes2)
-    C               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
+    C               :MSTORE(SP++); [a % b(C) => SP]
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#07?fork=berlin]
+ * @zk-counters
+ *  - 1 arith
+ *  - 8 binary
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: [a, b]
+ *  - stack output: [a % b]
+ */
 opSMOD:
-
+    ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
     %MAX_CNT_BINARY - CNT_BINARY - 8 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-
+    ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
+    ; check out-of-gas
+    GAS - 5 => GAS    :JMPN(outOfGas)
     SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-                    :CALL(abs)
+    $ => A          :MLOAD(SP--); [a => A]
+                    :CALL(abs); in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
     A => E
     B => C
-    $ => A          :MLOAD(SP)
-                    :CALL(abs)
+    $ => A          :MLOAD(SP); [b => A]
+                    :CALL(abs); in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
     A               :MSTORE(tmpVarA)
     C => A
     1 => B
-    $ => B          :XOR
+    $ => B          :XOR; [XOR(A,B) => A]
     $ => A          :MLOAD(tmpVarA)
     B - 1           :JMPN(opSMODNeg)  ; 0 negative, 1 positive
     ; Div operation with Arith
     E               :MSTORE(arithA)
     A               :MSTORE(arithB)
-                    :CALL(divARITH)
+                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => C          :MLOAD(arithRes2)
-    C               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
+    C               :MSTORE(SP++); [a % b(C) => SP]
                     :JMP(readCode)
 
 opSMODNeg:
 
-    ; Div operation with Arith
     E               :MSTORE(arithA)
     A               :MSTORE(arithB)
-                    :CALL(divARITH)
+                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes2)
     0 => A
-    $ => A          :SUB
-    A               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
+    $ => A          :SUB; A - B => A
+    A               :MSTORE(SP++); [a % b(C) => SP]
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#08?fork=berlin]
+ * @zk-counters
+ *  - 1 arith
+ *  - 4 binary
+ *  - 80 steps
+ * @process-opcode
+ *  - stack input: [a, b, N]
+ *  - stack output: [(a + b) % N]
+ */
 opADDMOD:
-
+    ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
     %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 80 :JMPN(outOfCountersStep)
-
-    GAS-8 => GAS    :JMPN(outOfGas)
-
+    ; check out-of-gas
+    GAS - 8 => GAS    :JMPN(outOfGas)
+    ; check stack underflow
     SP - 3          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-    $ => B          :MLOAD(SP--)
+    $ => A          :MLOAD(SP--); [a => A]
+    $ => B          :MLOAD(SP--); [b => B]
     ; Add operation with Arith
     $${var _addMod = A + B}
 
@@ -213,80 +281,110 @@ opADDMOD:
     0 => D
 
 AddModJumpCarry:
-    A => E          ; Store sumResult on E
-
-    $ => A          :MLOAD(SP) ; load modulus
+    ; Store sumResult on E
+    A => E 
+    $ => A          :MLOAD(SP); [N => A]
     2 => B
     $               :LT, JMPC(zeroOneAddMod)
-
-    ${_addMod / A} => B        ; k: Max should be (2^256 -1) * 2 / 2 --> smaller than 2^256
-    ${_addMod % A} => C        ; addModResult
-
+    ; k: Max should be (2^256 -1) * 2 / 2 --> smaller than 2^256
+    ${_addMod / A} => B
+     ; addModResult        
+    ${_addMod % A} => C       
     ; k * N + addModResult = D*2^256 + sumResult
     ; B * A + C = D*2^256 + E
-
     ; Check addModResult is less than modulus
     E               :ARITH
-
     A => B          ; modulus
     C => A          ; addModResult
     $ => A          :LT
     1               :ASSERT
-    C               :MSTORE(SP++)
+    C               :MSTORE(SP++); [(a + b) % N => SP]
                     :JMP(readCode)
 
 zeroOneAddMod:
-    0               :MSTORE(SP++)
+    0               :MSTORE(SP++); [0 => SP]
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#09?fork=berlin]
+ * @zk-counters
+ *  - 3 arith
+ *  - 3 binary
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: [a, b, N]
+ *  - stack output: [(a * b) % N]
+ */
 opMULMOD:
-    GAS-8 => GAS    :JMPN(outOfGas)
+
+    ; check stack underflow
     SP - 3          :JMPN(stackUnderflow)
+    ; check out-of-gas
+    GAS - 8 => GAS    :JMPN(outOfGas)
     SP - 1 => SP
 
-    $ => A          :MLOAD(SP--)
-    $ => B          :MLOAD(SP--)
-    $ => C          :MLOAD(SP) ; Modulus N
-    zkPC+1 => RR    :JMP(utilMULMOD)
-
-    C               :MSTORE(SP++)
+    $ => A          :MLOAD(SP--); [a => A]
+    $ => B          :MLOAD(SP--); [b => B]
+    $ => C          :MLOAD(SP); [N => C]
+    zkPC+1 => RR    :JMP(utilMULMOD); in: [A, B, C] out: [C: (A * B) % C]
+    C               :MSTORE(SP++); [C => SP]
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#0A?fork=berlin]
+ * @zk-counters
+ *  - 5 binary
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: [a, exp]
+ *  - stack output: [a ** exp]
+ */
 opEXP:
-
+    ; checks zk-counters
     %MAX_CNT_BINARY - CNT_BINARY - 5 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-
+    ; check stack underflow
     SP - 2              :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A              :MLOAD(SP--)
-    $ => B              :MLOAD(SP)
+    $ => A              :MLOAD(SP--); [a => A]
+    $ => B              :MLOAD(SP); [exp => B]
     B => D
-    zkPC+1 => RR        :JMP(expAD)
-    A                   :MSTORE(SP++)
-    1024 - SP           :JMPN(stackOverflow)
-                        :CALL(getLenBytes)
+    zkPC+1 => RR        :JMP(expAD); in: [A, D] out: [A: A^D]
+    A                   :MSTORE(SP++); [a ** exp (A) => SP]
+                        :CALL(getLenBytes); in: [B: bytes] out: [A: bytes len]
+    ; check out-of-gas
     GAS-10-50*A => GAS  :JMPN(outOfGas)
                         :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#0B?fork=berlin]
+ * @zk-counters
+ *  - 6 arith
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: [b,x]
+ *  - stack output: [y]
+ */
 opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/vm/src/evm/opcodes/functions.ts#L193
-
+    ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 6 :JMPN(outOfCountersArith)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-
+    ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
+    ; check out-of-gas
+    GAS-5 => GAS    :JMPN(outOfGas)
     SP - 1 => SP
-    $ => B          :MLOAD(SP--) ; sign byte --> sign bit = 8 * A + 7
-    $ => D          :MLOAD(SP)   ; number to convert
+    $ => B          :MLOAD(SP--); [b => B]
+    $ => D          :MLOAD(SP); [x => D]
     30 => A
-    $               :LT, JMPC(opSIGNEXTENDEnd); if signByte is 31 or more, means basically let the number as it is
-    B * 8  + 7 => D ; B is less than 31, no need for binary
+    ; if signByte is 31 or more, means basically let the number as it is
+    $               :LT, JMPC(opSIGNEXTENDEnd)
+    B * 8  + 7 => D; B is less than 31, no need for binary
     D*2 => RR
     zkPC+2                  :MSTORE(tmpSHXZkPC)
-                            :JMP(@exp_num + RR)  ; signBit TODO table for shifting + multipliyng
+                            :JMP(@exp_num + RR)
     B => A
-    $ => D          :MLOAD(SP)   ; number to convert
-
+    $ => D          :MLOAD(SP); [x => D]
     ;Store mask
     1 => B
     $ => C          :SUB ; mask
@@ -294,7 +392,8 @@ opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-mon
     D => B               ; number to convert
     $ => B          :AND ; check sign bit
     0 => A
-    $               :EQ, JMPC(opSIGNEXTENDPositive) ; If 0 means the sign bit was 0 --> positive
+    ; If 0 means the sign bit was 0 --> positive
+    $               :EQ, JMPC(opSIGNEXTENDPositive) 
     C => A ; mask
     %MAX_UINT_256 => B
     $ => B          :XOR ; not mask
@@ -308,7 +407,5 @@ opSIGNEXTENDPositive:
     $ => D          :AND
 
 opSIGNEXTENDEnd:
-    D               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
+    D               :MSTORE(SP++); [D => SP]
                     :JMP(readCode)

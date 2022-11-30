@@ -1,108 +1,201 @@
-
+/**
+ * @link [https://www.evm.codes/#40?fork=berlin]
+ * @zk-counters
+ *  - 1 keccak
+ *  - 255 poseidon
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: [blockNumber]
+ *  - stack output: [hash]
+ */
 opBLOCKHASH:
-
+    ; checks zk-counters
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
     $ => A                                     :MLOAD(cntKeccakPreProcess)
     %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1   :JMPN(outOfCountersKeccak)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
+    ; check stack underflow
     SP - 1 => SP     :JMPN(stackUnderflow)
+
+    ; check out-of-gas
     GAS - 20 => GAS  :JMPN(outOfGas)
 
-    ; Check batch number is lt current batch number, else return 0
     ; Get last tx count
     $ => B          :MLOAD(txCount)
     B + 1 => B
-    $ => A          :MLOAD(SP) ; batch number
+    $ => A          :MLOAD(SP) ; [blockNumber => A]
+    ; Check batch block is lt current block number, else return 0
     B - A - 1       :JMPN(opBLOCKHASHzero)
     ; Create key for the batch hash mapping key
+    ; set bytes length to D
     32 => D
-    0 => HASHPOS ; A new hash with position 0 is started
+    ; A new hash with position 0 is started
+    0 => HASHPOS
     $ => E                              :MLOAD(lastHashKIdUsed)
     E+1 => E                            :MSTORE(lastHashKIdUsed)
     A                                   :HASHK(E)
     %STATE_ROOT_STORAGE_POS             :HASHK(E)
     HASHPOS                             :HASHKLEN(E)
+    ; blockhash key = hash(blockNumber, STATE_ROOT_STORAGE_POS)
     $ => C                              :HASHKDIGEST(E)
     %ADDRESS_SYSTEM => A
+    ; set key for smt storage query
     %SMT_KEY_SC_STORAGE => B
+    ; storage value in E
     $ => E                              :SLOAD
-    ; Store result value in the stack
-    E               :MSTORE(SP++)
+    ; store result value in the stack
+    E               :MSTORE(SP++); [hash(E) => SP]
     1024 - SP       :JMPN(stackOverflow)
+    ; check stack overflow
                     :JMP(readCode)
 
 ; Handle when is asking for the hash of a not computed batch, return 0
 opBLOCKHASHzero:
-    0               :MSTORE(SP++)
+    0               :MSTORE(SP++); [0 => SP]
+    ; check stack overflow
     1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#41?fork=berlin]
+ * @zk-counters
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: []
+ *  - stack output: [address]
+ */
 opCOINBASE:
-
+    ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+
+    ; check out-of-gas
+    GAS-2 => GAS    :JMPN(outOfGas)
 
     $ => A          :MLOAD(sequencerAddr)
-    A               :MSTORE(SP++)
+    A               :MSTORE(SP++); [address => E]
+    ; check stack overflow
     1024 - SP       :JMPN(stackOverflow)
-    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#42?fork=berlin]
+ * @zk-counters
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: []
+ *  - stack output: [timestamp]
+ */
 opTIMESTAMP:
-
+    ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
-    $ => A          :MLOAD(timestamp)
-    A               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
+    ; check out-of-gas
     GAS-2 => GAS    :JMPN(outOfGas)
+    $ => A          :MLOAD(timestamp)
+    A               :MSTORE(SP++); [timestamp => E]
+    ; check stack overflow
+    1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#43?fork=berlin]
+ * @zk-counters
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: []
+ *  - stack output: [blockNumber]
+ */
 opNUMBER:
-
+    ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
+    ; check out-of-gas
+    GAS - 2 => GAS  :JMPN(outOfGas)
     ; Get current tx count
     $ => D          :MLOAD(txCount)
-    D + 1           :MSTORE(SP++)
+    D + 1           :MSTORE(SP++); [blockNumber => E]
+    ; check stack overflow
     1024 - SP       :JMPN(stackOverflow)
-    GAS - 2 => GAS  :JMPN(outOfGas)
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#44?fork=berlin]
+ * @zk-counters
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: []
+ *  - stack output: [difficulty]
+ */
 opDIFFICULTY:
-
+    ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
+    ; check out-of-gas
+    GAS-2 => GAS    :JMPN(outOfGas)
+    ; No difficulty, always 0
     %BATCH_DIFFICULTY => A
-    A               :MSTORE(SP++)
+    A               :MSTORE(SP++); [difficulty => E]
+    ; check stack overflow
     1024 - SP       :JMPN(stackOverflow)
-    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#45?fork=berlin]
+ * @zk-counters
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: []
+ *  - stack output: [gasLimit]
+ */
 opGASLIMIT:
-
+    ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
+    ; check out-of-gas
+    GAS-2 => GAS    :JMPN(outOfGas)
+    ; constant tx gas limit
     %TX_GAS_LIMIT => A
-    A               :MSTORE(SP++)
+    A               :MSTORE(SP++); [gasLimit => E]
+    ; check stack overflow
     1024 - SP       :JMPN(stackOverflow)
-    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
+/**
+ * @link [https://www.evm.codes/#46?fork=berlin]
+ * @zk-counters
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: []
+ *  - stack output: [chainId]
+ */
 opCHAINID:
-
+    ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
+    ; check out-of-gas
+    GAS-2 => GAS    :JMPN(outOfGas)
     $ => A          :MLOAD(chainID)
-    A               :MSTORE(SP++)
+    A               :MSTORE(SP++); [chainId => E]
+    ; check stack overflow
     1024 - SP       :JMPN(stackOverflow)
-    GAS-2 => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
-opBASEFEE:
 
+/**
+ * @link [https://www.evm.codes/#48?fork=berlin]
+ * @zk-counters
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: []
+ *  - stack output: [baseFee]
+ */
+opBASEFEE:
+    ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
-    0               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
+    ; check out-of-gas
     GAS-2 => GAS    :JMPN(outOfGas)
+    0               :MSTORE(SP++); [baseFee => E]
+    ; check stack overflow
+    1024 - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
