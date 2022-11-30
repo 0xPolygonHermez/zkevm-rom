@@ -46,7 +46,7 @@ start: ; main zkROM entry point
 setGlobalExitRoot:
         0 => HASHPOS
         $ => E                                  :MLOAD(lastHashKIdUsed)
-        E+1 => E                                :MSTORE(lastHashKIdUsed)
+        E+1                                     :MSTORE(lastHashKIdUsed)
 
         32 => D
         A                                       :HASHK(E)
@@ -56,6 +56,15 @@ setGlobalExitRoot:
 
         %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2 => A
         %SMT_KEY_SC_STORAGE => B
+
+        ; read timestamp given the globalExitRoot
+        $ => D                                  :SLOAD
+
+        ; skip overwrite timestamp if it is different than 0
+        D - 1                                   :JMPN(writeGlobalExitRoot)
+                                                :JMP(skipSetGlobalExitRoot)
+
+writeGlobalExitRoot:
         $ => D                                  :MLOAD(timestamp)
         $ => SR                                 :SSTORE ; Store 'timestamp' in storage position 'keccak256(globalExitRoot, 0)'
 
@@ -162,29 +171,31 @@ processTxsEnd:
         A                               :MSTORE(batchHashData)
 
 ;; Compute 'newAccInputHash'
+        $ => E                          :MLOAD(lastHashKIdUsed)
+        E+1 => E
         0 => HASHPOS
 
         32 => D
         $ => A                          :MLOAD(oldAccInputHash)
-        A                               :HASHK(0)
+        A                               :HASHK(E)
 
         $ => A                          :MLOAD(batchHashData)
-        A                               :HASHK(0)
+        A                               :HASHK(E)
 
         $ => A                          :MLOAD(globalExitRoot)
-        A                               :HASHK(0)
+        A                               :HASHK(E)
 
         8 => D
         $ => A                          :MLOAD(timestamp)
-        A                               :HASHK(0)
+        A                               :HASHK(E)
 
         20 => D
         $ => A                          :MLOAD(sequencerAddr)
-        A                               :HASHK(0)
+        A                               :HASHK(E)
 
-        HASHPOS                         :HASHKLEN(0)
+        HASHPOS                         :HASHKLEN(E)
 
-        $ => C                          :HASHKDIGEST(0)
+        $ => C                          :HASHKDIGEST(E)
         C                               :MSTORE(newAccInputHash)
         ${eventLog(onFinishBatch)}
 
