@@ -156,7 +156,7 @@ MSTORE32:
     D               :MSTORE(tmpVarD)
     E               :MSTORE(tmpVarE)
     E => A
-    0x200000 => B
+    0x400000 => B
     $               :LT,JMPC(initMSTORE)
                     :JMP(errorMLOADMSTORE)
 
@@ -264,7 +264,7 @@ MLOAD32:
     C               :MSTORE(tmpVarC)
     D               :MSTORE(tmpVarD)
     E => A
-    0x200000 => B
+    0x400000 => B
     $               :LT,JMPC(initMLOAD)
                     :JMP(errorMLOADMSTORE)
 
@@ -988,6 +988,15 @@ hashPoseidonLinearFromMemory:
     $ => C                          :MLOAD(memSizeLinearPoseidon)
     0 => D
     C - 1                           :JMPN(hashPoseidonReturn)
+    ; check poseidon counters
+    ; 56 is the value used by the prover to increment poseidon counters depending on the hash length
+    C               :MSTORE(arithA)
+    56              :MSTORE(arithB)
+                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => B          :MLOAD(arithRes1)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1 => A
+    $               :LT, JMPC(outOfCountersPoseidon)
+
     ; get a new hashPId
     $ => B                          :MLOAD(nextHashPId)
     B                               :MSTORE(tmpContractHashId)
@@ -1043,6 +1052,10 @@ maskAddress:
                     :RETURN
 
 updateSystemData:
+    ; check keccak counters
+    $ => A                              :MLOAD(cntKeccakPreProcess)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1:JMPN(outOfCountersKeccak)
+
     ; Get last tx count
     %LAST_TX_STORAGE_POS => C
     %ADDRESS_SYSTEM => A
@@ -1061,8 +1074,6 @@ updateSystemData:
     A                                   :HASHK(E)
     %STATE_ROOT_STORAGE_POS             :HASHK(E)
     HASHPOS                             :HASHKLEN(E)
-    $ => A                              :MLOAD(cntKeccakPreProcess)
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1:JMPN(outOfCountersKeccak)
     $ => C                              :HASHKDIGEST(E)
     %ADDRESS_SYSTEM => A
     SR => D

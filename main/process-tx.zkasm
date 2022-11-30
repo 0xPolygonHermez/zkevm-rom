@@ -32,25 +32,8 @@ processTx:
 
         ; Minimum of 100000 steps left to process a tx
         %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCountersStep)
-
-        ; Get sigDataSize
-        $ => HASHPOS                     :MLOAD(sigDataSize)
-
-        ; Check keccak counters
-        HASHPOS                          :MSTORE(arithA)
-        136                              :MSTORE(arithB)
-                                         :CALL(divARITH)
-        $ => B                           :MLOAD(arithRes1)
-        $ => A                           :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 => A
-        $                                :LT, JMPC(outOfCountersKeccak)
-
-        ; Get hash address previously stored in RLP parsing
-        $ => E                          :MLOAD(lastTxHashId)
-        E+1 => E                        :MSTORE(lastTxHashId)
-
+        $ => A                          :MLOAD(txHash)
         ; Check the signature
-        $ => A                          :HASHKDIGEST(E)
         $ => B                          :MLOAD(txR)
         $ => C                          :MLOAD(txS)
         $ => D                          :MLOAD(txV)
@@ -241,6 +224,9 @@ getContractAddress:
         ; Check if create is with CREATE2 opcode
         $ => A                          :MLOAD(isCreate2)
         0 - A                           :JMPN(create2)
+        ; Check keccak counters
+        $ => A                          :MLOAD(cntKeccakPreProcess)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1:JMPN(outOfCountersKeccak)
         $ => A                          :MLOAD(txNonce)
         0x80 => B
         $                               :LT,JMPC(nonce1byte)
@@ -278,10 +264,21 @@ nonceIs0:
 ;; compute new contract address as CREATE2 spec: keccak256(0xff ++ address ++ salt ++ keccak256(init_code))[12:] (https://eips.ethereum.org/EIPS/eip-1014)
 create2:
         $ => C                          :MLOAD(txCalldataLen)
+        ; Check keccak counters
+        C + 1                           :MSTORE(arithA)
+        136                             :MSTORE(arithB)
+                                        :CALL(divARITH)
+        $ => B                          :MLOAD(arithRes1)
+        $ => A                          :MLOAD(cntKeccakPreProcess)
+        ; -2 because we will use one more keccack for generating contract address
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A  - 2 => A
+        $                               :LT, JMPC(outOfCountersKeccak)
+
         $ => CTX                        :MLOAD(originCTX)
         $ => B                          :MLOAD(argsOffsetCall)
 
 loopCreate2:
+        ; check zk-counters
         %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
         %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCountersBinary)
 
@@ -308,15 +305,8 @@ endloopCreate2:
 create2end:
         $ => CTX                        :MLOAD(currentCTX)
         HASHPOS                         :HASHKLEN(E)
-        ; Check keccak counters
-        HASHPOS                         :MSTORE(arithA)
-        136                             :MSTORE(arithB)
-                                        :CALL(divARITH)
-        $ => B                          :MLOAD(arithRes1)
-        $ => A                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A  - 1 => A
-        $                               :LT, JMPC(outOfCountersKeccak)
         $ => C                          :HASHKDIGEST(E)
+        
         ; new hash with position 0 is started
         0 => HASHPOS
         $ => E                          :MLOAD(lastHashKIdUsed)
@@ -334,16 +324,6 @@ create2end:
 
 endContractAddress:
         HASHPOS                         :HASHKLEN(E)
-
-        ; Check keccak counters
-        HASHPOS                         :MSTORE(arithA)
-        136                             :MSTORE(arithB)
-                                        :CALL(divARITH)
-        $ => B                          :MLOAD(arithRes1)
-        $ => A                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 => A
-        $                               :LT, JMPC(outOfCountersKeccak)
-
         $ => A                          :HASHKDIGEST(E)
                                         :CALL(maskAddress) ; Mask address to 20 bytes
         A                               :MSTORE(createContractAddress)
@@ -449,6 +429,15 @@ callContract:
         B                               :MSTORE(bytecodeLength)
         0 => A
         $                               :EQ, JMPC(defaultOpCode) ;no bytecode
+
+        ; check poseidon counters
+        ; 56 is the value used by the prover to increment poseidon counters depending on the hash length
+        B               :MSTORE(arithA)
+        56              :MSTORE(arithB)
+                        :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+        $ => B          :MLOAD(arithRes1)
+        %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1 => A
+        $               :LT, JMPC(outOfCountersPoseidon)
 
         $ => A                          :MLOAD(txDestAddr)
         ; get hash contract
