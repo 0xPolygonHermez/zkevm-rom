@@ -52,7 +52,7 @@ endList:
                                         :CALL(divARITH)
         $ => B                          :MLOAD(arithRes1)
         $ => D                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B - D - 1:JMPN(handleOOCatRLP)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B - D - 1:JMPN(handleOOCKatRLP)
 
 ;; Read RLP 'nonce'
         ; 64 bits max
@@ -215,6 +215,7 @@ longData:
         A => B                          :MSTORE(txCalldataLen)
 
 readData:
+        ; check binaries
         32 => D
         B - D                           :JMPN(readDataFinal)
         B - D                           :MSTORE(txDataRead)
@@ -330,9 +331,14 @@ vREADTx:
 ;;;;;;;;;
 ;; E - Handler error RLP fields
 ;;;;;;;;;
-handleOOCatRLP:
+handleOOCBatRLP:
+        ${eventLog(onError, OOCB)}
+                                        :JMP(handleOOCatRLP)
+handleOOCKatRLP:
         ${eventLog(onError, OOCK)}
-        $ => SR         :MLOAD(batchSR)
+                                        :JMP(handleOOCatRLP)
+handleOOCatRLP:
+        $ => SR                         :MLOAD(batchSR)
 
 invalidTxRLP:
 ;; Append all missing 'batchL2Data' to 'batchDataHash' bytes
