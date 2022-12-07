@@ -197,7 +197,7 @@ opCALL:
     ; store address call
     $ => A          :MLOAD(SP--); [address => A]
     ; Mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: not masked address] out: [A: masked address]
+                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
     A               :MSTORE(addrCall)
     ; store value call
     $ => A          :MLOAD(SP--); [value => A]
@@ -336,7 +336,7 @@ opCALLCODE:
     ; store address call
     $ => A          :MLOAD(SP--); [address => A]
     ; Mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: not masked address] out: [A: masked address]
+                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
     A               :MSTORE(addrCall)
     ; store value call
     $ => A          :MLOAD(SP--); [value => A]
@@ -504,9 +504,10 @@ opRETURN32:
     ; load origin CTX
     $ => CTX        :MLOAD(originCTX)
     B => E
+     ; set bytesToStore with value to use in MSTORE
     A               :MSTORE(bytesToStore)
     ; store 32 bytes at origin CTX
-                    :CALL(MSTORE32); in: [E: offset] out: [A: value]
+                    :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     E => B
     D => E
     C - 32 => C
@@ -521,7 +522,7 @@ opRETURNfinal:
     B => E
     A               :MSTORE(bytesToStore)
     ; store last bytes
-                    :CALL(MSTOREX); in: [E: offset, C: length] out: [E: new offset]
+                    :CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
     $ => CTX        :MLOAD(currentCTX)
 
 opRETURNend:
@@ -636,7 +637,7 @@ opDELEGATECALL:
     ; store address call
     $ => A          :MLOAD(SP--); [address => A]
     ; Mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: not masked address] out: [A: masked address]
+                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
     A               :MSTORE(addrCall)
     ; store bytes offset int the memory, the calldata of the subcontext
     $ => A          :MLOAD(SP--)
@@ -874,7 +875,7 @@ opSTATICCALL:
     A               :MSTORE(gasCall)
     $ => A          :MLOAD(SP--); [address => A]
     ; mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: not masked address] out: [A: masked address]
+                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
     A               :MSTORE(addrCall)
     ; store bytes offset int the memory, the calldata of the subcontext
     $ => A          :MLOAD(SP--); [argsOffset => A]
@@ -1009,9 +1010,10 @@ opREVERT32:
     E => D
     $ => CTX        :MLOAD(originCTX)
     B => E
+     ; set bytesToStore with value to use in MSTORE
     A               :MSTORE(bytesToStore)
     ; store 32 bytes at origin CTX
-                    :CALL(MSTORE32); in: [E: offset] out: [A: value]
+                    :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     E => B
     D => E
     C - 32 => C
@@ -1025,7 +1027,7 @@ opREVERTfinal:
     $ => CTX        :MLOAD(originCTX)
     B => E
     A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX); in: [E: offset, C: length] out: [E: new offset]
+                    :CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
     $ => CTX        :MLOAD(currentCTX)
 
 opREVERTend:
@@ -1080,7 +1082,7 @@ opSENDALL:
 
     $ => A              :MLOAD(SP); [address => A]
     ; Mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: not masked address] out: [A: masked address]
+                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
     ; check if storage address has balance to withdraw
     A => C
     A => E
@@ -1139,7 +1141,7 @@ opSENDALLend:
     ; restore origin CTX values
     $ => SP                 :MLOAD(lastSP)
     $ => PC                 :MLOAD(lastPC)
-    D                       :MSTORE(SP++)
+    D                       :MSTORE(SP++); [output => SP]
     ; check stack overflow
     1024 - SP               :JMPN(stackOverflow)
     ; decrease depth
