@@ -57,6 +57,17 @@ opSTOPend:
  *  - stack output: [address]
  */
 opCREATE:
+    ; checks zk-counters
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2     :JMPN(outOfCountersMemalign)
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    
+    ; check out-of-gas
+    GAS - %CREATE_GAS => GAS  :JMPN(outOfGas)
+    GAS                 :MSTORE(gasCall)
+    
     ; increase depth
     $ => A              :MLOAD(depth)
     A + 1               :MSTORE(depth)
@@ -74,12 +85,6 @@ opCREATE:
     $ => C              :MLOAD(SP); [size => C]
     C                   :MSTORE(argsLengthCall)
 
-    ; checks zk-counters
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2     :JMPN(outOfCountersMemalign)
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
 
     ; store lastMemOffset for memory expansion gas cost
     E                   :MSTORE(lastMemOffset)
@@ -89,9 +94,6 @@ opCREATE:
                         :CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; store current CTX to auxiliary var for later usage
     CTX                 :MSTORE(originAuxCTX)
-    ; check out-of-gas
-    GAS - %CREATE_GAS => GAS  :JMPN(outOfGas)
-    GAS                 :MSTORE(gasCall)
 
     ; check if source address has enough balance to send to the new account
     $ => A              :MLOAD(storageAddr)
@@ -733,6 +735,14 @@ opDELEGATECALLend:
  *  - stack output: [address]
  */
 opCREATE2:
+    ; checks zk-counters
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    ; check out-of-gas
+    GAS - %CREATE_2_GAS => GAS  :JMPN(outOfGas)
+    
     ; increase depth
     $ => A              :MLOAD(depth)
     A + 1               :MSTORE(depth)
@@ -751,11 +761,6 @@ opCREATE2:
     C                   :MSTORE(argsLengthCall)
     $ => D              :MLOAD(SP); [salt => D]
 
-    ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
 
     ; store lastMemOffset for memory expansion gas cost
     E                   :MSTORE(lastMemOffset)
@@ -765,8 +770,6 @@ opCREATE2:
                         :CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; store current CTX to auxiliary var for later usage
     CTX                 :MSTORE(originAuxCTX)
-    ; check out-of-gas
-    GAS - %CREATE_2_GAS => GAS  :JMPN(outOfGas)
 
     ; cost to hash the initialisation code
     ${C+31}             :MSTORE(arithA)
@@ -1063,6 +1066,8 @@ opSENDALL:
     %MAX_CNT_BINARY - CNT_BINARY - 10 :JMPN(outOfCountersBinary)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 2040 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    ; check out-of-gas
+    GAS - %SENDALL_GAS => GAS   :JMPN(outOfGas)
 
     ; check stack underflow
     SP - 1 => SP        :JMPN(stackUnderflow)
@@ -1070,8 +1075,6 @@ opSENDALL:
     ; check is static
     $ => A              :MLOAD(isStaticCall)
     0 - A               :JMPN(invalidStaticTx)
-    ; check out-of-gas
-    GAS - %SENDALL_GAS => GAS   :JMPN(outOfGas)
 
     $ => A              :MLOAD(storageAddr)
     ; set key for smt balance query

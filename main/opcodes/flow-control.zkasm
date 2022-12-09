@@ -32,13 +32,14 @@ opJUMP:
  *  - stack output: none
  */
 opJUMPI:
-
+    ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    ; check out-of-gas
+    GAS - %GAS_SLOW_STEP => GAS                 :JMPN(outOfGas)
 
     SP - 2 => SP                    :JMPN(stackUnderflow)
     $ => B                          :MLOAD(SP); [value => B]
-    GAS - %GAS_SLOW_STEP => GAS                 :JMPN(outOfGas)
     0 => A
     $                               :EQ, JMPC(readCode)
     SP + 1 => SP
