@@ -5,10 +5,10 @@ IDENTITY:
     zkPC+2 => RR
     $               :LT, JMPC(moveBalances)
     
-    GAS - 15 => GAS :JMPN(outOfGas)
+    GAS - %IDENTITY_GAS => GAS :JMPN(outOfGas)
     $ => C          :MLOAD(argsLengthCall)
     ${(C+31)/32} => A
-    GAS - 3*A => GAS:JMPN(outOfGas)
+    GAS - %IDENTITY_WORD_GAS*A => GAS:JMPN(outOfGas)
     CTX             :MSTORE(currentCTX)
     CTX => A
     $ => CTX        :MLOAD(originCTX)
@@ -27,7 +27,7 @@ IDENTITYinit:
     ; Copy from calldata to memory
     C - 1           :JMPN(IDENTITYreturn)
     C - 32          :JMPN(IDENTITYfinal)
-    1024 + A => SP
+    %CALLDATA_OFFSET + A => SP
     $ => B          :MLOAD(SP)
     B               :MSTORE(bytesToStore)
                     :CALL(MSTORE32)
@@ -35,7 +35,7 @@ IDENTITYinit:
     C - 32 => C
                     :JMP(IDENTITYinit)
 IDENTITYfinal:
-    1024 + A => SP
+    %CALLDATA_OFFSET + A => SP
     $ => A          :MLOAD(SP)
     32 - C => D
                     :CALL(SHRarith)

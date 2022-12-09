@@ -23,9 +23,9 @@ opADDRESSdeploy:
 opADDRESSend:
     A               :MSTORE(SP++); [address(A) => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
     ; check out-of-gas
-    GAS-2 => GAS    :JMPN(outOfGas)
+    GAS-%GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 /**
@@ -49,9 +49,9 @@ opSELFBALANCE:
     $ => D          :SLOAD
     D               :MSTORE(SP++); [balance(D) => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
     ; check out-of-gas
-    GAS-5 => GAS    :JMPN(outOfGas)
+    GAS - %GAS_FAST_STEP => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 /**
@@ -78,10 +78,10 @@ opBALANCE:
     $ => D          :SLOAD
     D               :MSTORE(SP++); [balance(D) => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
                     :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ; check out-of-gas
-    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 /**
@@ -99,9 +99,9 @@ opORIGIN:
     $ => A          :MLOAD(txSrcOriginAddr)
     A               :MSTORE(SP++); [address(A) => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
     ; check out-of-gas
-    GAS-2 => GAS    :JMPN(outOfGas)
+    GAS-%GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 /**
@@ -119,9 +119,9 @@ opCALLER:
     $ => A          :MLOAD(txSrcAddr)
     A               :MSTORE(SP++); [address(A) => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
     ; check out-of-gas
-    GAS-2 => GAS    :JMPN(outOfGas)
+    GAS-%GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 /**
@@ -139,9 +139,9 @@ opCALLVALUE:
     $ => A          :MLOAD(txValue)
     A               :MSTORE(SP++); [value(A) => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
     ; check out-of-gas
-    GAS-2 => GAS    :JMPN(outOfGas)
+    GAS-%GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 /**
@@ -159,9 +159,9 @@ opGASPRICE:
     $ => A          :MLOAD(txGasPrice)
     A               :MSTORE(SP++); [price(A) => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
     ; check out-of-gas
-    GAS-2 => GAS    :JMPN(outOfGas)
+    GAS-%GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 /**
@@ -176,8 +176,8 @@ opGAS:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     ; check out-of-gas
-    GAS - 2 => GAS  :JMPN(outOfGas)
+    GAS - %GAS_QUICK_STEP => GAS  :JMPN(outOfGas)
     GAS             :MSTORE(SP++); [gas(GAS) => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
                     :JMP(readCode)

@@ -36,7 +36,7 @@ opSTOPend:
     ; store stack output
     D               :MSTORE(SP++)
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
     ; decrease depth
     $ => A          :MLOAD(depth)
     A - 1           :MSTORE(depth)
@@ -90,7 +90,7 @@ opCREATE:
     ; store current CTX to auxiliary var for later usage
     CTX                 :MSTORE(originAuxCTX)
     ; check out-of-gas
-    GAS - 32000 => GAS  :JMPN(outOfGas)
+    GAS - %CREATE_GAS => GAS  :JMPN(outOfGas)
     GAS                 :MSTORE(gasCall)
 
     ; check if source address has enough balance to send to the new account
@@ -249,17 +249,17 @@ opCALL2:
 
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
-    GAS-100-D*2500 => GAS :JMPN(outOfGas)
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS :JMPN(outOfGas)
     ; Calculate positive_value_cost, if value call > 0 -> 9000
     $ => B          :MLOAD(valueCall)
     0 => A
     $               :EQ,JMPC(opCALLend)
 
-    GAS - 9000 => GAS :JMPN(outOfGas)
+    GAS - %CALL_VALUE_TRANSFER_GAS => GAS :JMPN(outOfGas)
     ; if destAddress is an empty account, we should add 25k of gas to base cost
     $ => E               :MLOAD(addrCall)
                          :CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
-    GAS - 25000*E => GAS :JMPN(outOfGas)
+    GAS - %CALL_NEW_ACCOUNT_GAS*E => GAS :JMPN(outOfGas)
 
 opCALLend:
     ; setup vars for next CTX
@@ -292,7 +292,7 @@ opCALLend:
     $ => CTX            :MLOAD(originCTX)
     GAS - A             :MSTORE(gasCTX)
     ; add estipend (2300) in case of tx with value
-    A + 2300*C => A
+    A + %CALL_STIPEND*C => A
     ; move is static bool value to following CTX
     $ => D              :MLOAD(isStaticCall)
     $ => CTX            :MLOAD(currentCTX)
@@ -376,13 +376,13 @@ opCALLCODE:
 
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
-    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
     ; Calculate positive_value_cost, if value call > 0 -> 9000
     $ => B                   :MLOAD(valueCall)
     0 => A
     $                        :EQ,JMPC(opCALLCODEend)
     ; Substract gas if the call has value
-    GAS - 9000 => GAS        :JMPN(outOfGas)
+    GAS - %CALL_VALUE_TRANSFER_GAS => GAS        :JMPN(outOfGas)
 
 opCALLCODEend:
     ; setup vars for next CTX
@@ -415,7 +415,7 @@ opCALLCODEend:
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     ; Add estipend (2300) in case of tx with value
-    A + 2300*C => A
+    A + %CALL_STIPEND*C => A
     ; move is static bool value to following CTX
     $ => D          :MLOAD(isStaticCall)
     $ => CTX        :MLOAD(currentCTX)
@@ -534,7 +534,7 @@ opRETURNend:
     $ => PC         :MLOAD(lastPC)
     1               :MSTORE(SP++); [1 => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
     ; decrease depth
     $ => A          :MLOAD(depth)
     A - 1           :MSTORE(depth)
@@ -546,7 +546,7 @@ opRETURNdeploy:
     ; code size limit = 0x6000
     0x6000 - C      :JMPN(invalidCodeSize)
     ;code_deposit_cost = 200 * returned_code_size
-    GAS - 200 * C => GAS    :JMPN(outOfGas) 
+    GAS - %RETURN_GAS_COST * C => GAS    :JMPN(outOfGas) 
     ; check if first context
     $ => B          :MLOAD(originCTX)
     0 - B           :JMPN(opRETURNcreate)
@@ -603,7 +603,7 @@ opRETURNcreateEnd:
     $ => PC         :MLOAD(lastPC)
     A               :MSTORE(SP++); [createContractAddress(A) => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
     ; decrease depth
     $ => A          :MLOAD(depth)
     A - 1           :MSTORE(depth)
@@ -674,7 +674,7 @@ opDELEGATECALL:
     $ => A                   :MLOAD(addrCall)
                              :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ;gas_cost = base_gas + gas_sent_with_call
-    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
 
     ; transition to new CTX
     $ => C          :MLOAD(txSrcAddr)
@@ -766,7 +766,7 @@ opCREATE2:
     ; store current CTX to auxiliary var for later usage
     CTX                 :MSTORE(originAuxCTX)
     ; check out-of-gas
-    GAS - 32000 => GAS  :JMPN(outOfGas)
+    GAS - %CREATE_2_GAS => GAS  :JMPN(outOfGas)
 
     ; cost to hash the initialisation code
     ${C+31}             :MSTORE(arithA)
@@ -908,7 +908,7 @@ opSTATICCALL:
     $ => A          :MLOAD(addrCall)
                     :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ;gas_cost = base_gas + gas_sent_with_call
-    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
 
     ; setup vars for next CTX
     $ => D          :MLOAD(storageAddr)
@@ -1038,7 +1038,7 @@ opREVERTend:
     $ => PC         :MLOAD(lastPC)
     0               :MSTORE(SP++); [0 => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
     ; decrease depth
     $ => A          :MLOAD(depth)
     A - 1           :MSTORE(depth)
@@ -1071,7 +1071,7 @@ opSENDALL:
     $ => A              :MLOAD(isStaticCall)
     0 - A               :JMPN(invalidStaticTx)
     ; check out-of-gas
-    GAS - 5000 => GAS   :JMPN(outOfGas)
+    GAS - %SENDALL_GAS => GAS   :JMPN(outOfGas)
 
     $ => A              :MLOAD(storageAddr)
     ; set key for smt balance query
@@ -1090,13 +1090,13 @@ opSENDALL:
     D => B
     $                           :EQ,JMPC(opSENDALL2)
                                 :CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
-    GAS - 25000 * E => GAS      :JMPN(outOfGas)
+    GAS - %CALL_NEW_ACCOUNT_GAS * E => GAS      :JMPN(outOfGas)
 
 opSENDALL2:
     ; check is cold to compute gas cost
     C => A
                               :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
-    GAS - 2600 * D => GAS     :JMPN(outOfGas)
+    GAS - %COLD_ACCOUNT_ACCESS_COST * D => GAS     :JMPN(outOfGas)
     B                         :MSTORE(arithA)
     ; read previous balance receiver
     ; set key for smt balance query
@@ -1143,7 +1143,7 @@ opSENDALLend:
     $ => PC                 :MLOAD(lastPC)
     D                       :MSTORE(SP++); [output => SP]
     ; check stack overflow
-    1024 - SP               :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP               :JMPN(stackOverflow)
     ; decrease depth
     $ => A                  :MLOAD(depth)
     A - 1                   :MSTORE(depth)

@@ -22,7 +22,7 @@ opMLOAD:
     SP - 1 => SP    :JMPN(stackUnderflow)
 
     ; check out-of-gas
-    GAS - 3 => GAS  :JMPN(outOfGas)
+    GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
     
     $ => E          :MLOAD(SP); [offset => E]
     ; store lastMemOffset for memory expansion gas cost
@@ -35,7 +35,7 @@ opMLOAD:
     ; store stack output                
     A               :MSTORE(SP++); [value(A) => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 /**
@@ -63,7 +63,7 @@ opMLOAD:
     SP - 1 => SP
 
     ; check out-of-gas
-    GAS - 3 => GAS  :JMPN(outOfGas)
+    GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
 
     $ => E          :MLOAD(SP--); [offset => E]
     $ => B          :MLOAD(SP); [value => B]
@@ -103,7 +103,7 @@ opMSTORE8:
     SP - 1 => SP
 
     ; check out-of-gas
-    GAS - 3 => GAS  :JMPN(outOfGas)
+    GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
 
     $ => B          :MLOAD(SP--); [offset => B]
     ; store lastMemOffset for memory expansion gas cost
@@ -139,7 +139,7 @@ opMSIZE:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
     ; check out-of-gas
-    GAS - 2 => GAS      :JMPN(outOfGas)
+    GAS - %GAS_QUICK_STEP => GAS      :JMPN(outOfGas)
 
     ; load current memory length
     $ => E              :MLOAD(memLength)
@@ -160,7 +160,7 @@ opMSIZE:
 MSIZEend:
     E               :MSTORE(SP++); [size(E) => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 /**
  * @link [https://www.evm.codes/#54?fork=berlin]
@@ -187,11 +187,11 @@ opSLOAD:
     $ => E          :SLOAD
     E               :MSTORE(SP++); [value(E) => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
     ; set key(C) as warmed storage for address(A)
                     :CALL(isColdSlot)
     ; check out-of-gas
-    GAS - %SLOAD_GAS - A*2000 => GAS    :JMPN(outOfGas)
+    GAS - %SLOAD_GAS - A * %COLD_SLOAD_COST_RED => GAS    :JMPN(outOfGas)
                     :JMP(readCode)
 
 /**
@@ -215,7 +215,7 @@ opSSTORE:
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
     ; check out-of-gas
-    GAS - 2300 - 1  :JMPN(outOfGas)
+    GAS - %SSTORE_ENTRY_EIP_2200_GAS - 1  :JMPN(outOfGas)
     ; check is static call
     $ => A          :MLOAD(isStaticCall)
     0 - A           :JMPN(invalidStaticTx)
@@ -248,14 +248,14 @@ opSSTOREinit:
                     :CALL(isColdSlot)
     B => C           ; origin value
     ; check out-of-gas
-    GAS - A*2100 => GAS    :JMPN(outOfGas)
+    GAS - A*%COLD_SLOAD_COST => GAS    :JMPN(outOfGas)
     E => A
     D => B
     $ => A          :EQ
     A - 1           :JMPN(opSSTOREdif)
     ; if new_val == current_val
     ; check out-of-gas
-    GAS - 100 => GAS:JMPN(outOfGas)
+    GAS - %SSTORE_DYNAMIC_GAS => GAS:JMPN(outOfGas)
                     :JMP(opSSTOREend)
 
 opSSTOREdif:
@@ -276,7 +276,7 @@ opSSTOREdif:
 
 opSSTOREdifA:
     ; if current_val != orig_val
-    GAS - 100 => GAS:JMPN(outOfGas)
+    GAS - %SSTORE_DYNAMIC_GAS => GAS:JMPN(outOfGas)
     0 => A
     C => B
     $ => A          :EQ
