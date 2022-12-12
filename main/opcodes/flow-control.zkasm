@@ -43,32 +43,26 @@ opJUMPI:
     $                               :EQ, JMPC(readCode)
     SP + 1 => SP
     $ => PC                         :MLOAD(SP--); [counter => PC]
-    PC => B
-    ; Check PC is a JUMPDEST
-                                    :JMP(checkJumpDest)
+    PC => B                         :JMP(checkJumpDest) ; Check PC is a JUMPDEST
 
 ; TODO check do not overflow
 checkJumpDest:
     ; if it is a deploy we have to check the data from the calldata (not the bytecode)
-    $ => A                          :MLOAD(isCreateContract)
-    -A                              :JMPN(checkJumpDestDeployment)
+    $ => A                          :MLOAD(isCreateContract),JMPNZ(checkJumpDestDeployment)
     PC => HASHPOS
     HASHPOS => B
     $ => A                          :MLOAD(bytecodeLength)
     $                               :LT,JMPC(invalidJump)
     ; set number of bytes to hashP at D
-    1 => D
     ; get hashP address pointer where contract bytecode is stored
     $ => E                          :MLOAD(contractHashId)
-    $ => A                          :HASHP(E)
+    $ => A                          :HASHP1(E)
     ; check if is a jumpDest (0x5B)
     0x5B => B
-    $                               :EQ, JMPC(readCode)
-                                    :JMP(invalidJump)
+    $                               :EQ, JMPC(readCode,invalidJump)
 checkJumpDestDeployment:
     ; check jumpDest from calldata
-    $ => A                          :MLOAD(isCreate)
-    -A                              :JMPN(checkJumpDestDeploymentCreate)
+    $ => A                          :MLOAD(isCreate),JMPNZ(checkJumpDestDeploymentCreate)
     ; get position where data starts in the tx
     $ => HASHPOS                    :MLOAD(dataStarts)
     ; add PC to data starts to  point the bytes to read for the push
@@ -80,8 +74,7 @@ checkJumpDestDeployment:
     $ => A                          :HASHK(E)
     ; check if is a jumpDest (0x5B)
     0x5B => B
-    $                               :EQ, JMPC(readCode)
-                                    :JMP(invalidJump)
+    $                               :EQ, JMPC(readCode,invalidJump)
 
 checkJumpDestDeploymentCreate:
     ; checks zk-counters
@@ -95,15 +88,12 @@ checkJumpDestDeploymentCreate:
     ; increase current program counter (PC) to offset for getting pushed bytes to read
     E + PC => E
     ; set bytes to read from memory at C
-    1 => C
-                                    :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
+    1 => C                          :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
     $ => CTX                        :MLOAD(currentCTX)
-    31 => D
-                                    :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    31 => D                         :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     ; check if is a jumpDest (0x5B)
     0x5B => B
-    $                               :EQ, JMPC(readCode)
-                                    :JMP(invalidJump)
+    $                               :EQ, JMPC(readCode,invalidJump)
 
 /**
  * @link [https://www.evm.codes/#58?fork=berlin]
@@ -122,9 +112,7 @@ opPC:
     ; store current PC
     PC - 1              :MSTORE(SP++); [PC => SP]
     ; check stack overflow
-    1024 - SP           :JMPN(stackOverflow)
-                        :JMP(readCode)
-
+    1024 - SP           :JMPN(stackOverflow,readCode)
 
 /**
  * @link [https://www.evm.codes/#5B?fork=berlin]
@@ -138,7 +126,6 @@ opJUMPDEST:
 
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
-    
+
     ; check out-of-gas
-    GAS - 1 => GAS  :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS - 1 => GAS  :JMPN(outOfGas,readCode)

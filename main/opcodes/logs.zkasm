@@ -19,8 +19,7 @@ opLOG0:
     GAS - 375 => GAS    :JMPN(outOfGas)
 
     ; check is static
-    $ => A              :MLOAD(isStaticCall)
-    0 - A               :JMPN(invalidStaticTx)
+    $ => A              :MLOAD(isStaticCall),JMPNZ(invalidStaticTx)
 
     SP - 1 => SP
     $ => E              :MLOAD(SP--) ; [offset => E]
@@ -28,76 +27,65 @@ opLOG0:
     ; store lastMemOffset for memory expansion gas cost
     E                   :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
-    C                   :MSTORE(lastMemLength)
-                        :CALL(saveMem); in: [lastMemOffset, lastMemLength]
-    ; store number of topics                        
+    C                   :MSTORE(lastMemLength),CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    ; store number of topics
     0                   :MSTORE(numTopics)
     ; calculate data size gas cost => lastMemLength * 8
     8                   :MSTORE(arithA)
-    C                   :MSTORE(arithB)
-                        :CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
+    C                   :MSTORE(arithB),CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
     $ => B              :MLOAD(arithRes1)
     GAS => A
     ; check out-of-gas
     $                   :LT,JMPC(outOfGas)
-    GAS - B => GAS 
+    GAS - B => GAS
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
-    B + 1               :MSTORE(nextFreeLogIndex) ; store next free log index
-                        :JMP(opLOGLoop)
+    B + 1               :MSTORE(nextFreeLogIndex),JMP(opLOGLoop) ; store next free log index
 
 opLOG1:
 
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
 
     SP - 3              :JMPN(stackUnderflow)
-    GAS - 375 => GAS    :JMPN(outOfGas)             
-    $ => A              :MLOAD(isStaticCall)
-    0 - A               :JMPN(invalidStaticTx)
+    GAS - 375 => GAS    :JMPN(outOfGas)
+    $ => A              :MLOAD(isStaticCall),JMPNZ(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--)
-    $ => C              :MLOAD(SP)  
+    $ => C              :MLOAD(SP)
     E                   :MSTORE(lastMemOffset)
-    C                   :MSTORE(lastMemLength)
-                        :CALL(saveMem)
+    C                   :MSTORE(lastMemLength),CALL(saveMem)
     1                   :MSTORE(numTopics)
     8                   :MSTORE(arithA)
-    C                   :MSTORE(arithB)
-                        :CALL(mulARITH)
+    C                   :MSTORE(arithB),CALL(mulARITH)
     $ => B              :MLOAD(arithRes1)
     GAS => A
     ; check out-of-gas
     $                   :LT,JMPC(outOfGas)
-    GAS - B => GAS                            
+    GAS - B => GAS
     $ => B              :MLOAD(nextFreeLogIndex)
-    B + 1               :MSTORE(nextFreeLogIndex) 
-                        :JMP(opLOGLoop)
+    B + 1               :MSTORE(nextFreeLogIndex),JMP(opLOGLoop)
 
 opLOG2:
 
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
 
     SP - 4              :JMPN(stackUnderflow)
-    GAS - 375 => GAS    :JMPN(outOfGas)       
-    $ => A              :MLOAD(isStaticCall)
-    0 - A               :JMPN(invalidStaticTx)
+    GAS - 375 => GAS    :JMPN(outOfGas)
+    $ => A              :MLOAD(isStaticCall),JMPNZ(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--)
-    $ => C              :MLOAD(SP) 
+    $ => C              :MLOAD(SP)
     E                   :MSTORE(lastMemOffset)
-    C                   :MSTORE(lastMemLength)
-                        :CALL(saveMem)
+    C                   :MSTORE(lastMemLength),CALL(saveMem)
     2                   :MSTORE(numTopics)
     8                   :MSTORE(arithA)
-    C                   :MSTORE(arithB)
-                        :CALL(mulARITH)
+    C                   :MSTORE(arithB),CALL(mulARITH)
     $ => B              :MLOAD(arithRes1)
     GAS => A
     ; check out-of-gas
     $                   :LT,JMPC(outOfGas)
-    GAS - B => GAS 
+    GAS - B => GAS
     $ => B              :MLOAD(nextFreeLogIndex)
-    B + 1               :MSTORE(nextFreeLogIndex)
-                        :JMP(opLOGLoop)
+    B + 1               :MSTORE(nextFreeLogIndex),JMP(opLOGLoop)
 
 opLOG3:
 
@@ -105,26 +93,22 @@ opLOG3:
 
     SP - 5              :JMPN(stackUnderflow)
     GAS - 375 => GAS    :JMPN(outOfGas)
-    $ => A              :MLOAD(isStaticCall)
-    0 - A               :JMPN(invalidStaticTx)
+    $ => A              :MLOAD(isStaticCall),JMPNZ(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--)
     $ => C              :MLOAD(SP)
     E                   :MSTORE(lastMemOffset)
-    C                   :MSTORE(lastMemLength)
-                        :CALL(saveMem)
+    C                   :MSTORE(lastMemLength),CALL(saveMem)
     3                   :MSTORE(numTopics)
     8                   :MSTORE(arithA)
-    C                   :MSTORE(arithB)
-                        :CALL(mulARITH)
+    C                   :MSTORE(arithB),CALL(mulARITH)
     $ => B              :MLOAD(arithRes1)
     GAS => A
     ; check out-of-gas
     $                   :LT,JMPC(outOfGas)
-    GAS - B => GAS                             
+    GAS - B => GAS
     $ => B              :MLOAD(nextFreeLogIndex)
-    B + 1               :MSTORE(nextFreeLogIndex)
-                        :JMP(opLOGLoop)
+    B + 1               :MSTORE(nextFreeLogIndex),JMP(opLOGLoop)
 
 opLOG4:
 
@@ -132,26 +116,22 @@ opLOG4:
 
     SP - 6              :JMPN(stackUnderflow)
     GAS - 375 => GAS    :JMPN(outOfGas)
-    $ => A              :MLOAD(isStaticCall)
-    0 - A               :JMPN(invalidStaticTx)
+    $ => A              :MLOAD(isStaticCall),JMPNZ(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--)
     $ => C              :MLOAD(SP)
     E                   :MSTORE(lastMemOffset)
-    C                   :MSTORE(lastMemLength)
-                        :CALL(saveMem)
+    C                   :MSTORE(lastMemLength),CALL(saveMem)
     4                   :MSTORE(numTopics)
     8                   :MSTORE(arithA)
-    C                   :MSTORE(arithB)
-                        :CALL(mulARITH)
+    C                   :MSTORE(arithB),CALL(mulARITH)
     $ => B              :MLOAD(arithRes1)
     GAS => A
     ; check out-of-gas
     $                   :LT,JMPC(outOfGas)
-    GAS - B => GAS 
+    GAS - B => GAS
     $ => B              :MLOAD(nextFreeLogIndex)
-    B + 1               :MSTORE(nextFreeLogIndex)
-                        :JMP(opLOGLoop)
+    B + 1               :MSTORE(nextFreeLogIndex),JMP(opLOGLoop)
 
 opLOGLoop:
     ; checks zk-counters
@@ -162,9 +142,8 @@ opLOGLoop:
     C - 32          :JMPN(opLOGFinal)
     ; load next 32 bytes
                     :CALL(MLOAD32); in: [E: offset] out: [A: value]
-    ${storeLog(B, 0, A)} ; storeLog(indexLog, isTopic, bytesToStore)
-    C - 32 => C
-                    :JMP(opLOGLoop)
+    $${storeLog(B, 0, A)} ; storeLog(indexLog, isTopic, bytesToStore)
+    C - 32 => C     :JMP(opLOGLoop)
 
 opLOGFinal:
     ; load last C bytes
@@ -185,6 +164,5 @@ opSaveTopicsLoop:
     ; check out-of-gas
     GAS - 375 => GAS    :JMPN(outOfGas)
     $ => C              :MLOAD(SP)   ; [topic => C]
-    ${storeLog(B, 1, C)}     ; storeLog(indexLog, isTopic, bytesToStore)
-    A - 1 =>  A
-                        :JMP(opSaveTopicsLoop)
+    $${storeLog(B, 1, C)}     ; storeLog(indexLog, isTopic, bytesToStore)
+    A - 1 =>  A         :JMP(opSaveTopicsLoop)

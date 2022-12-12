@@ -31,14 +31,12 @@ opBLOCKHASH:
     $ => E                              :SLOAD
     ; Store result value in the stack
     E               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)
 
 ; Handle when is asking for the hash of a not computed batch, return 0
 opBLOCKHASHzero:
     0               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)
 
 opCOINBASE:
 
@@ -47,8 +45,7 @@ opCOINBASE:
     $ => A          :MLOAD(sequencerAddr)
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-2 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-2 => GAS    :JMPN(outOfGas,readCode)
 
 opTIMESTAMP:
 
@@ -57,8 +54,9 @@ opTIMESTAMP:
     $ => A          :MLOAD(timestamp)
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-2 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-2 => GAS    :JMPN(outOfGas,readCode)
+
+    $ :MLOAD(@mapping_opcodes + RR)
 
 opNUMBER:
 
@@ -68,28 +66,23 @@ opNUMBER:
     $ => D          :MLOAD(txCount)
     D + 1           :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS - 2 => GAS  :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS - 2 => GAS  :JMPN(outOfGas,readCode)
 
 opDIFFICULTY:
 
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
-    %BATCH_DIFFICULTY => A
-    A               :MSTORE(SP++)
+    %BATCH_DIFFICULTY => A :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-2 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-2 => GAS    :JMPN(outOfGas,readCode)
 
 opGASLIMIT:
 
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
-    %TX_GAS_LIMIT => A
-    A               :MSTORE(SP++)
+    %TX_GAS_LIMIT => A  :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-2 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-2 => GAS    :JMPN(outOfGas,readCode)
 
 opCHAINID:
 
@@ -98,13 +91,12 @@ opCHAINID:
     $ => A          :MLOAD(chainID)
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-2 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-2 => GAS    :JMPN(outOfGas,readCode)
+
 opBASEFEE:
 
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     0               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-2 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-2 => GAS    :JMPN(outOfGas,readCode)

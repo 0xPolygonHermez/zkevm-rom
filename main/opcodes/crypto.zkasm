@@ -23,7 +23,7 @@ opSHA3:
 
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
-    
+
     ; check out-of-gas
     GAS - 30 => GAS :JMPN(outOfGas)
     SP - 1 => SP
@@ -32,22 +32,19 @@ opSHA3:
     ; store lastMemOffset for memory expansion gas cost
     E               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
-    C               :MSTORE(lastMemLength)
-    ; compute memory expansion gas cost
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
-    ; check out-of-gas, dynamic                
+    C               :MSTORE(lastMemLength), CALL(saveMem) ; compute memory expansion gas cost
+                                                          ; in: [lastMemOffset, lastMemLength]
+    ; check out-of-gas, dynamic
     ;${6*((C+31)/32)}
     C+31 => A
     ;(C+31)/32
     A               :MSTORE(arithA)
-    32              :MSTORE(arithB)
-                    :CALL(divARITH)
+    32              :MSTORE(arithB),CALL(divARITH)
     $ => A          :MLOAD(arithRes1); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     ; Mul operation with Arith
     ; 6*((C+31)/32)
     6               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(mulARITH)
+    A               :MSTORE(arithB),CALL(mulARITH)
     $ => A          :MLOAD(arithRes1)
     GAS - A => GAS  :JMPN(outOfGas)  ; dynamic_gas = 6 * minimum_word_size + memory_expansion_cost
     ; new hash id
@@ -67,7 +64,7 @@ opSHA3Loop:
     C - 32          :JMPN(opSHA3Final)
     ; load next 32 bytes from memory
                     :CALL(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
-    ; save new offset at B                   
+    ; save new offset at B
     E => B
     ; get current hash pointer
     $ => E          :MLOAD(lastHashKIdUsed)
@@ -75,17 +72,15 @@ opSHA3Loop:
     A               :HASHK(E)
     ; restore new offset at E
     B => E
-    C - 32 => C
-                    :JMP(opSHA3Loop)
+    C - 32 => C     :JMP(opSHA3Loop)
 opSHA3Final:
     ; load next C bytes from memory
                     :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
     ; set #bytes to right shift
-    32 - C => D
-                    :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    32 - C => D    :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     ; get current hash pointer
     $ => E          :MLOAD(lastHashKIdUsed)
-    ; set remaining bytes length to hash at D                    
+    ; set remaining bytes length to hash at D
     C => D
     ; append A to hash pointer E
     A               :HASHK(E)
@@ -98,8 +93,7 @@ opSHA3End:
 
     ; Check keccak counters
     HASHPOS         :MSTORE(arithA)
-    136             :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    136             :MSTORE(arithB),CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
     $ => A          :MLOAD(cntKeccakPreProcess)
     ; checks keccak counters
@@ -110,5 +104,4 @@ opSHA3End:
     ; store hash
     A               :MSTORE(SP++); [hash(A) => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)

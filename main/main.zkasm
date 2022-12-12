@@ -36,7 +36,7 @@ start: ; main zkROM entry point
 ;;     - load transaction count from system smart contract
 ;;     - compute keccaks needed to finish the batch
 ;;;;;;;;;;;;;;;;;;
-        ${eventLog(onStartBatch, C)}
+        $${eventLog(onStartBatch, C)}
 
         $ => A                                  :MLOAD(globalExitRoot)
         0 => B
@@ -73,8 +73,7 @@ skipSetGlobalExitRoot:
         ; Divide the total data length by 136 to obtain the keccak counter increment.
         ; 136 is the value used by the prover to increment keccak counters
         A                                       :MSTORE(arithA)
-        136                                     :MSTORE(arithB)
-                                                :CALL(divARITH)
+        136                                     :MSTORE(arithB),CALL(divARITH)
         $ => B                                  :MLOAD(arithRes1)
         ; Compute minimum necessary keccaks to finish the batch
         B + 1 + %MIN_CNT_KECCAK_BATCH               :MSTORE(cntKeccakPreProcess)
@@ -102,8 +101,7 @@ txLoopRLP:
 
         $ => A          :MLOAD(batchL2DataLength)
         $ => C          :MLOAD(batchL2DataParsed)
-        C - A           :JMPN(loadTx_rlp)
-                        :JMP(endCheckRLP)
+        C - A           :JMPN(loadTx_rlp,endCheckRLP)
 
 endCheckRLP:
                         :JMP(txLoop)
@@ -119,14 +117,12 @@ txLoop:
         A               :JMPN(processTxsEnd)
 
         $ => A          :MLOAD(ctxTxToUse) ; Load first context used by transaction
-        A+1 => CTX      :MSTORE(ctxTxToUse)
-
-                        :JMP(processTx)
+        A+1 => CTX      :MSTORE(ctxTxToUse),JMP(processTx)
 
 processTxEnd:
                         :CALL(updateSystemData)
 processTxFinished:
-        ${eventLog(onFinishTx)}
+        $${eventLog(onFinishTx)}
                         :JMP(txLoop)
 
 processTxsEnd:

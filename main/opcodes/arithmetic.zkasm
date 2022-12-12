@@ -24,11 +24,8 @@ opADD:
     $ => A          :MLOAD(SP--) ; [a => A]
     $ => B          :MLOAD(SP) ; [b => B]
 
-    ; call arith state machine and push to the stack
-    $               :ADD, MSTORE(SP++) ; [a + b => SP]
-
-    ; continue read bytecode
-                    :JMP(readCode)
+    ; call arith state machine and push to the stack. continue read bytecode
+    $               :ADD, MSTORE(SP++),JMP(readCode) ; [a + b => SP]
 
 opMUL:
 
@@ -41,13 +38,11 @@ opMUL:
     $ => B          :MLOAD(SP)
     ; Mul operation with Arith
     A               :MSTORE(arithA)
-    B               :MSTORE(arithB)
-                    :CALL(mulARITH)
+    B               :MSTORE(arithB),CALL(mulARITH)
     $ => E          :MLOAD(arithRes1)
     E               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-5 => GAS    :JMPN(outOfGas,readCode)
 
 opSUB:
 
@@ -58,10 +53,8 @@ opSUB:
     SP - 1 => SP
     $ => A          :MLOAD(SP--)
     $ => B          :MLOAD(SP)
-    $ => E          :SUB
-    E               :MSTORE(SP++)
-    GAS-3 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    $ => E          :SUB, MSTORE(SP++)
+    GAS-3 => GAS    :JMPN(outOfGas,readCode)
 
 opDIV:
 
@@ -75,13 +68,11 @@ opDIV:
     $ => A          :MLOAD(SP)
     ; Div operation with Arith
     E               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(divARITH)
+    A               :MSTORE(arithB),CALL(divARITH)
     $ => B          :MLOAD(arithRes1)
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-5 => GAS    :JMPN(outOfGas,readCode)
 
 opSDIV:
 
@@ -91,12 +82,11 @@ opSDIV:
 
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-                    :CALL(abs)
+    $ => A          :MLOAD(SP--),CALL(abs)
+
     A => E
     B => C
-    $ => A          :MLOAD(SP)
-                    :CALL(abs)
+    $ => A          :MLOAD(SP),CALL(abs)
     A               :MSTORE(tmpVarA)
     C => A
     $ => A          :XOR
@@ -111,8 +101,7 @@ opSDIV:
     $ => B          :MLOAD(arithRes1)
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-5 => GAS    :JMPN(outOfGas,readCode)
 
 opSDIVNeg:
 
@@ -123,11 +112,9 @@ opSDIVNeg:
     $ => B          :MLOAD(arithRes1)
 
     0 => A
-    $ => A          :SUB
-    A               :MSTORE(SP++)
+    $ => A          :SUB,MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-5 => GAS    :JMPN(outOfGas,readCode)
 
 opMOD:
 
@@ -141,13 +128,12 @@ opMOD:
     $ => A          :MLOAD(SP)
     ; Mod operation with Arith
     E               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(divARITH)
+    A               :MSTORE(arithB),CALL(divARITH)
+
     $ => C          :MLOAD(arithRes2)
     C               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-5 => GAS    :JMPN(outOfGas,readCode)
 
 opSMOD:
 
@@ -157,12 +143,10 @@ opSMOD:
 
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A          :MLOAD(SP--)
-                    :CALL(abs)
+    $ => A          :MLOAD(SP--),CALL(abs)
     A => E
     B => C
-    $ => A          :MLOAD(SP)
-                    :CALL(abs)
+    $ => A          :MLOAD(SP),CALL(abs)
     A               :MSTORE(tmpVarA)
     C => A
     1 => B
@@ -171,13 +155,12 @@ opSMOD:
     B - 1           :JMPN(opSMODNeg)  ; 0 negative, 1 positive
     ; Div operation with Arith
     E               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(divARITH)
+    A               :MSTORE(arithB),CALL(divARITH)
+
     $ => C          :MLOAD(arithRes2)
     C               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-5 => GAS    :JMPN(outOfGas,readCode)
 
 opSMODNeg:
 
@@ -187,11 +170,9 @@ opSMODNeg:
                     :CALL(divARITH)
     $ => B          :MLOAD(arithRes2)
     0 => A
-    $ => A          :SUB
-    A               :MSTORE(SP++)
+    $ => A          :SUB,MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-5 => GAS    :JMPN(outOfGas,readCode)
 
 opADDMOD:
 
@@ -232,12 +213,10 @@ AddModJumpCarry:
     C => A          ; addModResult
     $ => A          :LT
     1               :ASSERT
-    C               :MSTORE(SP++)
-                    :JMP(readCode)
+    C               :MSTORE(SP++),JMP(readCode)
 
 zeroOneAddMod:
-    0               :MSTORE(SP++)
-                    :JMP(readCode)
+    0               :MSTORE(SP++),JMP(readCode)
 
 opMULMOD:
     GAS-8 => GAS    :JMPN(outOfGas)
@@ -246,11 +225,9 @@ opMULMOD:
 
     $ => A          :MLOAD(SP--)
     $ => B          :MLOAD(SP--)
-    $ => C          :MLOAD(SP) ; Modulus N
-    zkPC+1 => RR    :JMP(utilMULMOD)
+    $ => C          :MLOAD(SP),CALL(utilMULMOD) ; Modulus N
 
-    C               :MSTORE(SP++)
-                    :JMP(readCode)
+    C               :MSTORE(SP++),JMP(readCode)
 
 opEXP: ; //TODO: test exp == 0
 
@@ -261,13 +238,11 @@ opEXP: ; //TODO: test exp == 0
     SP - 1 => SP
     $ => A              :MLOAD(SP--)
     $ => B              :MLOAD(SP)
-    B => D
-    zkPC+1 => RR        :JMP(expAD)
+    B => D              :CALL(expAD)
     A                   :MSTORE(SP++)
     1024 - SP           :JMPN(stackOverflow)
                         :CALL(getLenBytes)
-    GAS-10-50*A => GAS  :JMPN(outOfGas)
-                        :JMP(readCode)
+    GAS-10-50*A => GAS  :JMPN(outOfGas,readCode)
 
 opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/vm/src/evm/opcodes/functions.ts#L193
 
@@ -300,8 +275,7 @@ opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-mon
     0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn => B
     $ => B          :XOR ; not mask
     D => A
-    $ => D          :OR
-                    :JMP(opSIGNEXTENDEnd)
+    $ => D          :OR,JMP(opSIGNEXTENDEnd)
 
 opSIGNEXTENDPositive:
     C => B
@@ -311,5 +285,4 @@ opSIGNEXTENDPositive:
 opSIGNEXTENDEnd:
     D               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-5 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-5 => GAS    :JMPN(outOfGas,readCode)

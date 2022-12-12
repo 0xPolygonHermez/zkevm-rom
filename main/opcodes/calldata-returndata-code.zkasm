@@ -13,51 +13,42 @@ opCALLDATALOAD:
     32              :MSTORE(arithB)
                     :CALL(divARITH)
     $ => B          :MLOAD(arithRes1)
-    $ => A          :MLOAD(arithRes2)
-
-    0 - A           :JMPN(opCALLDATALOAD2)
+    $ => A          :MLOAD(arithRes2),JMPNZ(opCALLDATALOAD2)
     SP => C
     1024 + B => SP
     $ => B          :MLOAD(SP)
     C => SP
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-3 => GAS    :JMPN(outOfGas,readCode)
 
 opCALLDATALOAD2:
     SP => C
     A => D
     1024 + B => SP
-    $ => A          :MLOAD(SP++)
-                    :CALL(SHLarith)
+    $ => A          :MLOAD(SP++),CALL(SHLarith)
     A => B
     32 - D => D
-    $ => A          :MLOAD(SP)
-                    :CALL(SHRarith)
+    $ => A          :MLOAD(SP),CALL(SHRarith)
     C => SP
     B + A           :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS - 3 => GAS  :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS - 3 => GAS  :JMPN(outOfGas,readCode)
 
 opCALLDATASIZE:
 
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
-    $ => A          :MLOAD(isCreateContract)
-    0 - A           :JMPN(opCALLDATASIZEdep)
+    $ => A          :MLOAD(isCreateContract),JMPNZ(opCALLDATASIZEdep)
     $ => B          :MLOAD(txCalldataLen)
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-2 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-2 => GAS    :JMPN(outOfGas,readCode)
 
 opCALLDATASIZEdep:
     0               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-2 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-2 => GAS    :JMPN(outOfGas,readCode)
 
 
 ; // TODO: if ins deployment only write 0
@@ -76,16 +67,15 @@ opCALLDATACOPY:
     E               :MSTORE(lastMemOffset)
     C               :MSTORE(lastMemLength)
     GAS - 3 => GAS  :JMPN(outOfGas)
+
+    ; **** REVIEW fake freeIn = 0 ****
     GAS - ${3*((C+31)/32)} => GAS    :JMPN(outOfGas) ; Arith
                     :CALL(saveMem)
     SP              :MSTORE(SPw)
     $ => A          :MLOAD(txCalldataLen)
     $               :LT,JMPC(opCALLDATACOPY0)
     A + C => A
-    $               :LT,JMPC(opCALLDATACOPYX0)
-                    :JMP(opCALLDATACOPYinit)
-
-opCALLDATACOPYX0:
+    $               :LT,JMPC(opCALLDATACOPYinit)
     $ => C          :MLOAD(txCalldataLen)
 
 opCALLDATACOPYinit:
@@ -98,45 +88,38 @@ opCALLDATACOPYinit:
     C - 1           :JMPN(opCALLDATACOPYcheckLen)
     C - 32          :JMPN(opCALLDATACOPYfinal)
     B               :MSTORE(arithA)
-    32              :MSTORE(arithB)
-                    :CALL(divARITH)
+    32              :MSTORE(arithB),CALL(divARITH)
     $ => D          :MLOAD(arithRes2)
     $ => A          :MLOAD(arithRes1)
     A               :MSTORE(arithA)
-    1024            :MSTORE(arithB)
-                    :CALL(addARITH)
+    1024            :MSTORE(arithB),CALL(addARITH)
     $ => A          :MLOAD(arithRes1)
     A => SP
-    $ => A          :MLOAD(SP)
-                    :CALL(SHLarith)
+    $ => A          :MLOAD(SP),CALL(SHLarith)
     A => C
     $ => A          :MLOAD(arithRes1)
     A + 1 => SP
     32 - D => D
-    $ => A          :MLOAD(SP)
-                    :CALL(SHRarith)
-    A + C           :MSTORE(bytesToStore)
-                    :CALL(MSTORE32)
+    $ => A          :MLOAD(SP),CALL(SHRarith)
+    A + C           :MSTORE(bytesToStore),CALL(MSTORE32)
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP)   ;length
     C - 32 => C
     C               :MSTORE(SP)
-    B + 32 => B
-                    :JMP(opCALLDATACOPYinit)
+    B + 32 => B     :JMP(opCALLDATACOPYinit)
 
 opCALLDATACOPYfinal:
     B               :MSTORE(arithA)
-    32              :MSTORE(arithB)
-                    :CALL(divARITH)
+    32              :MSTORE(arithB),CALL(divARITH)
+
     $ => D          :MLOAD(arithRes2)
     $ => B          :MLOAD(arithRes1)
     1024            :MSTORE(arithA)
-    B               :MSTORE(arithB)
-                    :CALL(addARITH)
+    B               :MSTORE(arithB),CALL(addARITH)
+
     $ => B          :MLOAD(arithRes1)
     B => SP
-    $ => A          :MLOAD(SP)
-                    :CALL(SHLarith)
+    $ => A          :MLOAD(SP),CALL(SHLarith)
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP)   ;length
     B + 1 => SP
@@ -144,41 +127,29 @@ opCALLDATACOPYfinal:
     D               :JMPN(opCALLDATACOPYxor)
     A => B
     $ => A          :MLOAD(SP)
-    32 - D => D
-                    :CALL(SHRarith)
-    32 - C => D
-                    :CALL(SHLarith)
-    B + A => A
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX)
+    32 - D => D     :CALL(SHRarith)
+    32 - C => D     :CALL(SHLarith)
+    B + A => A      :MSTORE(bytesToStore),CALL(MSTOREX)
                     :JMP(opCALLDATACOPYcheckLen)
 
 opCALLDATACOPY0:
     32 - C          :JMPN(opCALLDATACOPY320)
-    0               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX)
+    0               :MSTORE(bytesToStore),CALL(MSTOREX)
                     :JMP(opCALLDATACOPYend)
 
 opCALLDATACOPY320:
-    0               :MSTORE(bytesToStore)
-                    :CALL(MSTORE32)
-    C - 32 => C
-                    :JMP(opCALLDATACOPY0)
+    0               :MSTORE(bytesToStore),CALL(MSTORE32)
+    C - 32 => C     :JMP(opCALLDATACOPY0)
 
 opCALLDATACOPYxor:
-    32 - C => D
-                    ;SHR/SHL could be optimized
-                    :CALL(SHRarith)
+    32 - C => D     :CALL(SHRarith)
                     :CALL(SHLarith)
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX)
+    A               :MSTORE(bytesToStore),CALL(MSTOREX)
 
 opCALLDATACOPYcheckLen:
     $ => C          :MLOAD(lastMemLength)
     $ => A          :MLOAD(txCalldataLen)
-    C - A => C      :JMPN(opCALLDATACOPYend)
-                    :JMP(opCALLDATACOPY0)
-
+    C - A => C      :JMPN(opCALLDATACOPYend,opCALLDATACOPY0)
 
 opCALLDATACOPYend:
     $ => SP         :MLOAD(SPw)
@@ -189,23 +160,19 @@ opCODESIZE:
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 252 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
 
-    $ => A          :MLOAD(isCreateContract)
-    0 - A           :JMPN(opCODESIZEdep)
+    $ => A          :MLOAD(isCreateContract),JMPNZ(opCODESIZEdep)
     $ => A          :MLOAD(txDestAddr)
     %SMT_KEY_SC_LENGTH => B
     0 => C
-    $ => A          :SLOAD
-    A               :MSTORE(SP++)
+    $ => A          :SLOAD,MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-2 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-2 => GAS    :JMPN(outOfGas,readCode)
 
 opCODESIZEdep: ;//TODO: create/create2, constructor parameters, initBytcode vs deployed Bytecode
     $ => B          :MLOAD(txCalldataLen)
     B               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-2 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-2 => GAS    :JMPN(outOfGas,readCode)
 
 VAR GLOBAL memOffset
 VAR GLOBAL remainingBytes
@@ -216,8 +183,7 @@ VAR GLOBAL memInteger
 opCODECOPY:
 
     SP - 3          :JMPN(stackUnderflow)
-    $ => A          :MLOAD(isCreateContract)
-    0 - A           :JMPN(opCALLDATACOPY) ; //TODO: delegateCall ? use of storageAddr? same in process_tx ?
+    $ => A          :MLOAD(isCreateContract),JMPNZ(opCALLDATACOPY) ; //TODO: delegateCall ? use of storageAddr? same in process_tx ?
     SP - 1 => SP
     $ => C          :MLOAD(SP--) ;destOffset, memory offset
     $ => D          :MLOAD(SP--) ;offset, bytecode offset
@@ -230,6 +196,7 @@ opCODECOPY:
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
 
     GAS - 3 => GAS  :JMPN(outOfGas)
+    ; REVIEW INSECURE !!!!
     GAS - ${3*((E+31)/32)} => GAS    :JMPN(outOfGas)
                     :CALL(saveMem)
     ; check memory limits
@@ -256,14 +223,13 @@ opCODECOPYinit:
     %MAX_CNT_STEPS - STEP - 200                :JMPN(outOfCountersStep)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2    :JMPN(outOfCountersMemalign)
 
-    $ => B          :MLOAD(remainingBytes)
-    B - 1           :JMPN(readCode)
+    ; REVIEW JMPZ
+    $ => B          :MLOAD(remainingBytes),JMPZ(readCode)
     $ => A          :MLOAD(memOffset)
                     :CALL(offsetUtil) ; E (integer) / C (remaining)
     E               :MSTORE(memInteger)
     $ => A          :MLOAD(MEM:E) ; read M0 previous value
-    A               :MSTORE(previousValue)
-                    :CALL(opCODECOPYLoadBytes)
+    A               :MSTORE(previousValue),CALL(opCODECOPYLoadBytes)
     $ => A          :MLOAD(previousValue)
     ${memAlignWR8_W0(A,B,C)} => D  ; no trust calculate W0
     B               :MEM_ALIGN_WR8 ; only use LSB of B, rest of bytes could be non zero
@@ -274,10 +240,7 @@ opCODECOPYinit:
     B - 1 => B  ; decrease 1 byte from length
     B               :MSTORE(remainingBytes)
     $ => A          :MLOAD(memOffset)
-    A + 1 => A  ; increment offset to write the next byte
-    A               :MSTORE(memOffset)
-                    :JMP(opCODECOPYinit)
-
+    A + 1 => A      :MSTORE(memOffset),JMP(opCODECOPYinit); increment offset to write the next byte
 
 ; @info Load 0 if read bytecode position is above bytecode length
 opCODECOPYLoadBytes:
@@ -287,14 +250,11 @@ opCODECOPYLoadBytes:
     HASHPOS => A
     $               :LT, JMPC(readValueBytecode)
 readZero:
-    0 => B
-                    :RETURN
+    0 => B          :RETURN
 readValueBytecode:
-    1 => D
+    ; REVIEW 1 => D
     $ => E          :MLOAD(codecopyHashId)
-    $ => B          :HASHP(E)   ; read value to write in memory
-                    :RETURN
-
+    $ => B          :HASHP1(E),RETURN   ; read value to write in memory and return
 
 opEXTCODESIZE:
 
@@ -302,16 +262,14 @@ opEXTCODESIZE:
     %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
 
     SP - 1 => SP    :JMPN(stackUnderflow)
-    $ => A          :MLOAD(SP)
-                    :CALL(maskAddress) ; Mask address to 20 bytes
+    $ => A          :MLOAD(SP),CALL(maskAddress) ; Mask address to 20 bytes
                     :CALL(isColdAddress)
     %SMT_KEY_SC_LENGTH => B
     0 => C
     $ => A          :SLOAD
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-100-D*2500 => GAS    :JMPN(outOfGas,readCode)
 
 ; read hash smt
 ; put 32 by 32 bytes in the hashP
@@ -329,8 +287,7 @@ opEXTCODECOPY:
 
     SP - 4          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A          :MLOAD(SP--) ;addr
-                    :CALL(maskAddress) ; Mask address to 20 bytes
+    $ => A          :MLOAD(SP--),CALL(maskAddress) ; Mask address to 20 bytes
                     :CALL(isColdAddress)
     GAS-100-D*2500 => GAS            :JMPN(outOfGas)
                     :CALL(opEXTCODECOPYCheckHash)
@@ -345,7 +302,7 @@ opEXTCODECOPY:
     %MAX_CNT_STEPS - STEP - 200                :JMPN(outOfCountersStep)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2    :JMPN(outOfCountersMemalign)
 
-
+    ; REVIEW !!!
     GAS - ${3*((E+31)/32)} => GAS    :JMPN(outOfGas)
                     :CALL(saveMem)
     ; check memory limits
@@ -366,8 +323,7 @@ opEXTCODECOPY2:
     D               :MSTORE(codecopyHashId) ; set hashId to get bytes from
     B               :MSTORE(codecopyBytecodeLength) ; set contract bytecode length
     C               :MSTORE(memOffset)
-    E               :MSTORE(remainingBytes)
-                    :JMP(opCODECOPYinit)
+    E               :MSTORE(remainingBytes),JMP(opCODECOPYinit)
 
 opEXTCODECOPYCheckHash:
     ; get contract length
@@ -392,26 +348,23 @@ opEXTCODECOPYCheckHash:
 
     ; set vars prior to loop
     D => B
-    0 => HASHPOS
-                                    :JMP(opEXTCODECOPYCheckHashLoop)
+    0 => HASHPOS                    :JMP(opEXTCODECOPYCheckHashLoop)
 
 ; @info bytes are inserted byte by byte
 ; TODO: it could be improved by computing how many 32 bytes slots are needed
 opEXTCODECOPYCheckHashLoop:
 
-        %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
-
-        B - 1                                   :JMPN(opEXTCODECOPYCheckHashLoopEnd) ; finish reading bytecode
-        1 => D
-        ${getBytecode(A, HASHPOS, 1)}           :HASHP(E)                   ; add bytes to hash contract bytecode
-        B - 1 => B
-                                                :JMP(opEXTCODECOPYCheckHashLoop)
+        ; REVIEW !!!
+        %MAX_CNT_STEPS - STEP - 20 * B          :JMPN(outOfCountersStep)
+        B - 1 => RCX                            :JMPN(opEXTCODECOPYCheckHashLoopEnd) ; finish reading bytecode
+        ${getBytecode(A, HASHPOS, 1)}           :HASHP1(E),REPEAT(RCX)               ; add bytes to hash contract bytecode
 
 opEXTCODECOPYCheckHashLoopEnd:
         HASHPOS                         :HASHPLEN(E)
         $ => E                          :HASHPDIGEST(E)
         ; check hash computed matches hash in the smt leaf
         E                               :ASSERT
+
 opEXTCODECOPYCheckHashEnd:
                                         :RETURN
 
@@ -421,19 +374,15 @@ opEXTCODECOPYinit:
 
     C - 1           :JMPN(readCode)
     C - 32          :JMPN(opEXTCODECOPYfinal)
-    ${getBytecode(A,B,32)} => D
-    D               :MSTORE(bytesToStore)
-                    :CALL(MSTORE32)
+    ${getBytecode(A,B,32)} => D  :MSTORE(bytesToStore),CALL(MSTORE32)
+
     C - 32 => C
-    B + 32 => B
-                    :JMP(opEXTCODECOPYinit)
+    B + 32 => B    :JMP(opEXTCODECOPYinit)
 
 opEXTCODECOPYfinal:
     ${getBytecode(A,B,C)} => A
-    32 - C  => D
-                    :CALL(SHLarith)
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX)
+    32 - C  => D    :CALL(SHLarith)
+    A               :MSTORE(bytesToStore),CALL(MSTOREX)
                     :JMP(readCode)
 
 opRETURNDATASIZE:
@@ -454,8 +403,7 @@ opRETURNDATASIZE:
 
 endOpRETURNDATASIZE:
     A               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)
 
 opRETURNDATACOPY:
     SP - 3          :JMPN(stackUnderflow)
@@ -500,14 +448,12 @@ opRETURNDATACOPY:
     C+31 => A
     ;(C+31)/32
     A               :MSTORE(arithA)
-    32              :MSTORE(arithB)
-                    :CALL(divARITH)
+    32              :MSTORE(arithB),CALL(divARITH)
     $ => A          :MLOAD(arithRes1)
     ; Mul operation with Arith
     ; 3*((C+31)/32)
     3               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(mulARITH)
+    A               :MSTORE(arithB),CALL(mulARITH)
     $ => A          :MLOAD(arithRes1)
     GAS - A => GAS  :JMPN(outOfGas)
 
@@ -518,14 +464,12 @@ opRETURNDATACOPYinit:
     C - 32          :JMPN(opRETURNDATACOPYfinal)
     B => E
     ; Load memory from last context used
-    $ => CTX        :MLOAD(retDataCTX)
-                    :CALL(MLOAD32)
+    $ => CTX        :MLOAD(retDataCTX),CALL(MLOAD32)
     ; Save memory to the current context
     $ => CTX        :MLOAD(currentCTX)
     E => B
     D => E
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTORE32)
+    A               :MSTORE(bytesToStore),CALL(MSTORE32)
     E => D
     C - 32 => C
                     :JMP(opRETURNDATACOPYinit)
@@ -533,20 +477,17 @@ opRETURNDATACOPYinit:
 opRETURNDATACOPYfinal:
     B => E
     ; Load memory from last context used
-    $ => CTX        :MLOAD(retDataCTX)
-                    :CALL(MLOADX)
+    $ => CTX        :MLOAD(retDataCTX),CALL(MLOADX)
     ; Save memory to the current context
     $ => CTX        :MLOAD(currentCTX)
     E => B ; offset retDataCTX
     D => E ; offset current CTX
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX)
+    A               :MSTORE(bytesToStore),CALL(MSTOREX)
                     :JMP(readCode)
 
 opRETURNDATACOPYEmpty:
     E + C => B ; offset return data + len return data must be 0
-    $               :EQ, JMPC(readCode)
-                    :JMP(outOfGas)
+    $               :EQ, JMPC(readCode,outOfGas)
 
 opEXTCODEHASH:
 
@@ -562,5 +503,4 @@ opEXTCODEHASH:
     0 => C
     $ => A          :SLOAD
     A               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)

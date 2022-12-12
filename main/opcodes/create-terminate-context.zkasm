@@ -6,24 +6,20 @@
  *  - stack output: none
  */
 opSTOP:
-    ; check if first context
-    $ => B          :MLOAD(originCTX)
-    ; if origin ctx is 0, end tx
-    B - 1           :JMPN(handleGas)
+    ; check if first context, if origin ctx is 0, end tx
+    $ => B          :MLOAD(originCTX),JMPZ(handleGas)
     ; else handle finish ctx
     $ => A          :MLOAD(gasRefund)
-    ; check if is a create call
-    $ => C          :MLOAD(isCreate)
-    ; set 1 to D, default stack return in stop code 
+    ; set 1 to D, default stack return in stop code
     1 => D
-    C - 1           :JMPN(opSTOPend)
+    ; check if is a create call
+    $ => C          :MLOAD(isCreate),JMPZ(opSTOPend)
     ; if is a create, return created contract address
     $ => D          :MLOAD(createContractAddress)
 
 opSTOPend:
     ; move to origin ctx
-    B => CTX
-    CTX             :MSTORE(currentCTX)
+    B => CTX        :MSTORE(currentCTX)
     ; restore retDataCTX, no return data in stop
     0               :MSTORE(retDataCTX)
     ; handle gas reund
@@ -39,8 +35,7 @@ opSTOPend:
     1024 - SP       :JMPN(stackOverflow)
     ; decrease depth
     $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth)
-                    :JMP(readCode)
+    A - 1           :MSTORE(depth),JMP(readCode)
 
 ; // TODO Check with DElEGATE CALL txDestAddr/txSrcAddr ( same as other calls)
 ; // TODO check revert create
@@ -64,8 +59,7 @@ opCREATE:
     ; check stack underflow
     SP - 3              :JMPN(stackUnderflow)
     ; check is static
-    $ => A              :MLOAD(isStaticCall)
-    0 - A               :JMPN(invalidStaticTx)
+    $ => A              :MLOAD(isStaticCall),JMPNZ(invalidStaticTx)
     SP - 1 => SP
     $ => D              :MLOAD(SP--); [value => D]
     D                   :MSTORE(valueCall)
@@ -139,9 +133,8 @@ opCREATE:
     %SMT_KEY_NONCE => B
     0 => C
     $ => SR             :SSTORE
-    SR                  :MSTORE(initSR)
-    ; compute gas send in call
-                        :CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    SR                  :MSTORE(initSR),CALL(computeGasSendCall) ; compute gas send in call
+                                                                 ; out: [A: min( requested_gas , all_but_one_64th(63/64))]
     ; return to origin CTX to set storage addr, gasRefund and gasCTX
     $ => CTX            :MLOAD(originCTX)
     $ => B              :MLOAD(storageAddr)
@@ -151,22 +144,18 @@ opCREATE:
     ; update GAS to computed gas send call
     A => GAS
     B                   :MSTORE(txSrcAddr)
-    C                   :MSTORE(gasRefund)
-    ; copy calldata from origin CTX to current CTX
-                        :CALL(copySP)
+    C                   :MSTORE(gasRefund),CALL(copySP) ; copy calldata from origin CTX to current CTX
     ; set CTX var values
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
-    A                   :MSTORE(txValue)
     ; Save touched root when a new context is created
-                        :CALL(checkpointTouched)
+    A                   :MSTORE(txValue),CALL(checkpointTouched)
                         :JMP(txType)
 
 opCreateFail:
     0                   :MSTORE(retDataCTX)
-    0                   :MSTORE(SP++); [0 => SP]
-                        :JMP(readCode)
+    0                   :MSTORE(SP++),JMP(readCode); [0 => SP]
 
 /**
  * @link [https://www.evm.codes/#f1?fork=berlin]
@@ -180,7 +169,7 @@ opCreateFail:
  *  - stack output: [success]
  */
 opCALL:
-    
+
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCountersStep)
     ; increase depth
@@ -194,21 +183,17 @@ opCALL:
     ; store gas call
     $ => A          :MLOAD(SP--); [gas => A]
     A               :MSTORE(gasCall)
-    ; store address call
-    $ => A          :MLOAD(SP--); [address => A]
-    ; Mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: not masked address] out: [A: masked address]
+    ; store address call [address => A]
+    $ => A          :MLOAD(SP--),CALL(maskAddress); Mask address to 20 bytes in: [A: not masked address] out: [A: masked address]
     A               :MSTORE(addrCall)
     ; store value call
     $ => A          :MLOAD(SP--); [value => A]
     A               :MSTORE(valueCall)
     ; if is static and value is not 0 -> revert
-    $ => B          :MLOAD(isStaticCall)
-    B - 1           :JMPN(opCALL2)
+    $ => B          :MLOAD(isStaticCall),JMPZ(opCALL2)
 
     0 => B
-    $               :EQ,JMPC(opCALL2)
-                    :JMP(invalidStaticTx)
+    $               :EQ,JMPC(opCALL2,invalidStaticTx)
 
 opCALL2:
 
@@ -222,9 +207,8 @@ opCALL2:
     $ => C          :MLOAD(SP--); [argsSize => C]
     C               :MSTORE(argsLengthCall)
     ; store lastMemLength for memory expansion gas cost
-    C               :MSTORE(lastMemLength)
-    ; compute memory expansion gas cost
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    C               :MSTORE(lastMemLength),CALL(saveMem) ; compute memory expansion gas cost
+                                                         ; in: [lastMemOffset, lastMemLength]
 
     ; store byte offset in the memory in bytes, where to store the return data of the sub context
     $ => B          :MLOAD(SP--); [retOffset => B]
@@ -232,9 +216,9 @@ opCALL2:
 
     ; store byte size to copy (size of the return data)
     $ => D          :MLOAD(SP); [retSize => D]
-    D               :MSTORE(lastMemLength)
-    ; compute memory expansion gas cost of the return value
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+
+    D               :MSTORE(lastMemLength),CALL(saveMem) ; compute memory expansion gas cost of the return value
+                                                         ; in: [lastMemOffset, lastMemLength]
 
     ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
@@ -244,8 +228,7 @@ opCALL2:
 
     $ => B                   :MLOAD(lastMemOffset)
     ; check if an address is cold. If it is, add it to the touched tree
-    $ => A          :MLOAD(addrCall)
-                    :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+    $ => A          :MLOAD(addrCall),CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
 
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
@@ -257,8 +240,7 @@ opCALL2:
 
     GAS - 9000 => GAS :JMPN(outOfGas)
     ; if destAddress is an empty account, we should add 25k of gas to base cost
-    $ => E               :MLOAD(addrCall)
-                         :CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
+    $ => E               :MLOAD(addrCall),CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
     GAS - 25000*E => GAS :JMPN(outOfGas)
 
 opCALLend:
@@ -286,9 +268,8 @@ opCALLend:
     $ => B          :MLOAD(valueCall)
     B               :MSTORE(txValue)
     0 => A
-    $ => C          :LT
-    ; compute gas send in call
-                    :CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    $ => C          :LT,CALL(computeGasSendCall) ; compute gas send in call
+                                                 ; out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX            :MLOAD(originCTX)
     GAS - A             :MSTORE(gasCTX)
     ; add estipend (2300) in case of tx with value
@@ -300,9 +281,8 @@ opCALLend:
     ; update GAS to computed gas send call
     A => GAS
     $ => A              :MLOAD(argsLengthCall)
-    A                   :MSTORE(txCalldataLen)
-    ; copy calldata from origin CTX to current CTX
-                        :CALL(copySP)
+    A                   :MSTORE(txCalldataLen),CALL(copySP) ; copy calldata from origin CTX to current CTX
+
     ; save touched root when a new context is created
                         :CALL(checkpointTouched)
                         :JMP(txType)
@@ -333,10 +313,8 @@ opCALLCODE:
     ; store gas call
     $ => A          :MLOAD(SP--); [gas => A]
     A               :MSTORE(gasCall)
-    ; store address call
-    $ => A          :MLOAD(SP--); [address => A]
-    ; Mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: not masked address] out: [A: masked address]
+    ; store address call [address => A]
+    $ => A          :MLOAD(SP--),CALL(maskAddress); Mask address to 20 bytes in: [A: not masked address] out: [A: masked address]
     A               :MSTORE(addrCall)
     ; store value call
     $ => A          :MLOAD(SP--); [value => A]
@@ -351,18 +329,14 @@ opCALLCODE:
     $ => C          :MLOAD(SP--); [argsSize => C]
     C               :MSTORE(argsLengthCall)
     ; store lastMemLength for memory expansion gas cost
-    C               :MSTORE(lastMemLength)
-    ; compute memory expansion gas cost
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    C               :MSTORE(lastMemLength),CALL(saveMem); compute memory expansion gas cost in: [lastMemOffset, lastMemLength]
 
     ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
     $ => B          :MLOAD(SP--); [retOffset => B]
     B               :MSTORE(lastMemOffset)
     ; Store byte size to copy (size of the return data).
     $ => D          :MLOAD(SP); [retSize => D]
-    D               :MSTORE(lastMemLength)
-    ; compute memory expansion gas cost of the return value
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    D               :MSTORE(lastMemLength),CALL(saveMem); compute memory expansion gas cost of the return value in: [lastMemOffset, lastMemLength]
 
     ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
@@ -371,8 +345,7 @@ opCALLCODE:
     %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCountersStep)
 
     ; check if an address is cold. If it is, add it to the touched tree
-    $ => A                   :MLOAD(addrCall)
-                             :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+    $ => A                   :MLOAD(addrCall),CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
 
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
@@ -393,7 +366,7 @@ opCALLCODEend:
     SP              :MSTORE(lastSP)
     PC              :MSTORE(lastPC)
     ; increase CTX
-    $ => A          :MLOAD(lastCtxUsed) 
+    $ => A          :MLOAD(lastCtxUsed)
     A+1 => CTX      :MSTORE(lastCtxUsed)
     CTX             :MSTORE(currentCTX)
     $ => A          :MLOAD(originAuxCTX)
@@ -409,9 +382,7 @@ opCALLCODEend:
     $ => B          :MLOAD(valueCall)
     B               :MSTORE(txValue)
     0 => A
-    $ => C          :LT
-    ; compute gas send in call
-                    :CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    $ => C          :LT,CALL(computeGasSendCall); compute gas send in call out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     ; Add estipend (2300) in case of tx with value
@@ -423,9 +394,7 @@ opCALLCODEend:
     A => GAS
     D               :MSTORE(isStaticCall)
     $ => A          :MLOAD(argsLengthCall)
-    A               :MSTORE(txCalldataLen)
-    ; copy calldata from origin CTX to current CTX
-                    :CALL(copySP)
+    A               :MSTORE(txCalldataLen),CALL(copySP) ; copy calldata from origin CTX to current CTX
     ; Save touched root when a new context is created
                     :CALL(checkpointTouched)
                     :JMP(txType)
@@ -504,24 +473,21 @@ opRETURN32:
     ; load origin CTX
     $ => CTX        :MLOAD(originCTX)
     B => E
-    A               :MSTORE(bytesToStore)
-    ; store 32 bytes at origin CTX
-                    :CALL(MSTORE32); in: [E: offset] out: [A: value]
+    A               :MSTORE(bytesToStore),CALL(MSTORE32)    ; store 32 bytes at origin CTX
+                                                            ; in: [E: offset] out: [A: value]
     E => B
     D => E
     C - 32 => C
     ; restore current TX
-    $ => CTX        :MLOAD(currentCTX)
-                    :JMP(opRETURN32)
+    $ => CTX        :MLOAD(currentCTX),JMP(opRETURN32)
 
 opRETURNfinal:
     ; load last bytes
                     :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
     $ => CTX        :MLOAD(originCTX)
     B => E
-    A               :MSTORE(bytesToStore)
-    ; store last bytes
-                    :CALL(MSTOREX); in: [E: offset, C: length] out: [E: new offset]
+    A               :MSTORE(bytesToStore),CALL(MSTOREX) ; store last bytes
+                                                        ; in: [E: offset, C: length] out: [E: new offset]
     $ => CTX        :MLOAD(currentCTX)
 
 opRETURNend:
@@ -536,8 +502,7 @@ opRETURNend:
     1024 - SP       :JMPN(stackOverflow)
     ; decrease depth
     $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth)
-                    :JMP(readCode)
+    A - 1           :MSTORE(depth),JMP(readCode)
 
 
 opRETURNdeploy:
@@ -545,11 +510,10 @@ opRETURNdeploy:
     ; code size limit = 0x6000
     0x6000 - C      :JMPN(invalidCodeSize)
     ;code_deposit_cost = 200 * returned_code_size
-    GAS - 200 * C => GAS    :JMPN(outOfGas) 
+    GAS - 200 * C => GAS    :JMPN(outOfGas)
     ; check if first context
     $ => B          :MLOAD(originCTX)
-    0 - B           :JMPN(opRETURNcreate)
-                    :JMP(endDeploy)
+    0 - B           :JMPN(opRETURNcreate,endDeploy)
 
 ; TODO: not in RETURN, but in CREATE process
 opRETURNcreate:
@@ -605,8 +569,7 @@ opRETURNcreateEnd:
     1024 - SP       :JMPN(stackOverflow)
     ; decrease depth
     $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth)
-                    :JMP(readCode)
+    A - 1           :MSTORE(depth),JMP(readCode)
 
 /**
  * @link [https://www.evm.codes/#f4?fork=berlin]
@@ -633,10 +596,9 @@ opDELEGATECALL:
     ; store gas call
     $ => A          :MLOAD(SP--); [gas => A]
     A               :MSTORE(gasCall)
-    ; store address call
-    $ => A          :MLOAD(SP--); [address => A]
-    ; Mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: not masked address] out: [A: masked address]
+    ; store address call [address => A]
+    $ => A          :MLOAD(SP--),CALL(maskAddress)  ; Mask address to 20 bytes
+                                                    ; in: [A: not masked address] out: [A: masked address]
     A               :MSTORE(addrCall)
     ; store bytes offset int the memory, the calldata of the subcontext
     $ => A          :MLOAD(SP--)
@@ -648,18 +610,16 @@ opDELEGATECALL:
     $ => C          :MLOAD(SP--); [argsSize => C]
     C               :MSTORE(argsLengthCall)
     ; store lastMemLength for memory expansion gas cost
-    C               :MSTORE(lastMemLength)
-    ; mem expansion gas cost call args
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    C               :MSTORE(lastMemLength),CALL(saveMem) ; mem expansion gas cost call args
+                                                         ; in: [lastMemOffset, lastMemLength]
 
     ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
     $ => B          :MLOAD(SP--); [retOffset => B]
     B               :MSTORE(lastMemOffset)
     ; Store byte size to copy (size of the return data).
     $ => E          :MLOAD(SP); [retSize => D]
-    E               :MSTORE(lastMemLength)
-    ;  Mem expansion gas cost return args
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    E               :MSTORE(lastMemLength), CALL(saveMem) ; Mem expansion gas cost return args
+                                                          ; in: [lastMemOffset, lastMemLength]
 
     ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
@@ -670,8 +630,7 @@ opDELEGATECALL:
 
     $ => B                   :MLOAD(lastMemOffset)
     ; check if an address is cold. If it is, add it to the touched tree
-    $ => A                   :MLOAD(addrCall)
-                             :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+    $ => A                   :MLOAD(addrCall),CALL(isColdAddress) ; in: [A: address] out: [D: 0 if warm, 1 if cold]
     ;gas_cost = base_gas + gas_sent_with_call
     GAS-100-D*2500 => GAS    :JMPN(outOfGas)
 
@@ -694,9 +653,8 @@ opDELEGATECALL:
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
     B               :MSTORE(retCallOffset)
-    E               :MSTORE(retCallLength)
-    ; compute gas send in call
-                    :CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    E               :MSTORE(retCallLength),CALL(computeGasSendCall) ; compute gas send in call
+                                                                    ; out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     $ => B          :MLOAD(txValue)
@@ -710,9 +668,7 @@ opDELEGATECALL:
 
 opDELEGATECALLend:
     $ => A          :MLOAD(argsLengthCall)
-    A               :MSTORE(txCalldataLen)
-    ; copy calldata from origin CTX to current CTX
-                    :CALL(copySP)
+    A               :MSTORE(txCalldataLen),CALL(copySP) ; copy calldata from origin CTX to current CTX
     ; Save touched root when a new context is created
                     :CALL(checkpointTouched)
                     :JMP(txType)
@@ -739,8 +695,7 @@ opCREATE2:
     ; check stack underflow
     SP - 4              :JMPN(stackUnderflow)
     ; check is static
-    $ => A              :MLOAD(isStaticCall)
-    0 - A               :JMPN(invalidStaticTx)
+    $ => A              :MLOAD(isStaticCall),JMPNZ(invalidStaticTx)
     SP - 1 => SP
     $ => A              :MLOAD(SP--); [value => D]
     A                   :MSTORE(valueCall)
@@ -759,9 +714,8 @@ opCREATE2:
     ; store lastMemOffset for memory expansion gas cost
     E                   :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
-    C                   :MSTORE(lastMemLength)
-    ; compute memory expansion gas cost
-                        :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    C                   :MSTORE(lastMemLength),CALL(saveMem) ; compute memory expansion gas cost
+                                                             ; in: [lastMemOffset, lastMemLength]
     ; store current CTX to auxiliary var for later usage
     CTX                 :MSTORE(originAuxCTX)
     ; check out-of-gas
@@ -769,14 +723,12 @@ opCREATE2:
 
     ; cost to hash the initialisation code
     ${C+31}             :MSTORE(arithA)
-    32                  :MSTORE(arithB)
-                        :CALL(divARITH)
+    32                  :MSTORE(arithB),CALL(divARITH)
     $ => C              :MLOAD(arithRes1)
     GAS => A
     6*C => B
     $                   :LT,JMPC(outOfGas)
-    A - B => GAS
-    GAS                 :MSTORE(gasCall)
+    A - B => GAS        :MSTORE(gasCall)
 
     ; check correctness of Create: depth, can transfer, nonce overlfow,
     ; can transfer
@@ -816,9 +768,8 @@ opCREATE2:
     A                   :MSTORE(originCTX)
 
     ; get nonce & update SR
-    B                   :MSTORE(txNonce)
-    ; get nonce length bytes
-                        :CALL(getLenBytes); in: [B: value] out: [A: value bytes length]
+    B                   :MSTORE(txNonce),CALL(getLenBytes) ; get nonce length bytes
+                                                           ; in: [B: value] out: [A: value bytes length]
     A                   :MSTORE(lengthNonce)
     ; increase nonce
     B + 1 => D
@@ -828,25 +779,20 @@ opCREATE2:
     0 => C
     $ => SR             :SSTORE
     SR                  :MSTORE(initSR)
-    A                   :MSTORE(txSrcAddr)
-    ; compute gas send in call
-                        :CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    A                   :MSTORE(txSrcAddr),CALL(computeGasSendCall) ; compute gas send in call
+                                                                    ; out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX            :MLOAD(originCTX)
     $ => C              :MLOAD(gasRefund)
     GAS - A             :MSTORE(gasCTX)
     $ => CTX            :MLOAD(currentCTX)
     C                   :MSTORE(gasRefund)
     ; update GAS to computed gas send call
-    A => GAS
-    ; copy calldata from origin CTX to current CTX
-                        :CALL(copySP)
+    A => GAS            :CALL(copySP) ; copy calldata from origin CTX to current CTX
     ; set CTX var values
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
-    A                   :MSTORE(txValue)
-    ; Save touched root when a new context is created
-                        :CALL(checkpointTouched)
+    A                   :MSTORE(txValue),CALL(checkpointTouched) ; Save touched root when a new context is created
                         :JMP(txType)
 
 /**
@@ -872,9 +818,8 @@ opSTATICCALL:
     ; store gas call
     $ => A          :MLOAD(SP--); [gas => A]
     A               :MSTORE(gasCall)
-    $ => A          :MLOAD(SP--); [address => A]
-    ; mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: not masked address] out: [A: masked address]
+    $ => A          :MLOAD(SP--),CALL(maskAddress) ; mask address to 20 bytes
+                                                   ; in: [A: not masked address] out: [A: masked address]
     A               :MSTORE(addrCall)
     ; store bytes offset int the memory, the calldata of the subcontext
     $ => A          :MLOAD(SP--); [argsOffset => A]
@@ -885,17 +830,15 @@ opSTATICCALL:
     $ => B          :MLOAD(SP--); [argsSize => B]
     B               :MSTORE(argsLengthCall)
     ; store lastMemLength for memory expansion gas cost
-    B               :MSTORE(lastMemLength)
-    ; compute memory expansion gas cost
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    B               :MSTORE(lastMemLength),CALL(saveMem) ; compute memory expansion gas cost
+                                   ; in: [lastMemOffset, lastMemLength]
     ; store byte offset in the memory in bytes, where to store the return data of the sub context
     $ => C          :MLOAD(SP--); [retOffset => C]
     C               :MSTORE(lastMemOffset)
     ; store byte size to copy (size of the return data)
     $ => E          :MLOAD(SP); [retSize => E]
-    E               :MSTORE(lastMemLength)
-    ; compute memory expansion gas cost of the return value
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    E               :MSTORE(lastMemLength),CALL(saveMem) ; compute memory expansion gas cost of the return value
+                                                         ; in: [lastMemOffset, lastMemLength]
 
     ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
@@ -904,9 +847,9 @@ opSTATICCALL:
     %MAX_CNT_STEPS - STEP - 600                :JMPN(outOfCountersStep)
 
     ; check if an address is cold. If it is, add it to the touched tree
-    $ => A          :MLOAD(addrCall)
-                    :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
-    ;gas_cost = base_gas + gas_sent_with_call
+    $ => A          :MLOAD(addrCall),CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+
+    ; gas_cost = base_gas + gas_sent_with_call
     GAS-100-D*2500 => GAS    :JMPN(outOfGas)
 
     ; setup vars for next CTX
@@ -929,18 +872,15 @@ opSTATICCALL:
     A               :MSTORE(txDestAddr)
     A               :MSTORE(storageAddr)
     C               :MSTORE(retCallOffset)
-    E               :MSTORE(retCallLength)
-    ; compute gas send in call
-                    :CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    E               :MSTORE(retCallLength),CALL(computeGasSendCall) ; compute gas send in call
+                                                                    ; out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     $ => CTX        :MLOAD(currentCTX)
     ; update GAS to computed gas send call
     A => GAS
     $ => A          :MLOAD(argsLengthCall)
-    A               :MSTORE(txCalldataLen)
-    ; copy calldata from origin CTX to current CTX
-                    :CALL(copySP)
+    A               :MSTORE(txCalldataLen),CALL(copySP) ; copy calldata from origin CTX to current CTX
     ; save touched root when a new context is created
                     :CALL(checkpointTouched)
                     :JMP(txType)
@@ -958,9 +898,7 @@ opREVERT:
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
     ; load initSR to revert al state changes
-    $ => SR         :MLOAD(initSR)
-    ; revert touched accounts
-                    :CALL(revertTouched)
+    $ => SR         :MLOAD(initSR),CALL(revertTouched) ; revert touched accounts
     SP - 1 => SP
     $ => E          :MLOAD(SP--); [offset => E]
     $ => C          :MLOAD(SP); [size => C]
@@ -969,12 +907,11 @@ opREVERT:
     ; store lastMemOffset for memory expansion gas cost
     E               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
-    C               :MSTORE(lastMemLength)
-    ; compute memory expansion gas cost
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    C               :MSTORE(lastMemLength), CALL(saveMem) ; compute memory expansion gas cost
+                                                          ; in: [lastMemOffset, lastMemLength]
     ; check if first context
     $ => B          :MLOAD(originCTX)
-    ${eventLog(onError, revert)}
+    $${eventLog(onError, revert)}
     0               :MSTORE(gasRefund)
     ; if origin ctx is 0, end tx
     B - 1           :JMPN(handleGas)
@@ -1007,23 +944,20 @@ opREVERT32:
     E => D
     $ => CTX        :MLOAD(originCTX)
     B => E
-    A               :MSTORE(bytesToStore)
-    ; store 32 bytes at origin CTX
-                    :CALL(MSTORE32); in: [E: offset] out: [A: value]
+    A               :MSTORE(bytesToStore),CALL(MSTORE32)    ; store 32 bytes at origin CTX
+                                                            ; in: [E: offset] out: [A: value]
     E => B
     D => E
     C - 32 => C
     ; restore current CTX
-    $ => CTX        :MLOAD(currentCTX)
-                    :JMP(opREVERT32)
+    $ => CTX        :MLOAD(currentCTX),JMP(opREVERT32)
 
 opREVERTfinal:
     ; copy last bytes
                     :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
     $ => CTX        :MLOAD(originCTX)
     B => E
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX); in: [E: offset, C: length] out: [E: new offset]
+    A               :MSTORE(bytesToStore),CALL(MSTOREX); in: [E: offset, C: length] out: [E: new offset]
     $ => CTX        :MLOAD(currentCTX)
 
 opREVERTend:
@@ -1037,8 +971,7 @@ opREVERTend:
     1024 - SP       :JMPN(stackOverflow)
     ; decrease depth
     $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth)
-                    :JMP(readCode)
+    A - 1           :MSTORE(depth),JMP(readCode)
 
 ; // TODO: handle if depth is over 0
 ; SELFDESTRUCT is deprecated and EIP-4758 is implemented: https://eips.ethereum.org/EIPS/eip-4758
@@ -1064,8 +997,7 @@ opSENDALL:
     SP - 1 => SP        :JMPN(stackUnderflow)
 
     ; check is static
-    $ => A              :MLOAD(isStaticCall)
-    0 - A               :JMPN(invalidStaticTx)
+    $ => A              :MLOAD(isStaticCall),JMPNZ(invalidStaticTx)
     ; check out-of-gas
     GAS - 5000 => GAS   :JMPN(outOfGas)
 
@@ -1076,9 +1008,9 @@ opSENDALL:
     ; balance in D
     $ => D              :SLOAD
 
-    $ => A              :MLOAD(SP); [address => A]
-    ; Mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: not masked address] out: [A: masked address]
+    ; [address => A]
+    $ => A              :MLOAD(SP),CALL(maskAddress) ; Mask address to 20 bytes
+                                                     ; in: [A: not masked address] out: [A: masked address]
     ; check if storage address has balance to withdraw
     A => C
     A => E
@@ -1090,8 +1022,7 @@ opSENDALL:
 
 opSENDALL2:
     ; check is cold to compute gas cost
-    C => A
-                              :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+    C => A                    :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     GAS - 2600 * D => GAS     :JMPN(outOfGas)
     B                         :MSTORE(arithA)
     ; read previous balance receiver
@@ -1103,8 +1034,7 @@ opSENDALL2:
 
     ; compute new receiver balance
     ; Add operation with Arith
-    E               :MSTORE(arithB)
-                    :CALL(addARITH); in: [arithA, arithB] out[arithRes1: arithA*arithB]
+    E               :MSTORE(arithB),CALL(addARITH); in: [arithA, arithB] out[arithRes1: arithA*arithB]
     $ => D          :MLOAD(arithRes1)
 
     ; transfer balance to receiver
@@ -1122,9 +1052,9 @@ opSENDALL2:
     $                       :EQ,JMPC(handleGas)
     ; decrease CTX
     $ => B                  :MLOAD(gasRefund)
-    $ => C                  :MLOAD(isCreate)
     1 => D
-    C - 1                   :JMPN(opSENDALLend)
+    ; REVIEW !!!
+    $ => C                  :MLOAD(isCreate),JMPZ(opSENDALLend)
     $ => D                  :MLOAD(createContractAddress)
 
 opSENDALLend:
@@ -1142,8 +1072,8 @@ opSENDALLend:
     1024 - SP               :JMPN(stackOverflow)
     ; decrease depth
     $ => A                  :MLOAD(depth)
-    A - 1                   :MSTORE(depth)
-                            :JMP(readCode)
+    A - 1                   :MSTORE(depth),JMP(readCode)
+
 /**
  * @link [https://www.evm.codes/#fe?fork=berlin]
  * @zk-counters
@@ -1154,5 +1084,4 @@ opSENDALLend:
  */
 opINVALID:
     ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
-                                :JMP(invalidProcess)
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep,invalidProcess)

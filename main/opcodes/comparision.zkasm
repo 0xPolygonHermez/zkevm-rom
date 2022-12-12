@@ -10,8 +10,7 @@ opLT:
     $ => B          :MLOAD(SP)
     GAS-3 => GAS    :JMPN(outOfGas)
     $               :LT,MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)
 
 opGT:
 
@@ -24,8 +23,7 @@ opGT:
     $ => A          :MLOAD(SP)
     GAS-3 => GAS    :JMPN(outOfGas)
     $               :LT,MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)
 
 opSLT:
 
@@ -38,8 +36,7 @@ opSLT:
     $ => B          :MLOAD(SP)
     GAS-3 => GAS    :JMPN(outOfGas)
     $               :SLT,MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)
 
 opSGT:
 
@@ -52,8 +49,7 @@ opSGT:
     $ => A          :MLOAD(SP)
     GAS-3 => GAS    :JMPN(outOfGas)
     $               :SLT,MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)
 
 opEQ:
 
@@ -66,8 +62,7 @@ opEQ:
     $ => B          :MLOAD(SP)
     GAS-3 => GAS    :JMPN(outOfGas)
     $               :EQ,MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)
 
 opISZERO:
 
@@ -93,8 +88,7 @@ opAND:
     $ => B          :MLOAD(SP)
     GAS-3 => GAS    :JMPN(outOfGas)
     $               :AND,MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)
 
 opOR:
 
@@ -107,8 +101,7 @@ opOR:
     $ => B          :MLOAD(SP)
     GAS-3 => GAS    :JMPN(outOfGas)
     $               :OR,MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)
 
 opXOR:
 
@@ -121,8 +114,7 @@ opXOR:
     $ => B          :MLOAD(SP)
     GAS-3 => GAS    :JMPN(outOfGas)
     $               :XOR,MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)
 
 opNOT:
 
@@ -134,8 +126,7 @@ opNOT:
     GAS-3 => GAS    :JMPN(outOfGas)
     0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn => B
     $ => A          :XOR,MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)
 
 opBYTE:
 
@@ -152,12 +143,10 @@ opBYTE:
                     :CALL(SHRarith)
     255 => B
     $               :AND,MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)
 opBYTE0:
     0               :MSTORE(SP++)
-    1024 - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    1024 - SP       :JMPN(stackOverflow,readCode)
 opSHR:
 
     %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
@@ -167,12 +156,10 @@ opSHR:
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
-    $ => A          :MLOAD(SP)
-                    :CALL(SHRarithBit)
+    $ => A          :MLOAD(SP),CALL(SHRarithBit)
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-3 => GAS    :JMPN(outOfGas,readCode)
 
 opSHL:
 
@@ -183,12 +170,10 @@ opSHL:
     SP - 2          :JMPN(stackUnderflow)
     SP - 1 => SP
     $ => D          :MLOAD(SP--)
-    $ => A          :MLOAD(SP)
-                    :CALL(SHLarithBit)
+    $ => A          :MLOAD(SP),CALL(SHLarithBit)
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-3 => GAS    :JMPN(outOfGas,readCode)
 
 ; TODO: Adapt to multiplication
 ; https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/evm/src/opcodes/functions.ts#L336
@@ -207,8 +192,7 @@ opSAR:
     1 => B
     $ => B          :XOR
     ${A * 256 + B * D} => D
-    $ => A          :MLOAD(SP)
-                    :CALL(abs)
+    $ => A          :MLOAD(SP),CALL(abs)
                     ; if more than 32 set to 32
                     :CALL(SHRarithBit)
     A => C
@@ -218,8 +202,7 @@ opSAR:
     B - 1           :JMPN(opSARNeg)  ; 0 negative, 1 positive
     C               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-3 => GAS    :JMPN(outOfGas,readCode)
 
 opSARNeg:
     C => A
@@ -227,8 +210,6 @@ opSARNeg:
     $ => B          :LT
     ${A + B} => B                   ; TODO: This is UNSAFE
     0 => A
-    $ => A          :SUB
-    A               :MSTORE(SP++)
+    $ => A          :SUB,MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
-    GAS-3 => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS-3 => GAS    :JMPN(outOfGas,readCode)
