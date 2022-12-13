@@ -327,7 +327,7 @@ opCODECOPY:
     %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
-    
+
     ; check out-of-gas
     GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
     ;${3*((E+31)/32)}
@@ -360,13 +360,13 @@ opCODECOPY2:
     ; set hashId to get bytes from
     D               :MSTORE(codecopyHashId)
     ; set contract bytecode length
-    B               :MSTORE(codecopyBytecodeLength) 
+    B               :MSTORE(codecopyBytecodeLength)
     C               :MSTORE(memOffset)
     E               :MSTORE(remainingBytes)
     ; checks zk-counters
-    %MAX_CNT_BINARY - CNT_BINARY - 32*E          :JMPN(outOfCountersBinary)
+    %MAX_CNT_BINARY - CNT_BINARY - 2*E           :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100*E                :JMPN(outOfCountersStep)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2*E    :JMPN(outOfCountersMemalign)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - E     :JMPN(outOfCountersMemalign)
 
 opCODECOPYinit:
 
@@ -547,10 +547,10 @@ opEXTCODECOPYCheckHash:
 opEXTCODECOPYCheckHashLoop:
         %MAX_CNT_STEPS - STEP - 20              :JMPN(outOfCountersStep)
         ; finish reading bytecode
-        B - 1                                   :JMPN(opEXTCODECOPYCheckHashLoopEnd) 
+        B - 1                                   :JMPN(opEXTCODECOPYCheckHashLoopEnd)
         1 => D
         ; add bytes to hash contract bytecode
-        ${getBytecode(A, HASHPOS, 1)}           :HASHP(E)                   
+        ${getBytecode(A, HASHPOS, 1)}           :HASHP(E)
         B - 1 => B
                                                 :JMP(opEXTCODECOPYCheckHashLoop)
 
@@ -660,7 +660,7 @@ opRETURNDATACOPY:
     $ => E          :MLOAD(retDataOffset)
     $ => CTX        :MLOAD(currentCTX)
     ; E ret data offset (memory pointer) of last context, B offset in return data  that want to retrive
-    E + B => E 
+    E + B => E
     ; if retDataSize <= retdataOffset + dataLen -> OOG
     ;A retDataSize
     B + C => B ; total offset (retdataOffset + dataLen)
@@ -690,7 +690,7 @@ opRETURNDATACOPYinit:
     ; Load memory from last context used
     $ => CTX        :MLOAD(retDataCTX)
                     :CALL(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
-    ; save new offset at B        
+    ; save new offset at B
     ; Save memory to the current context
     $ => CTX        :MLOAD(currentCTX)
     E => B
@@ -718,7 +718,7 @@ opRETURNDATACOPYfinal:
 
 opRETURNDATACOPYEmpty:
     ; offset return data + len return data must be 0
-    E + C => B 
+    E + C => B
     $               :EQ, JMPC(readCode)
                     :JMP(outOfGas)
 
