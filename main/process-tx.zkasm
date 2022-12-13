@@ -64,8 +64,7 @@ checkAndSaveFrom:
         0 - A                           :JMPN(endCheckChainId)
         $ => A                          :MLOAD(txChainId)
         $ => B                          :MLOAD(chainID)                                       ; A: chainId tx
-        $                               :EQ,JMPC(endCheckChainId)                             ; If A == B --> endCheckChainId
-                                        :JMP(invalidIntrinsicTxChainId)                       ; If A != B --> invalidIntrinsicTx
+        $                               :EQ,JMPC(endCheckChainId, invalidIntrinsicTxChainId)  ; If A == B --> endCheckChainId
 endCheckChainId:
 
 ;; Reset warm/cold information
@@ -108,8 +107,7 @@ endCheckChainId:
         ; Intrinsic gas --> gas Limit >= 21000 + calldata cost + deployment cost
         %BASE_TX_GAS => E ; Store init intrinsic gas at E
         $ => A                          :MLOAD(isCreateContract)
-        -A                              :JMPN(addDeploymentGasCost)
-                                        :JMP(getCalldataGasCost)
+        -A                              :JMPN(addDeploymentGasCost, getCalldataGasCost)
 
 addDeploymentGasCost:
         %BASE_TX_DEPLOY_GAS => E ; 53000 gas if transaction is a create
@@ -121,8 +119,8 @@ getCalldataGasCost:
 
 addGas:
         $ => HASHPOS                    :MLOAD(dataStarts)
-        0 => C
-                                        :JMP(loopBytes)
+        0 => C                          :JMP(loopBytes)
+
 loopBytes:
         %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
         A - C - 1                       :JMPN(endCalldataIntrinsicGas)
@@ -131,16 +129,13 @@ loopBytes:
         $ => D                          :HASHK1(E)
         B => E
         C + 1 => C
-        D - 1                           :JMPN(add4Gas)
-                                        :JMP(add16Gas)
+        D - 1                           :JMPN(add4Gas, add16Gas)
 
 add4Gas:
-        E + 4 => E
-                                        :JMP(loopBytes)
+        E + 4 => E                      :JMP(loopBytes)
 
 add16Gas:
-        E + 16 => E
-                                        :JMP(loopBytes)
+        E + 16 => E                     :JMP(loopBytes)
 
 endCalldataIntrinsicGas:
         ; Compare gas limit >= intrinsic gas
@@ -204,8 +199,7 @@ txType:
         0 => B
         $                               :EQ, JMPC(callContract)
         10 => B
-        $                               :LT,JMPC(selectorPrecompiled)
-                                        :JMP(callContract)
+        $                               :LT,JMPC(selectorPrecompiled, callContract)
 
 ;;;;;;;;;;;;;;;;;;
 ;; F.2 - Deploy contract
@@ -239,8 +233,7 @@ getContractAddress:
         B                               :HASHK(E)
         0x80 + C                        :HASHK1(E)
         C => D
-        A                               :HASHK(E)
-                                        :JMP(endContractAddress)
+        A                               :HASHK(E), JMP(endContractAddress)
 
 nonce1byte:
         $ => A                          :MLOAD(txSrcAddr)
@@ -250,12 +243,10 @@ nonce1byte:
         20 => D
         A                               :HASHK(E)
         B - 1                           :JMPN(nonceIs0)
-        B                               :HASHK1(E)
-                                        :JMP(endContractAddress)
+        B                               :HASHK1(E),JMP(endContractAddress)
 
 nonceIs0:
-        0x80                            :HASHK1(E)
-                                        :JMP(endContractAddress)
+        0x80                            :HASHK1(E),JMP(endContractAddress)
 
 ;; compute new contract address as CREATE2 spec: keccak256(0xff ++ address ++ salt ++ keccak256(init_code))[12:] (https://eips.ethereum.org/EIPS/eip-1014)
 create2:
@@ -286,14 +277,11 @@ loopCreate2:
         32 => D
         $ => E                          :MLOAD(lastHashKIdUsed)
         A                               :HASHK(E)
-        C - 32 => C
-                                        :JMP(loopCreate2)
+        C - 32 => C                     :JMP(loopCreate2)
 
 endloopCreate2:
-        B => E
-                                        :CALL(MLOADX)
-        32 - C => D
-                                        :CALL(SHRarith)
+        B => E                          :CALL(MLOADX)
+        32 - C => D                     :CALL(SHRarith)
         C => D
         $ => E                          :MLOAD(lastHashKIdUsed)
         A                               :HASHK(E)
@@ -356,8 +344,7 @@ deploy:
         zkPC+2 => RR
         $                               :LT, JMPC(moveBalances)
         0 => PC
-        0 => SP
-                                        :JMP(readCode)
+        0 => SP                         :JMP(readCode)
 
 ;; read calldata bytes of a deploy transaction and process them
 readDeployBytecode:
@@ -371,9 +358,8 @@ readDeployBytecode:
         HASHPOS + PC => HASHPOS
         $ => E                          :MLOAD(batchHashDataId)
         $ => RR                         :HASHK1(E)
-        $${eventLog(onOpcode(RR))}
-        PC + 1 => PC
-                                        :JMP(@mapping_opcodes + RR)
+        ${eventLog(onOpcode(RR))}
+        PC + 1 => PC                    :JMP(@mapping_opcodes + RR)
 
 ;; read calldata bytes of a CREATE/CREATE2 call and process them
 readDeployBytecodeCreate:
@@ -381,23 +367,18 @@ readDeployBytecodeCreate:
         $ => CTX                        :MLOAD(originCTX)
         ; check enough bytes to read in memory
         E - PC - 1                      :JMPN(readDeployBytecodeCreateDefault)
-
         $ => E                          :MLOAD(argsOffsetCall)
         E + PC => E
-        1 => C
-                                        :CALL(MLOADX)
+        1 => C                          :CALL(MLOADX)
         $ => CTX                        :MLOAD(currentCTX)
-        31 => D
-                                        :CALL(SHRarith)
+        31 => D                         :CALL(SHRarith)
         A => RR
-        $${eventLog(onOpcode(RR))}
-        PC + 1 => PC
-                                        :JMP(@mapping_opcodes + RR)
+        ${eventLog(onOpcode(RR))}
+        PC + 1 => PC                    :JMP(@mapping_opcodes + RR)
 
 ;; handle error no more bytecode to read when call CREATE/CREATE2
 readDeployBytecodeCreateDefault:
-        $ => CTX                        :MLOAD(currentCTX)
-                                        :JMP(defaultOpCode)
+        $ => CTX                        :MLOAD(currentCTX), JMP(defaultOpCode)
 
 ;;;;;;;;;;;;;;;;;;
 ;; F.1 - Call contract
@@ -458,8 +439,7 @@ checkHashBytecodeEnd:
         $ => E                          :HASHPDIGEST(E)
         ; check hash computed matches hash in the smt leaf
         $ => A                          :MLOAD(hashContractTxDestAddr)
-        E                               :ASSERT
-                                        :JMP(readCode)
+        E                               :ASSERT, JMP(readCode)
 
 readByteCode:
         $ => E                          :MLOAD(contractHashId) ; hash index
@@ -469,14 +449,12 @@ readByteCode:
         B - PC - 1                      :JMPN(defaultOpCode) ; no bytecode treated as 0x00
         PC => HASHPOS
         $ => RR                         :HASHP1(E)
-        $${eventLog(onOpcode(RR))}
-        PC + 1 => PC
-                                        :JMP(@mapping_opcodes + RR)
+        ${eventLog(onOpcode(RR))}
+        PC + 1 => PC                    :JMP(@mapping_opcodes + RR)
 
 readCode:
         $ => A                          :MLOAD(isCreateContract)
-        0 - A                           :JMPN(readDeployBytecode)
-                                        :JMP(readByteCode)
+        0 - A                           :JMPN(readDeployBytecode, readByteCode)
 
 ;; Compute and save hash bytecode and bytecode length in the state-tree
 endDeploy:
@@ -570,37 +548,33 @@ sendGasSeq:
         $ => D          :MLOAD(arithRes1)
         $ => A          :MLOAD(sequencerAddr)
         0 => B,C ; balance key smt
-        $ => SR         :SSTORE
-                        :JMP(processTxEnd)
-
+        $ => SR         :SSTORE, JMP(processTxEnd)
 
 ;; handle invalid transaction due to intrinsic checks
 invalidIntrinsicTxSignature:
-        $${eventLog(onError, intrinsic_invalid_signature)}
-                        :JMP(handleIntrinsicError)
+        ${eventLog(onError, intrinsic_invalid_signature)} :JMP(handleIntrinsicError)
+
 invalidIntrinsicTxChainId:
-        $${eventLog(onError, intrinsic_invalid_chain_id)}
-                        :JMP(handleIntrinsicError)
+        ${eventLog(onError, intrinsic_invalid_chain_id)}  :JMP(handleIntrinsicError)
+
 invalidIntrinsicTxNonce:
-        $${eventLog(onError, intrinsic_invalid_nonce)}
-                        :JMP(handleIntrinsicError)
+        ${eventLog(onError, intrinsic_invalid_nonce)}     :JMP(handleIntrinsicError)
+
 invalidIntrinsicTxGasLimit:
-        $${eventLog(onError, intrinsic_invalid_gas_limit)}
-                        :JMP(handleIntrinsicError)
+        ${eventLog(onError, intrinsic_invalid_gas_limit)}  :JMP(handleIntrinsicError)
+
 invalidIntrinsicTxBalance:
-        $${eventLog(onError, intrinsic_invalid_balance)}
-                        :JMP(handleIntrinsicError)
+        ${eventLog(onError, intrinsic_invalid_balance)}    :JMP(handleIntrinsicError)
+
 invalidIntrinsicBatchGasLimit:
-        $${eventLog(onError, intrinsic_invalid_batch_gas_limit)}
-                        :JMP(handleIntrinsicError)
+        ${eventLog(onError, intrinsic_invalid_batch_gas_limit)} :JMP(handleIntrinsicError)
+
 invalidIntrinsicTxSenderCode:
-        $${eventLog(onError, intrinsic_invalid_sender_code)}
-                        :JMP(handleIntrinsicError)
+        ${eventLog(onError, intrinsic_invalid_sender_code)} :JMP(handleIntrinsicError)
+
 handleIntrinsicError:
-        $ => SR                         :MLOAD(originSR)
-                                        :JMP(processTxFinished)
+        $ => SR                         :MLOAD(originSR), JMP(processTxFinished)
 
 ;; handle error no more bytecode to read
 defaultOpCode:
-        $${eventLog(onOpcode(0))}
-                                        :JMP(opSTOP)
+        ${eventLog(onOpcode(0))}        :JMP(opSTOP)

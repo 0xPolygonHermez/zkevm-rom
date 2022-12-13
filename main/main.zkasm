@@ -108,9 +108,7 @@ txLoopRLP:
 
         $ => A          :MLOAD(batchL2DataLength)
         $ => C          :MLOAD(batchL2DataParsed)
-        C - A           :JMPN(loadTx_rlp)
-                        :JMP(endCheckRLP)
-
+        C - A           :JMPN(loadTx_rlp, endCheckRLP)
 endCheckRLP:
                         :JMP(txLoop)
 
@@ -125,15 +123,12 @@ txLoop:
         A               :JMPN(processTxsEnd)
 
         $ => A          :MLOAD(ctxTxToUse) ; Load first context used by transaction
-        A+1 => CTX      :MSTORE(ctxTxToUse)
-
-                        :JMP(processTx)
+        A+1 => CTX      :MSTORE(ctxTxToUse),JMP(processTx)
 
 processTxEnd:
                         :CALL(updateSystemData)
 processTxFinished:
-        $${eventLog(onFinishTx)}
-                        :JMP(txLoop)
+        ${eventLog(onFinishTx)}   :JMP(txLoop)
 
 processTxsEnd:
 
