@@ -1,5 +1,3 @@
-; This file is WIP
-
 VAR GLOBAL tmpVarA
 VAR GLOBAL tmpVarB
 VAR GLOBAL tmpVarC
@@ -27,42 +25,59 @@ VAR GLOBAL result
 ; @out B => Sign of A [1 if negative, 0 positive]
 abs:
     0 => B
+    ; if is negative, change sign
     $ => B          :SLT, JMPC(absIsNeg)
                     :RETURN
 
 absIsNeg:
     A => B
     0 => A
+    ; 0 - (-A) = A
     $ => A          :SUB
     1 => B          :RETURN
 
-; @info copy calldata A to ctxB SP = %CALLDATA_OFFSET
+; @info copy calldata from previous context to current context
+; @in argsOffsetCall: offset to copy from te calldata
+; @in argsLengthCall: length to copy from the calldata
 copySP:
     RR              :MSTORE(tmpZkPC2)
+    ; store current ctx
     CTX             :MSTORE(currentCTX)
-    %CALLDATA_OFFSET => SP                             ;destOffset = 0
+    ; set SP at the begginning of calldata memory allocation
+    %CALLDATA_OFFSET => SP
+    ; retrieve previous context
     $ => CTX        :MLOAD(originCTX)
     $ => E          :MLOAD(argsOffsetCall)
-    $ => C          :MLOAD(argsLengthCall) ;length
+    $ => C          :MLOAD(argsLengthCall)
 
 copyInit:
+    ; checks zk-counters
     %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     C               :JMPZ(copyEnd)
     C - 32          :JMPN(copyFinal)
-    zkPC+1 => RR    :JMP(MLOAD32)
+    ; load 32 bytes from previous context
+    zkPC+1 => RR    :JMP(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
+    ; restore current context
     $ => CTX        :MLOAD(currentCTX)
+    ; insert 32 bytes from previous context's calldata to current context's calldata
     A               :MSTORE(SP++)
+    ; load previous context for next iteration
     $ => CTX        :MLOAD(originCTX)
     C - 32 => C     :JMP(copyInit)
 
 copyFinal:
-    zkPC+1 => RR    :JMP(MLOADX)
+    ; update RR to call a function from a call and load X bytes from previous context
+    zkPC+1 => RR    :JMP(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
+    ; restore current context
     $ => CTX        :MLOAD(currentCTX)
+    ; insert X bytes from previous context's calldata to current context's calldata
     A               :MSTORE(SP++)
+    ; load previous context
     $ => CTX        :MLOAD(originCTX)
 
 copyEnd:
+    ; restore RR to return to initial call correctly
     $ => RR         :MLOAD(tmpZkPC2)
     $ => CTX        :MLOAD(currentCTX), RETURN
 
@@ -70,25 +85,33 @@ copyEnd:
 ; @in B => number
 ; @out A => bytes length
 getLenBytes:
+    ; store current registries
     RR              :MSTORE(tmpZkPC)
     B               :MSTORE(tmpVarB)
     C               :MSTORE(tmpVarC)
     D               :MSTORE(tmpVarD)
+    ; set C as counter to 0
     0 => C
     B => A
 
 getLenBytesLoop:
+    ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 8 :JMPN(outOfCountersBinary)
     %MAX_CNT_ARITH - CNT_ARITH - 4 :JMPN(outOfCountersArith)
     0 => B
+    ; if B is zero, finish counter
     $               :EQ,JMPC(getLenEnd)
+    ; right shift one byte
     1 => D
-    zkPC+1 => RR    :JMP(SHRarith)
+    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    ; increase counter
     C + 1 => C      :JMP(getLenBytesLoop)
 
 getLenEnd:
+    ; counter to A
     C => A
+    ; recover registries
     $ => B          :MLOAD(tmpVarB)
     $ => C          :MLOAD(tmpVarC)
     $ => RR         :MLOAD(tmpZkPC)
@@ -98,28 +121,35 @@ getLenEnd:
 ; @in B => number
 ; @out A => bits length
 getLenBits:
+    ; store current registries
     RR              :MSTORE(tmpZkPC)
     B               :MSTORE(tmpVarB)
     C               :MSTORE(tmpVarC)
     D               :MSTORE(tmpVarD)
+    ; set C as counter to 0
     0 => C
     B => A
 
 getLenBitsLoop:
+    ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
-    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
-
+    %MAX_CNT_BINARY - CNT_BINARY - 8 :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 4 :JMPN(outOfCountersArith)
     0 => B
+    ; if B is zero, finish counter
     $               :EQ,JMPC(getLenBitsEnd)
+    ; divide value by 2
     A               :MSTORE(arithA)
     2               :MSTORE(arithB)
     zkPC+1 => RR    :JMP(divARITH)
     $ => A          :MLOAD(arithRes1)
+    ; increase counter
     C + 1 => C      :JMP(getLenBitsLoop)
 
 getLenBitsEnd:
+    ; counter to A
     C => A
+    ; recover registries
     $ => B          :MLOAD(tmpVarB)
     $ => C          :MLOAD(tmpVarC)
     $ => RR         :MLOAD(tmpZkPC)
@@ -128,72 +158,84 @@ getLenBitsEnd:
 VAR GLOBAL bytesToStore
 VAR GLOBAL isMSTOREX
 ; @info save value to memory < 32 bytes with offset
-; REQUIRE: set bytesToStore with value to use in MSTORE
+; @in bytesToStore => bytes to store in memory
 ; @in E => offset
 ; @in C => length
 ; @out E => new offset
 MSTOREX:
     32 - C          :JMPN(errorMLOADMSTORE)
-    32 - C - 1      :JMPN(MSTORE32)
+    32 - C - 1      :JMPN(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     1               :MSTORE(isMSTOREX)
 
 ; @info save value to memory 32 bytes with offset
-; REQUIRE: set bytesToStore with value to use in MSTORE
+; @in bytesToStore => bytes to store in memory
 ; @in E => offset
 ; @out E => new offset
 MSTORE32:
+    ; store current registries
     RR              :MSTORE(tmpZkPC)
     A               :MSTORE(tmpVarA)
     B               :MSTORE(tmpVarB)
     C               :MSTORE(tmpVarC)
     D               :MSTORE(tmpVarD)
     E               :MSTORE(tmpVarE)
+    ; check offset is lower than max memory
     E => A
-    0x400000 => B
+    %MEMORY_LENGTH => B
     $               :LT,JMPC(initMSTORE, errorMLOADMSTORE)
 
 initMSTORE:
-    zkPC+1 => RR    :JMP(offsetUtil)
+    zkPC+1 => RR    :JMP(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    ; is storing <32 bytes, jump to store last bytes or finish if 0 bytes left
     $ => B          :MLOAD(isMSTOREX), JMPZ(finalMSTORE)
     C               :JMPNZ(MSTOREX2)
     $ => C          :MLOAD(tmpVarC)
+    ; load bytes to store
     $ => A          :MLOAD(bytesToStore)
     32 - C => D
-    zkPC+1 => RR    :JMP(SHRarith)
-    zkPC+1 => RR    :JMP(SHLarith)
+    ; shift bytes to store
+    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
     A => B
+    ; load from memoty
     $ => A          :MLOAD(MEM:E)
     32 - D => D
-    zkPC+1 => RR    :JMP(SHLarith)
-    zkPC+1 => RR    :JMP(SHRarith)
+    ; shift loaded bytes
+    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
+    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     A + B           :MSTORE(bytesToStore)
     A + B => A
     0 => C
     0               :MSTORE(isMSTOREX), JMP(finalMSTORE)
 
+; used if memory to load is allocated in two different slots
 MSTOREX2:
     $ => D          :MLOAD(tmpVarC)
     C + D => D
+    ; load memory from slot E
     $ => A          :MLOAD(MEM:E)
-    zkPC+1 => RR    :JMP(SHLarith)
+    ; shift loaded memory from slot E
+    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
     $ => D          :MLOAD(tmpVarC)
-    zkPC+1 => RR    :JMP(SHRarith)
+    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     A => B
+    ; load memory from slot E+1
     $ => A          :MLOAD(MEM:E+1)
     32 - C => D
-    zkPC+1 => RR    :JMP(SHRarith)
+    ; right shift loaded memory from slot E+1
+    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     A + B => B
     $ => A          :MLOAD(bytesToStore)
     $ => D          :MLOAD(tmpVarC)
     32 - D => D
-    zkPC+1 => RR    :JMP(SHRarith)
-    zkPC+1 => RR    :JMP(SHLarith)
-    A + B           :MSTORE(bytesToStore)
-    A + B => A
+    ; shift bytes to store
+    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
+    ; append loaded bytes from concurrent slots
+    A + B => A      :MSTORE(bytesToStore)
 
 finalMSTORE:
     C               :JMPNZ(memAlignOptionMSTORE)
-
 ; (*) NOTE: only using E0 on address indirection, ignores E1..E7
     $ => A          :MLOAD(bytesToStore)
     A               :MSTORE(MEM:E)
@@ -202,8 +244,8 @@ finalMSTORE:
 memAlignOptionMSTORE:
     E               :MSTORE(tmpVarE)
 
-    $ => A          :MLOAD(MEM:E) ; read M0
-    $ => B          :MLOAD(MEM:E+1) ; read M1
+    $ => A          :MLOAD(MEM:E)
+    $ => B          :MLOAD(MEM:E+1)
 
     ${memAlignWR_W0(A,mem.bytesToStore,C)} => D                    ; no trust calculate W0
     ${memAlignWR_W1(B,mem.bytesToStore,C)} => E                    ; no trust calculate W1
@@ -249,7 +291,7 @@ MLOAD32:
     C               :MSTORE(tmpVarC)
     D               :MSTORE(tmpVarD)
     E => A
-    0x400000 => B
+    %MEMORY_LENGTH => B
     $               :LT,JMPC(initMLOAD, errorMLOADMSTORE)
 
 initMLOAD:
@@ -271,8 +313,8 @@ memAlignOptionMLOAD:
 sliceA:
     $ => C          :MLOAD(tmpVarC)
     32 - C => D
-    zkPC+1 => RR    :JMP(SHRarith)
-    zkPC+1 => RR    :JMP(SHLarith)
+    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
     0               :MSTORE(isMLOADX)
     E + C => E      :JMP(endMLOAD)
 
@@ -854,7 +896,7 @@ addBatchHashByteByByte:
 
 utilsAddBatchHashBytebyByte:
         32 - D => D
-        $ => A                          :MLOAD(auxBytes), CALL(SHRarith)
+        $ => A                          :MLOAD(auxBytes), CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
         ; get last byte
         0xFFn => B
         $ => A                          :AND
@@ -948,7 +990,7 @@ hashPoseidonLoop:
 
 hashPoseidonFinal:
                     :CALL(MLOADX)
-    32 - C => D     :CALL(SHRarith)
+    32 - C => D     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     $ => E          :MLOAD(tmpContractHashId)
     C => D
     A               :HASHP(E)
