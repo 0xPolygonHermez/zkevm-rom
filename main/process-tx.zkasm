@@ -127,9 +127,8 @@ loopBytes:
         %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
         A - C - 1                       :JMPN(endCalldataIntrinsicGas)
         E => B
-        1 => D
         $ => E                          :MLOAD(batchHashDataId)
-        $ => D                          :HASHK(E)
+        $ => D                          :HASHK1(E)
         B => E
         C + 1 => C
         D - 1                           :JMPN(add4Gas)
@@ -232,15 +231,13 @@ getContractAddress:
         0x80 => B
         $                               :LT,JMPC(nonce1byte)
         $ => C                          :MLOAD(lengthNonce)
-        1 => D
         ; 1 byte length address + 20 bytes address + 1 byte length nonce + C bytes nonce
-        0xc0 + 22 + C                   :HASHK(E)
-        0x94                            :HASHK(E)
+        0xc0 + 22 + C                   :HASHK1(E)
+        0x94                            :HASHK1(E)
         20 => D
         $ => B                          :MLOAD(txSrcAddr)
         B                               :HASHK(E)
-        1 => D
-        0x80 + C                        :HASHK(E)
+        0x80 + C                        :HASHK1(E)
         C => D
         A                               :HASHK(E)
                                         :JMP(endContractAddress)
@@ -248,18 +245,16 @@ getContractAddress:
 nonce1byte:
         $ => A                          :MLOAD(txSrcAddr)
         $ => B                          :MLOAD(txNonce)
-        1 => D
-        0xc0 + 22                       :HASHK(E)
-        0x94                            :HASHK(E)
+        0xc0 + 22                       :HASHK1(E)
+        0x94                            :HASHK1(E)
         20 => D
         A                               :HASHK(E)
-        1 => D
         B - 1                           :JMPN(nonceIs0)
-        B                               :HASHK(E)
+        B                               :HASHK1(E)
                                         :JMP(endContractAddress)
 
 nonceIs0:
-        0x80                            :HASHK(E)
+        0x80                            :HASHK1(E)
                                         :JMP(endContractAddress)
 
 ;; compute new contract address as CREATE2 spec: keccak256(0xff ++ address ++ salt ++ keccak256(init_code))[12:] (https://eips.ethereum.org/EIPS/eip-1014)
@@ -312,8 +307,7 @@ create2end:
         0 => HASHPOS
         $ => E                          :MLOAD(lastHashKIdUsed)
         E+1 => E                        :MSTORE(lastHashKIdUsed)
-        1 => D
-        0xff                            :HASHK(E)
+        0xff                            :HASHK1(E)
         20 => D
         $ => A                          :MLOAD(txSrcAddr)
         A                               :HASHK(E)
@@ -376,8 +370,7 @@ readDeployBytecode:
         $ => HASHPOS                    :MLOAD(dataStarts)
         HASHPOS + PC => HASHPOS
         $ => E                          :MLOAD(batchHashDataId)
-        1 => D
-        $ => RR                         :HASHK(E)
+        $ => RR                         :HASHK1(E)
         ${eventLog(onOpcode(RR))}
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
@@ -446,7 +439,6 @@ callContract:
         $ => A                          :SLOAD
         A                               :MSTORE(hashContractTxDestAddr)
         0 => HASHPOS
-        1 => D
         $ => B                          :MLOAD(bytecodeLength)
 
         ; get a new hashPId
@@ -459,7 +451,7 @@ callContract:
 
         ; set repeat itarations: RCX register + 1
         B - 1 => RCX                    :JMPN(checkHashBytecodeEnd)
-        ${getBytecode(A, HASHPOS, 1)}   :HASHP(E), REPEAT(RCX) ; hash contract bytecode
+        ${getBytecode(A, HASHPOS, 1)}   :HASHP1(E), REPEAT(RCX) ; hash contract bytecode
 
 checkHashBytecodeEnd:
         HASHPOS                         :HASHPLEN(E)
@@ -476,8 +468,7 @@ readByteCode:
         $ => B                          :MLOAD(bytecodeLength)
         B - PC - 1                      :JMPN(defaultOpCode) ; no bytecode treated as 0x00
         PC => HASHPOS
-        1 => D
-        $ => RR                         :HASHP(E)
+        $ => RR                         :HASHP1(E)
         ${eventLog(onOpcode(RR))}
         PC + 1 => PC
                                         :JMP(@mapping_opcodes + RR)
