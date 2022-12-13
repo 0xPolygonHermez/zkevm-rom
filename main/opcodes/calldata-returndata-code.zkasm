@@ -17,7 +17,7 @@
     ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
     ; check out-of-gas
-    GAS-3 => GAS    :JMPN(outOfGas)
+    GAS - %GAS_FASTEST_STEP => GAS    :JMPN(outOfGas)
     $ => B          :MLOAD(SP); [offset => B]
     $ => A          :MLOAD(txCalldataLen)
     ; if offset is lower than calldata length, return 0
@@ -32,14 +32,14 @@
     ; if data not aligned (remainder > 0), shift
     0 - A           :JMPN(opCALLDATALOAD2)
     SP => C
-    ; add 1024 to point calldata in the memory
-    1024 + B => SP
+    ; add %CALLDATA_OFFSET to point calldata in the memory
+    %CALLDATA_OFFSET + B => SP
     $ => B          :MLOAD(SP); [stack => B]
     ; recover previous stack pointer
     C => SP
     B               :MSTORE(SP++); [data(offset) => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 opCALLDATALOAD2:
@@ -48,7 +48,7 @@ opCALLDATALOAD2:
     ; remainder at D
     A => D
     ; set pointer to calldata
-    1024 + B => SP
+    %CALLDATA_OFFSET + B => SP
     $ => A          :MLOAD(SP++); [stack => A]
                     :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
     A => B
@@ -59,13 +59,13 @@ opCALLDATALOAD2:
     C => SP
     B + A           :MSTORE(SP++); [data(offset) => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 CALLDATALOADreturn0:
     0               :MSTORE(SP++); [0 => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 /**
@@ -80,20 +80,20 @@ opCALLDATASIZE:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     ; check out-of-gas
-    GAS-2 => GAS    :JMPN(outOfGas)
+    GAS-%GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
     ; return 0 for contract creation
     $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPN(opCALLDATASIZEdep)
     $ => B          :MLOAD(txCalldataLen)
     B               :MSTORE(SP++); [size => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 opCALLDATASIZEdep:
     0               :MSTORE(SP++); [0 => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 
@@ -126,7 +126,7 @@ opCALLDATACOPY:
     ; store lastMemLength for memory expansion gas cost
     C               :MSTORE(lastMemLength)
     ; check out-of-gas
-    GAS - 3 => GAS  :JMPN(outOfGas)
+    GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
     GAS - ${3*((C+31)/32)} => GAS    :JMPN(outOfGas)
                     :CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; save current stack pointer
@@ -158,8 +158,8 @@ opCALLDATACOPYinit:
     $ => D          :MLOAD(arithRes2)
     $ => A          :MLOAD(arithRes1)
     A               :MSTORE(arithA)
-    ; add 1024 to offset to reach calldata in memory
-    1024            :MSTORE(arithB)
+    ; add %CALLDATA_OFFSET to offset to reach calldata in memory
+    %CALLDATA_OFFSET            :MSTORE(arithB)
                     :CALL(addARITH); in: [arithA, arithB] out[arithRes1: arithA*arithB]
     $ => A          :MLOAD(arithRes1)
     ; set stack pointer to first byte to read
@@ -192,8 +192,8 @@ opCALLDATACOPYfinal:
                     :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => D          :MLOAD(arithRes2)
     $ => B          :MLOAD(arithRes1)
-    ; add 1024 to offset to reach calldata in memory
-    1024            :MSTORE(arithA)
+    ; add %CALLDATA_OFFSET to offset to reach calldata in memory
+    %CALLDATA_OFFSET            :MSTORE(arithA)
     B               :MSTORE(arithB)
                     :CALL(addARITH); in: [arithA, arithB] out[arithRes1: arithA*arithB]
     $ => B          :MLOAD(arithRes1)
@@ -269,7 +269,7 @@ opCODESIZE:
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 252 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     ; check out-of-gas
-    GAS-2 => GAS    :JMPN(outOfGas)
+    GAS-%GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
     ; if is create, get size from calldata
     $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPN(opCODESIZEdep)
@@ -281,14 +281,14 @@ opCODESIZE:
     $ => A          :SLOAD
     A               :MSTORE(SP++); [size => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 opCODESIZEdep:
     $ => B          :MLOAD(txCalldataLen)
     B               :MSTORE(SP++); [size => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 VAR GLOBAL memOffset
@@ -327,7 +327,7 @@ opCODECOPY:
     %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     ; check out-of-gas
-    GAS - 3 => GAS  :JMPN(outOfGas)
+    GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
     GAS - ${3*((E+31)/32)} => GAS    :JMPN(outOfGas)
     ; compute memory expansion gas cost
                     :CALL(saveMem); in: [lastMemOffset, lastMemLength]
@@ -414,14 +414,14 @@ opEXTCODESIZE:
                     :CALL(maskAddress); in: [A: address] out: [A: masked address]
                     :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ; check out-of-gas
-    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
     ; set key for smt smart contract length query
     %SMT_KEY_SC_LENGTH => B
     0 => C
     $ => A          :SLOAD
     A               :MSTORE(SP++); [size => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 ; read hash smt
@@ -458,7 +458,7 @@ opEXTCODECOPY:
                     :CALL(maskAddress); in: [A: address] out: [A: masked address]
                     :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ; check out-of-gas
-    GAS-100-D*2500 => GAS            :JMPN(outOfGas)
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS            :JMPN(outOfGas)
                     :CALL(opEXTCODECOPYCheckHash)
     $ => C          :MLOAD(SP--); [destOffset => C]
     $ => D          :MLOAD(SP--); [offset => D]
@@ -582,7 +582,7 @@ opRETURNDATASIZE:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
     ; check out-of-gas
-    GAS - 2 => GAS  :JMPN(outOfGas)
+    GAS - %GAS_QUICK_STEP => GAS  :JMPN(outOfGas)
     ; Load ret data length from last ctx
     $ => B          :MLOAD(retDataCTX)
     ; if no retDataCTX(0), retDataLength = 0
@@ -596,7 +596,7 @@ opRETURNDATASIZE:
 endOpRETURNDATASIZE:
     A               :MSTORE(SP++); [size => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
                     :JMP(readCode)
 
 /**
@@ -621,7 +621,7 @@ opRETURNDATACOPY:
     ; check stack underflow
     SP - 3          :JMPN(stackUnderflow)
     ; check out-of-gas
-    GAS - 3 => GAS  :JMPN(outOfGas)
+    GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
     SP - 1 => SP
     $ => D          :MLOAD(SP--); [destOffset => D]
     $ => E          :MLOAD(SP--); [offset => E]
@@ -723,12 +723,12 @@ opEXTCODEHASH:
                     :CALL(maskAddress); in: [A: address] out: [A: masked address]
                     :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ; check out-of-gas
-    GAS-100-D*2500 => GAS    :JMPN(outOfGas)
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
     ; set key for smt smart contract code hash query
     %SMT_KEY_SC_CODE => B
     0 => C
     $ => A          :SLOAD
     A               :MSTORE(SP++); [hash => SP]
     ; check stack overflow
-    1024 - SP       :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
                     :JMP(readCode)

@@ -17,7 +17,7 @@ opJUMP:
     SP - 1 => SP                    :JMPN(stackUnderflow)
 
     ; check out-of-gas
-    GAS - 8 => GAS                  :JMPN(outOfGas)
+    GAS - %GAS_MID_STEP => GAS                  :JMPN(outOfGas)
 
     $ => B                         :MLOAD(SP); [counter => PC]
     ; Check PC is a JUMPDEST
@@ -32,13 +32,14 @@ opJUMP:
  *  - stack output: none
  */
 opJUMPI:
-
+    ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    ; check out-of-gas
+    GAS - %GAS_SLOW_STEP => GAS                 :JMPN(outOfGas)
 
     SP - 2 => SP                    :JMPN(stackUnderflow)
     $ => B                          :MLOAD(SP); [value => B]
-    GAS - 10 => GAS                 :JMPN(outOfGas)
     0 => A
     $                               :EQ, JMPC(readCode)
     SP + 1 => SP
@@ -119,11 +120,11 @@ opPC:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
     ; check out-of-gas
-    GAS - 2 => GAS      :JMPN(outOfGas)
+    GAS - %GAS_QUICK_STEP => GAS      :JMPN(outOfGas)
     ; store current PC
     PC - 1              :MSTORE(SP++); [PC => SP]
     ; check stack overflow
-    1024 - SP           :JMPN(stackOverflow)
+    %CALLDATA_OFFSET - SP           :JMPN(stackOverflow)
                         :JMP(readCode)
 
 
@@ -141,5 +142,5 @@ opJUMPDEST:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     
     ; check out-of-gas
-    GAS - 1 => GAS  :JMPN(outOfGas)
+    GAS - %JUMP_DEST_GAS => GAS  :JMPN(outOfGas)
                     :JMP(readCode)
