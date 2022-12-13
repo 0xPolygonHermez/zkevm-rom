@@ -326,9 +326,26 @@ opCODECOPY:
     ;Check counters
     %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+
+    
     ; check out-of-gas
     GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
-    GAS - ${3*((E+31)/32)} => GAS    :JMPN(outOfGas)
+    ;${3*((E+31)/32)}
+    E+31 => A
+    ;(E+31)/32
+    A               :MSTORE(arithA)
+    32              :MSTORE(arithB)
+                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => A          :MLOAD(arithRes1)
+    ; Mul operation with Arith
+    ; 3*((E+31)/32)
+    3               :MSTORE(arithA)
+    A               :MSTORE(arithB)
+                    :CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
+    $ => A          :MLOAD(arithRes1)
+
+    GAS - A => GAS  :JMPN(outOfGas)
+
     ; compute memory expansion gas cost
                     :CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; if offset is above data len, length => offset
@@ -346,13 +363,14 @@ opCODECOPY2:
     B               :MSTORE(codecopyBytecodeLength) 
     C               :MSTORE(memOffset)
     E               :MSTORE(remainingBytes)
+    ; checks zk-counters
+    %MAX_CNT_BINARY - CNT_BINARY - 32*E          :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 100*E                :JMPN(outOfCountersStep)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2*E    :JMPN(outOfCountersMemalign)
 
 opCODECOPYinit:
-    ; checks zk-counters
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 100                :JMPN(outOfCountersStep)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2    :JMPN(outOfCountersMemalign)
 
     $ => B          :MLOAD(remainingBytes)
     B - 1           :JMPN(readCode)
