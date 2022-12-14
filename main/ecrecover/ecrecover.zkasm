@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; ecrecover A = hash, B = r, C = s, D = v
-;;           E = result
+;; ecrecover in: A = hash, B = r, C = s, D = v
+;;           out: A = result, B = result_code
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -20,7 +20,8 @@ VAR GLOBAL ecrecover_s_upperlimit
 
 INCLUDE "constEc.zkasm"
 
-; ERROR CODES
+; ERROR CODES (B)
+; 0 - no error
 ; 1 - r is zero (0)
 ; 2 - r is too big
 ; 3 - s is zero (0)
@@ -178,7 +179,8 @@ ecrecover_v_y2_same_parity:
 
         ; for address take only last 20 bytes
         0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn => B
-        $ => A         :AND,JMP(ecrecover_end)
+        $ => A         :AND
+        0 => B         :JMP(ecrecover_end)
 
 ; ERRORS
 ecrecover_r_is_zero:
@@ -203,7 +205,7 @@ ecrecover_error:
         0 => A
 
 ecrecover_end:
-        $ => RR :MLOAD(ecrecover_RR)
+        $ => RR     :MLOAD(ecrecover_RR)
         :RETURN
 
 INCLUDE "addFpEc.zkasm"
