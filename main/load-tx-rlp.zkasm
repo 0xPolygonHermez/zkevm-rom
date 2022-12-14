@@ -62,13 +62,10 @@ nonceREAD:
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(endNonce)
         A - 0x81                        :JMPN(nonce0)
-        A - 0x89                        :JMPN(shortNonce)
-                                        :JMP(invalidTxRLP)
+        A - 0x89                        :JMPN(shortNonce, invalidTxRLP)
 
 nonce0:
-        0                               :MSTORE(lengthNonce)
-        0 => A
-                                        :JMP(endNonce)
+        0  => A                         :MSTORE(lengthNonce), JMP(endNonce)
 
 shortNonce:
         A - 0x80 => D
@@ -88,12 +85,10 @@ gasPriceREAD:
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(endGasPrice)
         A - 0x81                        :JMPN(gasPrice0)
-        A - 0xa1                        :JMPN(shortGasPrice)
-                                        :JMP(invalidTxRLP)
+        A - 0xa1                        :JMPN(shortGasPrice, invalidTxRLP)
 
 gasPrice0:
-        0 => A
-                                        :JMP(endGasPrice)
+        0 => A                          :JMP(endGasPrice)
 
 shortGasPrice:
         A - 0x80 => D
@@ -113,8 +108,7 @@ gasLimitREAD:
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(endGasLimit)
         A - 0x81                        :JMPN(gasLimit0)
-        A - 0xa1                        :JMPN(shortGasLimit)
-                                        :JMP(invalidTxRLP)
+        A - 0xa1                        :JMPN(shortGasLimit, invalidTxRLP)
 
 gasLimit0:
         0 => A                          :JMPN(endGasLimit)
@@ -137,12 +131,10 @@ toREAD:
         A - 0x80                        :JMPN(invalidTxRLP)
         A - 0x81                        :JMPN(noTo)
         A - 0x94                        :JMPN(invalidTxRLP)
-        A - 0x95                        :JMPN(shortTo)
-                                        :JMP(invalidTxRLP)
+        A - 0x95                        :JMPN(shortTo, invalidTxRLP)
 
 noTo:
-        1                               :MSTORE(isCreateContract)
-                                        :JMP(endTo)
+        1                               :MSTORE(isCreateContract), JMP(endTo)
 
 shortTo:
         A - 0x80 => D
@@ -162,8 +154,7 @@ valueREAD:
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(endValue)
         A - 0x81                        :JMPN(value0)
-        A - 0xa1                        :JMPN(shortValue)
-                                        :JMP(invalidTxRLP)
+        A - 0xa1                        :JMPN(shortValue, invalidTxRLP)
 
 value0:
         0 => A
@@ -190,21 +181,18 @@ dataREAD:
         A - 0x80                        :JMPN(veryShortData)
         A - 0x81                        :JMPN(endData)
         A - 0xb8                        :JMPN(shortData)
-        A - 0xc0                        :JMPN(longData)
-                                        :JMP(invalidTxRLP)
+        A - 0xc0                        :JMPN(longData, invalidTxRLP)
 
 veryShortData:
         1                               :MSTORE(txCalldataLen)
         31 => D
                                         :CALL(SHLarith)
-        A                               :MSTORE(SP++)
-                                        :JMP(endData)
+        A                               :MSTORE(SP++), JMP(endData)
 
 shortData:
         $ => D                          :MLOAD(batchHashPos)
         D                               :MSTORE(dataStarts)
-        A - 0x80 => B                   :MSTORE(txCalldataLen)
-                                        :JMP(readData)
+        A - 0x80 => B                   :MSTORE(txCalldataLen), JMP(readData)
 
 longData:
         A - 0xb7 => D
@@ -222,18 +210,14 @@ readData:
                                         :CALL(addHashTx)
         A                               :MSTORE(SP++)
                                         :CALL(addBatchHashByteByByte)
-        $ => B                          :MLOAD(txDataRead)
-                                        :JMP(readData)
+        $ => B                          :MLOAD(txDataRead), JMP(readData)
 
 readDataFinal:
         B - 1                           :JMPN(endData)
-        B => D
-                                        :CALL(addHashTx)
-        32 - D => D
-                                        :CALL(SHLarith)
+        B => D                          :CALL(addHashTx)
+        32 - D => D                     :CALL(SHLarith)
         A                               :MSTORE(SP)
-        32 - D => D
-                                        :CALL(addBatchHashByteByByte)
+        32 - D => D                     :CALL(addBatchHashByteByByte)
 
 endData:
         ; Check all bytes read to detect pre EIP-155 tx
@@ -249,12 +233,11 @@ chainREAD:
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(endChainId)
         A - 0x81                        :JMPN(chainId0)
-        A - 0x89                        :JMPN(shortChainId)
-                                        :JMP(invalidTxRLP)
+        A - 0x89                        :JMPN(shortChainId, invalidTxRLP)
 
 chainId0:
-        0 => A
-                                        :JMP(endChainId)
+        0 => A                          :JMP(endChainId)
+
 
 shortChainId:
         A - 0x80 => D
@@ -271,8 +254,7 @@ endChainId:
                                         :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         0x8080 => B
-        $                               :EQ,JMPC(sizeVerification)
-                                        :JMP(invalidTxRLP)
+        $                               :EQ,JMPC(sizeVerification, invalidTxRLP)
 
 setPreEIP155Flag:
         1                               :MSTORE(isPreEIP155)
@@ -281,8 +263,7 @@ setPreEIP155Flag:
 sizeVerification:
         C => A
         $ => B                          :MLOAD(txRLPLength)
-        $                               :EQ,JMPC(sizeVerificationSuccess)
-                                        :JMP(invalidTxRLP)
+        $                               :EQ,JMPC(sizeVerificationSuccess, invalidTxRLP)
 sizeVerificationSuccess:
         HASHPOS                         :HASHKLEN(E)
 
@@ -325,18 +306,15 @@ vREADTx:
         A + 1 => A                      :MSTORE(pendingTxs)
 ;; compute signature
         $ => A                          :HASHKDIGEST(E)
-        A                               :MSTORE(txHash)
-                                        :JMP(txLoopRLP)
+        A                               :MSTORE(txHash), JMP(txLoopRLP)
 
 ;;;;;;;;;
 ;; E - Handler error RLP fields
 ;;;;;;;;;
 handleOOCBatRLP:
-        $${eventLog(onError, OOCB)}
-                                        :JMP(handleOOCatRLP)
+        $${eventLog(onError, OOCB)}      :JMP(handleOOCatRLP)
 handleOOCKatRLP:
-        $${eventLog(onError, OOCK)}
-                                        :JMP(handleOOCatRLP)
+        $${eventLog(onError, OOCK)}      :JMP(handleOOCatRLP)
 handleOOCatRLP:
         $ => SR                         :MLOAD(batchSR)
 
@@ -353,8 +331,7 @@ appendTxs:
         ${getTxs(p,D)} => A
         $${p = p + D}
         A                               :HASHK(E)
-        C + D => C
-                                        :JMP(appendTxs)
+        C + D => C                      :JMP(appendTxs)
 
 finalAppendTxs:
         B - C => D
@@ -365,5 +342,4 @@ finalAppendTxs:
         C + D => C
 
 endAppendTxs:
-        HASHPOS                         :MSTORE(batchHashPos)
-                                        :JMP(processTxsEnd)
+        HASHPOS                         :MSTORE(batchHashPos),JMP(processTxsEnd)

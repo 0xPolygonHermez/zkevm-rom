@@ -37,8 +37,7 @@ opSTOPend:
     D               :MSTORE(SP++)
     ; decrease depth
     $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth)
-                    :JMP(readCode)
+    A - 1           :MSTORE(depth), JMP(readCode)
 
 /**
  * @link [https://www.evm.codes/#f0?fork=berlin]
@@ -156,15 +155,13 @@ opCREATE:
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
-    A                   :MSTORE(txValue)
     ; Save touched root when a new context is created
-                        :CALL(checkpointTouched)
+    A                   :MSTORE(txValue), CALL(checkpointTouched)
                         :JMP(txType)
 
 opCreateFail:
     0                   :MSTORE(retDataCTX)
-    0                   :MSTORE(SP++); [0 => SP]
-                        :JMP(readCode)
+    0                   :MSTORE(SP++), JMP(readCode); [0 => SP]
 
 /**
  * @link [https://www.evm.codes/#f1?fork=berlin]
@@ -205,8 +202,7 @@ opCALL:
     B - 1           :JMPN(opCALL2)
 
     0 => B
-    $               :EQ,JMPC(opCALL2)
-                    :JMP(invalidStaticTx)
+    $               :EQ,JMPC(opCALL2, invalidStaticTx)
 
 opCALL2:
 
@@ -298,9 +294,8 @@ opCALLend:
     ; update GAS to computed gas send call
     A => GAS
     $ => A              :MLOAD(argsLengthCall)
-    A                   :MSTORE(txCalldataLen)
     ; copy calldata from origin CTX to current CTX
-                        :CALL(copySP)
+    A                   :MSTORE(txCalldataLen), CALL(copySP)
     ; save touched root when a new context is created
                         :CALL(checkpointTouched)
                         :JMP(txType)
@@ -421,9 +416,8 @@ opCALLCODEend:
     A => GAS
     D               :MSTORE(isStaticCall)
     $ => A          :MLOAD(argsLengthCall)
-    A               :MSTORE(txCalldataLen)
     ; copy calldata from origin CTX to current CTX
-                    :CALL(copySP)
+    A               :MSTORE(txCalldataLen), CALL(copySP)
     ; Save touched root when a new context is created
                     :CALL(checkpointTouched)
                     :JMP(txType)
@@ -510,8 +504,7 @@ opRETURN32:
     D => E
     C - 32 => C
     ; restore current TX
-    $ => CTX        :MLOAD(currentCTX)
-                    :JMP(opRETURN32)
+    $ => CTX        :MLOAD(currentCTX), JMP(opRETURN32)
 
 opRETURNfinal:
     ; load last bytes
@@ -533,8 +526,7 @@ opRETURNend:
     1               :MSTORE(SP++); [1 => SP]
     ; decrease depth
     $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth)
-                    :JMP(readCode)
+    A - 1           :MSTORE(depth), JMP(readCode)
 
 opRETURNdeploy:
     ; code size limit = 0x6000
@@ -543,8 +535,7 @@ opRETURNdeploy:
     GAS - %RETURN_GAS_COST * C => GAS    :JMPN(outOfGas)
     ; check if first context
     $ => B          :MLOAD(originCTX)
-    0 - B           :JMPN(opRETURNcreate)
-                    :JMP(endDeploy)
+    0 - B           :JMPN(opRETURNcreate, endDeploy)
 
 opRETURNcreate:
     ; checks zk-counters
@@ -596,8 +587,7 @@ opRETURNcreateEnd:
     A               :MSTORE(SP++); [createContractAddress(A) => SP]
     ; decrease depth
     $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth)
-                    :JMP(readCode)
+    A - 1           :MSTORE(depth), JMP(readCode)
 
 /**
  * @link [https://www.evm.codes/#f4?fork=berlin]
@@ -701,9 +691,8 @@ opDELEGATECALL:
 
 opDELEGATECALLend:
     $ => A          :MLOAD(argsLengthCall)
-    A               :MSTORE(txCalldataLen)
     ; copy calldata from origin CTX to current CTX
-                    :CALL(copySP)
+    A               :MSTORE(txCalldataLen), CALL(copySP)
     ; Save touched root when a new context is created
                     :CALL(checkpointTouched)
                     :JMP(txType)
@@ -834,9 +823,8 @@ opCREATE2:
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
-    A                   :MSTORE(txValue)
     ; Save touched root when a new context is created
-                        :CALL(checkpointTouched)
+    A                   :MSTORE(txValue), CALL(checkpointTouched)
                         :JMP(txType)
 
 /**
@@ -928,9 +916,8 @@ opSTATICCALL:
     ; update GAS to computed gas send call
     A => GAS
     $ => A          :MLOAD(argsLengthCall)
-    A               :MSTORE(txCalldataLen)
     ; copy calldata from origin CTX to current CTX
-                    :CALL(copySP)
+    A               :MSTORE(txCalldataLen), CALL(copySP)
     ; save touched root when a new context is created
                     :CALL(checkpointTouched)
                     :JMP(txType)
@@ -1007,8 +994,7 @@ opREVERT32:
     D => E
     C - 32 => C
     ; restore current CTX
-    $ => CTX        :MLOAD(currentCTX)
-                    :JMP(opREVERT32)
+    $ => CTX        :MLOAD(currentCTX), JMP(opREVERT32)
 
 opREVERTfinal:
     ; copy last bytes
@@ -1028,8 +1014,7 @@ opREVERTend:
     0               :MSTORE(SP++); [0 => SP]
     ; decrease depth
     $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth)
-                    :JMP(readCode)
+    A - 1           :MSTORE(depth), JMP(readCode)
 
 ; SELFDESTRUCT is deprecated and EIP-4758 is implemented: https://eips.ethereum.org/EIPS/eip-4758
 ; SELFDESTRUCT is now SENDALL
@@ -1129,8 +1114,7 @@ opSENDALLend:
     D                       :MSTORE(SP++); [output => SP]
     ; decrease depth
     $ => A                  :MLOAD(depth)
-    A - 1                   :MSTORE(depth)
-                            :JMP(readCode)
+    A - 1                   :MSTORE(depth), JMP(readCode)
 /**
  * @link [https://www.evm.codes/#fe?fork=berlin]
  * @zk-counters
@@ -1141,5 +1125,4 @@ opSENDALLend:
  */
 opINVALID:
     ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-                                :JMP(invalidProcess)
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep, invalidProcess)

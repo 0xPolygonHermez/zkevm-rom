@@ -35,19 +35,15 @@ IDENTITYinit:
     C - 32          :JMPN(IDENTITYfinal)
     %CALLDATA_OFFSET + A => SP
     $ => B          :MLOAD(SP)
-    B               :MSTORE(bytesToStore)
-                    :CALL(MSTORE32)
+    B               :MSTORE(bytesToStore), CALL(MSTORE32)
     A + 1 => A
-    C - 32 => C
-                    :JMP(IDENTITYinit)
+    C - 32 => C     :JMP(IDENTITYinit)
 IDENTITYfinal:
     %CALLDATA_OFFSET + A => SP
     $ => A          :MLOAD(SP)
-    32 - C => D
-                    :CALL(SHRarith)
+    32 - C => D     :CALL(SHRarith)
                     :CALL(SHLarith)
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX)
+    A               :MSTORE(bytesToStore), CALL(MSTOREX)
 IDENTITYreturn:
     ; Copy from memory current CTX to memory origin CTX
     0 => E
@@ -57,8 +53,7 @@ IDENTITYreturn:
     $ => A          :MLOAD(retDataLength)
     $               :LT, JMPC(IDENTITYreturn2)
     B => C
-    $ => B          :MLOAD(retCallOffset)
-                    :JMP(IDENTITYreturnLoop)
+    $ => B          :MLOAD(retCallOffset), JMP(IDENTITYreturnLoop)
 
 IDENTITYreturn2:
     A => C
@@ -79,17 +74,14 @@ IDENTITYreturnLoop:
     E => B
     D => E
     C - 32 => C
-    $ => CTX        :MLOAD(currentCTX)
-                    :JMP(IDENTITYreturnLoop)
+    $ => CTX        :MLOAD(currentCTX), JMP(IDENTITYreturnLoop)
 IDENTITYreturnFinal:
                     :CALL(MLOADX)
     $ => CTX        :MLOAD(originCTX)
     B => E
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX)
+    A               :MSTORE(bytesToStore), CALL(MSTOREX)
     $ => CTX        :MLOAD(currentCTX)
 
 IDENTITYend:
     $ => CTX        :MLOAD(originCTX)
-    CTX             :MSTORE(currentCTX)
-                    :JMP(preEnd)
+    CTX             :MSTORE(currentCTX), JMP(preEnd)

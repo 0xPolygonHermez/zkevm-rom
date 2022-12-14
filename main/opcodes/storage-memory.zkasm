@@ -33,9 +33,7 @@ opMLOAD:
     ; compute memory expansion gas cost
                     :CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; store stack output
-    A               :MSTORE(SP++); [value(A) => SP]
-    ; continue read bytecode
-                    :JMP(readCode)
+    A               :MSTORE(SP++), JMP(readCode); [value(A) => SP]
 
 /**
  * @link [https://www.evm.codes/#52?fork=berlin]
@@ -74,9 +72,7 @@ opMLOAD:
 
                     :CALL(MSTORE32); in: [E: offset] out: [A: value]
     ; store lastMemOffset for memory expansion gas cost
-    32              :MSTORE(lastMemLength)
-    ; compute memory expansion gas cost
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    32              :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
                     :JMP(readCode)
 
 /**
@@ -118,8 +114,7 @@ opMSTORE8:
     ${memAlignWR8_W0(A,B,C)} => D  ; no trust calculate W0
     B               :MEM_ALIGN_WR8 ; only use LSB of B, rest of bytes could be non zero.
     ; write at memory position E
-    D               :MSTORE(MEM:E)
-                    :JMP(readCode)
+    D               :MSTORE(MEM:E), JMP(readCode)
 
 /**
  * @link [https://www.evm.codes/#59?fork=berlin]
@@ -159,8 +154,7 @@ opMSIZE:
 MSIZEend:
     E               :MSTORE(SP++); [size(E) => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
 /**
  * @link [https://www.evm.codes/#54?fork=berlin]
  * @zk-counters
@@ -188,8 +182,7 @@ opSLOAD:
     ; set key(C) as warmed storage for address(A)
                     :CALL(isColdSlot)
     ; check out-of-gas
-    GAS - %SLOAD_GAS - A * %COLD_SLOAD_COST_RED => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS - %SLOAD_GAS - A * %COLD_SLOAD_COST_RED => GAS    :JMPN(outOfGas, readCode)
 
 /**
  * @link [https://www.evm.codes/#55?fork=berlin]
@@ -225,8 +218,7 @@ opSSTORE:
     $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPN(deploymentSSTORE)
     ; load current storage address
-    $ => A          :MLOAD(storageAddr)
-                    :JMP(opSSTOREinit)
+    $ => A          :MLOAD(storageAddr), JMP(opSSTOREinit)
 
 deploymentSSTORE:
     ; in case of create, the storage address is the create contract address
@@ -252,8 +244,7 @@ opSSTOREinit:
     A - 1           :JMPN(opSSTOREdif)
     ; if new_val == current_val
     ; check out-of-gas
-    GAS - %SSTORE_DYNAMIC_GAS => GAS:JMPN(outOfGas)
-                    :JMP(opSSTOREend)
+    GAS - %SSTORE_DYNAMIC_GAS => GAS:JMPN(outOfGas, opSSTOREend)
 
 opSSTOREdif:
     ; if new_val != current_val
@@ -268,8 +259,7 @@ opSSTOREdif:
     A - 1           :JMPN(opSSTOREdifB)
     ; if origin_val == 0
     ; check out-of-gas
-    GAS - %SSTORE_SET_GAS => GAS    :JMPN(outOfGas)
-                    :JMP(opSSTOREend)
+    GAS - %SSTORE_SET_GAS => GAS    :JMPN(outOfGas, opSSTOREend)
 
 opSSTOREdifA:
     ; if current_val != orig_val
@@ -292,8 +282,7 @@ opSSTOREdifAB:
     A - 1           :JMPN(opSSTOREdifA2)
     ; if orig_val == 0
     $ => A          :MLOAD(gasRefund)
-    A + 19900 => A  :MSTORE(gasRefund)
-                    :JMP(opSSTOREend)
+    A + 19900 => A  :MSTORE(gasRefund), JMP(opSSTOREend)
 
 opSSTOREdifA1:
     ; if orig_val != 0
@@ -304,8 +293,7 @@ opSSTOREdifA1:
     ; if current_val == 0
     ; compute gas refund
     $ => A          :MLOAD(gasRefund)
-    A - %SSTORE_CLEARS_SCHEDULE => A  :MSTORE(gasRefund)
-                    :JMP(opSSTOREdifAB)
+    A - %SSTORE_CLEARS_SCHEDULE => A  :MSTORE(gasRefund), JMP(opSSTOREdifAB)
 opSSTOREdifA12:
     ;if current_val != 0
     0 => A
@@ -315,15 +303,13 @@ opSSTOREdifA12:
     ; if new_val == 0
     ; compute gas refund
     $ => A          :MLOAD(gasRefund)
-    A + %SSTORE_CLEARS_SCHEDULE => A  :MSTORE(gasRefund)
-                    :JMP(opSSTOREdifAB)
+    A + %SSTORE_CLEARS_SCHEDULE => A  :MSTORE(gasRefund), JMP(opSSTOREdifAB)
 
 opSSTOREdifA2:
     ; if orig_val != 0
     ; compute gas refund
     $ => A          :MLOAD(gasRefund)
-    A + 2800 => A   :MSTORE(gasRefund)
-                    :JMP(opSSTOREend)
+    A + 2800 => A   :MSTORE(gasRefund), JMP(opSSTOREend)
 
 opSSTOREdifB:
     ; if orig_val != 0
@@ -342,8 +328,7 @@ opSSTOREdifB:
 opSSTOREend:
     $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPN(mloadContract)
-    $ => A          :MLOAD(storageAddr)
-                    :JMP(opSSTOREsr)
+    $ => A          :MLOAD(storageAddr), JMP(opSSTOREsr)
 
 mloadContract:
     ; if is a create, use create contract address storage
@@ -353,5 +338,4 @@ opSSTOREsr:
     ; set key for smt storage query
     %SMT_KEY_SC_STORAGE => B
     $ => C          :MLOAD(tmpVarC); key => C
-    $ => SR         :SSTORE
-                    :JMP(readCode)
+    $ => SR         :SSTORE, JMP(readCode)
