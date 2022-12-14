@@ -26,12 +26,10 @@ opMLOAD:
 
     $ => E          :MLOAD(SP); [offset => E]
     ; store lastMemOffset for memory expansion gas cost
-    E               :MSTORE(lastMemOffset)
-                    :CALL(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
+    E               :MSTORE(lastMemOffset), CALL(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
     ; store lastMemLength for memory expansion gas cost
-    32              :MSTORE(lastMemLength)
     ; compute memory expansion gas cost
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    32              :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; store stack output
     A               :MSTORE(SP++), JMP(readCode); [value(A) => SP]
 
@@ -68,9 +66,7 @@ opMLOAD:
     ; store bytesToStore for MSTORE32 execution
     B               :MSTORE(bytesToStore)
     ; store lastMemOffset for memory expansion gas cost
-    E               :MSTORE(lastMemOffset)
-
-                    :CALL(MSTORE32); in: [E: offset] out: [A: value]
+    E               :MSTORE(lastMemOffset), CALL(MSTORE32); in: [E: offset] out: [A: value]
     ; store lastMemOffset for memory expansion gas cost
     32              :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
                     :JMP(readCode)
@@ -104,10 +100,8 @@ opMSTORE8:
     ; store lastMemOffset for memory expansion gas cost
     B               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost. In case of MSTORE8, always 1 byte
-    1               :MSTORE(lastMemLength)
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
-    B => A
-                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    1               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    B => A          :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     $ => B          :MLOAD(SP); [value => B]
     ; read from memory position E
     $ => A          :MLOAD(MEM:E)
@@ -178,9 +172,8 @@ opSLOAD:
     ; set key for smt storage query
     %SMT_KEY_SC_STORAGE => B
     $ => E          :SLOAD
-    E               :MSTORE(SP++); [value(E) => SP]
     ; set key(C) as warmed storage for address(A)
-                    :CALL(isColdSlot)
+    E               :MSTORE(SP++), CALL(isColdSlot); [value(E) => SP]
     ; check out-of-gas
     GAS - %SLOAD_GAS - A * %COLD_SLOAD_COST_RED => GAS    :JMPN(outOfGas, readCode)
 
@@ -232,9 +225,8 @@ opSSTOREinit:
     SR              :MSTORE(auxSR)
     $ => SR         :MLOAD(originSR)
     $ => B          :SLOAD ; origin value
-    $ => SR         :MLOAD(auxSR)
     ; set key(C) as warmed storage for address(A)
-                    :CALL(isColdSlot)
+    $ => SR         :MLOAD(auxSR), CALL(isColdSlot)
     B => C           ; origin value
     ; check out-of-gas
     GAS - A*%COLD_SLOAD_COST => GAS    :JMPN(outOfGas)

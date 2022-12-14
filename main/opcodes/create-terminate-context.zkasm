@@ -84,9 +84,8 @@ opCREATE:
     ; store lastMemOffset for memory expansion gas cost
     E                   :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
-    C                   :MSTORE(lastMemLength)
     ; compute memory expansion gas cost
-                        :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    C                   :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; store current CTX to auxiliary var for later usage
     CTX                 :MSTORE(originAuxCTX)
 
@@ -136,9 +135,8 @@ opCREATE:
     %SMT_KEY_NONCE => B
     0 => C
     $ => SR             :SSTORE
-    SR                  :MSTORE(initSR)
     ; compute gas send in call
-                        :CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    SR                  :MSTORE(initSR), CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
     ; return to origin CTX to set storage addr, gasRefund and gasCTX
     $ => CTX            :MLOAD(originCTX)
     $ => B              :MLOAD(storageAddr)
@@ -148,9 +146,8 @@ opCREATE:
     ; update GAS to computed gas send call
     A => GAS
     B                   :MSTORE(txSrcAddr)
-    C                   :MSTORE(gasRefund)
     ; copy calldata from origin CTX to current CTX
-                        :CALL(copySP)
+    C                   :MSTORE(gasRefund), CALL(copySP)
     ; set CTX var values
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txCalldataLen)
@@ -189,10 +186,9 @@ opCALL:
     ; store gas call
     $ => A          :MLOAD(SP--); [gas => A]
     A               :MSTORE(gasCall)
+    $ => A          :MLOAD(SP--), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
     ; store address call
-    $ => A          :MLOAD(SP--); [address => A]
     ; Mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
     A               :MSTORE(addrCall)
     ; store value call
     $ => A          :MLOAD(SP--); [value => A]
@@ -226,9 +222,8 @@ opCALL2:
 
     ; store byte size to copy (size of the return data)
     $ => D          :MLOAD(SP); [retSize => D]
-    D               :MSTORE(lastMemLength)
     ; compute memory expansion gas cost of the return value
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    D               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
 
     ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
@@ -238,8 +233,7 @@ opCALL2:
 
     $ => B                   :MLOAD(lastMemOffset)
     ; check if an address is cold. If it is, add it to the touched tree
-    $ => A          :MLOAD(addrCall)
-                    :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+    $ => A          :MLOAD(addrCall), CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
 
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
@@ -251,8 +245,7 @@ opCALL2:
 
     GAS - %CALL_VALUE_TRANSFER_GAS => GAS :JMPN(outOfGas)
     ; if destAddress is an empty account, we should add 25k of gas to base cost
-    $ => E               :MLOAD(addrCall)
-                         :CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
+    $ => E               :MLOAD(addrCall), CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
     GAS - %CALL_NEW_ACCOUNT_GAS*E => GAS :JMPN(outOfGas)
 
 opCALLend:
@@ -280,9 +273,8 @@ opCALLend:
     $ => B          :MLOAD(valueCall)
     B               :MSTORE(txValue)
     0 => A
-    $ => C          :LT
     ; compute gas send in call
-                    :CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    $ => C          :LT, CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX            :MLOAD(originCTX)
     GAS - A             :MSTORE(gasCTX)
     ; add estipend (2300) in case of tx with value
@@ -327,9 +319,8 @@ opCALLCODE:
     $ => A          :MLOAD(SP--); [gas => A]
     A               :MSTORE(gasCall)
     ; store address call
-    $ => A          :MLOAD(SP--); [address => A]
     ; Mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
+    $ => A          :MLOAD(SP--), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
     A               :MSTORE(addrCall)
     ; store value call
     $ => A          :MLOAD(SP--); [value => A]
@@ -344,18 +335,16 @@ opCALLCODE:
     $ => C          :MLOAD(SP--); [argsSize => C]
     C               :MSTORE(argsLengthCall)
     ; store lastMemLength for memory expansion gas cost
-    C               :MSTORE(lastMemLength)
     ; compute memory expansion gas cost
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    C               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
 
     ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
     $ => B          :MLOAD(SP--); [retOffset => B]
     B               :MSTORE(lastMemOffset)
     ; Store byte size to copy (size of the return data).
     $ => D          :MLOAD(SP); [retSize => D]
-    D               :MSTORE(lastMemLength)
     ; compute memory expansion gas cost of the return value
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    D               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
 
     ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
@@ -364,8 +353,7 @@ opCALLCODE:
     %MAX_CNT_STEPS - STEP - 400:JMPN(outOfCountersStep)
 
     ; check if an address is cold. If it is, add it to the touched tree
-    $ => A                   :MLOAD(addrCall)
-                             :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+    $ => A                   :MLOAD(addrCall), CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
 
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
@@ -402,9 +390,8 @@ opCALLCODEend:
     $ => B          :MLOAD(valueCall)
     B               :MSTORE(txValue)
     0 => A
-    $ => C          :LT
     ; compute gas send in call
-                    :CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    $ => C          :LT, CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     ; Add estipend (2300) in case of tx with value
@@ -450,9 +437,8 @@ opRETURN:
     ; store lastMemOffset for memory expansion gas cost
     E               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
-    C               :MSTORE(lastMemLength)
     ; compute memory expansion gas cost
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    C               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; check is a create
     $ => D          :MLOAD(isCreateContract)
     0 - D           :JMPN(opRETURNdeploy)
@@ -497,9 +483,8 @@ opRETURN32:
     $ => CTX        :MLOAD(originCTX)
     B => E
      ; set bytesToStore with value to use in MSTORE
-    A               :MSTORE(bytesToStore)
     ; store 32 bytes at origin CTX
-                    :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    A               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     E => B
     D => E
     C - 32 => C
@@ -511,9 +496,8 @@ opRETURNfinal:
                     :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
     $ => CTX        :MLOAD(originCTX)
     B => E
-    A               :MSTORE(bytesToStore)
     ; store last bytes
-                    :CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
+    A               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
     $ => CTX        :MLOAD(currentCTX)
 
 opRETURNend:
@@ -565,10 +549,8 @@ opRETURNcreate:
     %SMT_KEY_SC_LENGTH => B
     C => D
     0 => C
-    $ => SR         :SSTORE
-
     ; get bytecode and hash it
-                        :CALL(hashPoseidonLinearFromMemory); in: [memOffsetLinearPoseidon, memSizeLinearPoseidon], out: [D: resulting linear poseidon]
+    $ => SR         :SSTORE, CALL(hashPoseidonLinearFromMemory); in: [memOffsetLinearPoseidon, memSizeLinearPoseidon], out: [D: resulting linear poseidon]
     $ => A              :MLOAD(createContractAddress)
     0 => C
     ; set key for smt smart contract bytecode query
@@ -629,18 +611,16 @@ opDELEGATECALL:
     $ => C          :MLOAD(SP--); [argsSize => C]
     C               :MSTORE(argsLengthCall)
     ; store lastMemLength for memory expansion gas cost
-    C               :MSTORE(lastMemLength)
     ; mem expansion gas cost call args
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    C               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
 
     ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
     $ => B          :MLOAD(SP--); [retOffset => B]
     B               :MSTORE(lastMemOffset)
     ; Store byte size to copy (size of the return data).
     $ => E          :MLOAD(SP); [retSize => D]
-    E               :MSTORE(lastMemLength)
     ;  Mem expansion gas cost return args
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    E               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
 
     ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
@@ -675,9 +655,8 @@ opDELEGATECALL:
     $ => A          :MLOAD(addrCall)
     A               :MSTORE(txDestAddr)
     B               :MSTORE(retCallOffset)
-    E               :MSTORE(retCallLength)
     ; compute gas send in call
-                    :CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    E               :MSTORE(retCallLength), CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     $ => B          :MLOAD(txValue)
@@ -740,16 +719,14 @@ opCREATE2:
     ; store lastMemOffset for memory expansion gas cost
     E                   :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
-    C                   :MSTORE(lastMemLength)
     ; compute memory expansion gas cost
-                        :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    C                   :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; store current CTX to auxiliary var for later usage
     CTX                 :MSTORE(originAuxCTX)
 
     ; cost to hash the initialisation code
     ${C+31}             :MSTORE(arithA)
-    32                  :MSTORE(arithB)
-                        :CALL(divARITH)
+    32                  :MSTORE(arithB), CALL(divARITH)
     $ => C              :MLOAD(arithRes1)
     GAS => A
     6*C => B
@@ -795,9 +772,8 @@ opCREATE2:
     A                   :MSTORE(originCTX)
 
     ; get nonce & update SR
-    B                   :MSTORE(txNonce)
     ; get nonce length bytes
-                        :CALL(getLenBytes); in: [B: value] out: [A: value bytes length]
+    B                   :MSTORE(txNonce), CALL(getLenBytes); in: [B: value] out: [A: value bytes length]
     A                   :MSTORE(lengthNonce)
     ; increase nonce
     B + 1 => D
@@ -807,18 +783,16 @@ opCREATE2:
     0 => C
     $ => SR             :SSTORE
     SR                  :MSTORE(initSR)
-    A                   :MSTORE(txSrcAddr)
     ; compute gas send in call
-                        :CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    A                   :MSTORE(txSrcAddr), CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX            :MLOAD(originCTX)
     $ => C              :MLOAD(gasRefund)
     GAS - A             :MSTORE(gasCTX)
     $ => CTX            :MLOAD(currentCTX)
     C                   :MSTORE(gasRefund)
     ; update GAS to computed gas send call
-    A => GAS
     ; copy calldata from origin CTX to current CTX
-                        :CALL(copySP)
+    A => GAS            :CALL(copySP)
     ; set CTX var values
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txCalldataLen)
@@ -850,9 +824,8 @@ opSTATICCALL:
     ; store gas call
     $ => A          :MLOAD(SP--); [gas => A]
     A               :MSTORE(gasCall)
-    $ => A          :MLOAD(SP--); [address => A]
     ; mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
+    $ => A          :MLOAD(SP--), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
     A               :MSTORE(addrCall)
     ; store bytes offset int the memory, the calldata of the subcontext
     $ => A          :MLOAD(SP--); [argsOffset => A]
@@ -863,17 +836,15 @@ opSTATICCALL:
     $ => B          :MLOAD(SP--); [argsSize => B]
     B               :MSTORE(argsLengthCall)
     ; store lastMemLength for memory expansion gas cost
-    B               :MSTORE(lastMemLength)
     ; compute memory expansion gas cost
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    B               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; store byte offset in the memory in bytes, where to store the return data of the sub context
     $ => C          :MLOAD(SP--); [retOffset => C]
     C               :MSTORE(lastMemOffset)
     ; store byte size to copy (size of the return data)
     $ => E          :MLOAD(SP); [retSize => E]
-    E               :MSTORE(lastMemLength)
     ; compute memory expansion gas cost of the return value
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    E               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
 
     ; checks zk-counters
     %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
@@ -882,8 +853,7 @@ opSTATICCALL:
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
 
     ; check if an address is cold. If it is, add it to the touched tree
-    $ => A          :MLOAD(addrCall)
-                    :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+    $ => A          :MLOAD(addrCall), CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ;gas_cost = base_gas + gas_sent_with_call
     GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
 
@@ -907,9 +877,8 @@ opSTATICCALL:
     A               :MSTORE(txDestAddr)
     A               :MSTORE(storageAddr)
     C               :MSTORE(retCallOffset)
-    E               :MSTORE(retCallLength)
     ; compute gas send in call
-                    :CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    E               :MSTORE(retCallLength), CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     $ => CTX        :MLOAD(currentCTX)
@@ -935,9 +904,8 @@ opREVERT:
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
     ; load initSR to revert al state changes
-    $ => SR         :MLOAD(initSR)
     ; revert touched accounts
-                    :CALL(revertTouched)
+    $ => SR         :MLOAD(initSR), CALL(revertTouched)
     SP - 1 => SP
     $ => E          :MLOAD(SP--); [offset => E]
     $ => C          :MLOAD(SP); [size => C]
@@ -946,9 +914,8 @@ opREVERT:
     ; store lastMemOffset for memory expansion gas cost
     E               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
-    C               :MSTORE(lastMemLength)
     ; compute memory expansion gas cost
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    C               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; check if first context
     $ => B          :MLOAD(originCTX)
     $${eventLog(onError, revert)}
@@ -980,16 +947,15 @@ opREVERT32:
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
 
     C - 1           :JMPN(opREVERTend)
-    C - 32          :JMPN(opREVERTfinal)
     ; load first 32 bytes from memory at current CTX
+    C - 32          :JMPN(opREVERTfinal)
                     :CALL(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
     E => D
     $ => CTX        :MLOAD(originCTX)
     B => E
      ; set bytesToStore with value to use in MSTORE
-    A               :MSTORE(bytesToStore)
     ; store 32 bytes at origin CTX
-                    :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    A               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     E => B
     D => E
     C - 32 => C
@@ -1001,8 +967,7 @@ opREVERTfinal:
                     :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
     $ => CTX        :MLOAD(originCTX)
     B => E
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
+    A               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
     $ => CTX        :MLOAD(currentCTX)
 
 opREVERTend:
@@ -1064,8 +1029,7 @@ opSENDALL:
 
 opSENDALL2:
     ; check is cold to compute gas cost
-    C => A
-                              :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+    C => A                      :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     GAS - %COLD_ACCOUNT_ACCESS_COST * D => GAS     :JMPN(outOfGas)
     B                         :MSTORE(arithA)
     ; read previous balance receiver
@@ -1077,8 +1041,7 @@ opSENDALL2:
 
     ; compute new receiver balance
     ; Add operation with Arith
-    E               :MSTORE(arithB)
-                    :CALL(addARITH); in: [arithA, arithB] out[arithRes1: arithA*arithB]
+    E               :MSTORE(arithB), CALL(addARITH); in: [arithA, arithB] out[arithRes1: arithA*arithB]
     $ => D          :MLOAD(arithRes1)
 
     ; transfer balance to receiver
