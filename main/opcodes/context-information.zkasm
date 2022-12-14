@@ -77,12 +77,11 @@ opBALANCE:
     ; balance in D
     $ => D          :SLOAD
     D               :MSTORE(SP++); [balance(D) => SP]
-    ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
                     :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ; check out-of-gas
     GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
-                    :JMP(readCode)
+    ; continue read bytecode
+    :JMP(readCode)
 
 /**
  * @link [https://www.evm.codes/#32?fork=berlin]

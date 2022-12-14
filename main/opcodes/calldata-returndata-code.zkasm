@@ -38,8 +38,7 @@
     ; recover previous stack pointer
     C => SP
     B               :MSTORE(SP++); [data(offset) => SP]
-    ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
+    ; continue read bytecode
                     :JMP(readCode)
 
 opCALLDATALOAD2:
@@ -58,14 +57,12 @@ opCALLDATALOAD2:
     ; recover SP
     C => SP
     B + A           :MSTORE(SP++); [data(offset) => SP]
-    ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
+    ; continue read bytecode
                     :JMP(readCode)
 
 CALLDATALOADreturn0:
     0               :MSTORE(SP++); [0 => SP]
-    ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
+    ; continue read bytecode
                     :JMP(readCode)
 
 /**
@@ -214,7 +211,7 @@ opCALLDATACOPYfinal:
                     :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP); [size => C]
-    ; point no next memoryn slot
+    ; point to next memory slot
     B + 1 => SP
     C - 32 + D => D
     D               :JMPN(opCALLDATACOPYxor)
@@ -338,7 +335,6 @@ opCODECOPY:
     %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
-
     ; check out-of-gas
     GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
     ;${3*((E+31)/32)}
@@ -364,6 +360,7 @@ opCODECOPY:
     $ => B          :MLOAD(bytecodeLength)
     $               :LT, JMPC(opCODECOPY2)
     B => A
+
 opCODECOPY2:
     ; init vars for copy the code
     A => HASHPOS
@@ -448,8 +445,7 @@ opEXTCODESIZE:
     0 => C
     $ => A          :SLOAD
     A               :MSTORE(SP++); [size => SP]
-    ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
+    ; continue read bytecode
                     :JMP(readCode)
 
 ; read hash smt
@@ -755,6 +751,5 @@ opEXTCODEHASH:
     0 => C
     $ => A          :SLOAD
     A               :MSTORE(SP++); [hash => SP]
-    ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
+    ; continue read bytecode
                     :JMP(readCode)
