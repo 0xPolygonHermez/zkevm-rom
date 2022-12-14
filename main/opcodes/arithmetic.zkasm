@@ -25,10 +25,7 @@ opADD:
     $ => B          :MLOAD(SP) ; [b => B]
 
     ; call binary:add state machine and push to the stack
-    $               :ADD, MSTORE(SP++)
-
-    ; continue read bytecode
-                    :JMP(readCode)
+    $               :ADD, MSTORE(SP++), JMP(readCode)
 
 /**
  * @link [https://www.evm.codes/#02?fork=berlin]
@@ -58,8 +55,7 @@ opMUL:
     B               :MSTORE(arithB)
                     :CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
     $ => E          :MLOAD(arithRes1)
-    E               :MSTORE(SP++); [a * b(E) => SP]
-                    :JMP(readCode)
+    E               :MSTORE(SP++), JMP(readCode); [a * b(E) => SP]
 
 /**
  * @link [https://www.evm.codes/#03?fork=berlin]
@@ -82,8 +78,7 @@ opSUB:
     $ => A          :MLOAD(SP--); [a => A]
     $ => B          :MLOAD(SP); [b => B]
     $ => E          :SUB
-    E               :MSTORE(SP++); [a - b(E) => SP]
-                    :JMP(readCode)
+    E               :MSTORE(SP++), JMP(readCode); [a - b(E) => SP]
 
 /**
  * @link [https://www.evm.codes/#04?fork=berlin]
@@ -114,8 +109,7 @@ opDIV:
     A               :MSTORE(arithB)
                     :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
-    B               :MSTORE(SP++); [a / b(B) => SP]
-                    :JMP(readCode)
+    B               :MSTORE(SP++), JMP(readCode); [a / b(B) => SP]
 
 /**
  * @link [https://www.evm.codes/#05?fork=berlin]
@@ -156,8 +150,7 @@ opSDIV:
     A               :MSTORE(arithB)
                     :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
-    B               :MSTORE(SP++); [a / b(B) => SP]
-                    :JMP(readCode)
+    B               :MSTORE(SP++), JMP(readCode); [a / b(B) => SP]
 
 opSDIVNeg:
     ; checks zk-counters
@@ -167,8 +160,7 @@ opSDIVNeg:
     $ => B          :MLOAD(arithRes1)
     0 => A
     $ => A          :SUB; A - B => A
-    A               :MSTORE(SP++); [a / b(A) => SP]
-                    :JMP(readCode)
+    A               :MSTORE(SP++), JMP(readCode); [a / b(A) => SP]
 
 /**
  * @link [https://www.evm.codes/#06?fork=berlin]
@@ -197,8 +189,7 @@ opMOD:
     A               :MSTORE(arithB)
                     :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => C          :MLOAD(arithRes2)
-    C               :MSTORE(SP++); [a % b(C) => SP]
-                    :JMP(readCode)
+    C               :MSTORE(SP++), JMP(readCode); [a % b(C) => SP]
 
 /**
  * @link [https://www.evm.codes/#07?fork=berlin]
@@ -237,8 +228,7 @@ opSMOD:
     A               :MSTORE(arithB)
                     :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => C          :MLOAD(arithRes2)
-    C               :MSTORE(SP++); [a % b(C) => SP]
-                    :JMP(readCode)
+    C               :MSTORE(SP++), JMP(readCode); [a % b(C) => SP]
 
 opSMODNeg:
 
@@ -248,8 +238,7 @@ opSMODNeg:
     $ => B          :MLOAD(arithRes2)
     0 => A
     $ => A          :SUB; A - B => A
-    A               :MSTORE(SP++); [a % b(C) => SP]
-                    :JMP(readCode)
+    A               :MSTORE(SP++), JMP(readCode); [a % b(C) => SP]
 
 /**
  * @link [https://www.evm.codes/#08?fork=berlin]
@@ -298,12 +287,10 @@ AddModJumpCarry:
     C => A          ; addModResult
     $ => A          :LT
     1               :ASSERT
-    C               :MSTORE(SP++); [(a + b) % N => SP]
-                    :JMP(readCode)
+    C               :MSTORE(SP++), JMP(readCode); [(a + b) % N => SP]
 
 zeroOneAddMod:
-    0               :MSTORE(SP++); [0 => SP]
-                    :JMP(readCode)
+    0               :MSTORE(SP++), JMP(readCode); [0 => SP]
 
 /**
  * @link [https://www.evm.codes/#09?fork=berlin]
@@ -327,8 +314,7 @@ opMULMOD:
     $ => B          :MLOAD(SP--); [b => B]
     $ => C          :MLOAD(SP); [N => C]
     zkPC+1 => RR    :JMP(utilMULMOD); in: [A, B, C] out: [C: (A * B) % C]
-    C               :MSTORE(SP++); [C => SP]
-                    :JMP(readCode)
+    C               :MSTORE(SP++), JMP(readCode); [C => SP]
 
 /**
  * @link [https://www.evm.codes/#0A?fork=berlin]
@@ -350,11 +336,9 @@ opEXP:
     $ => B              :MLOAD(SP); [exp => B]
     B => D
     zkPC+1 => RR        :JMP(expAD); in: [A, D] out: [A: A^D]
-    A                   :MSTORE(SP++); [a ** exp (A) => SP]
-                        :CALL(getLenBytes); in: [B: bytes] out: [A: bytes len]
+    A                   :MSTORE(SP++), CALL(getLenBytes); [a ** exp (A) => SP] ; in: [B: bytes] out: [A: bytes len]
     ; check out-of-gas
-    GAS - %GAS_SLOW_STEP - %EXP_BYTE_GAS * A => GAS  :JMPN(outOfGas)
-                        :JMP(readCode)
+    GAS - %GAS_SLOW_STEP - %EXP_BYTE_GAS * A => GAS  :JMPN(outOfGas, readCode)
 
 /**
  * @link [https://www.evm.codes/#0B?fork=berlin]
@@ -396,8 +380,7 @@ opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-mon
     %MAX_UINT_256 => B
     $ => B          :XOR ; not mask
     D => A
-    $ => D          :OR
-                    :JMP(opSIGNEXTENDEnd)
+    $ => D          :OR, JMP(opSIGNEXTENDEnd)
 
 opSIGNEXTENDPositive:
     C => B
@@ -405,5 +388,4 @@ opSIGNEXTENDPositive:
     $ => D          :AND
 
 opSIGNEXTENDEnd:
-    D               :MSTORE(SP++); [D => SP]
-                    :JMP(readCode)
+    D               :MSTORE(SP++), JMP(readCode); [D => SP]

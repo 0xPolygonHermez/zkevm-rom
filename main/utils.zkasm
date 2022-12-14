@@ -422,24 +422,15 @@ addARITH:
 
 subARITH:
 
-    RR              :MSTORE(tmpZkPCArith)
-    zkPC+1 => RR    :JMP(storeTmp)
-
+    RR              :MSTORE(tmpZkPCArith),CALL(storeTmp)
     $ => A          :MLOAD(arithA)
     $ => B          :MLOAD(arithB)
-    $ => A          :SUB
-
-    A               :MSTORE(arithRes1)
-
-    zkPC+1 => RR    :JMP(loadTmp)
-    $ => RR         :MLOAD(tmpZkPCArith)
-                    :JMP(RR)
+    $ => A          :SUB,MSTORE(arithRes1)
+    $ => RR         :MLOAD(tmpZkPCArith),JMP(loadTmp)
 
 mulARITH:
 
-    RR              :MSTORE(tmpZkPCArith)
-    zkPC+1 => RR    :JMP(storeTmp)
-
+    RR              :MSTORE(tmpZkPCArith), CALL(storeTmp)
     $ => A          :MLOAD(arithA)
     $ => B          :MLOAD(arithB)
     0 => C
@@ -448,16 +439,12 @@ mulARITH:
     ${_mulArith} => E :ARITH
 
     E               :MSTORE(arithRes1)
-    D               :MSTORE(arithOverflow)
-
-    zkPC+1 => RR    :JMP(loadTmp)
+    D               :MSTORE(arithOverflow), CALL(loadTmp)
     $ => RR         :MLOAD(tmpZkPCArith)
-                    :JMP(RR)
+                    :RETURN
 
 divARITH:
-    RR              :MSTORE(tmpZkPCArith)
-    zkPC+1 => RR    :JMP(storeTmp)
-
+    RR              :MSTORE(tmpZkPCArith), CALL(storeTmp)
     $ => E          :MLOAD(arithA)
     $ => A          :MLOAD(arithB)
     ; Check denominator(A) is not zero
@@ -483,42 +470,36 @@ divARITH:
     C => A ; reminder
     E => B ; divisor
     $ => A          :LT
-    1               :ASSERT
-
-    zkPC+1 => RR    :JMP(loadTmp)
+    1               :ASSERT,CALL(loadTmp)
     $ => RR         :MLOAD(tmpZkPCArith)
-                    :JMP(RR)
+                    :RETURN
 
 zeroDiv:
     0               :MSTORE(arithRes1)
-    0               :MSTORE(arithRes2)
-
-    zkPC+1 => RR    :JMP(loadTmp)
+    0               :MSTORE(arithRes2), CALL(loadTmp)
     $ => RR         :MLOAD(tmpZkPCArith)
-                    :JMP(RR)
+                    :RETURN
 
 divisorSmallerDiv:
     0               :MSTORE(arithRes1)
-    E               :MSTORE(arithRes2)
+    E               :MSTORE(arithRes2), CALL(loadTmp)
 
-    zkPC+1 => RR    :JMP(loadTmp)
     $ => RR         :MLOAD(tmpZkPCArith)
-                    :JMP(RR)
+                    :RETURN
 
 loadTmp:
     $ => A                  :MLOAD(tmpVarAArith)
     $ => B                  :MLOAD(tmpVarBArith)
     $ => C                  :MLOAD(tmpVarCArith)
     $ => D                  :MLOAD(tmpVarDArith)
-    $ => E                  :MLOAD(tmpVarEArith)
-                            :JMP(RR)
+    $ => E                  :MLOAD(tmpVarEArith), RETURN
+
 storeTmp:
     A                   :MSTORE(tmpVarAArith)
     B                   :MSTORE(tmpVarBArith)
     C                   :MSTORE(tmpVarCArith)
     D                   :MSTORE(tmpVarDArith)
-    E                   :MSTORE(tmpVarEArith)
-                        :JMP(RR)
+    E                   :MSTORE(tmpVarEArith), RETURN
 
 VAR GLOBAL tmpSHXZkPC
 VAR GLOBAL tmpSHXZkPC2
@@ -539,8 +520,7 @@ SHRarith:
     0 => C
     0 => D
     ${A*B} => D             :ARITH              ; A * B = op --> D = op (D bits)
-    E => A                                      ; A init number
-                            :JMP(SHRarithinit)
+    E => A                  :JMP(SHRarithinit)  ; A init number
 
 ;@in A - (A >> D)
 ;@in D - (A >> D) D bits
@@ -573,8 +553,7 @@ SHRarithfinal:
     $ => C                  :MLOAD(tmpVarC2)
     $ => D                  :MLOAD(tmpVarD2)
     $ => E                  :MLOAD(tmpVarE2)
-    $ => RR                 :MLOAD(tmpSHXZkPC2)
-                            :JMP(RR)
+    $ => RR                 :MLOAD(tmpSHXZkPC2), RETURN
 
 ;@in A - (A << D)
 ;@in D - (A << D) D bytes
@@ -650,57 +629,42 @@ SHLarithfinal:
     $ => D                  :MLOAD(tmpVarD2)
     $ => E                  :MLOAD(tmpVarE2)
     $ => RR                 :MLOAD(tmpSHXZkPC2)
-                            :JMP(RR)
+                            :RETURN
 
 outOfCountersStep:
-    $${eventLog(onError, OOCS)}
-                    :JMP(handleBatchError)
+    $${eventLog(onError, OOCS)} :JMP(handleBatchError)
 outOfCountersKeccak:
-    $${eventLog(onError, OOCK)}
-                    :JMP(handleBatchError)
+    $${eventLog(onError, OOCK)} :JMP(handleBatchError)
 outOfCountersBinary:
-    $${eventLog(onError, OOCB)}
-                    :JMP(handleBatchError)
+    $${eventLog(onError, OOCB)} :JMP(handleBatchError)
 outOfCountersMemalign:
-    $${eventLog(onError, OOCM)}
-                    :JMP(handleBatchError)
+    $${eventLog(onError, OOCM)} :JMP(handleBatchError)
 outOfCountersArith:
-    $${eventLog(onError, OOCA)}
-                    :JMP(handleBatchError)
+    $${eventLog(onError, OOCA)} :JMP(handleBatchError)
 outOfCountersPadding:
-    $${eventLog(onError, OOCPA)}
-                    :JMP(handleBatchError)
+    $${eventLog(onError, OOCPA)} :JMP(handleBatchError)
 outOfCountersPoseidon:
-    $${eventLog(onError, OOCPO)}
-                    :JMP(handleBatchError)
+    $${eventLog(onError, OOCPO)} :JMP(handleBatchError)
 outOfGas:
-    $${eventLog(onError, OOG)}
-                    :JMP(handleError)
+    $${eventLog(onError, OOG)}   :JMP(handleError)
 invalidJump:
-    $${eventLog(onError, invalid)}
-                    :JMP(handleError)
+    $${eventLog(onError, invalid)} :JMP(handleError)
 invalidProcess:
-    $${eventLog(onError, invalid)}
-                    :JMP(handleError)
+    $${eventLog(onError, invalid)} :JMP(handleError)
 stackUnderflow:
-    $${eventLog(onError, underflow)}
-                    :JMP(handleError)
+    $${eventLog(onError, underflow)} :JMP(handleError)
 stackOverflow:
-    $${eventLog(onError, overflow)}
-                    :JMP(handleError)
+    $${eventLog(onError, overflow)} :JMP(handleError)
 deployAddressCollision:
-    $${eventLog(onError, invalid)}
-                    :JMP(handleError)
+    $${eventLog(onError, invalid)} :JMP(handleError)
 invalidStaticTx:
-    $${eventLog(onError, invalid)}
-                    :JMP(handleError)
+    $${eventLog(onError, invalid)} :JMP(handleError)
 invalidCodeSize:
-    $${eventLog(onError, invalid)}
-                    :JMP(handleError)
+    $${eventLog(onError, invalid)} :JMP(handleError)
+
 handleError:
     ;revert all state changes
-    $ => SR         :MLOAD(initSR)
-                    :CALL(revertTouched)
+    $ => SR         :MLOAD(initSR), CALL(revertTouched)
     ;remaining gas = 0
     $ => A          :MLOAD(originCTX)
     0 => B
@@ -715,20 +679,17 @@ handleError:
     $ => PC         :MLOAD(lastPC)
     0               :MSTORE(SP++)
     $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth)
-                    :JMP(readCode)
+    A - 1           :MSTORE(depth), JMP(readCode)
 
 handleBatchError:
     $ => SR         :MLOAD(batchSR)
     $${eventLog(onFinishTx)}
-    $${eventLog(onFinishBatch)}
-                    :JMP(processTxsEnd)
+    $${eventLog(onFinishBatch)} :JMP(processTxsEnd)
 
 firstContextInvalid:
     ;save Root and jump to send gas to sequencer
     0               :MSTORE(gasRefund)
-    0 => GAS
-                    :JMP(sendGasSeq)
+    0 => GAS        :JMP(sendGasSeq)
 
 ;Get offset/32 & offset%32
 ;@in A offset
@@ -739,8 +700,7 @@ offsetUtil:
     ${A & 0x1F} => C        ; ${A & 0x1F} -> C
     0x0FFFF - E     :JMPN(stackUnderflow)
     31-C            :JMPN(stackUnderflow)
-    E*32+C          :ASSERT
-                    :RETURN
+    E*32+C          :ASSERT, RETURN
 
 moveBalances:
 
@@ -786,8 +746,7 @@ invalidCall:
         GAS + A => GAS
         $ => SP                         :MLOAD(lastSP)
         $ => PC                         :MLOAD(lastPC)
-        0                               :MSTORE(SP++)
-                                        :JMP(readCode)
+        0                               :MSTORE(SP++), JMP(readCode)
 
 ; @info Read bytes opcode PUSHX
 ; @internalParam {numBlocks} 4 bytes blocks to read
@@ -812,8 +771,7 @@ readPush:
     0x04 => B
     $ => A                      :LT
     1                           :ASSERT
-    0 => B
-                                :JMP(readPushBlock)
+    0 => B                      :JMP(readPushBlock)
 
 readPushBlock:
     $ => A                      :MLOAD(numBlocks)
@@ -835,36 +793,28 @@ readPushBlock:
 
     $ => A                      :HASHP1(E)
     HASHPOS - 2 => HASHPOS
-    A*16777216 + C => C
-
-                                :JMP(doRotate)
+    A*16777216 + C => C         :JMP(doRotate)
 
 doRotate:
-    B - 1 => A
-
-                                :JMP(doRotateLoop)
+    B - 1 => A                  :JMP(doRotateLoop)
 
 doRotateLoop:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     A                           :JMPN(endRotate)
     ROTL_C => C
-    A - 1 => A
-                                :JMP(doRotateLoop)
+    A - 1 => A                  :JMP(doRotateLoop)
 
 endRotate:
     $ => D                      :MLOAD(accumulator)
     C + D => D
     D                           :MSTORE(accumulator)
-    B + 1 => B
-                                :JMP(readPushBlock)
+    B + 1 => B                  :JMP(readPushBlock)
 
 endPushInit:
     $ => A                          :MLOAD(leftBytes)
     A - 1                           :JMPN(finalPush)
     0 => C
-    0 => B
-                                    :JMP(endPushLoop)
-
+    0 => B                          :JMP(endPushLoop)
 
 endPushLoop:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
@@ -875,45 +825,37 @@ endPushLoop:
 
     $ => D                          :HASHP1(E)
     HASHPOS - 2 => HASHPOS
-    B - 1 => A
-                                    :JMP(computeFactorLoop)
+    B - 1 => A                      :JMP(computeFactorLoop)
 
 computeFactorLoop:
     A                               :JMPN(computeFactorEnd)
     256*D => D
-    A - 1 => A
-                                    :JMP(computeFactorLoop)
+    A - 1 => A                      :JMP(computeFactorLoop)
 
 computeFactorEnd:
     B + 1 => B
-    D + C => C
-                                    :JMP(endPushLoop)
+    D + C => C                      :JMP(endPushLoop)
 
 endPushFinal:
-    $ => B                          :MLOAD(numBlocks)
-                                    :JMP(doRotate2)
+    $ => B                          :MLOAD(numBlocks), JMP(doRotate2)
 
 doRotate2:
-    B - 1 => A
-                                :JMP(doRotateLoop2)
+    B - 1 => A                      :JMP(doRotateLoop2)
 
 doRotateLoop2:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     A                           :JMPN(endRotate2)
     ROTL_C => C
-    A - 1 => A
-                                :JMP(doRotateLoop2)
+    A - 1 => A                  :JMP(doRotateLoop2)
 
 endRotate2:
     $ => D                      :MLOAD(accumulator)
     C + D => D
-    D                           :MSTORE(accumulator)
-                                :JMP(finalPush)
+    D                           :MSTORE(accumulator), JMP(finalPush)
 
 finalPush:
     $ => E                      :MLOAD(accumulator)
-    $ => D                      :MLOAD(pushBytes)
-                                :RETURN
+    $ => D                      :MLOAD(pushBytes), RETURN
 
 VAR GLOBAL auxBytes
 addBatchHashByteByByte:
@@ -926,14 +868,12 @@ addBatchHashByteByByte:
 
 utilsAddBatchHashBytebyByte:
         32 - D => D
-        $ => A                          :MLOAD(auxBytes)
-        zkPC+1 => RR                    :JMP(SHRarith)
+        $ => A                          :MLOAD(auxBytes), CALL(SHRarith)
         ; get last byte
         0xFFn => B
         $ => A                          :AND
         D => B
-        1 => D
-        zkPC+1 => RR                    :JMP(addBatchHashData)
+        1 => D                          :CALL(addBatchHashData)
         B => D
         32 - D => D
         D + 1 => D
@@ -981,18 +921,17 @@ hashPoseidonLoop:
 
     C - 1           :JMPN(hashPoseidonEnd)
     C - 32          :JMPN(hashPoseidonFinal)
-    zkPC+1 => RR    :JMP(MLOAD32)
+                    :CALL(MLOAD32)
     E => B
     $ => E          :MLOAD(tmpContractHashId)
     A               :HASHP(E)
     B => E
-    C - 32 => C
-                    :JMP(hashPoseidonLoop)
+    C - 32 => C     :JMP(hashPoseidonLoop)
+
 
 hashPoseidonFinal:
-    zkPC+1 => RR    :JMP(MLOADX)
-    32 - C => D
-    zkPC+1 => RR    :JMP(SHRarith)
+                    :CALL(MLOADX)
+    32 - C => D     :CALL(SHRarith)
     $ => E          :MLOAD(tmpContractHashId)
     C => D
     A               :HASHP(E)
@@ -1134,8 +1073,7 @@ utilMULMOD:
     D => A ; D1
     $ => B          :MLOAD(tmpVarD) ;D2
     $ => A          :ADD
-    $               :MLOAD(arithOverflow), ASSERT
-                    :JMP(utilMULMODend)
+    $               :MLOAD(arithOverflow), ASSERT, JMP(utilMULMODend)
 
 mulModNoKH:
     ; if theres no K.h the equation is simplified as:
@@ -1151,8 +1089,7 @@ mulModNoKH:
     A => B          ; modulus
     C => A          ; mulModResult
     $ => A          :LT
-    1               :ASSERT
-                    :JMP(utilMULMODend)
+    1               :ASSERT, JMP(utilMULMODend)
 
 zeroOneMod:
     0 => C
@@ -1161,9 +1098,8 @@ utilMULMODend:
     $ => A          :MLOAD(tmpVarA)
     $ => B          :MLOAD(tmpVarB)
     $ => D          :MLOAD(tmpVarD)
-    $ => E          :MLOAD(tmpVarE)
     $ => RR         :MLOAD(tmpZkPC4)
-                    :JMP(RR)
+    $ => E          :MLOAD(tmpVarE), RETURN
 
 ;@info exp(A,D) --> A^D
 ;@in A, D => A^D
@@ -1190,28 +1126,23 @@ expADloop:
     0 => B
     $               :EQ,JMPC(expADend)  ;if exp == 0 --> expADend
     A               :MSTORE(arithA)
-    2               :MSTORE(arithB)
-    zkPC+1 => RR    :JMP(divARITH)      ;divARITH --> exp/2
+    2               :MSTORE(arithB), CALL(divARITH)      ;divARITH --> exp/2
     $ => D          :MLOAD(arithRes1)   ;D = exp/2
     $ => A          :MLOAD(arithRes2)   ;A = exp%2 (0 or 1)
     0 => B
     $               :EQ,JMPC(expADloop0);if exp%2 == 0 --> expADloop0
     E               :MSTORE(arithA)
-    C               :MSTORE(arithB)
-    zkPC+1 => RR    :JMP(mulARITH)      ;mulARITH --> E*C
+    C               :MSTORE(arithB), CALL(mulARITH)      ;mulARITH --> E*C
     $ => C          :MLOAD(arithRes1)   ;C = E*C (acc = bp*acc)
 
 expADloop0:
     E               :MSTORE(arithA)
-    E               :MSTORE(arithB)
-    zkPC+1 => RR    :JMP(mulARITH)      ;mulARITH --> E*E
-    $ => E          :MLOAD(arithRes1)   ;E = E*E (bp = bp*bp)
-                    :JMP(expADloop)
+    E               :MSTORE(arithB), CALL(mulARITH)      ;mulARITH --> E*E
+    $ => E          :MLOAD(arithRes1), JMP(expADloop)   ;E = E*E (bp = bp*bp)
 
 expA0D:                                 ;if base == 0, result0
     0 => C
-    0 => D
-                    :JMP(expADend)
+    0 => D          :JMP(expADend)
 
 expAD0:                                 ;if exp == 0, result 1
     1 => C
@@ -1221,6 +1152,5 @@ expADend:
     C => A
     $ => B          :MLOAD(tmpVarB3)
     $ => C          :MLOAD(tmpVarC3)
-    $ => E          :MLOAD(tmpVarE3)
     $ => RR         :MLOAD(tmpZkPC3)
-                    :JMP(RR)
+    $ => E          :MLOAD(tmpVarE3), RETURN
