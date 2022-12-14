@@ -19,9 +19,8 @@ opJUMP:
     ; check out-of-gas
     GAS - %GAS_MID_STEP => GAS                  :JMPN(outOfGas)
 
-    $ => B                         :MLOAD(SP); [counter => PC]
     ; Check PC is a JUMPDEST
-    :JMP(checkJumpDest)
+    $ => B                         :MLOAD(SP), JMP(checkJumpDest); [counter => PC]
 /**
  * @link [https://www.evm.codes/#57?fork=berlin]
  * @zk-counters
@@ -43,9 +42,8 @@ opJUMPI:
     0 => A
     $                               :EQ, JMPC(readCode)
     SP + 1 => SP
-    $ => B                         :MLOAD(SP--); [counter => PC]
     ; Check PC is a JUMPDEST
-                                    :JMP(checkJumpDest)
+    $ => B                         :MLOAD(SP--), JMP(checkJumpDest); [counter => PC]
 
 checkJumpDest:
     ; if it is a deploy we have to check the data from the calldata (not the bytecode)
@@ -60,8 +58,7 @@ checkJumpDest:
     $ => A                          :HASHP1(E)
     ; check if is a jumpDest (0x5B)
     0x5B => B
-    $                               :EQ, JMPC(readCode)
-                                    :JMP(invalidJump)
+    $                               :EQ, JMPC(readCode, invalidJump)
 checkJumpDestDeployment:
     ; check jumpDest from calldata
     $ => A                          :MLOAD(isCreate)
@@ -77,8 +74,7 @@ checkJumpDestDeployment:
     $ => A                          :HASHK1(E)
     ; check if is a jumpDest (0x5B)
     0x5B => B
-    $                               :EQ, JMPC(readCode)
-                                    :JMP(invalidJump)
+    $                               :EQ, JMPC(readCode, invalidJump)
 
 checkJumpDestDeploymentCreate:
     ; checks zk-counters
@@ -100,8 +96,7 @@ checkJumpDestDeploymentCreate:
                                     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     ; check if is a jumpDest (0x5B)
     0x5B => B
-    $                               :EQ, JMPC(readCode)
-                                    :JMP(invalidJump)
+    $                               :EQ, JMPC(readCode, invalidJump)
 
 /**
  * @link [https://www.evm.codes/#58?fork=berlin]
@@ -120,8 +115,7 @@ opPC:
     ; store current PC
     PC - 1              :MSTORE(SP++); [PC => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP           :JMPN(stackOverflow)
-                        :JMP(readCode)
+    %CALLDATA_OFFSET - SP           :JMPN(stackOverflow, readCode)
 
 
 /**
@@ -137,5 +131,4 @@ opJUMPDEST:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
     ; check out-of-gas
-    GAS - %JUMP_DEST_GAS => GAS  :JMPN(outOfGas)
-                    :JMP(readCode)
+    GAS - %JUMP_DEST_GAS => GAS  :JMPN(outOfGas, readCode)

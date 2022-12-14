@@ -15,8 +15,7 @@ opADDRESS:
     $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPN(opADDRESSdeploy)
     ; load current storage address
-    $ => A          :MLOAD(storageAddr)
-                    :JMP(opADDRESSend)
+    $ => A          :MLOAD(storageAddr), JMP(opADDRESSend)
 
 opADDRESSdeploy:
     ; load create contract address
@@ -25,8 +24,7 @@ opADDRESSdeploy:
 opADDRESSend:
     A               :MSTORE(SP++); [address(A) => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
 
 /**
  * @link [https://www.evm.codes/#47?fork=berlin]
@@ -51,8 +49,7 @@ opSELFBALANCE:
     $ => D          :SLOAD
     D               :MSTORE(SP++); [balance(D) => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
 
 /**
  * @link [https://www.evm.codes/#31?fork=berlin]
@@ -79,9 +76,7 @@ opBALANCE:
     D               :MSTORE(SP++); [balance(D) => SP]
                     :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ; check out-of-gas
-    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
-    ; continue read bytecode
-    :JMP(readCode)
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas, readCode)
 
 /**
  * @link [https://www.evm.codes/#32?fork=berlin]
@@ -100,8 +95,7 @@ opORIGIN:
     $ => A          :MLOAD(txSrcOriginAddr)
     A               :MSTORE(SP++); [address(A) => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
 
 /**
  * @link [https://www.evm.codes/#33?fork=berlin]
@@ -120,8 +114,7 @@ opCALLER:
     $ => A          :MLOAD(txSrcAddr)
     A               :MSTORE(SP++); [address(A) => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
 
 /**
  * @link [https://www.evm.codes/#34?fork=berlin]
@@ -140,8 +133,7 @@ opCALLVALUE:
     $ => A          :MLOAD(txValue)
     A               :MSTORE(SP++); [value(A) => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
 
 /**
  * @link [https://www.evm.codes/#3A?fork=berlin]
@@ -160,8 +152,7 @@ opGASPRICE:
     $ => A          :MLOAD(txGasPrice)
     A               :MSTORE(SP++); [price(A) => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
 
 /**
  * @link [https://www.evm.codes/#5A?fork=berlin]
@@ -178,5 +169,4 @@ opGAS:
     GAS - %GAS_QUICK_STEP => GAS  :JMPN(outOfGas)
     GAS             :MSTORE(SP++); [gas(GAS) => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)

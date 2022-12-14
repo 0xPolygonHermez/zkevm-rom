@@ -37,9 +37,7 @@
     $ => B          :MLOAD(SP); [stack => B]
     ; recover previous stack pointer
     C => SP
-    B               :MSTORE(SP++); [data(offset) => SP]
-    ; continue read bytecode
-                    :JMP(readCode)
+    B               :MSTORE(SP++), JMP(readCode); [data(offset) => SP]
 
 opCALLDATALOAD2:
     ; store SP at C
@@ -56,14 +54,10 @@ opCALLDATALOAD2:
                     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     ; recover SP
     C => SP
-    B + A           :MSTORE(SP++); [data(offset) => SP]
-    ; continue read bytecode
-                    :JMP(readCode)
+    B + A           :MSTORE(SP++), JMP(readCode); [data(offset) => SP]
 
 CALLDATALOADreturn0:
-    0               :MSTORE(SP++); [0 => SP]
-    ; continue read bytecode
-                    :JMP(readCode)
+    0               :MSTORE(SP++), JMP(readCode); [0 => SP]
 
 /**
  * @link [https://www.evm.codes/#36?fork=berlin]
@@ -84,14 +78,12 @@ opCALLDATASIZE:
     $ => B          :MLOAD(txCalldataLen)
     B               :MSTORE(SP++); [size => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
 
 opCALLDATASIZEdep:
     0               :MSTORE(SP++); [0 => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
 
 /**
  * @link [https://www.evm.codes/#37?fork=berlin]
@@ -144,8 +136,7 @@ opCALLDATACOPY:
     $               :LT,JMPC(opCALLDATACOPY0)
     A + C => A
     ; if offset + size is lower then calldata size => length
-    $               :LT,JMPC(opCALLDATACOPYX0)
-                    :JMP(opCALLDATACOPYinit)
+    $               :LT,JMPC(opCALLDATACOPYX0, opCALLDATACOPYinit)
 
 opCALLDATACOPYX0:
     $ => C          :MLOAD(txCalldataLen)
@@ -190,8 +181,7 @@ opCALLDATACOPYinit:
     $ => C          :MLOAD(SP); [size => C]
     C - 32 => C
     C               :MSTORE(SP); [size => SP]
-    B + 32 => B
-                    :JMP(opCALLDATACOPYinit)
+    B + 32 => B     :JMP(opCALLDATACOPYinit)
 
 opCALLDATACOPYfinal:
     ; copy last bytes
@@ -230,16 +220,14 @@ opCALLDATACOPYfinal:
 opCALLDATACOPY0:
     32 - C          :JMPN(opCALLDATACOPY320)
     ; set bytesToStore with value to use in MSTORE
-    0               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
+    0               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
                     :JMP(opCALLDATACOPYend)
 
 opCALLDATACOPY320:
     ; set bytesToStore with value to use in MSTORE
-    0               :MSTORE(bytesToStore)
-                    :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
-    C - 32 => C
-                    :JMP(opCALLDATACOPY0)
+    0               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    C - 32 => C     :JMP(opCALLDATACOPY0)
+
 
 opCALLDATACOPYxor:
     32 - C => D
@@ -254,14 +242,12 @@ opCALLDATACOPYcheckLen:
     ; fill missing values with 0 (size > calldata)
     $ => C          :MLOAD(lastMemLength)
     $ => A          :MLOAD(txCalldataLen)
-    C - A => C      :JMPN(opCALLDATACOPYend)
-                    :JMP(opCALLDATACOPY0)
+    C - A => C      :JMPN(opCALLDATACOPYend, opCALLDATACOPY0)
 
 
 opCALLDATACOPYend:
     ; retrieve SP
-    $ => SP         :MLOAD(SPw)
-                    :JMP(readCode)
+    $ => SP         :MLOAD(SPw), JMP(readCode)
 
 /**
  * @link [https://www.evm.codes/#38?fork=berlin]
@@ -289,15 +275,13 @@ opCODESIZE:
     $ => A          :SLOAD
     A               :MSTORE(SP++); [size => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
 
 opCODESIZEdep:
     $ => B          :MLOAD(txCalldataLen)
     B               :MSTORE(SP++); [size => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
 
 VAR GLOBAL memOffset
 VAR GLOBAL remainingBytes
@@ -400,8 +384,7 @@ opCODECOPYinit:
     B               :MSTORE(remainingBytes)
     $ => A          :MLOAD(memOffset)
     A + 1 => A  ; increment offset to write the next byte
-    A               :MSTORE(memOffset)
-                    :JMP(opCODECOPYinit)
+    A               :MSTORE(memOffset), JMP(opCODECOPYinit)
 
 
 ; @info Load 0 if read bytecode position is above bytecode length
@@ -444,9 +427,7 @@ opEXTCODESIZE:
     %SMT_KEY_SC_LENGTH => B
     0 => C
     $ => A          :SLOAD
-    A               :MSTORE(SP++); [size => SP]
-    ; continue read bytecode
-                    :JMP(readCode)
+    A               :MSTORE(SP++), JMP(readCode); [size => SP]
 
 ; read hash smt
 ; put 32 by 32 bytes in the hashP
@@ -508,8 +489,7 @@ opEXTCODECOPY2:
     D               :MSTORE(codecopyHashId) ; set hashId to get bytes from
     B               :MSTORE(codecopyBytecodeLength) ; set contract bytecode length
     C               :MSTORE(memOffset)
-    E               :MSTORE(remainingBytes)
-                    :JMP(opCODECOPYinit)
+    E               :MSTORE(remainingBytes), JMP(opCODECOPYinit)
 
 opEXTCODECOPYCheckHash:
     ; set key for smt smart contract length query
@@ -545,8 +525,7 @@ opEXTCODECOPYCheckHash:
 
     ; set vars prior to loop
     D => B
-    0 => HASHPOS
-                                    :JMP(opEXTCODECOPYCheckHashLoop)
+    0 => HASHPOS                    :JMP(opEXTCODECOPYCheckHashLoop)
 
 ; @info bytes are inserted byte by byte
 opEXTCODECOPYCheckHashLoop:
@@ -555,8 +534,7 @@ opEXTCODECOPYCheckHashLoop:
         B - 1                                   :JMPN(opEXTCODECOPYCheckHashLoopEnd)
         ; add bytes to hash contract bytecode
         ${getBytecode(A, HASHPOS, 1)}           :HASHP1(E)
-        B - 1 => B
-                                                :JMP(opEXTCODECOPYCheckHashLoop)
+        B - 1 => B                              :JMP(opEXTCODECOPYCheckHashLoop)
 
 opEXTCODECOPYCheckHashLoopEnd:
         HASHPOS                         :HASHPLEN(E)
@@ -576,8 +554,7 @@ opEXTCODECOPYinit:
     D               :MSTORE(bytesToStore)
                     :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     C - 32 => C
-    B + 32 => B
-                    :JMP(opEXTCODECOPYinit)
+    B + 32 => B     :JMP(opEXTCODECOPYinit)
 
 opEXTCODECOPYfinal:
     ; copy last bytes
@@ -585,8 +562,7 @@ opEXTCODECOPYfinal:
     32 - C  => D
                     :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
     ; set bytesToStore with value to use in MSTORE
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
+    A               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
                     :JMP(readCode)
 
 /**
@@ -618,8 +594,7 @@ opRETURNDATASIZE:
 endOpRETURNDATASIZE:
     A               :MSTORE(SP++); [size => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow)
-                    :JMP(readCode)
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
 
 /**
  * @link [https://www.evm.codes/#3E?fork=berlin]
@@ -700,31 +675,26 @@ opRETURNDATACOPYinit:
     E => B
     D => E
     ; set bytesToStore with value to use in MSTORE
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    A               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     E => D
-    C - 32 => C
-                    :JMP(opRETURNDATACOPYinit)
+    C - 32 => C     :JMP(opRETURNDATACOPYinit)
 
 opRETURNDATACOPYfinal:
     B => E
     ; Load memory from last context used
-    $ => CTX        :MLOAD(retDataCTX)
-                    :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
+    $ => CTX        :MLOAD(retDataCTX), CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
     ; save memory to the current context
     $ => CTX        :MLOAD(currentCTX)
     E => B ; offset retDataCTX
     D => E ; offset current CTX
     ; set bytesToStore with value to use in MSTORE
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
+    A               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
                     :JMP(readCode)
 
 opRETURNDATACOPYEmpty:
     ; offset return data + len return data must be 0
     E + C => B
-    $               :EQ, JMPC(readCode)
-                    :JMP(outOfGas)
+    $               :EQ, JMPC(readCode, outOfGas)
 
 /**
  * @link [https://www.evm.codes/#3F?fork=berlin]
@@ -750,6 +720,4 @@ opEXTCODEHASH:
     %SMT_KEY_SC_CODE => B
     0 => C
     $ => A          :SLOAD
-    A               :MSTORE(SP++); [hash => SP]
-    ; continue read bytecode
-                    :JMP(readCode)
+    A               :MSTORE(SP++), JMP(readCode); [hash => SP]
