@@ -52,8 +52,7 @@ opMUL:
     $ => B          :MLOAD(SP); [b => B]
     ; Mul operation with Arith
     A               :MSTORE(arithA)
-    B               :MSTORE(arithB)
-                    :CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
+    B               :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
     $ => E          :MLOAD(arithRes1)
     E               :MSTORE(SP++), JMP(readCode); [a * b(E) => SP]
 
@@ -106,8 +105,7 @@ opDIV:
     $ => A          :MLOAD(SP); [b => A]
     ; Div operation with Arith
     E               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    A               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
     B               :MSTORE(SP++), JMP(readCode); [a / b(B) => SP]
 
@@ -132,12 +130,10 @@ opSDIV:
     GAS - %GAS_FAST_STEP => GAS    :JMPN(outOfGas)
 
     SP - 1 => SP
-    $ => A          :MLOAD(SP--); [a => A]
-                    :CALL(abs); in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
+    $ => A          :MLOAD(SP--), CALL(abs); [a => A]; in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
     A => E
     B => C
-    $ => A          :MLOAD(SP); [b => A]
-                    :CALL(abs); in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
+    $ => A          :MLOAD(SP), CALL(abs); [b => A]; in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
     A               :MSTORE(tmpVarA)
     C => A
     $ => A          :XOR; [XOR(A,B) => A]
@@ -147,16 +143,14 @@ opSDIV:
     ; if is neg, jump to sdivneg
     B - 1           :JMPN(opSDIVNeg)
     E               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    A               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
     B               :MSTORE(SP++), JMP(readCode); [a / b(B) => SP]
 
 opSDIVNeg:
     ; checks zk-counters
     E               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    A               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
     0 => A
     $ => A          :SUB; A - B => A
@@ -186,8 +180,7 @@ opMOD:
     $ => A          :MLOAD(SP); [b => A]
     ; Mod operation with Arith
     E               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    A               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => C          :MLOAD(arithRes2)
     C               :MSTORE(SP++), JMP(readCode); [a % b(C) => SP]
 
@@ -211,12 +204,10 @@ opSMOD:
     ; check out-of-gas
     GAS - %GAS_FAST_STEP => GAS    :JMPN(outOfGas)
     SP - 1 => SP
-    $ => A          :MLOAD(SP--); [a => A]
-                    :CALL(abs); in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
+    $ => A          :MLOAD(SP--), CALL(abs); [a => A]; in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
     A => E
     B => C
-    $ => A          :MLOAD(SP); [b => A]
-                    :CALL(abs); in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
+    $ => A          :MLOAD(SP), CALL(abs); [b => A]; in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
     A               :MSTORE(tmpVarA)
     C => A
     1 => B
@@ -225,16 +216,14 @@ opSMOD:
     B - 1           :JMPN(opSMODNeg)  ; 0 negative, 1 positive
     ; Div operation with Arith
     E               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    A               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => C          :MLOAD(arithRes2)
     C               :MSTORE(SP++), JMP(readCode); [a % b(C) => SP]
 
 opSMODNeg:
 
     E               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    A               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes2)
     0 => A
     $ => A          :SUB; A - B => A
