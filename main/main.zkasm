@@ -58,10 +58,8 @@ setGlobalExitRoot:
         %SMT_KEY_SC_STORAGE => B
 
         ; read timestamp given the globalExitRoot
-        $ => D                                  :SLOAD
-
         ; skip overwrite timestamp if it is different than 0
-        -D                                      :JMPN(skipSetGlobalExitRoot)
+        $ => D                                  :SLOAD, JMPNZ(skipSetGlobalExitRoot)
 
         $ => D                                  :MLOAD(timestamp)
         $ => SR                                 :SSTORE ; Store 'timestamp' in storage position 'keccak256(globalExitRoot, 0)'
@@ -118,8 +116,7 @@ endCheckRLP:
 
 txLoop:
         $ => A          :MLOAD(pendingTxs)
-        A-1 => A        :MSTORE(pendingTxs)
-        A               :JMPN(processTxsEnd)
+        A-1 => A        :MSTORE(pendingTxs), JMPN(processTxsEnd)
 
         $ => A          :MLOAD(ctxTxToUse) ; Load first context used by transaction
         A+1 => CTX      :MSTORE(ctxTxToUse),JMP(processTx)

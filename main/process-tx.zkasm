@@ -51,16 +51,14 @@ checkAndSaveFrom:
 
         %SMT_KEY_SC_LENGTH => B
         0 => C
-        $ => B                          :SLOAD
-        0 - B                           :JMPN(invalidIntrinsicTxSenderCode)
+        $ => B                          :SLOAD, JMPNZ(invalidIntrinsicTxSenderCode)
 
 ;;;;;;;;;;;;;;;;;;
 ;; C - Verify chainID
 ;;;;;;;;;;;;;;;;;;
 
-        $ => A                          :MLOAD(isPreEIP155)
         ; Don't check chainId for legacy transactions
-        0 - A                           :JMPN(endCheckChainId)
+        $ => A                          :MLOAD(isPreEIP155), JMPNZ(endCheckChainId)
         $ => A                          :MLOAD(txChainId)
         $ => B                          :MLOAD(chainID)                                       ; A: chainId tx
         $                               :EQ,JMPC(endCheckChainId, invalidIntrinsicTxChainId)  ; If A == B --> endCheckChainId
@@ -83,8 +81,7 @@ endCheckChainId:
         0 => C
         $ => A                          :SLOAD
         $ => B                          :MLOAD(txNonce)
-        $ => C                          :EQ
-        C - 1                           :JMPN(invalidIntrinsicTxNonce) ; Compare nonce state tree with nonce transaction
+        $ => C                          :EQ, JMPNC(invalidIntrinsicTxNonce) ; Compare nonce state tree with nonce transaction
         B                               :ASSERT ; sanity check
         A + 1 => D
         E => A
@@ -104,8 +101,7 @@ endCheckChainId:
 
         ; Intrinsic gas --> gas Limit >= 21000 + calldata cost + deployment cost
         %BASE_TX_GAS => E ; Store init intrinsic gas at E
-        $ => A                          :MLOAD(isCreateContract)
-        -A                              :JMPN(addDeploymentGasCost, getCalldataGasCost)
+        $ => A                          :MLOAD(isCreateContract), JMPNZ(addDeploymentGasCost, getCalldataGasCost)
 
 addDeploymentGasCost:
         %BASE_TX_DEPLOY_GAS => E ; 53000 gas if transaction is a create
@@ -185,8 +181,7 @@ endCalldataIntrinsicGas:
 txType:
 
         ; Compute deployment address if create contract operation
-        $ => A                          :MLOAD(isCreateContract)
-        0 - A                           :JMPN(getContractAddress)
+        $ => A                          :MLOAD(isCreateContract), JMPNZ(getContractAddress)
         $ => A                          :MLOAD(txDestAddr)
                                         :CALL(isColdAddress) ; Add 'to' to touched addresses
         ; Check 'to' is zero or precompiled contract
@@ -211,8 +206,7 @@ getContractAddress:
         $ => E                          :MLOAD(lastHashKIdUsed)
         E+1 => E                        :MSTORE(lastHashKIdUsed)
         ; Check if create is with CREATE2 opcode
-        $ => A                          :MLOAD(isCreate2)
-        0 - A                           :JMPN(create2)
+        $ => A                          :MLOAD(isCreate2), JMPNZ(create2)
         ; Check keccak counters
         $ => A                          :MLOAD(cntKeccakPreProcess)
         %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1:JMPN(outOfCountersKeccak)
@@ -237,7 +231,7 @@ nonce1byte:
         0x94                            :HASHK1(E)
         20 => D
         A                               :HASHK(E)
-        B - 1                           :JMPN(nonceIs0)
+        B                               :JMPZ(nonceIs0)
         B                               :HASHK1(E),JMP(endContractAddress)
 
 nonceIs0:
@@ -263,7 +257,7 @@ loopCreate2:
         %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
         %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCountersBinary)
 
-        C - 1                           :JMPN(create2end)
+        C                               :JMPZ(create2end)
         C - 32                          :JMPN(endloopCreate2)
         B => E                          :CALL(MLOAD32)
         E => B
@@ -341,8 +335,7 @@ deploy:
 ;; read calldata bytes of a deploy transaction and process them
 readDeployBytecode:
         ; check transaction is a deploy transaction
-        $ => B                          :MLOAD(isCreate)
-        0 - B                           :JMPN(readDeployBytecodeCreate)
+        $ => B                          :MLOAD(isCreate), JMPNZ(readDeployBytecodeCreate)
         ; check enough bytes to read in calldata
         $ => B                          :MLOAD(txCalldataLen)
         B - PC - 1                      :JMPN(defaultOpCode)
@@ -444,15 +437,14 @@ readByteCode:
         PC + 1 => PC                    :JMP(@mapping_opcodes + RR)
 
 readCode:
-        $ => A                          :MLOAD(isCreateContract)
-        0 - A                           :JMPN(readDeployBytecode, readByteCode)
+        $ => A                          :MLOAD(isCreateContract), JMPNZ(readDeployBytecode, readByteCode)
 
 ;; Compute and save hash bytecode and bytecode length in the state-tree
 endDeploy:
         ; called from `opRETURNDeploy` which has: C --> length, E --> offset
         ; only when first context ends on deploy
         ; If length is 0 do not modify state-tree
-        C - 1                           :JMPN(handleGas)
+        C                               :JMPZ(handleGas)
         ; save offset memory and length to compute hash bytecode
         E                               :MSTORE(memOffsetLinearPoseidon)
         C                               :MSTORE(memSizeLinearPoseidon)
@@ -478,8 +470,7 @@ endDeploy:
 ;; compute maximum gas to refund
 handleGas:
         0 => A
-        $ => B                          :MLOAD(gasRefund)
-        B - 1                           :JMPN(refundGas)
+        $ => B                          :MLOAD(gasRefund), JMPZ(refundGas)
         $ => A                          :MLOAD(txGasLimit)
         A - GAS => A
         ; Div operation with Arith

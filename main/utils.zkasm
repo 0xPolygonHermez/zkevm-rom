@@ -48,7 +48,7 @@ copySP:
 copyInit:
     %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-    C - 1           :JMPN(copyEnd)
+    C               :JMPZ(copyEnd)
     C - 32          :JMPN(copyFinal)
     zkPC+1 => RR    :JMP(MLOAD32)
     $ => CTX        :MLOAD(currentCTX)
@@ -154,9 +154,8 @@ MSTORE32:
 
 initMSTORE:
     zkPC+1 => RR    :JMP(offsetUtil)
-    $ => B          :MLOAD(isMSTOREX)
-    B - 1           :JMPN(finalMSTORE)
-    -C              :JMPN(MSTOREX2)
+    $ => B          :MLOAD(isMSTOREX), JMPZ(finalMSTORE)
+    C               :JMPNZ(MSTOREX2)
     $ => C          :MLOAD(tmpVarC)
     $ => A          :MLOAD(bytesToStore)
     32 - C => D
@@ -193,7 +192,7 @@ MSTOREX2:
     A + B => A
 
 finalMSTORE:
-    -C              :JMPN(memAlignOptionMSTORE)
+    C               :JMPNZ(memAlignOptionMSTORE)
 
 ; (*) NOTE: only using E0 on address indirection, ignores E1..E7
     $ => A          :MLOAD(bytesToStore)
@@ -214,8 +213,7 @@ memAlignOptionMSTORE:
     D               :MSTORE(MEM:E)          ; write W0
     A               :MSTORE(MEM:E+1)        ; write W1
     E*32 + C => E
-    $ => A          :MLOAD(isMSTOREX)
-    A - 1           :JMPN(offsetMSTORE32)
+    $ => A          :MLOAD(isMSTOREX), JMPZ(offsetMSTORE32)
     $ => C          :MLOAD(tmpVarC)
     E*32 + C => E
     0               :MSTORE(isMSTOREX), JMP(endMSTORE)
@@ -256,11 +254,11 @@ MLOAD32:
 
 initMLOAD:
     zkPC+1 => RR    :JMP(offsetUtil)
-    -C              :JMPN(memAlignOptionMLOAD)
+    C               :JMPNZ(memAlignOptionMLOAD)
     $ => A          :MLOAD(MEM:E)
     $ => B          :MLOAD(isMLOADX)
     E*32 => E
-    B - 1           :JMPN(offsetMLOAD32, sliceA)
+    B               :JMPZ(offsetMLOAD32, sliceA)
 
 memAlignOptionMLOAD:
     $ => A          :MLOAD(MEM:E)
@@ -268,7 +266,7 @@ memAlignOptionMLOAD:
     $ => A          :MEM_ALIGN_RD
     E*32 + C => E
     $ => B          :MLOAD(isMLOADX)
-    B - 1           :JMPN(offsetMLOAD32)
+    B               :JMPZ(offsetMLOAD32)
 
 sliceA:
     $ => C          :MLOAD(tmpVarC)
@@ -595,7 +593,7 @@ SHLarithinit:
     $ => E                  :MLOAD(result)          ; E result
     256 - D => D, RR                                ; D = 256 - D
                             :CALL(@exp_num + RR)     ; B = 2**D
-    0 - C                   :JMPN(SHLarithBig)      ; if 2**D-1 < init number --> SHLarithBig
+    C                       :JMPNZ(SHLarithBig)      ; if 2**D-1 < init number --> SHLarithBig
     0 => D,C
     E                       :ARITH, JMP(SHLarithfinal) ; init number * 2**D = init
 
@@ -696,8 +694,7 @@ moveBalances:
 ; evmCALL (Move Balances)
 ;;;;;;;;
         ;Check if is a delegate call
-        $ => A                           :MLOAD(isDelegateCall)
-        -A                               :JMPN(endMoveBalances)
+        $ => A                           :MLOAD(isDelegateCall), JMPNZ(endMoveBalances)
         ; Decrement original balance
         $ => A                          :MLOAD(txSrcAddr)
         0 => B,C                                                                                ; balance key smt
@@ -799,8 +796,7 @@ endRotate:
     B + 1 => B                  :JMP(readPushBlock)
 
 endPushInit:
-    $ => A                          :MLOAD(leftBytes)
-    A - 1                           :JMPN(finalPush)
+    $ => A                          :MLOAD(leftBytes), JMPZ(finalPush)
     0 => C
     0 => B                          :JMP(endPushLoop)
 
@@ -886,7 +882,7 @@ hashPoseidonLinearFromMemory:
     $ => E                          :MLOAD(memOffsetLinearPoseidon)
     $ => C                          :MLOAD(memSizeLinearPoseidon)
     0 => D
-    C - 1                           :JMPN(hashPoseidonReturn)
+    C                               :JMPZ(hashPoseidonReturn)
     ; check poseidon counters
     ; 56 is the value used by the prover to increment poseidon counters depending on the hash length
     C               :MSTORE(arithA)
@@ -906,7 +902,7 @@ hashPoseidonLoop:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
 
-    C - 1           :JMPN(hashPoseidonEnd)
+    C               :JMPZ(hashPoseidonEnd)
     C - 32          :JMPN(hashPoseidonFinal)
                     :CALL(MLOAD32)
     E => B
