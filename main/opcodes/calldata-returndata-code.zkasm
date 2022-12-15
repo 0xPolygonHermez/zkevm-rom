@@ -100,10 +100,9 @@ opCALLDATACOPY:
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1 :JMPN(outOfCountersMemalign)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     ; check stack underflow
-    SP - 3          :JMPN(stackUnderflow)
-    SP - 1 => SP
-    $ => E          :MLOAD(SP--); [destOffset => E]
-    $ => B          :MLOAD(SP--); [offset => B]
+    SP - 3 => SP          :JMPN(stackUnderflow)
+    $ => E          :MLOAD(SP+2); [destOffset => E]
+    $ => B          :MLOAD(SP+1); [offset => B]
     $ => C          :MLOAD(SP); [size => C]
     ; store lastMemOffset for memory expansion gas cost
     E               :MSTORE(lastMemOffset)
@@ -283,14 +282,14 @@ VAR GLOBAL memInteger
  *  - stack output: []
  */
 opCODECOPY:
-    ; check stack underflow
-    SP - 3          :JMPN(stackUnderflow)
     ; if is a create, copy from calldata
     $ => A          :MLOAD(isCreateContract)
     0 - A           :JMPN(opCALLDATACOPY)
-    SP - 1 => SP
-    $ => C          :MLOAD(SP--); [destOffset => C]
-    $ => D          :MLOAD(SP--); [offset => D]
+
+    ; check stack underflow
+    SP - 3 => SP          :JMPN(stackUnderflow)
+    $ => C          :MLOAD(SP+2); [destOffset => C]
+    $ => D          :MLOAD(SP+1); [offset => D]
     $ => E          :MLOAD(SP); [size => E]
     ; store lastMemOffset for memory expansion gas cost
     C               :MSTORE(lastMemOffset)
@@ -432,22 +431,35 @@ opEXTCODECOPY:
     %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
     ; check stack underflow
-    SP - 4          :JMPN(stackUnderflow)
-    SP - 1 => SP
-    $ => A          :MLOAD(SP--), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
+    SP - 4 => SP          :JMPN(stackUnderflow)
+    $ => A          :MLOAD(SP+3), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
                     :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ; check out-of-gas
     GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS            :JMPN(outOfGas)
                     :CALL(opEXTCODECOPYCheckHash)
-    $ => C          :MLOAD(SP--); [destOffset => C]
-    $ => D          :MLOAD(SP--); [offset => D]
+    $ => C          :MLOAD(SP+2); [destOffset => C]
+    $ => D          :MLOAD(SP+1); [offset => D]
     $ => E          :MLOAD(SP); [size => E]
     ; store lastMemOffset for memory expansion gas cost
     C               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
     E               :MSTORE(lastMemLength)
     ; check out-of-gas
-    GAS - ${3*((E+31)/32)} => GAS    :JMPN(outOfGas)
+    ;${3*((E+31)/32)}
+    E+31 => A
+    ;(E+31)/32
+    A               :MSTORE(arithA)
+    32              :MSTORE(arithB)
+                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => A          :MLOAD(arithRes1)
+    ; Mul operation with Arith
+    ; 3*((E+31)/32)
+    3               :MSTORE(arithA)
+    A               :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
+    $ => A          :MLOAD(arithRes1)
+    ; check out-of-gas
+    GAS - A => GAS  :JMPN(outOfGas)
+
     ; compute memory expansion gas cost
                     :CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; if offset is above data len, length => offset
@@ -588,12 +600,12 @@ opRETURNDATACOPY:
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2    :JMPN(outOfCountersMemalign)
     ; check stack underflow
-    SP - 3          :JMPN(stackUnderflow)
+    SP - 3 => SP          :JMPN(stackUnderflow)
     ; check out-of-gas
     GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
-    SP - 1 => SP
-    $ => D          :MLOAD(SP--); [destOffset => D]
-    $ => E          :MLOAD(SP--); [offset => E]
+
+    $ => D          :MLOAD(SP+2); [destOffset => D]
+    $ => E          :MLOAD(SP+1); [offset => E]
     $ => C          :MLOAD(SP); [size => C]
     ; store lastMemOffset for memory expansion gas cost
     D               :MSTORE(lastMemOffset)

@@ -54,13 +54,12 @@ opMLOAD:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
     ; check stack underflow
-    SP - 2          :JMPN(stackUnderflow)
-    SP - 1 => SP
+    SP - 2 => SP          :JMPN(stackUnderflow)
 
     ; check out-of-gas
     GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
 
-    $ => E          :MLOAD(SP--); [offset => E]
+    $ => E          :MLOAD(SP+1); [offset => E]
     $ => B          :MLOAD(SP); [value => B]
 
     ; store bytesToStore for MSTORE32 execution
@@ -90,13 +89,12 @@ opMSTORE8:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
     ; check stack underflow
-    SP - 2          :JMPN(stackUnderflow)
-    SP - 1 => SP
+    SP - 2 => SP          :JMPN(stackUnderflow)
 
     ; check out-of-gas
     GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
 
-    $ => B          :MLOAD(SP--); [offset => B]
+    $ => B          :MLOAD(SP+1); [offset => B]
     ; store lastMemOffset for memory expansion gas cost
     B               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost. In case of MSTORE8, always 1 byte
@@ -196,15 +194,14 @@ opSSTORE:
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
 
     ; check stack underflow
-    SP - 2          :JMPN(stackUnderflow)
+    SP - 2  => SP        :JMPN(stackUnderflow)
     ; check out-of-gas
     GAS - %SSTORE_ENTRY_EIP_2200_GAS - 1  :JMPN(outOfGas)
     ; check is static call
     $ => A          :MLOAD(isStaticCall)
     0 - A           :JMPN(invalidStaticTx)
 
-    SP - 1 => SP
-    $ => C          :MLOAD(SP--) ; [key => C]
+    $ => C          :MLOAD(SP+1) ; [key => C]
     C               :MSTORE(tmpVarC)
     $ => D          :MLOAD(SP) ; [value => D]
     ; check if is a create call
