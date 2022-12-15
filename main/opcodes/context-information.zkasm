@@ -66,15 +66,13 @@ opBALANCE:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
-    $ => A          :MLOAD(SP); [address => A]
     ; Mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
+    $ => A          :MLOAD(SP), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
     ; set key for smt balance query
     0 => B,C
     ; balance in D
     $ => D          :SLOAD
-    D               :MSTORE(SP++); [balance(D) => SP]
-                    :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+    D               :MSTORE(SP++), CALL(isColdAddress); [balance(D) => SP]; in: [A: address] out: [D: 0 if warm, 1 if cold]
     ; check out-of-gas
     GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas, readCode)
 

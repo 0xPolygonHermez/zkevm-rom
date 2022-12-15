@@ -37,8 +37,7 @@ processTx:
         ; Check the signature
         $ => B                          :MLOAD(txR)
         $ => C                          :MLOAD(txS)
-        $ => D                          :MLOAD(txV)
-                                        :CALL(ecrecover_tx)
+        $ => D                          :MLOAD(txV), CALL(ecrecover_tx)
         ; Check result is non-zero
 checkAndSaveFrom:
         0 => B
@@ -68,8 +67,7 @@ checkAndSaveFrom:
 endCheckChainId:
 
 ;; Reset warm/cold information
-        $ => A                          :MLOAD(txSrcOriginAddr)
-                                        :CALL(initTouchedTree)
+        $ => A                          :MLOAD(txSrcOriginAddr), CALL(initTouchedTree)
                                         :CALL(isColdAddress) ; add tx.origin to touched addresses
         0                               :MSTORE(depth) ; Initial depth is 0
 
@@ -149,8 +147,7 @@ endCalldataIntrinsicGas:
         ; gas price * gas limit
         $ => B                          :MLOAD(txGasPrice)
         A                               :MSTORE(arithA)
-        B                               :MSTORE(arithB)
-                                        :CALL(mulARITH)
+        B                               :MSTORE(arithB), CALL(mulARITH)
         $ => D                          :MLOAD(arithRes1)
         ; Get caller balance
         $ => A                          :MLOAD(txSrcOriginAddr)
@@ -159,8 +156,7 @@ endCalldataIntrinsicGas:
         ; (gas price * gas limit) + value
         $ => B                          :MLOAD(txValue)
         D                               :MSTORE(arithA)
-        B                               :MSTORE(arithB)
-                                        :CALL(addARITH)
+        B                               :MSTORE(arithB), CALL(addARITH)
         $ => B                          :MLOAD(arithRes1)
         ; Comparison
         C => A
@@ -168,8 +164,7 @@ endCalldataIntrinsicGas:
 
         ; Substract (gas price * gas limit) from caller balance
         C                               :MSTORE(arithA)
-        D                               :MSTORE(arithB)
-                                        :CALL(subARITH)
+        D                               :MSTORE(arithB), CALL(subARITH)
         ; Substracted balance result in D
         $ => D                          :MLOAD(arithRes1)
         $ => A                          :MLOAD(txSrcOriginAddr)
@@ -253,8 +248,7 @@ create2:
         $ => C                          :MLOAD(txCalldataLen)
         ; Check keccak counters
         C + 1                           :MSTORE(arithA)
-        136                             :MSTORE(arithB)
-                                        :CALL(divARITH)
+        136                             :MSTORE(arithB), CALL(divARITH)
         $ => B                          :MLOAD(arithRes1)
         $ => A                          :MLOAD(cntKeccakPreProcess)
         ; -2 because we will use one more keccack for generating contract address
@@ -271,8 +265,7 @@ loopCreate2:
 
         C - 1                           :JMPN(create2end)
         C - 32                          :JMPN(endloopCreate2)
-        B => E
-                                        :CALL(MLOAD32)
+        B => E                          :CALL(MLOAD32)
         E => B
         32 => D
         $ => E                          :MLOAD(lastHashKIdUsed)
@@ -307,8 +300,7 @@ create2end:
 
 endContractAddress:
         HASHPOS                         :HASHKLEN(E)
-        $ => A                          :HASHKDIGEST(E)
-                                        :CALL(maskAddress) ; Mask address to 20 bytes
+        $ => A                          :HASHKDIGEST(E), CALL(maskAddress) ; Mask address to 20 bytes
         A                               :MSTORE(createContractAddress)
         A                               :MSTORE(txDestAddr)
         A                               :MSTORE(storageAddr)
@@ -408,8 +400,7 @@ callContract:
         ; check poseidon counters
         ; 56 is the value used by the prover to increment poseidon counters depending on the hash length
         B               :MSTORE(arithA)
-        56              :MSTORE(arithB)
-                        :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+        56              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
         $ => B          :MLOAD(arithRes1)
         %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1 => A
         $               :LT, JMPC(outOfCountersPoseidon)
@@ -471,8 +462,7 @@ endDeploy:
         C => D
         0 => C
         $ => SR                         :SSTORE
-        A                               :MSTORE(txDestAddr)
-                                        :CALL(hashPoseidonLinearFromMemory)
+        A                               :MSTORE(txDestAddr), CALL(hashPoseidonLinearFromMemory)
         $ => A                          :MLOAD(createContractAddress)
         0 => C
         %SMT_KEY_SC_CODE => B
@@ -494,8 +484,7 @@ handleGas:
         A - GAS => A
         ; Div operation with Arith
         A                               :MSTORE(arithA)
-        2                               :MSTORE(arithB)
-                                        :CALL(divARITH)
+        2                               :MSTORE(arithB), CALL(divARITH)
         $ => A                          :MLOAD(arithRes1)
         A - B                           :JMPN(refundGas)
         B => A
@@ -507,8 +496,7 @@ refundGas:
         $ => B                          :MLOAD(txGasPrice)
         ;Mul operation with Arith
         A                               :MSTORE(arithA)
-        B                               :MSTORE(arithB)
-                                        :CALL(mulARITH)
+        B                               :MSTORE(arithB), CALL(mulARITH)
         $ => D                          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txSrcOriginAddr)
@@ -517,8 +505,7 @@ refundGas:
 
         ; Add operation with Arith
         A                               :MSTORE(arithA)
-        D                               :MSTORE(arithB)
-                                        :CALL(addARITH)
+        D                               :MSTORE(arithB), CALL(addARITH)
         $ => D                          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txSrcOriginAddr)
@@ -534,8 +521,7 @@ sendGasSeq:
         $ => B          :MLOAD(txGasPrice)
         ; Mul operation with Arith
         A               :MSTORE(arithA)
-        B               :MSTORE(arithB)
-                        :CALL(mulARITH)
+        B               :MSTORE(arithB), CALL(mulARITH)
         $ => D          :MLOAD(arithRes1) ; value to pay the sequencer in D
 
         $ => A          :MLOAD(sequencerAddr)
@@ -543,8 +529,7 @@ sendGasSeq:
         $ => A          :SLOAD ; Original Balance in A
         ; Add operation with Arith
         A               :MSTORE(arithA)
-        D               :MSTORE(arithB)
-                        :CALL(addARITH)
+        D               :MSTORE(arithB), CALL(addARITH)
         $ => D          :MLOAD(arithRes1)
         $ => A          :MLOAD(sequencerAddr)
         0 => B,C ; balance key smt

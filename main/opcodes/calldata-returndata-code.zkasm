@@ -25,8 +25,7 @@
     B => E
     ; Div operation with Arith
     E               :MSTORE(arithA)
-    32              :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
     $ => A          :MLOAD(arithRes2)
     ; if data not aligned (remainder > 0), shift
@@ -46,12 +45,10 @@ opCALLDATALOAD2:
     A => D
     ; set pointer to calldata
     %CALLDATA_OFFSET + B => SP
-    $ => A          :MLOAD(SP++); [stack => A]
-                    :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
+    $ => A          :MLOAD(SP++), CALL(SHLarith); [stack => A]; in: [A: value, D: #bytes to left shift] out: [A: shifted result]
     A => B
     32 - D => D
-    $ => A          :MLOAD(SP); [stack => A]
-                    :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    $ => A          :MLOAD(SP), CALL(SHRarith); [stack => A]; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     ; recover SP
     C => SP
     B + A           :MSTORE(SP++), JMP(readCode); [data(offset) => SP]
@@ -118,14 +115,12 @@ opCALLDATACOPY:
     ;(C+31)/32 => A
     C+31 => A
     A               :MSTORE(arithA)
-    32              :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => A          :MLOAD(arithRes1)
     ; Mul operation with Arith
     ; 3*A
     3               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
+    A               :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
     $ => A          :MLOAD(arithRes1)
     GAS - A => GAS  :JMPN(outOfGas)
                     :CALL(saveMem); in: [lastMemOffset, lastMemLength]
@@ -152,14 +147,12 @@ opCALLDATACOPYinit:
     ; copy last bytes
     C - 32          :JMPN(opCALLDATACOPYfinal)
     B               :MSTORE(arithA)
-    32              :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => D          :MLOAD(arithRes2)
     $ => A          :MLOAD(arithRes1)
     A               :MSTORE(arithA)
     ; add %CALLDATA_OFFSET to offset to reach calldata in memory
-    %CALLDATA_OFFSET            :MSTORE(arithB)
-                    :CALL(addARITH); in: [arithA, arithB] out[arithRes1: arithA*arithB]
+    %CALLDATA_OFFSET            :MSTORE(arithB), CALL(addARITH); in: [arithA, arithB] out[arithRes1: arithA*arithB]
     $ => A          :MLOAD(arithRes1)
     ; set stack pointer to first byte to read
     A => SP
@@ -170,12 +163,10 @@ opCALLDATACOPYinit:
     ; get data from next memory slot
     A + 1 => SP
     32 - D => D
-    $ => A          :MLOAD(SP); [calldata => A]
     ; align calldata
-                    :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    $ => A          :MLOAD(SP), CALL(SHRarith); [calldata => A]; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     ; set bytesToStore with value to use in MSTORE
-    A + C           :MSTORE(bytesToStore)
-                    :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    A + C           :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     ; recover stack pointer
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP); [size => C]
@@ -186,19 +177,16 @@ opCALLDATACOPYinit:
 opCALLDATACOPYfinal:
     ; copy last bytes
     B               :MSTORE(arithA)
-    32              :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => D          :MLOAD(arithRes2)
     $ => B          :MLOAD(arithRes1)
     ; add %CALLDATA_OFFSET to offset to reach calldata in memory
     %CALLDATA_OFFSET            :MSTORE(arithA)
-    B               :MSTORE(arithB)
-                    :CALL(addARITH); in: [arithA, arithB] out[arithRes1: arithA*arithB]
+    B               :MSTORE(arithB), CALL(addARITH); in: [arithA, arithB] out[arithRes1: arithA*arithB]
     $ => B          :MLOAD(arithRes1)
     ; set SP to calldata
     B => SP
-    $ => A          :MLOAD(SP); [calldata => A]
-                    :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
+    $ => A          :MLOAD(SP), CALL(SHLarith); [calldata => A]; in: [A: value, D: #bytes to left shift] out: [A: shifted result]
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP); [size => C]
     ; point to next memory slot
@@ -207,14 +195,11 @@ opCALLDATACOPYfinal:
     D               :JMPN(opCALLDATACOPYxor)
     A => B
     $ => A          :MLOAD(SP); [calldata => C]
-    32 - D => D
-                    :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    32 - C => D
-                    :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
+    32 - D => D     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    32 - C => D     :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
     B + A => A
     ; set bytesToStore with value to use in MSTORE
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
+    A               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
                     :JMP(opCALLDATACOPYcheckLen)
 
 opCALLDATACOPY0:
@@ -230,13 +215,10 @@ opCALLDATACOPY320:
 
 
 opCALLDATACOPYxor:
-    32 - C => D
-                    ;SHR/SHL could be optimized
-                    :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    32 - C => D     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
                     :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
     ; set bytesToStore with value to use in MSTORE
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
+    A               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
 
 opCALLDATACOPYcheckLen:
     ; fill missing values with 0 (size > calldata)
@@ -325,14 +307,12 @@ opCODECOPY:
     E+31 => A
     ;(E+31)/32
     A               :MSTORE(arithA)
-    32              :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => A          :MLOAD(arithRes1)
     ; Mul operation with Arith
     ; 3*((E+31)/32)
     3               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
+    A               :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
     $ => A          :MLOAD(arithRes1)
 
     GAS - A => GAS  :JMPN(outOfGas)
@@ -366,13 +346,11 @@ opCODECOPYinit:
 
     $ => B          :MLOAD(remainingBytes)
     B - 1           :JMPN(readCode)
-    $ => A          :MLOAD(memOffset)
-                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    $ => A          :MLOAD(memOffset), CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     E               :MSTORE(memInteger)
     ; read M0 previous value
     $ => A          :MLOAD(MEM:E)
-    A               :MSTORE(previousValue)
-                    :CALL(opCODECOPYLoadBytes); in:[codecopyBytecodeLength, codecopyHashId] out: [B: readByte]
+    A               :MSTORE(previousValue), CALL(opCODECOPYLoadBytes); in:[codecopyBytecodeLength, codecopyHashId] out: [B: readByte]
     $ => A          :MLOAD(previousValue)
     ${memAlignWR8_W0(A,B,C)} => D  ; no trust calculate W0
     B               :MEM_ALIGN_WR8 ; only use LSB of B, rest of bytes could be non zero
@@ -418,8 +396,7 @@ opEXTCODESIZE:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
-    $ => A          :MLOAD(SP); [address => A]
-                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
+    $ => A          :MLOAD(SP), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
                     :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ; check out-of-gas
     GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
@@ -459,8 +436,7 @@ opEXTCODECOPY:
     ; check stack underflow
     SP - 4          :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A          :MLOAD(SP--); [address => A]
-                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
+    $ => A          :MLOAD(SP--), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
                     :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ; check out-of-gas
     GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS            :JMPN(outOfGas)
@@ -506,8 +482,7 @@ opEXTCODECOPYCheckHash:
     ; 56 is the value used by the prover to increment poseidon counters depending on the hash length
     RR              :MSTORE(tmpZkPC)
     B + 1           :MSTORE(arithA)
-    56              :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    56              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => RR         :MLOAD(tmpZkPC)
     $ => B          :MLOAD(arithRes1)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1 => A
@@ -559,8 +534,7 @@ opEXTCODECOPYinit:
 opEXTCODECOPYfinal:
     ; copy last bytes
     ${getBytecode(A,B,C)} => A
-    32 - C  => D
-                    :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
+    32 - C  => D    :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
     ; set bytesToStore with value to use in MSTORE
     A               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
                     :JMP(readCode)
@@ -626,8 +600,7 @@ opRETURNDATACOPY:
     ; store lastMemOffset for memory expansion gas cost
     D               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
-    C               :MSTORE(lastMemLength)
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    C               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; if retDataCTX is 0, end opcode execution
     $ => B          :MLOAD(retDataCTX)
     0 => A
@@ -655,8 +628,7 @@ opRETURNDATACOPY:
     ; Mul operation with Arith
     ; 3*((C+31)/32)
     3               :MSTORE(arithA)
-    A               :MSTORE(arithB)
-                    :CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
+    A               :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
     $ => A          :MLOAD(arithRes1)
     ; check out-of-gas
     GAS - A => GAS  :JMPN(outOfGas)
@@ -667,8 +639,7 @@ opRETURNDATACOPYinit:
     C - 32          :JMPN(opRETURNDATACOPYfinal)
     B => E
     ; Load memory from last context used
-    $ => CTX        :MLOAD(retDataCTX)
-                    :CALL(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
+    $ => CTX        :MLOAD(retDataCTX), CALL(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
     ; save new offset at B
     ; Save memory to the current context
     $ => CTX        :MLOAD(currentCTX)
@@ -711,8 +682,7 @@ opEXTCODEHASH:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
-    $ => A          :MLOAD(SP); [address => A]
-                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
+    $ => A          :MLOAD(SP), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
                     :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ; check out-of-gas
     GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
