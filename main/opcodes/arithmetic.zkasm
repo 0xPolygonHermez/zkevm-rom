@@ -134,21 +134,14 @@ opSDIV:
     A => E
     B => C
     $ => A          :MLOAD(SP), CALL(abs); [b => A]; in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
-    A               :MSTORE(tmpVarA)
-    C => A
-    $ => A          :XOR; [XOR(A,B) => A]
-    1 => B
-    $ => B          :XOR; [XOR(A,B) => B]
-    $ => A          :MLOAD(tmpVarA)
-    ; if is neg, jump to sdivneg
-    B - 1           :JMPN(opSDIVNeg)
+    ; if is neg (different signs => C != B), jump to sdivneg
+    C - B           :JMPNZ(opSDIVNeg)
     E               :MSTORE(arithA)
     A               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
     B               :MSTORE(SP++), JMP(readCode); [a / b(B) => SP]
 
 opSDIVNeg:
-    ; checks zk-counters
     E               :MSTORE(arithA)
     A               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
@@ -208,23 +201,15 @@ opSMOD:
     A => E
     B => C
     $ => A          :MLOAD(SP), CALL(abs); [b => A]; in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
-    A               :MSTORE(tmpVarA)
-    C => A
-    1 => B
-    $ => B          :XOR; [XOR(A,B) => A]
-    $ => A          :MLOAD(tmpVarA)
-    B - 1           :JMPN(opSMODNeg)  ; 0 negative, 1 positive
     ; Div operation with Arith
     E               :MSTORE(arithA)
     A               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => C          :MLOAD(arithRes2)
-    C               :MSTORE(SP++), JMP(readCode); [a % b(C) => SP]
+    $ => B          :MLOAD(arithRes2)
+    ; if a is negative, jump to smodNeg
+    -C              :JMPN(opSMODNeg)
+    B               :MSTORE(SP++), JMP(readCode); [a % b(C) => SP]
 
 opSMODNeg:
-
-    E               :MSTORE(arithA)
-    A               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => B          :MLOAD(arithRes2)
     0 => A
     $ => A          :SUB; A - B => A
     A               :MSTORE(SP++), JMP(readCode); [a % b(C) => SP]
