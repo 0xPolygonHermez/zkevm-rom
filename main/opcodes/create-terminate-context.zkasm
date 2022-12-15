@@ -7,16 +7,15 @@
  */
 opSTOP:
     ; check if first context
-    $ => B          :MLOAD(originCTX)
     ; if origin ctx is 0, end tx
-    B - 1           :JMPN(handleGas)
+    $ => B          :MLOAD(originCTX), JMPZ(handleGas)
     ; else handle finish ctx
     $ => A          :MLOAD(gasRefund)
     ; check if is a create call
     $ => C          :MLOAD(isCreate)
     ; set 1 to D, default stack return in stop code
     1 => D
-    C - 1           :JMPN(opSTOPend)
+    C               :JMPZ(opSTOPend)
     ; if is a create, return created contract address
     $ => D          :MLOAD(createContractAddress)
 
@@ -70,8 +69,7 @@ opCREATE:
     ; check stack underflow
     SP - 3              :JMPN(stackUnderflow)
     ; check is static
-    $ => A              :MLOAD(isStaticCall)
-    0 - A               :JMPN(invalidStaticTx)
+    $ => A              :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
     SP - 1 => SP
     $ => D              :MLOAD(SP--); [value => D]
     D                   :MSTORE(valueCall)
@@ -194,9 +192,7 @@ opCALL:
     $ => A          :MLOAD(SP--); [value => A]
     A               :MSTORE(valueCall)
     ; if is static and value is not 0 -> revert
-    $ => B          :MLOAD(isStaticCall)
-    B - 1           :JMPN(opCALL2)
-
+    $ => B          :MLOAD(isStaticCall), JMPZ(opCALL2)
     0 => B
     $               :EQ,JMPC(opCALL2, invalidStaticTx)
 
@@ -439,12 +435,10 @@ opRETURN:
     ; compute memory expansion gas cost
     C               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; check is a create
-    $ => D          :MLOAD(isCreateContract)
-    0 - D           :JMPN(opRETURNdeploy)
+    $ => D          :MLOAD(isCreateContract), JMPNZ(opRETURNdeploy)
     ; reduce CTX
-    $ => B          :MLOAD(originCTX)
     ; if origin ctx is 0, end tx
-    B - 1           :JMPN(handleGas)
+    $ => B          :MLOAD(originCTX), JMPZ(handleGas)
     ; handle gas refund
     $ => B          :MLOAD(gasRefund)
     $ => A          :MLOAD(currentCTX)
@@ -473,7 +467,7 @@ opRETURN32:
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
 
-    C - 1           :JMPN(opRETURNend)
+    C               :JMPZ(opRETURNend)
     C - 32          :JMPN(opRETURNfinal)
     ; load first 32 bytes from memory at current CTX
                     :CALL(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
@@ -517,8 +511,7 @@ opRETURNdeploy:
     ;code_deposit_cost = 200 * returned_code_size
     GAS - %RETURN_GAS_COST * C => GAS    :JMPN(outOfGas)
     ; check if first context
-    $ => B          :MLOAD(originCTX)
-    0 - B           :JMPN(opRETURNcreate, endDeploy)
+    $ => B          :MLOAD(originCTX), JMPNZ(opRETURNcreate, endDeploy)
 
 opRETURNcreate:
     ; checks zk-counters
@@ -703,8 +696,7 @@ opCREATE2:
     ; check stack underflow
     SP - 4              :JMPN(stackUnderflow)
     ; check is static
-    $ => A              :MLOAD(isStaticCall)
-    0 - A               :JMPN(invalidStaticTx)
+    $ => A              :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
     SP - 1 => SP
     $ => A              :MLOAD(SP--); [value => D]
     A                   :MSTORE(valueCall)
@@ -920,7 +912,7 @@ opREVERT:
     $${eventLog(onError, revert)}
     0               :MSTORE(gasRefund)
     ; if origin ctx is 0, end tx
-    B - 1           :JMPN(handleGas)
+    B               :JMPZ(handleGas)
     ; decrease CTX
     $ => A          :MLOAD(currentCTX)
     B => CTX
@@ -945,7 +937,7 @@ opREVERT32:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
 
-    C - 1           :JMPN(opREVERTend)
+    C              :JMPZ(opREVERTend)
     ; load first 32 bytes from memory at current CTX
     C - 32          :JMPN(opREVERTfinal)
                     :CALL(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
@@ -1004,9 +996,7 @@ opSENDALL:
     SP - 1 => SP        :JMPN(stackUnderflow)
 
     ; check is static
-    $ => A              :MLOAD(isStaticCall)
-    0 - A               :JMPN(invalidStaticTx)
-
+    $ => A              :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
     $ => A              :MLOAD(storageAddr)
     ; set key for smt balance query
     %SMT_KEY_BALANCE => B
@@ -1060,7 +1050,7 @@ opSENDALL2:
     $ => B                  :MLOAD(gasRefund)
     $ => C                  :MLOAD(isCreate)
     1 => D
-    C - 1                   :JMPN(opSENDALLend)
+    C                       :JMPZ(opSENDALLend)
     $ => D                  :MLOAD(createContractAddress)
 
 opSENDALLend:
