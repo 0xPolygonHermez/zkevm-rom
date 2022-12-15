@@ -198,15 +198,13 @@ opSSTORE:
     ; check out-of-gas
     GAS - %SSTORE_ENTRY_EIP_2200_GAS - 1  :JMPN(outOfGas)
     ; check is static call
-    $ => A          :MLOAD(isStaticCall)
-    0 - A           :JMPN(invalidStaticTx)
+    $ => A          :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
 
     $ => C          :MLOAD(SP+1) ; [key => C]
     C               :MSTORE(tmpVarC)
     $ => D          :MLOAD(SP) ; [value => D]
     ; check if is a create call
-    $ => A          :MLOAD(isCreateContract)
-    0 - A           :JMPN(deploymentSSTORE)
+    $ => A          :MLOAD(isCreateContract), JMPNZ(deploymentSSTORE)
     ; load current storage address
     $ => A          :MLOAD(storageAddr), JMP(opSSTOREinit)
 
@@ -229,8 +227,7 @@ opSSTOREinit:
     GAS - A*%COLD_SLOAD_COST => GAS    :JMPN(outOfGas)
     E => A
     D => B
-    $ => A          :EQ
-    A - 1           :JMPN(opSSTOREdif)
+    $ => A          :EQ, JMPNC(opSSTOREdif)
     ; if new_val == current_val
     ; check out-of-gas
     GAS - %SSTORE_DYNAMIC_GAS => GAS:JMPN(outOfGas, opSSTOREend)
@@ -239,13 +236,11 @@ opSSTOREdif:
     ; if new_val != current_val
     C => A
     E => B
-    $ => A          :EQ
-    A - 1           :JMPN(opSSTOREdifA)
+    $ => A          :EQ, JMPNC(opSSTOREdifA)
     ; if current_val == orig_val
     0 => A
     C => B
-    $ => A          :EQ
-    A - 1           :JMPN(opSSTOREdifB)
+    $ => A          :EQ, JMPNC(opSSTOREdifB)
     ; if origin_val == 0
     ; check out-of-gas
     GAS - %SSTORE_SET_GAS => GAS    :JMPN(outOfGas, opSSTOREend)
@@ -255,20 +250,17 @@ opSSTOREdifA:
     GAS - %SSTORE_DYNAMIC_GAS => GAS:JMPN(outOfGas)
     0 => A
     C => B
-    $ => A          :EQ
-    A - 1           :JMPN(opSSTOREdifA1)
+    $ => A          :EQ, JMPNC(opSSTOREdifA1)
     ; if origin_value == 0
 
 opSSTOREdifAB:
     ; if origin_value == 0
     D => A
     C => B
-    $ => A          :EQ
-    A - 1           :JMPN(opSSTOREend)
+    $ => A          :EQ, JMPNC(opSSTOREend)
     ; if new_val == orig_val
     0 => A
-    $ => A          :EQ
-    A - 1           :JMPN(opSSTOREdifA2)
+    $ => A          :EQ, JMPNC(opSSTOREdifA2)
     ; if orig_val == 0
     $ => A          :MLOAD(gasRefund)
     A + 19900 => A  :MSTORE(gasRefund), JMP(opSSTOREend)
@@ -277,8 +269,7 @@ opSSTOREdifA1:
     ; if orig_val != 0
     0 => A
     E => B
-    $ => A          :EQ
-    A - 1           :JMPN(opSSTOREdifA12)
+    $ => A          :EQ, JMPNC(opSSTOREdifA12)
     ; if current_val == 0
     ; compute gas refund
     $ => A          :MLOAD(gasRefund)
@@ -287,8 +278,7 @@ opSSTOREdifA12:
     ;if current_val != 0
     0 => A
     D => B
-    $ => A          :EQ
-    A - 1           :JMPN(opSSTOREdifAB)
+    $ => A          :EQ, JMPNC(opSSTOREdifAB)
     ; if new_val == 0
     ; compute gas refund
     $ => A          :MLOAD(gasRefund)
@@ -306,8 +296,7 @@ opSSTOREdifB:
     GAS - %SSTORE_RESET_GAS => GAS    :JMPN(outOfGas)
     0 => A
     D => B
-    $ => A          :EQ
-    A - 1           :JMPN(opSSTOREend)
+    $ => A          :EQ, JMPNC(opSSTOREend)
     ; if new_val == 0
     ; compute gas refund
     $ => A          :MLOAD(gasRefund)
@@ -315,8 +304,7 @@ opSSTOREdifB:
                     :JMP(opSSTOREend)
 
 opSSTOREend:
-    $ => A          :MLOAD(isCreateContract)
-    0 - A           :JMPN(mloadContract)
+    $ => A          :MLOAD(isCreateContract), JMPNZ(mloadContract)
     $ => A          :MLOAD(storageAddr), JMP(opSSTOREsr)
 
 mloadContract:

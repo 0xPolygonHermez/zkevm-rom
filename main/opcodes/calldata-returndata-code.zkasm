@@ -27,9 +27,8 @@
     E               :MSTORE(arithA)
     32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
-    $ => A          :MLOAD(arithRes2)
     ; if data not aligned (remainder > 0), shift
-    0 - A           :JMPN(opCALLDATALOAD2)
+    $ => A          :MLOAD(arithRes2), JMPNZ(opCALLDATALOAD2)
     SP => C
     ; add %CALLDATA_OFFSET to point calldata in the memory
     %CALLDATA_OFFSET + B => SP
@@ -70,8 +69,7 @@ opCALLDATASIZE:
     ; check out-of-gas
     GAS-%GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
     ; return 0 for contract creation
-    $ => A          :MLOAD(isCreateContract)
-    0 - A           :JMPN(opCALLDATASIZEdep)
+    $ => A          :MLOAD(isCreateContract), JMPNZ(opCALLDATASIZEdep)
     $ => B          :MLOAD(txCalldataLen)
     B               :MSTORE(SP++); [size => SP]
     ; check stack overflow
@@ -142,7 +140,7 @@ opCALLDATACOPYinit:
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1 :JMPN(outOfCountersMemalign)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
     ; finish loop
-    C - 1           :JMPN(opCALLDATACOPYcheckLen)
+    C               :JMPZ(opCALLDATACOPYcheckLen)
     ; copy last bytes
     C - 32          :JMPN(opCALLDATACOPYfinal)
     B               :MSTORE(arithA)
@@ -190,8 +188,7 @@ opCALLDATACOPYfinal:
     $ => C          :MLOAD(SP); [size => C]
     ; point to next memory slot
     B + 1 => SP
-    C - 32 + D => D
-    D               :JMPN(opCALLDATACOPYxor)
+    C - 32 + D => D :JMPN(opCALLDATACOPYxor)
     A => B
     $ => A          :MLOAD(SP); [calldata => C]
     32 - D => D     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
@@ -246,8 +243,7 @@ opCODESIZE:
     ; check out-of-gas
     GAS-%GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
     ; if is create, get size from calldata
-    $ => A          :MLOAD(isCreateContract)
-    0 - A           :JMPN(opCODESIZEdep)
+    $ => A          :MLOAD(isCreateContract), JMPNZ(opCODESIZEdep)
     ; else, from storage
     $ => A          :MLOAD(txDestAddr)
     ; set key for smt bytecode length query
@@ -283,9 +279,7 @@ VAR GLOBAL memInteger
  */
 opCODECOPY:
     ; if is a create, copy from calldata
-    $ => A          :MLOAD(isCreateContract)
-    0 - A           :JMPN(opCALLDATACOPY)
-
+    $ => A          :MLOAD(isCreateContract), JMPNZ(opCALLDATACOPY)
     ; check stack underflow
     SP - 3 => SP          :JMPN(stackUnderflow)
     $ => C          :MLOAD(SP+2); [destOffset => C]
@@ -343,8 +337,7 @@ opCODECOPYinit:
 
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
 
-    $ => B          :MLOAD(remainingBytes)
-    B - 1           :JMPN(readCode)
+    $ => B          :MLOAD(remainingBytes), JMPZ(readCode)
     $ => A          :MLOAD(memOffset), CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     E               :MSTORE(memInteger)
     ; read M0 previous value
@@ -516,7 +509,7 @@ opEXTCODECOPYCheckHash:
 opEXTCODECOPYCheckHashLoop:
         %MAX_CNT_STEPS - STEP - 20              :JMPN(outOfCountersStep)
         ; finish reading bytecode
-        B - 1                                   :JMPN(opEXTCODECOPYCheckHashLoopEnd)
+        B                                       :JMPZ(opEXTCODECOPYCheckHashLoopEnd)
         ; add bytes to hash contract bytecode
         ${getBytecode(A, HASHPOS, 1)}           :HASHP1(E)
         B - 1 => B                              :JMP(opEXTCODECOPYCheckHashLoop)
@@ -532,7 +525,7 @@ opEXTCODECOPYCheckHashEnd:
 opEXTCODECOPYinit:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-    C - 1           :JMPN(readCode)
+    C               :JMPZ(readCode)
     C - 32          :JMPN(opEXTCODECOPYfinal)
     ${getBytecode(A,B,32)} => D
     ; set bytesToStore with value to use in MSTORE
@@ -645,7 +638,7 @@ opRETURNDATACOPY:
 
 opRETURNDATACOPYinit:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-    C - 1           :JMPN(readCode)
+    C               :JMPZ(readCode)
     C - 32          :JMPN(opRETURNDATACOPYfinal)
     B => E
     ; Load memory from last context used
