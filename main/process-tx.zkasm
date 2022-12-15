@@ -247,7 +247,7 @@ create2:
         $ => B                          :MLOAD(arithRes1)
         $ => A                          :MLOAD(cntKeccakPreProcess)
         ; -2 because we will use one more keccack for generating contract address
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A  - 2 => A
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2 => A
         $                               :LT, JMPC(outOfCountersKeccak)
 
         $ => CTX                        :MLOAD(originCTX)
@@ -446,9 +446,14 @@ endDeploy:
         ; only when first context ends on deploy
         ; If length is 0 do not modify state-tree
         C                               :JMPZ(handleGas)
-        ; save offset memory and length to compute hash bytecode
+
+        ; save offset memory and length to compute hash bytecode. Read bytecode first byte
         E                               :MSTORE(memOffsetLinearPoseidon)
-        C                               :MSTORE(memSizeLinearPoseidon)
+        C                               :MSTORE(memSizeLinearPoseidon), CALL(checkBytecodeStartsEF)
+
+        ; check bytecode first byte != 0xEF
+        $                               :MLOAD(startsWithEF), JMPNZ(invalidCodeStartsEF)
+
         ; set bytecode length
         $ => A                          :MLOAD(createContractAddress)
         %SMT_KEY_SC_LENGTH => B

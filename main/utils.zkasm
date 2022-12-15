@@ -634,19 +634,21 @@ outOfCountersPoseidon:
 outOfGas:
     $${eventLog(onError, OOG)}   :JMP(handleError)
 invalidJump:
-    $${eventLog(onError, invalid)} :JMP(handleError)
-invalidProcess:
-    $${eventLog(onError, invalid)} :JMP(handleError)
+    $${eventLog(onError, invalidJump)} :JMP(handleError)
+invalidOpcode:
+    $${eventLog(onError, invalidOpcode)} :JMP(handleError)
 stackUnderflow:
     $${eventLog(onError, underflow)} :JMP(handleError)
 stackOverflow:
     $${eventLog(onError, overflow)} :JMP(handleError)
 deployAddressCollision:
-    $${eventLog(onError, invalid)} :JMP(handleError)
+    $${eventLog(onError, invalidAddressCollision)} :JMP(handleError)
 invalidStaticTx:
-    $${eventLog(onError, invalid)} :JMP(handleError)
+    $${eventLog(onError, invalidStaticTx)} :JMP(handleError)
 invalidCodeSize:
-    $${eventLog(onError, invalid)} :JMP(handleError)
+    $${eventLog(onError, invalidCodeSize)} :JMP(handleError)
+invalidCodeStartsEF:
+    $${eventLog(onError, invalidCodeStartsEF)} :JMP(handleError)
 
 handleError:
     ;revert all state changes
@@ -866,6 +868,38 @@ utilsAddBatchHashBytebyByte:
         $ => RR                         :MLOAD(tmpZkPC)
                                         :RETURN
 
+; @info check bytecode first byte != 0xEF as defined in EIP-3541 (https://eips.ethereum.org/EIPS/eip-3541)
+; @internalParam {memOffset} memory offset to read bytes from
+; @internalParam {startsWithEF} flag to indicate if first deployed byte on the bytecode is 0xEF
+VAR GLOBAL startsWithEF
+checkBytecodeStartsEF:
+    ; save temporary registers
+    A                               :MSTORE(tmpVarA3)
+    B                               :MSTORE(tmpVarB3)
+    C                               :MSTORE(tmpVarC3)
+    D                               :MSTORE(tmpVarD3)
+    E                               :MSTORE(tmpVarE3)
+    RR                              :MSTORE(tmpZkPC2)
+
+    ; load memOffset
+    $ => E                          :MLOAD(memOffsetLinearPoseidon)
+
+    ; get 1 byte from memory
+    1 => C                          :CALL(MLOADX) ; in: [E: offset, C: lenght] out: [A: value , E: new offset]
+    31 => D                         :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+
+    ; check if byte read is equal to 0xEF
+    %BYTECODE_STARTS_EF - A         :JMPNZ(checkBytecodeStartsEFend)
+    1                               :MSTORE(startsWithEF)
+
+checkBytecodeStartsEFend:
+    ; set back tmp registers
+    $ => RR         :MLOAD(tmpZkPC2)
+    $ => A          :MLOAD(tmpVarA3)
+    $ => B          :MLOAD(tmpVarB3)
+    $ => C          :MLOAD(tmpVarC3)
+    $ => D          :MLOAD(tmpVarD3)
+    $ => E          :MLOAD(tmpVarE3), RETURN
 
 ; @info Computes hash bytecode from memory bytes
 ; @internalParam {memOffset} memory offset to read bytes from
@@ -1062,7 +1096,7 @@ mulModNoKH:
     ${(_mulMod / A)} => B   ; k
     ${_mulMod % A} => C     ; mulModResult
     $ => D         :MLOAD(arithOverflow)
-    $              :MLOAD(arithRes1), ARITH ; Can this be on the same line of MLOAD?
+    $              :MLOAD(arithRes1), ARITH
 
     A => B          ; modulus
     C => A          ; mulModResult
