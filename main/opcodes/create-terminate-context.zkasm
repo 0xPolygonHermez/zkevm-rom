@@ -134,7 +134,7 @@ opCREATE:
     0 => C
     $ => SR             :SSTORE
     ; compute gas send in call
-    SR                  :MSTORE(initSR), CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    SR                  :MSTORE(initSR), CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
     ; return to origin CTX to set storage addr, gasRefund and gasCTX
     $ => CTX            :MLOAD(originCTX)
     $ => B              :MLOAD(storageAddr)
@@ -270,7 +270,7 @@ opCALLend:
     B               :MSTORE(txValue)
     0 => A
     ; compute gas send in call
-    $ => C          :LT, CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    $ => C          :LT, CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX            :MLOAD(originCTX)
     GAS - A             :MSTORE(gasCTX)
     ; add estipend (2300) in case of tx with value
@@ -387,7 +387,7 @@ opCALLCODEend:
     B               :MSTORE(txValue)
     0 => A
     ; compute gas send in call
-    $ => C          :LT, CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    $ => C          :LT, CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     ; Add estipend (2300) in case of tx with value
@@ -652,7 +652,7 @@ opDELEGATECALL:
     A               :MSTORE(txDestAddr)
     B               :MSTORE(retCallOffset)
     ; compute gas send in call
-    E               :MSTORE(retCallLength), CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    E               :MSTORE(retCallLength), CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     $ => B          :MLOAD(txValue)
@@ -721,7 +721,7 @@ opCREATE2:
 
     ; cost to hash the initialisation code
     ${C+31}             :MSTORE(arithA)
-    32                  :MSTORE(arithB), CALL(divARITH)
+    32                  :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => C              :MLOAD(arithRes1)
     GAS => A
     6*C => B
@@ -779,7 +779,7 @@ opCREATE2:
     $ => SR             :SSTORE
     SR                  :MSTORE(initSR)
     ; compute gas send in call
-    A                   :MSTORE(txSrcAddr), CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    A                   :MSTORE(txSrcAddr), CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX            :MLOAD(originCTX)
     $ => C              :MLOAD(gasRefund)
     GAS - A             :MSTORE(gasCTX)
@@ -873,7 +873,7 @@ opSTATICCALL:
     A               :MSTORE(storageAddr)
     C               :MSTORE(retCallOffset)
     ; compute gas send in call
-    E               :MSTORE(retCallLength), CALL(computeGasSendCall); out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    E               :MSTORE(retCallLength), CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
     $ => CTX        :MLOAD(currentCTX)
