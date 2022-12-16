@@ -535,14 +535,18 @@ opRETURNcreate:
     $ => A          :MLOAD(txSrcAddr)
     $ => D          :MLOAD(txNonce)
 
-    ; set bytecode length
-    $ => A          :MLOAD(createContractAddress)
+    ; set bytecode length and read bytecode first byte
+    $ => A          :MLOAD(createContractAddress), CALL(checkBytecodeStartsEF)
+
+    ; check bytecode first byte != 0xEF
+    $               :MLOAD(startsWithEF), JMPNZ(invalidCodeStartsEF)
+
     ; set key for smt smart contract length query
     %SMT_KEY_SC_LENGTH => B
     C => D
     0 => C
     ; get bytecode and hash it
-    $ => SR         :SSTORE, CALL(hashPoseidonLinearFromMemory); in: [memOffsetLinearPoseidon, memSizeLinearPoseidon], out: [D: resulting linear poseidon]
+    $ => SR             :SSTORE, CALL(hashPoseidonLinearFromMemory); in: [memOffsetLinearPoseidon, memSizeLinearPoseidon], out: [D: resulting linear poseidon]
     $ => A              :MLOAD(createContractAddress)
     0 => C
     ; set key for smt smart contract bytecode query
@@ -1077,4 +1081,4 @@ opSENDALLend:
  */
 opINVALID:
     ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep, invalidProcess)
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep, invalidOpcode)
