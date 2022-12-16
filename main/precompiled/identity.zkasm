@@ -28,6 +28,7 @@ IDENTITY:
 IDENTITYinit:
     %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+
     ; Copy from calldata to memory
     C               :JMPZ(IDENTITYreturn)
     C - 32          :JMPN(IDENTITYfinal)
@@ -36,12 +37,14 @@ IDENTITYinit:
     B               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     A + 1 => A
     C - 32 => C     :JMP(IDENTITYinit)
+
 IDENTITYfinal:
     %CALLDATA_OFFSET + A => SP
     $ => A          :MLOAD(SP)
     32 - C => D     :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
                     :CALL(SHLarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     A               :MSTORE(bytesToStore), CALL(MSTOREX)
+
 IDENTITYreturn:
     ; Copy from memory current CTX to memory origin CTX
     0 => E
@@ -60,7 +63,7 @@ IDENTITYreturn2:
 IDENTITYreturnLoop:
     %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+
     C               :JMPZ(IDENTITYend)
     C - 32          :JMPN(IDENTITYreturnFinal)
                     :CALL(MLOAD32)
@@ -73,6 +76,7 @@ IDENTITYreturnLoop:
     D => E
     C - 32 => C
     $ => CTX        :MLOAD(currentCTX), JMP(IDENTITYreturnLoop)
+
 IDENTITYreturnFinal:
                     :CALL(MLOADX)
     $ => CTX        :MLOAD(originCTX)
