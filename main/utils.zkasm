@@ -897,7 +897,7 @@ readPushBlock:
     $ => A                      :MLOAD(numBlocks)
     $                           :EQ, JMPC(endPushInit)
     ; load hash contract identifier
-    E                           :MLOAD(contractHashId) 
+    E                           :MLOAD(contractHashId)
     ; read bytes
     $ => C                      :HASHP1(E)
     HASHPOS - 2 => HASHPOS
@@ -997,9 +997,10 @@ utilsAddBatchHashBytebyByte:
         1 => D                          :CALL(addBatchHashData); in:[D: length of the hash]
         ; check loop
         B => D
-        32 - D => D
+        ; D + 1 => D we set 33 in stead of 32 to earn 1 step
+        33 - D => D
         $ => B                          :MLOAD(tmpVarD)
-        D - B                           :JMPN(utilsAddBatchHashBytebyByte)
+        D - B - 1                       :JMPN(utilsAddBatchHashBytebyByte)
         $ => RR                         :MLOAD(tmpZkPC)
                                         :RETURN
 
@@ -1111,6 +1112,7 @@ maskAddress:
     $ => A          :AND
     $ => B          :MLOAD(tmpVarB), RETURN
 
+;@info: updates the address sytem storage with current batch and state root
 updateSystemData:
     ; check keccak counters
     $ => A                              :MLOAD(cntKeccakPreProcess)
@@ -1256,42 +1258,56 @@ expAD:
     B               :MSTORE(tmpVarB3)
     C               :MSTORE(tmpVarC3)
     E               :MSTORE(tmpVarE3)
-    A => E                              ;E base
-    D => B                              ;B exp
+    ;E base
+    A => E
+     ;B exp
+    D => B
     0 => A
-    $               :EQ,JMPC(expAD0)    ;if exp == 0 --> expAD0
-    E => A                              ;A base
+    ;if exp == 0 --> expAD0
+    $               :EQ,JMPC(expAD0)
+     ;A base
+    E => A
     0 => B
-    $               :EQ,JMPC(expA0D)    ;if base == 0 --> expA0D
+    ;if base == 0 --> expA0D
+    $               :EQ,JMPC(expA0D)
     1 => C
 
 expADloop:
 
     %MAX_CNT_ARITH - CNT_ARITH - 3 :JMPN(outOfCountersArith)
-
-    D => A                              ;A exp
+    ;A exp
+    D => A
     0 => B
-    $               :EQ,JMPC(expADend)  ;if exp == 0 --> expADend
+    ;if exp == 0 --> expADend
+    $               :EQ,JMPC(expADend)
     A               :MSTORE(arithA)
-    2               :MSTORE(arithB), CALL(divARITH)      ;divARITH --> exp/2
-    $ => D          :MLOAD(arithRes1)   ;D = exp/2
-    $ => A          :MLOAD(arithRes2)   ;A = exp%2 (0 or 1)
+    ;divARITH --> exp/2
+    2               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    ;D = exp/2
+    $ => D          :MLOAD(arithRes1)
+    ;A = exp%2 (0 or 1)
+    $ => A          :MLOAD(arithRes2)
     0 => B
-    $               :EQ,JMPC(expADloop0);if exp%2 == 0 --> expADloop0
+    ;if exp%2 == 0 --> expADloop0
+    $               :EQ,JMPC(expADloop0)
     E               :MSTORE(arithA)
-    C               :MSTORE(arithB), CALL(mulARITH)      ;mulARITH --> E*C
-    $ => C          :MLOAD(arithRes1)   ;C = E*C (acc = bp*acc)
+    ;mulARITH --> E*C
+    C               :MSTORE(arithB), CALL(mulARITH)
+     ;C = E*C (acc = bp*acc)
+    $ => C          :MLOAD(arithRes1)
 
 expADloop0:
     E               :MSTORE(arithA)
-    E               :MSTORE(arithB), CALL(mulARITH)      ;mulARITH --> E*E
-    $ => E          :MLOAD(arithRes1), JMP(expADloop)   ;E = E*E (bp = bp*bp)
-
-expA0D:                                 ;if base == 0, result0
+    ;mulARITH --> E*E
+    E               :MSTORE(arithB), CALL(mulARITH)
+    ;E = E*E (bp = bp*bp)
+    $ => E          :MLOAD(arithRes1), JMP(expADloop)
+;if base == 0, result0
+expA0D:
     0 => C
     0 => D          :JMP(expADend)
-
-expAD0:                                 ;if exp == 0, result 1
+ ;if exp == 0, result 1
+expAD0:
     1 => C
     0 => D
 
