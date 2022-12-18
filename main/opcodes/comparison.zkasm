@@ -309,12 +309,14 @@ opBYTE:
     ; read two items from the stack
     SP - 1 => SP
     $ => B          :MLOAD(SP--) ; [byte offset => B]
-    $ => A          :MLOAD(SP) ; [32-byte value => A]
+    $ => C          :MLOAD(SP) ; [32-byte value => C]
 
-    ; if the byte offset is out of range --> JMP(opBYTE0)
-    31 - B => D     :JMPN(opBYTE0)
+    ; if the byte offset is out of range --> go to opBYTE0
+    31 => A
+    $ => D          :SUB, JMPC(opBYTE0)
 
     ; call util function
+    C => A
                     :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
 
     ; call binary:and state machine and push to the stack
@@ -408,39 +410,41 @@ opSAR:
 
     ; read two items form the stack
     SP - 1 => SP
-    $ => C          :MLOAD(SP--)    ; [shift (bits) => C]
-    ; call abs util. get absolute value (A) and sign (B)
-    $ => A          :MLOAD(SP), CALL(abs) ; [value => A]; in: [A: value], out: [A: abs(A), B: sign(A)]]
+    $ => C          :MLOAD(SP--) ; [shift (bits) => C]
+    $ => A          :MLOAD(SP) ; [value => A]
 
-    A => D ; [abs(A) => D]
-    B => E ; [sign(A) => E]
+    ; Sign of A [1 if negative, 0 positive] in E
+    0 => B
+    $ => E          :SLT ; [sign(A) => E]
 
     ; check shift is less than 256 bits
-    C => B ; [shift (bits) => C]
+    A => D ; [value => D]
+    C => B ; [shift (bits) => B]
     256 => A
     $               :LT, JMPC(maxShiftSAR)
 
-    ; prepare register to call util SHRarithBit
-    D => A ; [abs(a) => A]
-    ; call SHRarithBit util
-    C => D          :CALL(SHRarithBit) ; [shift (bits) => D]; [ A >> D => A]
+    ; compute result depending on sign
+    E               :JMPZ(positiveValue, negativeValue)
 
+positiveValue:
+    ; call SHRarithBit util
+    D => A
+    C => D          :CALL(SHRarithBit) ; [shift (bits) => D]; [ A >> D => A]
+                    :JMP(endSAR)
+
+negativeValue:
+    D => A
+    %MAX_UINT_256 => B
+    $ => A          :XOR ; [~A => A]
+    C => D          :CALL(SHRarithBit) ; [shift (bits) => D]; [ A >> D => A]
+    $ => A          :XOR, JMP(endSAR) ; [~A => A]
+
+endSAR:
     ; check shifted result is greater than 0
     0 => B
     $               :EQ, JMPC(maxShiftSAR)
-
-    ; check sign negative or positive
-    ; if sign positive, return shifted result. sign negative, return -(shifted result)]
-    E               :JMPZ(finishOpSAR)
-
-    ; sign negative
-    A => B ; [shifted result => B]
-    0 => A
-
-    $ => A               :SUB   ; [0 - shifted result => A]
-
-finishOpSAR:
     A               :MSTORE(SP++), JMP(readCode)   ; [(value >> shift (signed)) => SP]
+
 
 ; return 0 if sign is positive. return %MAX_UINT_256 if sign is negative
 maxShiftSAR:

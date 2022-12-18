@@ -99,6 +99,7 @@ getLenBytesLoop:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 8 :JMPN(outOfCountersBinary)
     %MAX_CNT_ARITH - CNT_ARITH - 4 :JMPN(outOfCountersArith)
+
     0 => B
     ; if B is zero, finish counter
     $               :EQ,JMPC(getLenEnd)
@@ -517,6 +518,7 @@ mulARITH:
     D               :MSTORE(arithOverflow), CALL(loadTmp)
     $ => RR         :MLOAD(tmpZkPCArith)
                     :RETURN
+
 ; @info arithmetic division
 ; @in: arithA: dividend value
 ; @in: arithB: divisor value
@@ -641,6 +643,7 @@ SHRarithfinal:
     $ => D                  :MLOAD(tmpVarD2)
     $ => RR                 :MLOAD(tmpSHXZkPC2)
     $ => E                  :MLOAD(tmpVarE2), RETURN
+
 ;@info Shift left D bytes to A
 ;@in A - (A << D)
 ;@in D - (A << D) D bytes
@@ -1260,12 +1263,12 @@ expAD:
     E               :MSTORE(tmpVarE3)
     ;E base
     A => E
-     ;B exp
+    ;B exp
     D => B
     0 => A
     ;if exp == 0 --> expAD0
     $               :EQ,JMPC(expAD0)
-     ;A base
+    ;A base
     E => A
     0 => B
     ;if base == 0 --> expA0D
@@ -1273,8 +1276,14 @@ expAD:
     1 => C
 
 expADloop:
+    ; check zk-counters on each loop
+    ; - 3 ARITH: 1 in divARITH + 1 in 2*mulARITH
+    ; - 5 BINARIES: 5 in divARITH
+    ; - 100 steps (rounded up): 37 in divARITH + 11 in 2*mulARITH + 18 self
+    %MAX_CNT_ARITH - CNT_ARITH - 3      :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 5    :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
 
-    %MAX_CNT_ARITH - CNT_ARITH - 3 :JMPN(outOfCountersArith)
     ;A exp
     D => A
     0 => B
