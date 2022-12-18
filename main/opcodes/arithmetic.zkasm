@@ -299,20 +299,29 @@ opMULMOD:
  *  - stack input: [a, exp]
  *  - stack output: [a ** exp]
  */
+
 opEXP:
     ; checks zk-counters
-    %MAX_CNT_BINARY - CNT_BINARY - 5 :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 2    :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+
     ; check stack underflow
     SP - 2              :JMPN(stackUnderflow)
     SP - 1 => SP
-    $ => A              :MLOAD(SP--); [a => A]
-    $ => B              :MLOAD(SP); [exp => B]
-    B => D
-    zkPC+1 => RR        :JMP(expAD); in: [A, D] out: [A: A^D]
-    A                   :MSTORE(SP++), CALL(getLenBytes); [a ** exp (A) => SP] ; in: [B: bytes] out: [A: bytes len]
+
     ; check out-of-gas
-    GAS - %GAS_SLOW_STEP - %EXP_BYTE_GAS * A => GAS  :JMPN(outOfGas, readCode)
+    $ => C              :MLOAD(SP--); [a => C]
+    $ => B              :MLOAD(SP); [exp => B]
+
+    ; check out-of-gas
+                                                    :CALL(getLenBytes) ; in: [B: number] out: [A: byte length of B]
+    GAS - %GAS_SLOW_STEP - %EXP_BYTE_GAS * A => GAS :JMPN(outOfGas)
+
+    ; compute exponentiation
+    B => D
+    C => A
+    zkPC+1 => RR        :JMP(expAD) ; in: [A, D] out: [A: A ** D]
+    A                   :MSTORE(SP++), JMP(readCode) ; [a ** exp => SP]
 
 /**
  * @link [https://www.evm.codes/#0B?fork=berlin]
