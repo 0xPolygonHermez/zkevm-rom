@@ -17,6 +17,9 @@ VAR GLOBAL ecrecover_k2
 VAR GLOBAL ecrecover_RR
 VAR GLOBAL ecrecover_v_parity
 
+; ecrecover_lastHashIdUsed was a madatory parameter
+VAR GLOBAL ecrecover_lastHashIdUsed
+
 INCLUDE "constEc.zkasm"
 
 ; ERROR CODES
@@ -166,14 +169,10 @@ ecrecover_v_y2_same_parity:
 
 
         ; generate keccak of public key to obtain ethereum address
-        $ => E         :MLOAD(lastHashKIdUsed)
-        E + 1 => E     :MSTORE(lastHashKIdUsed)
+        $ => E      :MLOAD(ecrecover_lastHashIdUsed)
         0 => HASHPOS
         32 => D
-        ; check keccak counters
-        $ => A         :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 :JMPN(outOfCounters)
-        
+
         $ => A         :MLOAD(mulPointEc_p3_x)
 
         A              :HASHK(E)
@@ -183,6 +182,8 @@ ecrecover_v_y2_same_parity:
         A              :HASHK(E)
 
         64             :HASHKLEN(E)
+        $ => A         :MLOAD(cntKeccakPreProcess)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 :JMPN(outOfCounters)
         $ => A         :HASHKDIGEST(E)
 
         ; for address take only last 20 bytes

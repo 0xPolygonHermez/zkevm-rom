@@ -45,15 +45,7 @@ shortList:
         A - 0xc0 => A
 
 endList:
-        A + C => B                      :MSTORE(txRLPLength)
-        ; Check enough zk counters to digest tx hash
-        B + 1                           :MSTORE(arithA)
-        136                             :MSTORE(arithB)
-                                        :CALL(divARITH)
-        $ => B                          :MLOAD(arithRes1)
-        $ => D                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B - D - 1:JMPN(handleOOCatRLP)
-
+        A + C                           :MSTORE(txRLPLength)
 
 ;; Read RLP 'nonce'
         ; 64 bits max
@@ -319,18 +311,13 @@ vREADTx:
 ;; increase number of transaction to process
         $ => A                          :MLOAD(pendingTxs)
         A + 1 => A                      :MSTORE(pendingTxs)
-;; computte signature
-        $ => A                          :HASHKDIGEST(E)
-        A                               :MSTORE(txHash) 
+        HASHPOS                         :MSTORE(sigDataSize) ; save bytes length added to ethereum transaction hash
                                         :JMP(txLoopRLP)
 
 ;;;;;;;;;
 ;; E - Handler error RLP fields
 ;;;;;;;;;
-handleOOCatRLP:
-        ${eventLog(onError, OOC)}
-        $ => SR         :MLOAD(batchSR)
-        
+
 invalidTxRLP:
 ;; Append all missing 'batchL2Data' to 'batchDataHash' bytes
         $ => B                          :MLOAD(batchL2DataLength)

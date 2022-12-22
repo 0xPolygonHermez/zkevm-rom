@@ -647,6 +647,8 @@ opSHA3:
     %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCounters)
     %MAX_CNT_BINARY - CNT_BINARY - 193 :JMPN(outOfCounters)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCounters)
+    $ => A           :MLOAD(cntKeccakPreProcess)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2 :JMPN(outOfCounters)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 10 :JMPN(outOfCounters)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCounters)
 
@@ -674,14 +676,6 @@ opSHA3:
                     :CALL(mulARITH)
     $ => A          :MLOAD(arithRes1)
     GAS - A => GAS  :JMPN(outOfGas)  ; dynamic_gas = dynamic_gas = 6 * minimum_word_size + memory_expansion_cost
-    ; check keccak counters
-    C + 1           :MSTORE(arithA)
-    136             :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => B          :MLOAD(arithRes1)
-    $ => A          :MLOAD(cntKeccakPreProcess)
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 => A
-    $               :LT, JMPC(outOfCounters)
     ; new hash id
     $ => B           :MLOAD(lastHashKIdUsed)
     B + 1 => B       :MSTORE(lastHashKIdUsed)
@@ -714,6 +708,16 @@ opSHA3Final:
 opSHA3End:
     $ => E          :MLOAD(lastHashKIdUsed)
     HASHPOS         :HASHKLEN(E)
+    
+    ; Check keccak counters
+    HASHPOS         :MSTORE(arithA)
+    136             :MSTORE(arithB)
+                    :CALL(divARITH)
+    $ => B          :MLOAD(arithRes1)
+    $ => A          :MLOAD(cntKeccakPreProcess)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A => A
+    $               :LT, JMPC(outOfCounters)
+    
     $ => A          :HASHKDIGEST(E)
     A               :MSTORE(SP++)
     1024 - SP       :JMPN(stackOverflow)
@@ -1173,17 +1177,6 @@ opEXTCODECOPYCheckHash:
     0 => A
     D => B
     $                               :EQ, JMPC(opEXTCODECOPYCheckHashEnd)
-    ; check poseidon counters
-    ; 56 is the value used by the prover to increment poseidon counters depending on the hash length
-    RR              :MSTORE(tmpZkPC2)
-    B + 1           :MSTORE(arithA)
-    56              :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => RR         :MLOAD(tmpZkPC2)
-    $ => B          :MLOAD(arithRes1)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1 => A
-    $               :LT, JMPC(outOfCounters)
-
     E => A
     ; get hash contract
     %SMT_KEY_SC_CODE => B
