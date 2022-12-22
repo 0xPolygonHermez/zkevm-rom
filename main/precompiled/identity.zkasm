@@ -4,15 +4,19 @@ IDENTITY:
     0 => A
     zkPC+2 => RR
     $               :LT, JMPC(moveBalances)
-    
-    GAS - 15 => GAS :JMPN(outOfGas)
+
+    GAS - %IDENTITY_GAS => GAS :JMPN(outOfGas)
     $ => C          :MLOAD(argsLengthCall)
-    ${(C+31)/32} => A
-    GAS - 3*A => GAS:JMPN(outOfGas)
+    ;(C+31)/32 => A
+    C + 31 => A
+    A               :MSTORE(arithA)
+    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => A          :MLOAD(arithRes1)
+
+    GAS - %IDENTITY_WORD_GAS*A => GAS   :JMPN(outOfGas)
     CTX             :MSTORE(currentCTX)
     CTX => A
-    $ => CTX        :MLOAD(originCTX)
-    CTX - 1         :JMPN(handleGas)
+    $ => CTX        :MLOAD(originCTX), JMPZ(handleGas)
     A               :MSTORE(retDataCTX)
     A => CTX
     0 => B
@@ -22,47 +26,45 @@ IDENTITY:
     C               :MSTORE(retDataLength)
 
 IDENTITYinit:
-    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCounters)
-    %MAX_CNT_STEPS - STEP - 200         :JMPN(outOfCounters)
+    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+
     ; Copy from calldata to memory
-    C - 1           :JMPN(IDENTITYreturn)
+    C               :JMPZ(IDENTITYreturn)
     C - 32          :JMPN(IDENTITYfinal)
-    1024 + A => SP
+    %CALLDATA_OFFSET + A => SP
     $ => B          :MLOAD(SP)
-    B               :MSTORE(bytesToStore)
-                    :CALL(MSTORE32)
+    B               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     A + 1 => A
-    C - 32 => C
-                    :JMP(IDENTITYinit)
+    C - 32 => C     :JMP(IDENTITYinit)
+
 IDENTITYfinal:
-    1024 + A => SP
+    %CALLDATA_OFFSET + A => SP
     $ => A          :MLOAD(SP)
-    32 - C => D
-                    :CALL(SHRarith)
-                    :CALL(SHLarith)
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX)
+    32 - C => D     :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+                    :CALL(SHLarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    A               :MSTORE(bytesToStore), CALL(MSTOREX)
+
 IDENTITYreturn:
     ; Copy from memory current CTX to memory origin CTX
     0 => E
     $ => B          :MLOAD(retCallLength)
-    
-    ; Get lower between retCallLength and 
+
+    ; Get lower between retCallLength and
     $ => A          :MLOAD(retDataLength)
     $               :LT, JMPC(IDENTITYreturn2)
     B => C
-    $ => B          :MLOAD(retCallOffset)
-                    :JMP(IDENTITYreturnLoop)
+    $ => B          :MLOAD(retCallOffset), JMP(IDENTITYreturnLoop)
 
 IDENTITYreturn2:
     A => C
     $ => B          :MLOAD(retCallOffset)
 
 IDENTITYreturnLoop:
-    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCounters)
-    %MAX_CNT_STEPS - STEP - 600 :JMPN(outOfCounters)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCounters)
-    C - 1           :JMPN(IDENTITYend)
+    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+
+    C               :JMPZ(IDENTITYend)
     C - 32          :JMPN(IDENTITYreturnFinal)
                     :CALL(MLOAD32)
     E => D
@@ -73,17 +75,15 @@ IDENTITYreturnLoop:
     E => B
     D => E
     C - 32 => C
-    $ => CTX        :MLOAD(currentCTX)
-                    :JMP(IDENTITYreturnLoop)
+    $ => CTX        :MLOAD(currentCTX), JMP(IDENTITYreturnLoop)
+
 IDENTITYreturnFinal:
                     :CALL(MLOADX)
     $ => CTX        :MLOAD(originCTX)
     B => E
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTOREX)
+    A               :MSTORE(bytesToStore), CALL(MSTOREX)
     $ => CTX        :MLOAD(currentCTX)
 
 IDENTITYend:
     $ => CTX        :MLOAD(originCTX)
-    CTX             :MSTORE(currentCTX)
-                    :JMP(preEnd)
+    CTX             :MSTORE(currentCTX), JMP(preEnd)

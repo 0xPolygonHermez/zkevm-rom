@@ -1,55 +1,26 @@
 INCLUDE "map-opcodes.zkasm"
 INCLUDE "precompiled/selector.zkasm"
 INCLUDE "ecrecover/ecrecover.zkasm"
+INCLUDE "touched.zkasm"
+INCLUDE "2-exp.zkasm"
+
 ; Blocks process txs
 ;       A - Verify ecdsa signature
-;       B - Verify chainID
-;       C - Verify and increase nonce
-;       D - Verify upfront cost
-;       E - Check transaction type
-;         E.1 - call contract
-;         E.2 - deploy contract
-;       F - Handle Gas
+;       B - Verify tx.sender does not have any code deployed (EIP3607)
+;       C - Verify chainID
+;       D - Verify and increase nonce
+;       E - Verify upfront cost
+;       F - Check transaction type
+;         F.1 - call contract
+;         F.2 - deploy contract
+;       G - Handle Gas
 
 processTx:
 ;;;;;;;;;;;;;;;;;;
 ;; A - Verify ecdsa signature
 ;;;;;;;;;;;;;;;;;;
 
-        ${eventLog(onProcessTx)}
-        ; Minimum of 100000 steps left to process a tx
-        %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCounters)
-        ; Get sigDataSize
-        $ => HASHPOS                     :MLOAD(sigDataSize)
-
-        ; Check keccak counters
-        HASHPOS                          :MSTORE(arithA)
-        136                              :MSTORE(arithB)
-                                         :CALL(divARITH)
-        $ => B                           :MLOAD(arithRes1)
-        $ => A                           :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A => A
-        $                                :LT, JMPC(outOfCounters)
-
-        ; Get hash address previously stored in RLP parsing
-        $ => E                          :MLOAD(lastTxHashId)
-        E+1 => E                        :MSTORE(lastTxHashId)
-
-        ; Check the signature
-        $ => A                          :MLOAD(lastHashKIdUsed)
-        A + 1                           :MSTORE(lastHashKIdUsed)
-        A + 1                           :MSTORE(ecrecover_lastHashIdUsed)
-        $ => A                          :HASHKDIGEST(E)
-        $ => B                          :MLOAD(txR)
-        $ => C                          :MLOAD(txS)
-        $ => D                          :MLOAD(txV)
-                                        :CALL(ecrecover)
-        ; Check result is non-zero
-checkAndSaveFrom:
-        0 => B
-        A                               :MSTORE(txSrcAddr)
-        A                               :MSTORE(txSrcOriginAddr)
-        $                               :EQ,JMPC(invalidIntrinsicTx)
+        $${eventLog(onProcessTx)}
 
 ;;;;;;;;;
 ;; Store init state
@@ -59,27 +30,50 @@ checkAndSaveFrom:
         SR                              :MSTORE(originSR)
         SR                              :MSTORE(initSR)
 
+        ; Minimum of 100000 steps left to process a tx
+        %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY - 100   :JMPN(outOfCountersBinary)
+        $ => A                          :MLOAD(txHash)
+        ; Check the signature
+        $ => B                          :MLOAD(txR)
+        $ => C                          :MLOAD(txS)
+        $ => D                          :MLOAD(txV), CALL(ecrecover_tx)
+        ; Check result is non-zero
+checkAndSaveFrom:
+        0 => B
+        A                               :MSTORE(txSrcAddr)
+        A                               :MSTORE(txSrcOriginAddr)
+        $                               :EQ,JMPC(invalidIntrinsicTxSignature)
+
 ;;;;;;;;;;;;;;;;;;
-;; B - Verify chainID
+;; B - Verify tx.sender does not have any code deployed (EIP3607)
 ;;;;;;;;;;;;;;;;;;
 
+        %SMT_KEY_SC_LENGTH => B
+        0 => C
+        $ => B                          :SLOAD, JMPNZ(invalidIntrinsicTxSenderCode)
+
+;;;;;;;;;;;;;;;;;;
+;; C - Verify chainID
+;;;;;;;;;;;;;;;;;;
+
+        ; Don't check chainId for legacy transactions
+        $ => A                          :MLOAD(isPreEIP155), JMPNZ(endCheckChainId)
         $ => A                          :MLOAD(txChainId)
-        $ => B                          :MLOAD(chainId)                                       ; A: chainId tx
-        $                               :EQ,JMPC(endCheckChainId)                               ; If A == B --> endCheckChainId
-                                        :JMP(invalidIntrinsicTx)                                         ; If A != B --> invalidIntrinsicTx
+        $ => B                          :MLOAD(chainID)                                       ; A: chainId tx
+        $                               :EQ,JMPC(endCheckChainId, invalidIntrinsicTxChainId)  ; If A == B --> endCheckChainId
 endCheckChainId:
 
 ;; Reset warm/cold information
-        $ => A                          :MLOAD(txSrcOriginAddr)
-        ${clearWarmedStorage()} ; clear accessed since there is a new transaction
-        ${isWarmedAddress(A)} ; add tx.origin to touched addresses
+        $ => A                          :MLOAD(txSrcOriginAddr), CALL(initTouchedTree)
+                                        :CALL(isColdAddress) ; add tx.origin to touched addresses
         0                               :MSTORE(depth) ; Initial depth is 0
 
-;; Set gasPrice global var 
+;; Set gasPrice global var
         $ => A                          :MLOAD(txGasPriceRLP)
         A                               :MSTORE(txGasPrice)
 ;;;;;;;;;;;;;;;;;;
-;; C - Verify and increase nonce
+;; D - Verify and increase nonce
 ;;;;;;;;;;;;;;;;;;
 
         $ => A, E                       :MLOAD(txSrcOriginAddr) ; Address of the origin to A and E
@@ -87,8 +81,7 @@ endCheckChainId:
         0 => C
         $ => A                          :SLOAD
         $ => B                          :MLOAD(txNonce)
-        $ => C                          :EQ
-        C - 1                           :JMPN(invalidIntrinsicTx) ; Compare nonce state tree with nonce transaction
+        $ => C                          :EQ, JMPNC(invalidIntrinsicTxNonce) ; Compare nonce state tree with nonce transaction
         B                               :ASSERT ; sanity check
         A + 1 => D
         E => A
@@ -97,23 +90,21 @@ endCheckChainId:
         $ => SR                         :SSTORE ; Store the nonce plus one
 
 ;;;;;;;;;;;;;;;;;;
-;; D - Verify upfront cost
+;; E - Verify upfront cost
 ;;;;;;;;;;;;;;;;;;
 
         ; Verify batch gas limit
         $ => B                          :MLOAD(txGasLimit)
         ; Check batch gas limit is not exceeded by transaction
-        %BATCH_GAS_LIMIT => A
-        $                               :LT,JMPC(invalidIntrinsicTx)
+        %TX_GAS_LIMIT => A
+        $                               :LT,JMPC(invalidIntrinsicBatchGasLimit)
 
         ; Intrinsic gas --> gas Limit >= 21000 + calldata cost + deployment cost
         %BASE_TX_GAS => E ; Store init intrinsic gas at E
-        $ => A                          :MLOAD(isCreateContract)
-        -A                              :JMPN(addDeploymentGasCost)
-                                        :JMP(getCalldataGasCost)
+        $ => A                          :MLOAD(isCreateContract), JMPNZ(addDeploymentGasCost, getCalldataGasCost)
 
 addDeploymentGasCost:
-        E + %BASE_TX_DEPLOY_GAS => E ; Add 32000 if transaction is a create
+        %BASE_TX_DEPLOY_GAS => E ; 53000 gas if transaction is a create
 
 getCalldataGasCost:
         $ => A                          :MLOAD(txCalldataLen)
@@ -122,34 +113,29 @@ getCalldataGasCost:
 
 addGas:
         $ => HASHPOS                    :MLOAD(dataStarts)
-        0 => C
-                                        :JMP(loopBytes)
+        0 => C                          :JMP(loopBytes)
+
 loopBytes:
-        %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCounters)
+        %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
         A - C - 1                       :JMPN(endCalldataIntrinsicGas)
         E => B
-        HASHPOS => D
-        1 => D
         $ => E                          :MLOAD(batchHashDataId)
-        $ => D                          :HASHK(E)
+        $ => D                          :HASHK1(E)
         B => E
         C + 1 => C
-        D - 1                           :JMPN(add4Gas)
-                                        :JMP(add16Gas)
+        D - 1                           :JMPN(add4Gas, add16Gas)
 
 add4Gas:
-        E + 4 => E
-                                        :JMP(loopBytes)
+        E + 4 => E                      :JMP(loopBytes)
 
 add16Gas:
-        E + 16 => E
-                                        :JMP(loopBytes)
+        E + 16 => E                     :JMP(loopBytes)
 
 endCalldataIntrinsicGas:
         ; Compare gas limit >= intrinsic gas
         $ => A                          :MLOAD(txGasLimit)
         E => B
-        $                               :LT, JMPC(invalidIntrinsicTx)
+        $                               :LT, JMPC(invalidIntrinsicTxGasLimit)
         ; Store calculated gas for later usage
         E                               :MSTORE(gasCalldata)
 
@@ -157,8 +143,8 @@ endCalldataIntrinsicGas:
         ; gas price * gas limit
         $ => B                          :MLOAD(txGasPrice)
         A                               :MSTORE(arithA)
-        B                               :MSTORE(arithB)
-                                        :CALL(mulARITH)
+        B                               :MSTORE(arithB), CALL(mulARITH)
+        $ => D                          :MLOAD(arithOverflow), JMPNZ(invalidIntrinsicTxGasOverflow)
         $ => D                          :MLOAD(arithRes1)
         ; Get caller balance
         $ => A                          :MLOAD(txSrcOriginAddr)
@@ -167,17 +153,15 @@ endCalldataIntrinsicGas:
         ; (gas price * gas limit) + value
         $ => B                          :MLOAD(txValue)
         D                               :MSTORE(arithA)
-        B                               :MSTORE(arithB)
-                                        :CALL(addARITH)
+        B                               :MSTORE(arithB), CALL(addARITH)
         $ => B                          :MLOAD(arithRes1)
         ; Comparison
         C => A
-        $                               :LT, JMPC(invalidIntrinsicTx)
+        $                               :LT, JMPC(invalidIntrinsicTxBalance)
 
         ; Substract (gas price * gas limit) from caller balance
         C                               :MSTORE(arithA)
-        D                               :MSTORE(arithB)
-                                        :CALL(subARITH)
+        D                               :MSTORE(arithB), CALL(subARITH)
         ; Substracted balance result in D
         $ => D                          :MLOAD(arithRes1)
         $ => A                          :MLOAD(txSrcOriginAddr)
@@ -193,27 +177,23 @@ endCalldataIntrinsicGas:
         GAS - A => GAS
 
 ;;;;;;;;;;;;;;;;;;
-;; E - Check transaction type
+;; F - Check transaction type
 ;;;;;;;;;;;;;;;;;;
 txType:
 
         ; Compute deployment address if create contract operation
-        $ => A                          :MLOAD(isCreateContract)
-        0 - A                           :JMPN(getContractAddress)
+        $ => A                          :MLOAD(isCreateContract), JMPNZ(getContractAddress)
         $ => A                          :MLOAD(txDestAddr)
-        ; Add 'to' to touched addresses
-        ${isWarmedAddress(A)}
-        ${checkpoint()}
+                                        :CALL(isColdAddress) ; Add 'to' to touched addresses
         ; Check 'to' is zero or precompiled contract
         ; Check zero address since zero address is not a precompiled contract
         0 => B
         $                               :EQ, JMPC(callContract)
         10 => B
-        $                               :LT,JMPC(selectorPrecompiled)
-                                        :JMP(callContract)
+        $                               :LT,JMPC(selectorPrecompiled, callContract)
 
 ;;;;;;;;;;;;;;;;;;
-;; E.2 - Deploy contract
+;; F.2 - Deploy contract
 ;;     - Compute new contract address
 ;;     - Process bytecode
 ;;     - End deploy: add state-tree hash bytecode and bytecode length
@@ -227,80 +207,69 @@ getContractAddress:
         $ => E                          :MLOAD(lastHashKIdUsed)
         E+1 => E                        :MSTORE(lastHashKIdUsed)
         ; Check if create is with CREATE2 opcode
-        $ => A                          :MLOAD(isCreate2)
-        0 - A                           :JMPN(create2)
+        $ => A                          :MLOAD(isCreate2), JMPNZ(create2)
+        ; Check keccak counters
+        $ => A                          :MLOAD(cntKeccakPreProcess)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1:JMPN(outOfCountersKeccak)
         $ => A                          :MLOAD(txNonce)
         0x80 => B
         $                               :LT,JMPC(nonce1byte)
         $ => C                          :MLOAD(lengthNonce)
-        1 => D
         ; 1 byte length address + 20 bytes address + 1 byte length nonce + C bytes nonce
-        0xc0 + 22 + C                   :HASHK(E)
-        0x94                            :HASHK(E)
+        0xc0 + 22 + C                   :HASHK1(E)
+        0x94                            :HASHK1(E)
         20 => D
         $ => B                          :MLOAD(txSrcAddr)
         B                               :HASHK(E)
-        1 => D
-        0x80 + C                        :HASHK(E)
+        0x80 + C                        :HASHK1(E)
         C => D
-        A                               :HASHK(E)
-                                        :JMP(endContractAddress)
+        A                               :HASHK(E), JMP(endContractAddress)
 
 nonce1byte:
         $ => A                          :MLOAD(txSrcAddr)
         $ => B                          :MLOAD(txNonce)
-        1 => D
-        0xc0 + 22                       :HASHK(E)
-        0x94                            :HASHK(E)
+        0xc0 + 22                       :HASHK1(E)
+        0x94                            :HASHK1(E)
         20 => D
         A                               :HASHK(E)
-        1 => D
-        B - 1                           :JMPN(nonceIs0)
-        B                               :HASHK(E)
-                                        :JMP(endContractAddress)
+        B                               :JMPZ(nonceIs0)
+        B                               :HASHK1(E),JMP(endContractAddress)
 
 nonceIs0:
-        0x80                            :HASHK(E)
-
-endContractAddress:
-        ; end contract address hash and get the 20 first bytes
-        HASHPOS                         :HASHKLEN(E)
-        $ => A                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 :JMPN(outOfCounters)
-        $ => A                          :HASHKDIGEST(E)
-                                        :CALL(maskAddress) ; Mask address to 20 bytes
-        A                               :MSTORE(createContractAddress)
-        A                               :MSTORE(txDestAddr)
-        A                               :MSTORE(storageAddr)
-        ; TODO: Add check CREATE or deployment with constructor reverted
-                                        :JMP(deploy)
+        0x80                            :HASHK1(E),JMP(endContractAddress)
 
 ;; compute new contract address as CREATE2 spec: keccak256(0xff ++ address ++ salt ++ keccak256(init_code))[12:] (https://eips.ethereum.org/EIPS/eip-1014)
 create2:
         $ => C                          :MLOAD(txCalldataLen)
+        ; Check keccak counters
+        C + 1                           :MSTORE(arithA)
+        136                             :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+        $ => B                          :MLOAD(arithRes1)
+        $ => A                          :MLOAD(cntKeccakPreProcess)
+        ; -2 because we will use one more keccack for generating contract address
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2 => A
+        $                               :LT, JMPC(outOfCountersKeccak)
+
         $ => CTX                        :MLOAD(originCTX)
         $ => B                          :MLOAD(argsOffsetCall)
 
 loopCreate2:
-        %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCounters)
-        %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCounters)
+        ; check zk-counters
+        %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCountersBinary)
 
-        C - 1                           :JMPN(create2end)
+        C                               :JMPZ(create2end)
         C - 32                          :JMPN(endloopCreate2)
-        B => E
-                                        :CALL(MLOAD32)
+        B => E                          :CALL(MLOAD32)
         E => B
         32 => D
         $ => E                          :MLOAD(lastHashKIdUsed)
         A                               :HASHK(E)
-        C - 32 => C
-                                        :JMP(loopCreate2)
+        C - 32 => C                     :JMP(loopCreate2)
 
 endloopCreate2:
-        B => E
-                                        :CALL(MLOADX)
-        32 - C => D
-                                        :CALL(SHRarith)
+        B => E                          :CALL(MLOADX)
+        32 - C => D                     :CALL(SHRarith)
         C => D
         $ => E                          :MLOAD(lastHashKIdUsed)
         A                               :HASHK(E)
@@ -308,21 +277,13 @@ endloopCreate2:
 create2end:
         $ => CTX                        :MLOAD(currentCTX)
         HASHPOS                         :HASHKLEN(E)
-        ; Check keccak counters
-        HASHPOS                         :MSTORE(arithA)
-        136                             :MSTORE(arithB)
-                                        :CALL(divARITH)
-        $ => B                          :MLOAD(arithRes1)
-        $ => A                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A => A
-        $                               :LT, JMPC(outOfCounters)
         $ => C                          :HASHKDIGEST(E)
+
         ; new hash with position 0 is started
         0 => HASHPOS
         $ => E                          :MLOAD(lastHashKIdUsed)
         E+1 => E                        :MSTORE(lastHashKIdUsed)
-        1 => D
-        0xff                            :HASHK(E)
+        0xff                            :HASHK1(E)
         20 => D
         $ => A                          :MLOAD(txSrcAddr)
         A                               :HASHK(E)
@@ -331,28 +292,17 @@ create2end:
         B                               :HASHK(E)
         32 => D
         C                               :HASHK(E)
+
+endContractAddress:
         HASHPOS                         :HASHKLEN(E)
-
-        ; Check keccak counters
-        HASHPOS                         :MSTORE(arithA)
-        136                             :MSTORE(arithB)
-                                        :CALL(divARITH)
-        $ => B                          :MLOAD(arithRes1)
-        $ => A                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A => A
-        $                               :LT, JMPC(outOfCounters)
-
-        $ => A                          :HASHKDIGEST(E)
-                                        :CALL(maskAddress) ; Mask address to 20 bytes
+        $ => A                          :HASHKDIGEST(E), CALL(maskAddress) ; Mask address to 20 bytes
         A                               :MSTORE(createContractAddress)
         A                               :MSTORE(txDestAddr)
         A                               :MSTORE(storageAddr)
 
 ;; deploy contract in state-tree
 deploy:
-        ; add address to touched addresses
-        ${isWarmedAddress(A)}
-        ${checkpoint()}
+                                :CALL(isColdAddress) ; add address to touched addresses
         ; check if address is deployable ( nonce == bytecode == 0)
         A => E
 
@@ -381,25 +331,21 @@ deploy:
         zkPC+2 => RR
         $                               :LT, JMPC(moveBalances)
         0 => PC
-        0 => SP
-                                        :JMP(readCode)
+        0 => SP                         :JMP(readCode)
 
 ;; read calldata bytes of a deploy transaction and process them
 readDeployBytecode:
         ; check transaction is a deploy transaction
-        $ => B                          :MLOAD(isCreate)
-        0 - B                           :JMPN(readDeployBytecodeCreate)
+        $ => B                          :MLOAD(isCreate), JMPNZ(readDeployBytecodeCreate)
         ; check enough bytes to read in calldata
         $ => B                          :MLOAD(txCalldataLen)
         B - PC - 1                      :JMPN(defaultOpCode)
         $ => HASHPOS                    :MLOAD(dataStarts)
         HASHPOS + PC => HASHPOS
         $ => E                          :MLOAD(batchHashDataId)
-        1 => D
-        $ => RR                         :HASHK(E)
-        ${eventLog(onOpcode(RR))}
-        PC + 1 => PC
-                                        :JMP(@mapping_opcodes + RR)
+        $ => RR                         :HASHK1(E)
+        $${eventLog(onOpcode(RR))}
+        PC + 1 => PC                    :JMP(@mapping_opcodes + RR)
 
 ;; read calldata bytes of a CREATE/CREATE2 call and process them
 readDeployBytecodeCreate:
@@ -407,26 +353,21 @@ readDeployBytecodeCreate:
         $ => CTX                        :MLOAD(originCTX)
         ; check enough bytes to read in memory
         E - PC - 1                      :JMPN(readDeployBytecodeCreateDefault)
-
         $ => E                          :MLOAD(argsOffsetCall)
         E + PC => E
-        1 => C
-                                        :CALL(MLOADX)
+        1 => C                          :CALL(MLOADX)
         $ => CTX                        :MLOAD(currentCTX)
-        31 => D
-                                        :CALL(SHRarith)
+        31 => D                         :CALL(SHRarith)
         A => RR
-        ${eventLog(onOpcode(RR))}
-        PC + 1 => PC
-                                        :JMP(@mapping_opcodes + RR)
+        $${eventLog(onOpcode(RR))}
+        PC + 1 => PC                    :JMP(@mapping_opcodes + RR)
 
 ;; handle error no more bytecode to read when call CREATE/CREATE2
 readDeployBytecodeCreateDefault:
-        $ => CTX                        :MLOAD(currentCTX)
-                                        :JMP(defaultOpCode)
+        $ => CTX                        :MLOAD(currentCTX), JMP(defaultOpCode)
 
 ;;;;;;;;;;;;;;;;;;
-;; E.1 - Call contract
+;; F.1 - Call contract
 ;;     - Check bytecode to process against state-tree hash bytecode
 ;;     - Process bytecode
 ;;     - End deploy: add state-tree hash bytecode and bytecode length
@@ -441,6 +382,7 @@ callContract:
         0 => SP
 
         $ => A                          :MLOAD(txDestAddr)
+
         ; get contract length
         %SMT_KEY_SC_LENGTH => B
         0 => C
@@ -449,13 +391,20 @@ callContract:
         0 => A
         $                               :EQ, JMPC(defaultOpCode) ;no bytecode
 
+        ; check poseidon counters
+        ; 56 is the value used by the prover to increment poseidon counters depending on the hash length
+        B               :MSTORE(arithA)
+        56              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+        $ => B          :MLOAD(arithRes1)
+        %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1 => A
+        $               :LT, JMPC(outOfCountersPoseidon)
+
         $ => A                          :MLOAD(txDestAddr)
         ; get hash contract
         %SMT_KEY_SC_CODE => B
         $ => A                          :SLOAD
         A                               :MSTORE(hashContractTxDestAddr)
         0 => HASHPOS
-        1 => D
         $ => B                          :MLOAD(bytecodeLength)
 
         ; get a new hashPId
@@ -463,19 +412,19 @@ callContract:
         E                               :MSTORE(contractHashId)
         E+1                             :MSTORE(nextHashPId)
 
-checkHashBytecodeLoop:
-        %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCounters)
-        B - 1 - HASHPOS                         :JMPN(checkHashBytecodeEnd) ; finish reading bytecode
-        ${getBytecode(A, HASHPOS, 1)}           :HASHP(E) ; hash contract bytecode
-                                                :JMP(checkHashBytecodeLoop)
+        ; check steps used by REPEAT
+        %MAX_CNT_STEPS - STEP - B - 4   :JMPN(outOfCountersStep)
+
+        ; set repeat itarations: RCX register + 1
+        B - 1 => RCX                    :JMPN(checkHashBytecodeEnd)
+        ${getBytecode(A, HASHPOS, 1)}   :HASHP1(E), REPEAT(RCX) ; hash contract bytecode
 
 checkHashBytecodeEnd:
         HASHPOS                         :HASHPLEN(E)
         $ => E                          :HASHPDIGEST(E)
         ; check hash computed matches hash in the smt leaf
         $ => A                          :MLOAD(hashContractTxDestAddr)
-        E                               :ASSERT
-                                        :JMP(readCode)
+        E                               :ASSERT, JMP(readCode)
 
 readByteCode:
         $ => E                          :MLOAD(contractHashId) ; hash index
@@ -484,41 +433,41 @@ readByteCode:
         $ => B                          :MLOAD(bytecodeLength)
         B - PC - 1                      :JMPN(defaultOpCode) ; no bytecode treated as 0x00
         PC => HASHPOS
-        1 => D
-        $ => RR                         :HASHP(E)
-        ${eventLog(onOpcode(RR))}
-        PC + 1 => PC
-                                        :JMP(@mapping_opcodes + RR)
+        $ => RR                         :HASHP1(E)
+        $${eventLog(onOpcode(RR))}
+        PC + 1 => PC                    :JMP(@mapping_opcodes + RR)
 
 readCode:
-        $ => A                          :MLOAD(isCreateContract)
-        0 - A                           :JMPN(readDeployBytecode)
-                                        :JMP(readByteCode)
+        $ => A                          :MLOAD(isCreateContract), JMPNZ(readDeployBytecode, readByteCode)
 
 ;; Compute and save hash bytecode and bytecode length in the state-tree
 endDeploy:
         ; called from `opRETURNDeploy` which has: C --> length, E --> offset
         ; only when first context ends on deploy
         ; If length is 0 do not modify state-tree
-        C - 1                           :JMPN(handleGas)
-        ; save offset memory and length to compute hash bytecode
+        C                               :JMPZ(handleGas)
+
+        ; save offset memory and length to compute hash bytecode. Read bytecode first byte
         E                               :MSTORE(memOffsetLinearPoseidon)
-        C                               :MSTORE(memSizeLinearPoseidon)
+        C                               :MSTORE(memSizeLinearPoseidon), CALL(checkBytecodeStartsEF)
+
+        ; check bytecode first byte != 0xEF
+        $                               :MLOAD(startsWithEF), JMPNZ(invalidCodeStartsEF)
+
         ; set bytecode length
         $ => A                          :MLOAD(createContractAddress)
         %SMT_KEY_SC_LENGTH => B
         C => D
         0 => C
         $ => SR                         :SSTORE
-        A                               :MSTORE(txDestAddr)
-                                        :CALL(hashPoseidonLinearFromMemory)
+        A                               :MSTORE(txDestAddr), CALL(hashPoseidonLinearFromMemory)
         $ => A                          :MLOAD(createContractAddress)
         0 => C
         %SMT_KEY_SC_CODE => B
         $ => SR                         :SSTORE
 
 ;;;;;;;;;;;;;;;;;;
-;; F - Handle GAS
+;; G - Handle GAS
 ;;   - Check refund gas
 ;;   - Return gas not used to caller
 ;;   - Pay gas to sequencer
@@ -527,14 +476,12 @@ endDeploy:
 ;; compute maximum gas to refund
 handleGas:
         0 => A
-        $ => B                          :MLOAD(gasRefund)
-        B - 1                           :JMPN(refundGas)
+        $ => B                          :MLOAD(gasRefund), JMPZ(refundGas)
         $ => A                          :MLOAD(txGasLimit)
         A - GAS => A
         ; Div operation with Arith
         A                               :MSTORE(arithA)
-        2                               :MSTORE(arithB)
-                                        :CALL(divARITH)
+        2                               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
         $ => A                          :MLOAD(arithRes1)
         A - B                           :JMPN(refundGas)
         B => A
@@ -546,8 +493,7 @@ refundGas:
         $ => B                          :MLOAD(txGasPrice)
         ;Mul operation with Arith
         A                               :MSTORE(arithA)
-        B                               :MSTORE(arithB)
-                                        :CALL(mulARITH)
+        B                               :MSTORE(arithB), CALL(mulARITH)
         $ => D                          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txSrcOriginAddr)
@@ -556,8 +502,7 @@ refundGas:
 
         ; Add operation with Arith
         A                               :MSTORE(arithA)
-        D                               :MSTORE(arithB)
-                                        :CALL(addARITH)
+        D                               :MSTORE(arithB), CALL(addARITH)
         $ => D                          :MLOAD(arithRes1)
 
         $ => A                          :MLOAD(txSrcOriginAddr)
@@ -573,8 +518,7 @@ sendGasSeq:
         $ => B          :MLOAD(txGasPrice)
         ; Mul operation with Arith
         A               :MSTORE(arithA)
-        B               :MSTORE(arithB)
-                        :CALL(mulARITH)
+        B               :MSTORE(arithB), CALL(mulARITH)
         $ => D          :MLOAD(arithRes1) ; value to pay the sequencer in D
 
         $ => A          :MLOAD(sequencerAddr)
@@ -582,22 +526,40 @@ sendGasSeq:
         $ => A          :SLOAD ; Original Balance in A
         ; Add operation with Arith
         A               :MSTORE(arithA)
-        D               :MSTORE(arithB)
-                        :CALL(addARITH)
+        D               :MSTORE(arithB), CALL(addARITH)
         $ => D          :MLOAD(arithRes1)
         $ => A          :MLOAD(sequencerAddr)
         0 => B,C ; balance key smt
-        $ => SR         :SSTORE
-                        :JMP(processTxEnd)
-
+        $ => SR         :SSTORE, JMP(processTxEnd)
 
 ;; handle invalid transaction due to intrinsic checks
-invalidIntrinsicTx:
-        ${eventLog(onError, intrinsic_invalid)}
-        $ => SR                         :MLOAD(originSR)
-                                        :JMP(processTxEnd)
+invalidIntrinsicTxSignature:
+        $${eventLog(onError, intrinsic_invalid_signature)} :JMP(handleIntrinsicError)
+
+invalidIntrinsicTxChainId:
+        $${eventLog(onError, intrinsic_invalid_chain_id)}  :JMP(handleIntrinsicError)
+
+invalidIntrinsicTxNonce:
+        $${eventLog(onError, intrinsic_invalid_nonce)}     :JMP(handleIntrinsicError)
+
+invalidIntrinsicTxGasLimit:
+        $${eventLog(onError, intrinsic_invalid_gas_limit)}  :JMP(handleIntrinsicError)
+
+invalidIntrinsicTxGasOverflow:
+        $${eventLog(onError, intrinsic_invalid_gas_overflow)} :JMP(handleIntrinsicError)
+
+invalidIntrinsicTxBalance:
+        $${eventLog(onError, intrinsic_invalid_balance)}    :JMP(handleIntrinsicError)
+
+invalidIntrinsicBatchGasLimit:
+        $${eventLog(onError, intrinsic_invalid_batch_gas_limit)} :JMP(handleIntrinsicError)
+
+invalidIntrinsicTxSenderCode:
+        $${eventLog(onError, intrinsic_invalid_sender_code)} :JMP(handleIntrinsicError)
+
+handleIntrinsicError:
+        $ => SR                         :MLOAD(originSR), JMP(processTxFinished)
 
 ;; handle error no more bytecode to read
 defaultOpCode:
-        ${eventLog(onOpcode(0))}
-                                        :JMP(opSTOP)
+        $${eventLog(onOpcode(0))}        :JMP(opSTOP)

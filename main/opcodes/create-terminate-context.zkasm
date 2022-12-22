@@ -1,0 +1,1084 @@
+/**
+ * @link [https://www.evm.codes/#00?fork=berlin]
+ * @zk-counters
+ * @process-opcode
+ *  - stack input: none
+ *  - stack output: none
+ */
+opSTOP:
+    ; check if first context
+    ; if origin ctx is 0, end tx
+    $ => B          :MLOAD(originCTX), JMPZ(handleGas)
+    ; else handle finish ctx
+    $ => A          :MLOAD(gasRefund)
+    ; check if is a create call
+    $ => C          :MLOAD(isCreate)
+    ; set 1 to D, default stack return in stop code
+    1 => D
+    C               :JMPZ(opSTOPend)
+    ; if is a create, return created contract address
+    $ => D          :MLOAD(createContractAddress)
+
+opSTOPend:
+    ; move to origin ctx
+    B => CTX
+    CTX             :MSTORE(currentCTX)
+    ; restore retDataCTX, no return data in stop
+    0               :MSTORE(retDataCTX)
+    ; handle gas reund
+    $ => B          :MLOAD(gasCTX)
+    A               :MSTORE(gasRefund)
+    GAS + B => GAS
+    ; restore SP and PC from origin CTX
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    ; store stack output
+    D               :MSTORE(SP++)
+    ; decrease depth
+    $ => A          :MLOAD(depth)
+    A - 1           :MSTORE(depth), JMP(readCode)
+
+/**
+ * @link [https://www.evm.codes/#f0?fork=berlin]
+ * @zk-counters
+ *  - 32 arith
+ *  - 32 binary
+ *  - 2 mem align
+ *  - 510 poseidon
+ *  - 600 steps
+ * @process-opcode
+ *  - stack input:  [value, offset, size]
+ *  - stack output: [address]
+ */
+opCREATE:
+    ; checks zk-counters
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2     :JMPN(outOfCountersMemalign)
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+
+    ; check out-of-gas
+    GAS - %CREATE_GAS => GAS  :JMPN(outOfGas)
+    GAS                 :MSTORE(gasCall)
+
+    ; increase depth
+    $ => A              :MLOAD(depth)
+    A + 1               :MSTORE(depth)
+
+    ; check stack underflow
+    SP - 3              :JMPN(stackUnderflow)
+    ; check is static
+    $ => A              :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
+    SP - 1 => SP
+    $ => D              :MLOAD(SP--); [value => D]
+    D                   :MSTORE(valueCall)
+    $ => E              :MLOAD(SP--); [offset => E]
+    E                   :MSTORE(argsOffsetCall)
+    $ => C              :MLOAD(SP); [size => C]
+    C                   :MSTORE(argsLengthCall)
+
+
+    ; store lastMemOffset for memory expansion gas cost
+    E                   :MSTORE(lastMemOffset)
+    ; store lastMemLength for memory expansion gas cost
+    ; compute memory expansion gas cost
+    C                   :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    ; store current CTX to auxiliary var for later usage
+    CTX                 :MSTORE(originAuxCTX)
+
+    ; check if source address has enough balance to send to the new account
+    $ => A              :MLOAD(storageAddr)
+    ; set key for smt balance query
+    %SMT_KEY_BALANCE => B
+    ; 3rd parameter does not apply to nonce or balance
+    0 => C
+    ; balance in A
+    $ => A              :SLOAD
+    D => B
+    $                   :LT,JMPC(opCreateFail)
+
+    ; check nonce overlow
+    $ => A             :MLOAD(storageAddr)
+    ; set key for smt nonce query
+    %SMT_KEY_NONCE => B
+    ; nonce in B
+    $ => B              :SLOAD
+    A => C
+    %MAX_NONCE => A
+    $                   :EQ,JMPC(opCreateFail)
+
+    ;change to a new CTX
+    SP                  :MSTORE(lastSP)
+    PC                  :MSTORE(lastPC)
+    ; increase used contexts counter
+    $ => A              :MLOAD(lastCtxUsed)
+    A+1 => CTX          :MSTORE(lastCtxUsed)
+    CTX                 :MSTORE(currentCTX)
+    1                   :MSTORE(isCreateContract)
+    1                   :MSTORE(isCreate)
+    ; set origin CTX to this new CTX
+    $ => A              :MLOAD(originAuxCTX)
+    A                   :MSTORE(originCTX)
+
+    ; get nonce and update SR
+    B                   :MSTORE(txNonce)
+    ; get nonce length bytes
+                        :CALL(getLenBytes); in: [B: value] out: [A: value bytes length]
+    A                   :MSTORE(lengthNonce)
+    ; increase nonce
+    B + 1 => D
+    C => A
+    ; set key for smt nonce query
+    %SMT_KEY_NONCE => B
+    0 => C
+    $ => SR             :SSTORE
+    ; compute gas send in call
+    SR                  :MSTORE(initSR), CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    ; return to origin CTX to set storage addr, gasRefund and gasCTX
+    $ => CTX            :MLOAD(originCTX)
+    $ => B              :MLOAD(storageAddr)
+    $ => C              :MLOAD(gasRefund)
+    GAS - A             :MSTORE(gasCTX)
+    $ => CTX            :MLOAD(currentCTX)
+    ; update GAS to computed gas send call
+    A => GAS
+    B                   :MSTORE(txSrcAddr)
+    ; copy calldata from origin CTX to current CTX
+    C                   :MSTORE(gasRefund), CALL(copySP)
+    ; set CTX var values
+    $ => A              :MLOAD(argsLengthCall)
+    A                   :MSTORE(txCalldataLen)
+    $ => A              :MLOAD(valueCall)
+    ; Save touched root when a new context is created
+    A                   :MSTORE(txValue), CALL(checkpointTouched)
+                        :JMP(txType)
+
+opCreateFail:
+    0                   :MSTORE(retDataCTX)
+    0                   :MSTORE(SP++), JMP(readCode); [0 => SP]
+
+/**
+ * @link [https://www.evm.codes/#f1?fork=berlin]
+ * @zk-counters
+ *  - 32 arith
+ *  - 32 binary
+ *  - 510 poseidon
+ *  - 1200 steps
+ * @process-opcode
+ *  - stack input: [gas, address, value, argsOffset, argsSize, retOffset, retSize]
+ *  - stack output: [success]
+ */
+opCALL:
+
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    ; increase depth
+    $ => A          :MLOAD(depth)
+    A + 1           :MSTORE(depth)
+    ; check stack underflow
+    SP - 7          :JMPN(stackUnderflow)
+    SP - 1 => SP
+    ; store current CTX to auxiliary var for later usage
+    CTX             :MSTORE(originAuxCTX)
+    ; store gas call
+    $ => A          :MLOAD(SP--); [gas => A]
+    A               :MSTORE(gasCall)
+    $ => A          :MLOAD(SP--), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
+    ; store address call
+    ; Mask address to 20 bytes
+    A               :MSTORE(addrCall)
+    ; store value call
+    $ => A          :MLOAD(SP--); [value => A]
+    A               :MSTORE(valueCall)
+    ; if is static and value is not 0 -> revert
+    $ => B          :MLOAD(isStaticCall), JMPZ(opCALL2)
+    0 => B
+    $               :EQ,JMPC(opCALL2, invalidStaticTx)
+
+opCALL2:
+
+    ; store bytes offset int the memory, the calldata of the subcontext
+    $ => A          :MLOAD(SP--); [argsOffset => A]
+    A               :MSTORE(argsOffsetCall)
+    ; store lastMemOffset for memory expansion gas cost
+    A               :MSTORE(lastMemOffset)
+
+    ; byte size to copy, size of the calldata of the subcontext
+    $ => C          :MLOAD(SP--); [argsSize => C]
+    C               :MSTORE(argsLengthCall)
+    ; store lastMemLength for memory expansion gas cost
+    C               :MSTORE(lastMemLength)
+    ; compute memory expansion gas cost
+                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+
+    ; store byte offset in the memory in bytes, where to store the return data of the sub context
+    $ => B          :MLOAD(SP--); [retOffset => B]
+    B               :MSTORE(lastMemOffset)
+
+    ; store byte size to copy (size of the return data)
+    $ => D          :MLOAD(SP); [retSize => D]
+    ; compute memory expansion gas cost of the return value
+    D               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+
+    ; checks zk-counters
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 400:JMPN(outOfCountersStep)
+
+    $ => B                   :MLOAD(lastMemOffset)
+    ; check if an address is cold. If it is, add it to the touched tree
+    $ => A          :MLOAD(addrCall), CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+
+    ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
+    ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS :JMPN(outOfGas)
+    ; Calculate positive_value_cost, if value call > 0 -> 9000
+    $ => B          :MLOAD(valueCall)
+    0 => A
+    $               :EQ,JMPC(opCALLend)
+
+    GAS - %CALL_VALUE_TRANSFER_GAS => GAS :JMPN(outOfGas)
+    ; if destAddress is an empty account, we should add 25k of gas to base cost
+    $ => E               :MLOAD(addrCall), CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
+    GAS - %CALL_NEW_ACCOUNT_GAS*E => GAS :JMPN(outOfGas)
+
+opCALLend:
+    ; setup vars for next CTX
+    $ => B          :MLOAD(lastMemOffset)
+    $ => D          :MLOAD(lastMemLength)
+    $ => C          :MLOAD(storageAddr)
+    $ => E          :MLOAD(gasRefund)
+    SP              :MSTORE(lastSP)
+    PC              :MSTORE(lastPC)
+    ; increase CTX
+    $ => A          :MLOAD(lastCtxUsed)
+    A+1 => CTX      :MSTORE(lastCtxUsed)
+    CTX             :MSTORE(currentCTX)
+    $ => A          :MLOAD(originAuxCTX)
+    A               :MSTORE(originCTX)
+    C               :MSTORE(txSrcAddr)
+    E               :MSTORE(gasRefund)
+    SR              :MSTORE(initSR)
+    $ => A          :MLOAD(addrCall)
+    A               :MSTORE(txDestAddr)
+    A               :MSTORE(storageAddr)
+    B               :MSTORE(retCallOffset)
+    D               :MSTORE(retCallLength)
+    $ => B          :MLOAD(valueCall)
+    B               :MSTORE(txValue)
+    0 => A
+    ; compute gas send in call
+    $ => C          :LT, CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    $ => CTX            :MLOAD(originCTX)
+    GAS - A             :MSTORE(gasCTX)
+    ; add estipend (2300) in case of tx with value
+    A + %CALL_STIPEND*C => A
+    ; move is static bool value to following CTX
+    $ => D              :MLOAD(isStaticCall)
+    $ => CTX            :MLOAD(currentCTX)
+    D                   :MSTORE(isStaticCall)
+    ; update GAS to computed gas send call
+    A => GAS
+    $ => A              :MLOAD(argsLengthCall)
+    ; copy calldata from origin CTX to current CTX
+    A                   :MSTORE(txCalldataLen), CALL(copySP)
+    ; save touched root when a new context is created
+                        :CALL(checkpointTouched)
+                        :JMP(txType)
+
+/**
+ * @link [https://www.evm.codes/#f1?fork=berlin]
+ * @zk-counters
+ *  - 32 arith
+ *  - 32 binary
+ *  - 510 poseidon
+ *  - 1200 steps
+ * @process-opcode
+ *  - stack input: [gas, address, value, argsOffset, argsSize, retOffset, retSize]
+ *  - stack output: [success]
+ */
+opCALLCODE:
+
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    ; increase depth
+    $ => A          :MLOAD(depth)
+    A + 1           :MSTORE(depth)
+    ; check stack underflow
+    SP - 7          :JMPN(stackUnderflow)
+    SP - 1 => SP
+    ; store current CTX to auxiliary var for later usage
+    CTX             :MSTORE(originAuxCTX)
+    ; store gas call
+    $ => A          :MLOAD(SP--); [gas => A]
+    A               :MSTORE(gasCall)
+    ; store address call
+    ; Mask address to 20 bytes
+    $ => A          :MLOAD(SP--), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
+    A               :MSTORE(addrCall)
+    ; store value call
+    $ => A          :MLOAD(SP--); [value => A]
+    A               :MSTORE(valueCall)
+
+    ; store bytes offset int the memory, the calldata of the subcontext
+    $ => A          :MLOAD(SP--); [argsOffset => A]
+    A               :MSTORE(argsOffsetCall)
+    ; store lastMemOffset for memory expansion gas cost
+    A               :MSTORE(lastMemOffset)
+    ; byte size to copy, size of the calldata of the subcontext
+    $ => C          :MLOAD(SP--); [argsSize => C]
+    C               :MSTORE(argsLengthCall)
+    ; store lastMemLength for memory expansion gas cost
+    ; compute memory expansion gas cost
+    C               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+
+    ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
+    $ => B          :MLOAD(SP--); [retOffset => B]
+    B               :MSTORE(lastMemOffset)
+    ; Store byte size to copy (size of the return data).
+    $ => D          :MLOAD(SP); [retSize => D]
+    ; compute memory expansion gas cost of the return value
+    D               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+
+    ; checks zk-counters
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 400:JMPN(outOfCountersStep)
+
+    ; check if an address is cold. If it is, add it to the touched tree
+    $ => A                   :MLOAD(addrCall), CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+
+    ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost
+    ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
+    ; Calculate positive_value_cost, if value call > 0 -> 9000
+    $ => B                   :MLOAD(valueCall)
+    0 => A
+    $                        :EQ,JMPC(opCALLCODEend)
+    ; Substract gas if the call has value
+    GAS - %CALL_VALUE_TRANSFER_GAS => GAS        :JMPN(outOfGas)
+
+opCALLCODEend:
+    ; setup vars for next CTX
+    $ => B          :MLOAD(lastMemOffset)
+    $ => D          :MLOAD(lastMemLength)
+    $ => E          :MLOAD(storageAddr)
+    $ => C          :MLOAD(gasRefund)
+    SP              :MSTORE(lastSP)
+    PC              :MSTORE(lastPC)
+    ; increase CTX
+    $ => A          :MLOAD(lastCtxUsed)
+    A+1 => CTX      :MSTORE(lastCtxUsed)
+    CTX             :MSTORE(currentCTX)
+    $ => A          :MLOAD(originAuxCTX)
+    A               :MSTORE(originCTX)
+    E               :MSTORE(txSrcAddr)
+    E               :MSTORE(storageAddr)
+    C               :MSTORE(gasRefund)
+    SR              :MSTORE(initSR)
+    $ => A          :MLOAD(addrCall)
+    A               :MSTORE(txDestAddr)
+    B               :MSTORE(retCallOffset)
+    D               :MSTORE(retCallLength)
+    $ => B          :MLOAD(valueCall)
+    B               :MSTORE(txValue)
+    0 => A
+    ; compute gas send in call
+    $ => C          :LT, CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    $ => CTX        :MLOAD(originCTX)
+    GAS - A         :MSTORE(gasCTX)
+    ; Add estipend (2300) in case of tx with value
+    A + %CALL_STIPEND*C => A
+    ; move is static bool value to following CTX
+    $ => D          :MLOAD(isStaticCall)
+    $ => CTX        :MLOAD(currentCTX)
+    ; update GAS to computed gas send call
+    A => GAS
+    D               :MSTORE(isStaticCall)
+    $ => A          :MLOAD(argsLengthCall)
+    ; copy calldata from origin CTX to current CTX
+    A               :MSTORE(txCalldataLen), CALL(copySP)
+    ; Save touched root when a new context is created
+                    :CALL(checkpointTouched)
+                    :JMP(txType)
+/**
+ * @link [https://www.evm.codes/#f3?fork=berlin]
+ * @zk-counters
+ *  - 32 arith
+ *  - 32 binary
+ *  - 510 poseidon
+ *  - 600 steps
+ * @process-opcode
+ *  - stack input:  [offset, size]
+ *  - stack output: none
+ */
+opRETURN:
+    ; check stack underflow
+    SP - 2 => SP    :JMPN(stackUnderflow)
+    $ => E          :MLOAD(SP+1); [offset => E]
+    $ => C          :MLOAD(SP); [size => C]
+
+    ; checks zk-counters
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    ; store return data values
+    E               :MSTORE(retDataOffset)
+    C               :MSTORE(retDataLength)
+    ; store lastMemOffset for memory expansion gas cost
+    E               :MSTORE(lastMemOffset)
+    ; store lastMemLength for memory expansion gas cost
+    ; compute memory expansion gas cost
+    C               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    ; check is a create
+    $ => D          :MLOAD(isCreateContract), JMPNZ(opRETURNdeploy)
+    ; reduce CTX
+    ; if origin ctx is 0, end tx
+    $ => B          :MLOAD(originCTX), JMPZ(handleGas)
+    ; handle gas refund
+    $ => B          :MLOAD(gasRefund)
+    $ => A          :MLOAD(currentCTX)
+    $ => CTX        :MLOAD(originCTX)
+    ; set return data context values to origin context
+    A               :MSTORE(retDataCTX)
+    B               :MSTORE(gasRefund)
+    $ => B          :MLOAD(gasCTX)
+    B + GAS => GAS
+    ; return to current CTX
+    $ => CTX        :MLOAD(currentCTX)
+    $ => D          :MLOAD(retCallLength)
+    C => A
+    D => B
+    ; set smallest return length between retCallLength and lastMemLength
+    $               :LT,JMPC(preRETURN32)
+    D => C
+
+preRETURN32:
+    $ => B          :MLOAD(retCallOffset)
+
+; Copy from memory current CTX to memory origin CTX
+opRETURN32:
+    ; checks dynamic zk-counters
+    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+
+    C               :JMPZ(opRETURNend)
+    C - 32          :JMPN(opRETURNfinal)
+    ; load first 32 bytes from memory at current CTX
+                    :CALL(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
+    E => D
+    ; load origin CTX
+    $ => CTX        :MLOAD(originCTX)
+    B => E
+     ; set bytesToStore with value to use in MSTORE
+    ; store 32 bytes at origin CTX
+    A               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    E => B
+    D => E
+    C - 32 => C
+    ; restore current TX
+    $ => CTX        :MLOAD(currentCTX), JMP(opRETURN32)
+
+opRETURNfinal:
+    ; load last bytes
+                    :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
+    $ => CTX        :MLOAD(originCTX)
+    B => E
+    ; store last bytes
+    A               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
+    $ => CTX        :MLOAD(currentCTX)
+
+opRETURNend:
+    ; decrease CTX
+    $ => CTX        :MLOAD(originCTX)
+    CTX             :MSTORE(currentCTX)
+    ; restore origin CTX values
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    1               :MSTORE(SP++); [1 => SP]
+    ; decrease depth
+    $ => A          :MLOAD(depth)
+    A - 1           :MSTORE(depth), JMP(readCode)
+
+opRETURNdeploy:
+    ; code size limit = 0x6000
+    %CODE_SIZE_LIMIT - C      :JMPN(invalidCodeSize)
+    ;code_deposit_cost = 200 * returned_code_size
+    GAS - %RETURN_GAS_COST * C => GAS    :JMPN(outOfGas)
+    ; check if first context
+    $ => B          :MLOAD(originCTX), JMPNZ(opRETURNcreate, endDeploy)
+
+opRETURNcreate:
+    ; checks zk-counters
+    %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 192 :JMPN(outOfCountersBinary)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCountersMemalign)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1020 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+
+    ; save offset memory and length to compute contract hash
+    E               :MSTORE(memOffsetLinearPoseidon)
+    C               :MSTORE(memSizeLinearPoseidon)
+    ; decrease context and set values
+    CTX             :MSTORE(currentCTX)
+    $ => B          :MLOAD(gasRefund)
+    $ => CTX        :MLOAD(originCTX)
+    B               :MSTORE(gasRefund)
+    $ => B          :MLOAD(gasCTX)
+    B + GAS => GAS
+    $ => CTX        :MLOAD(currentCTX)
+    $ => A          :MLOAD(txSrcAddr)
+    $ => D          :MLOAD(txNonce)
+
+    ; set bytecode length and read bytecode first byte
+    $ => A          :MLOAD(createContractAddress), CALL(checkBytecodeStartsEF)
+
+    ; check bytecode first byte != 0xEF
+    $               :MLOAD(startsWithEF), JMPNZ(invalidCodeStartsEF)
+
+    ; set key for smt smart contract length query
+    %SMT_KEY_SC_LENGTH => B
+    C => D
+    0 => C
+    ; get bytecode and hash it
+    $ => SR             :SSTORE, CALL(hashPoseidonLinearFromMemory); in: [memOffsetLinearPoseidon, memSizeLinearPoseidon], out: [D: resulting linear poseidon]
+    $ => A              :MLOAD(createContractAddress)
+    0 => C
+    ; set key for smt smart contract bytecode query
+    %SMT_KEY_SC_CODE => B
+    $ => SR                         :SSTORE
+
+opRETURNcreateEnd:
+    ; return to origin CTX
+    $ => A          :MLOAD(createContractAddress)
+    $ => CTX        :MLOAD(originCTX)
+    CTX             :MSTORE(currentCTX)
+    0               :MSTORE(retDataCTX)
+    ; set SP and PC
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    A               :MSTORE(SP++); [createContractAddress(A) => SP]
+    ; decrease depth
+    $ => A          :MLOAD(depth)
+    A - 1           :MSTORE(depth), JMP(readCode)
+
+/**
+ * @link [https://www.evm.codes/#f4?fork=berlin]
+ * @zk-counters
+ *  - 32 arith
+ *  - 32 binary
+ *  - 510 poseidon
+ *  - 1200 steps
+ * @process-opcode
+ *  - stack input: [gas, address, argsOffset, argsSize, retOffset, retSize]
+ *  - stack output: [success]
+ */
+opDELEGATECALL:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    ; increase depth
+    $ => A          :MLOAD(depth)
+    A + 1           :MSTORE(depth)
+    ; check stack underflow
+    SP - 6          :JMPN(stackUnderflow)
+    SP - 1 => SP
+    ; store current CTX to auxiliary var for later usage
+    CTX             :MSTORE(originAuxCTX)
+    ; store gas call
+    $ => A          :MLOAD(SP--); [gas => A]
+    A               :MSTORE(gasCall)
+    ; store address call
+    $ => A          :MLOAD(SP--); [address => A]
+    ; Mask address to 20 bytes
+                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
+    A               :MSTORE(addrCall)
+    ; store bytes offset int the memory, the calldata of the subcontext
+    $ => A          :MLOAD(SP--)
+    A               :MSTORE(argsOffsetCall); [argsOffset => A]
+    ; store lastMemOffset for memory expansion gas cost
+    A               :MSTORE(lastMemOffset)
+
+    ; byte size to copy, size of the calldata of the subcontext
+    $ => C          :MLOAD(SP--); [argsSize => C]
+    C               :MSTORE(argsLengthCall)
+    ; store lastMemLength for memory expansion gas cost
+    ; mem expansion gas cost call args
+    C               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+
+    ; Store byte offset in the memory in bytes, where to store the return data of the sub context.
+    $ => B          :MLOAD(SP--); [retOffset => B]
+    B               :MSTORE(lastMemOffset)
+    ; Store byte size to copy (size of the return data).
+    $ => E          :MLOAD(SP); [retSize => D]
+    ;  Mem expansion gas cost return args
+    E               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+
+    ; checks zk-counters
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 400:JMPN(outOfCountersStep)
+
+
+    $ => B                   :MLOAD(lastMemOffset)
+    ; check if an address is cold. If it is, add it to the touched tree
+    $ => A                   :MLOAD(addrCall)
+                             :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+    ;gas_cost = base_gas + gas_sent_with_call
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
+
+    ; transition to new CTX
+    $ => C          :MLOAD(txSrcAddr)
+    $ => D          :MLOAD(storageAddr)
+    SP              :MSTORE(lastSP)
+    PC              :MSTORE(lastPC)
+    ; increase CTX
+    $ => A          :MLOAD(lastCtxUsed)
+    A+1 => CTX      :MSTORE(lastCtxUsed)
+    CTX             :MSTORE(currentCTX)
+    $ => A          :MLOAD(originAuxCTX)
+    A               :MSTORE(originCTX)
+    ; set vars for new CTX
+    C               :MSTORE(txSrcAddr)
+    D               :MSTORE(storageAddr)
+    1               :MSTORE(isDelegateCall)
+    SR              :MSTORE(initSR)
+    $ => A          :MLOAD(addrCall)
+    A               :MSTORE(txDestAddr)
+    B               :MSTORE(retCallOffset)
+    ; compute gas send in call
+    E               :MSTORE(retCallLength), CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    $ => CTX        :MLOAD(originCTX)
+    GAS - A         :MSTORE(gasCTX)
+    $ => B          :MLOAD(txValue)
+    $ => C          :MLOAD(gasRefund)
+    $ => D          :MLOAD(isStaticCall)
+    $ => CTX        :MLOAD(currentCTX)
+    D               :MSTORE(isStaticCall)
+    B               :MSTORE(txValue)
+    C               :MSTORE(gasRefund)
+    A => GAS
+
+opDELEGATECALLend:
+    $ => A          :MLOAD(argsLengthCall)
+    ; copy calldata from origin CTX to current CTX
+    A               :MSTORE(txCalldataLen), CALL(copySP)
+    ; Save touched root when a new context is created
+                    :CALL(checkpointTouched)
+                    :JMP(txType)
+
+/**
+ * @link [https://www.evm.codes/#f5?fork=berlin]
+ * @zk-counters
+ *  - 32 arith
+ *  - 32 binary
+ *  - 2 mem align
+ *  - 510 poseidon
+ *  - 600 steps
+ * @process-opcode
+ *  - stack input:  [value, offset, size, salt]
+ *  - stack output: [address]
+ */
+opCREATE2:
+    ; checks zk-counters
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    ; check out-of-gas
+    GAS - %CREATE_2_GAS => GAS  :JMPN(outOfGas)
+
+    ; increase depth
+    $ => A              :MLOAD(depth)
+    A + 1               :MSTORE(depth)
+
+    ; check stack underflow
+    SP - 4              :JMPN(stackUnderflow)
+    ; check is static
+    $ => A              :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
+    SP - 1 => SP
+    $ => A              :MLOAD(SP--); [value => D]
+    A                   :MSTORE(valueCall)
+    $ => E              :MLOAD(SP--); [offset => E]
+    E                   :MSTORE(argsOffsetCall)
+    $ => C              :MLOAD(SP--); [size => C]
+    C                   :MSTORE(argsLengthCall)
+    $ => D              :MLOAD(SP); [salt => D]
+
+
+    ; store lastMemOffset for memory expansion gas cost
+    E                   :MSTORE(lastMemOffset)
+    ; store lastMemLength for memory expansion gas cost
+    ; compute memory expansion gas cost
+    C                   :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    ; store current CTX to auxiliary var for later usage
+    CTX                 :MSTORE(originAuxCTX)
+
+    ; cost to hash the initialisation code
+    ${C+31}             :MSTORE(arithA)
+    32                  :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => C              :MLOAD(arithRes1)
+    GAS => A
+    6*C => B
+    $                   :LT,JMPC(outOfGas)
+    A - B => GAS
+    GAS                 :MSTORE(gasCall)
+
+    ; check correctness of Create: depth, can transfer, nonce overlfow,
+    ; can transfer
+    $ => A              :MLOAD(storageAddr)
+    ; set key for smt balance query
+    %SMT_KEY_BALANCE => B
+    ; 3rd parameter does not apply to nonce or balance
+    0 => C
+    ; balance in A
+    $ => A              :SLOAD
+    $ => B              :MLOAD(valueCall)
+    $                   :LT,JMPC(opCreateFail)
+
+    ; check nonce overlow
+    $ => A              :MLOAD(storageAddr)
+    ; set key for smt nonce query
+    %SMT_KEY_NONCE => B
+    ; nonce in B
+    $ => B              :SLOAD
+    A => C
+    %MAX_NONCE => A
+    $                   :EQ,JMPC(opCreateFail)
+
+    ;change to a new CTX
+    SP                  :MSTORE(lastSP)
+    PC                  :MSTORE(lastPC)
+    ; increase used contexts counter
+    $ => A              :MLOAD(lastCtxUsed)
+    A+1 => CTX          :MSTORE(lastCtxUsed)
+    CTX                 :MSTORE(currentCTX)
+    1                   :MSTORE(isCreateContract)
+    1                   :MSTORE(isCreate)
+    1                   :MSTORE(isCreate2)
+    D                   :MSTORE(salt)
+    ; set origin CTX to this new CTX
+    $ => A              :MLOAD(originAuxCTX)
+    A                   :MSTORE(originCTX)
+
+    ; get nonce & update SR
+    ; get nonce length bytes
+    B                   :MSTORE(txNonce), CALL(getLenBytes); in: [B: value] out: [A: value bytes length]
+    A                   :MSTORE(lengthNonce)
+    ; increase nonce
+    B + 1 => D
+    C => A
+    ; set key for smt nonce query
+    %SMT_KEY_NONCE => B
+    0 => C
+    $ => SR             :SSTORE
+    SR                  :MSTORE(initSR)
+    ; compute gas send in call
+    A                   :MSTORE(txSrcAddr), CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    $ => CTX            :MLOAD(originCTX)
+    $ => C              :MLOAD(gasRefund)
+    GAS - A             :MSTORE(gasCTX)
+    $ => CTX            :MLOAD(currentCTX)
+    C                   :MSTORE(gasRefund)
+    ; update GAS to computed gas send call
+    ; copy calldata from origin CTX to current CTX
+    A => GAS            :CALL(copySP)
+    ; set CTX var values
+    $ => A              :MLOAD(argsLengthCall)
+    A                   :MSTORE(txCalldataLen)
+    $ => A              :MLOAD(valueCall)
+    ; Save touched root when a new context is created
+    A                   :MSTORE(txValue), CALL(checkpointTouched)
+                        :JMP(txType)
+
+/**
+ * @link [https://www.evm.codes/#fa?fork=berlin]
+ * @zk-counters
+ *  - 32 arith
+ *  - 32 binary
+ *  - 510 poseidon
+ *  - 1200 steps
+ * @process-opcode
+ *  - stack input: [gas, address, argsOffset, argsSize, retOffset, retSize]
+ *  - stack output: [success]
+ */
+opSTATICCALL:
+    ; increase depth
+    $ => A          :MLOAD(depth)
+    A + 1           :MSTORE(depth)
+    ; check stack underflow
+    SP - 6          :JMPN(stackUnderflow)
+    SP - 1 => SP
+    ; store current CTX to auxiliary var for later usage
+    CTX             :MSTORE(originAuxCTX)
+    ; store gas call
+    $ => A          :MLOAD(SP--); [gas => A]
+    A               :MSTORE(gasCall)
+    ; mask address to 20 bytes
+    $ => A          :MLOAD(SP--), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
+    A               :MSTORE(addrCall)
+    ; store bytes offset int the memory, the calldata of the subcontext
+    $ => A          :MLOAD(SP--); [argsOffset => A]
+    A               :MSTORE(argsOffsetCall)
+    ; store lastMemOffset for memory expansion gas cost
+    A               :MSTORE(lastMemOffset)
+    ; byte size to copy, size of the calldata of the subcontext
+    $ => B          :MLOAD(SP--); [argsSize => B]
+    B               :MSTORE(argsLengthCall)
+    ; store lastMemLength for memory expansion gas cost
+    ; compute memory expansion gas cost
+    B               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    ; store byte offset in the memory in bytes, where to store the return data of the sub context
+    $ => C          :MLOAD(SP--); [retOffset => C]
+    C               :MSTORE(lastMemOffset)
+    ; store byte size to copy (size of the return data)
+    $ => E          :MLOAD(SP); [retSize => E]
+    ; compute memory expansion gas cost of the return value
+    E               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+
+    ; checks zk-counters
+    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+
+    ; check if an address is cold. If it is, add it to the touched tree
+    $ => A          :MLOAD(addrCall), CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+    ;gas_cost = base_gas + gas_sent_with_call
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
+
+    ; setup vars for next CTX
+    $ => D          :MLOAD(storageAddr)
+    $ => B          :MLOAD(gasRefund)
+    SP              :MSTORE(lastSP)
+    PC              :MSTORE(lastPC)
+    ; increase CTX
+    $ => A          :MLOAD(lastCtxUsed)
+    A+1 => CTX      :MSTORE(lastCtxUsed)
+    CTX             :MSTORE(currentCTX)
+    $ => A          :MLOAD(originAuxCTX)
+    A               :MSTORE(originCTX)
+    B               :MSTORE(gasRefund)
+    0               :MSTORE(txValue)
+    1               :MSTORE(isStaticCall)
+    D               :MSTORE(txSrcAddr)
+    SR              :MSTORE(initSR)
+    $ => A          :MLOAD(addrCall)
+    A               :MSTORE(txDestAddr)
+    A               :MSTORE(storageAddr)
+    C               :MSTORE(retCallOffset)
+    ; compute gas send in call
+    E               :MSTORE(retCallLength), CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
+    $ => CTX        :MLOAD(originCTX)
+    GAS - A         :MSTORE(gasCTX)
+    $ => CTX        :MLOAD(currentCTX)
+    ; update GAS to computed gas send call
+    A => GAS
+    $ => A          :MLOAD(argsLengthCall)
+    ; copy calldata from origin CTX to current CTX
+    A               :MSTORE(txCalldataLen), CALL(copySP)
+    ; save touched root when a new context is created
+                    :CALL(checkpointTouched)
+                    :JMP(txType)
+/**
+ * @link [https://www.evm.codes/#fd?fork=berlin]
+ * @zk-counters
+ *  - 1000 steps
+ * @process-opcode
+ *  - stack input: [offset, size]
+ *  - stack output: none
+ */
+opREVERT:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    ; check stack underflow
+    SP - 2 => SP          :JMPN(stackUnderflow)
+    ; load initSR to revert al state changes
+    ; revert touched accounts
+    $ => SR         :MLOAD(initSR), CALL(revertTouched)
+
+    $ => E          :MLOAD(SP+1); [offset => E]
+    $ => C          :MLOAD(SP); [size => C]
+    E               :MSTORE(retDataOffset)
+    C               :MSTORE(retDataLength)
+    ; store lastMemOffset for memory expansion gas cost
+    E               :MSTORE(lastMemOffset)
+    ; store lastMemLength for memory expansion gas cost
+    ; compute memory expansion gas cost
+    C               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    ; check if first context
+    $ => B          :MLOAD(originCTX)
+    $${eventLog(onError, revert)}
+    0               :MSTORE(gasRefund)
+    ; if origin ctx is 0, end tx
+    B               :JMPZ(handleGas)
+    ; decrease CTX
+    $ => A          :MLOAD(currentCTX)
+    B => CTX
+    ; add return data context value to origin context
+    A               :MSTORE(retDataCTX)
+    ; return left gas to origin CTX
+    $ => B          :MLOAD(gasCTX)
+    GAS + B => GAS
+
+    A => CTX
+    $ => D          :MLOAD(retCallLength)
+    C => A
+    D => B
+    $               :LT,JMPC(preREVERT32)
+    D => C
+
+; copy from memory current CTX to memory origin CTX
+preREVERT32:
+    $ => B          :MLOAD(retCallOffset)
+
+opREVERT32:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+
+    C              :JMPZ(opREVERTend)
+    ; load first 32 bytes from memory at current CTX
+    C - 32          :JMPN(opREVERTfinal)
+                    :CALL(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
+    E => D
+    $ => CTX        :MLOAD(originCTX)
+    B => E
+     ; set bytesToStore with value to use in MSTORE
+    ; store 32 bytes at origin CTX
+    A               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    E => B
+    D => E
+    C - 32 => C
+    ; restore current CTX
+    $ => CTX        :MLOAD(currentCTX), JMP(opREVERT32)
+
+opREVERTfinal:
+    ; copy last bytes
+                    :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
+    $ => CTX        :MLOAD(originCTX)
+    B => E
+    A               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
+    $ => CTX        :MLOAD(currentCTX)
+
+opREVERTend:
+    ; decrease CTX and restore SP and PC
+    $ => CTX        :MLOAD(originCTX)
+    CTX             :MSTORE(currentCTX)
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    0               :MSTORE(SP++); [0 => SP]
+    ; decrease depth
+    $ => A          :MLOAD(depth)
+    A - 1           :MSTORE(depth), JMP(readCode)
+
+; SELFDESTRUCT is deprecated and EIP-4758 is implemented: https://eips.ethereum.org/EIPS/eip-4758
+; SELFDESTRUCT is now SENDALL
+/**
+ * @link [https://www.evm.codes/#ff?fork=berlin] (selfdestruct)
+ * @zk-counters
+ *  - 10 binary
+ *  - 2040 poseidon
+ *  - 600 steps
+ * @process-opcode
+ *  - stack input: [address]
+ *  - stack output: none
+ */
+opSENDALL:
+    ; checks zk-counters
+    %MAX_CNT_BINARY - CNT_BINARY - 10 :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 2040 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    ; check out-of-gas
+    GAS - %SENDALL_GAS => GAS   :JMPN(outOfGas)
+
+    ; check stack underflow
+    SP - 1 => SP        :JMPN(stackUnderflow)
+
+    ; check is static
+    $ => A              :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
+    $ => A              :MLOAD(storageAddr)
+    ; set key for smt balance query
+    %SMT_KEY_BALANCE => B
+    0 => C
+    ; balance in D
+    $ => D              :SLOAD
+
+    $ => A              :MLOAD(SP); [address => A]
+    ; Mask address to 20 bytes
+                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
+    ; check if storage address has balance to withdraw
+    A => C
+    A => E
+    0 => A
+    D => B
+    $                           :EQ,JMPC(opSENDALL2)
+                                :CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
+    GAS - %CALL_NEW_ACCOUNT_GAS * E => GAS      :JMPN(outOfGas)
+
+opSENDALL2:
+    ; check is cold to compute gas cost
+    C => A                      :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+    GAS - %COLD_ACCOUNT_ACCESS_COST * D => GAS     :JMPN(outOfGas)
+    B                         :MSTORE(arithA)
+    ; read previous balance receiver
+    ; set key for smt balance query
+    %SMT_KEY_BALANCE => B
+    0 => C
+    ; balance in E
+    $ => E              :SLOAD
+
+    ; compute new receiver balance
+    ; Add operation with Arith
+    E               :MSTORE(arithB), CALL(addARITH); in: [arithA, arithB] out[arithRes1: arithA*arithB]
+    $ => D          :MLOAD(arithRes1)
+
+    ; transfer balance to receiver
+    $ => A                  :MLOAD(SP); [address => A]
+    %SMT_KEY_BALANCE => B
+    0 => C
+    $ => SR                 :SSTORE
+
+    ; set contract balance to 0
+    $ => A                  :MLOAD(storageAddr)
+    0 => D
+    $ => SR                 :SSTORE
+    ; if origin ctx is 0, end tx
+    $ => A                  :MLOAD(originCTX)
+    $                       :EQ,JMPC(handleGas)
+    ; decrease CTX
+    $ => B                  :MLOAD(gasRefund)
+    $ => C                  :MLOAD(isCreate)
+    1 => D
+    C                       :JMPZ(opSENDALLend)
+    $ => D                  :MLOAD(createContractAddress)
+
+opSENDALLend:
+    A => CTX
+    0                       :MSTORE(retDataCTX)
+    CTX                     :MSTORE(currentCTX)
+    B                       :MSTORE(gasRefund)
+    $ => C                  :MLOAD(gasCTX)
+    GAS + C => GAS
+    ; restore origin CTX values
+    $ => SP                 :MLOAD(lastSP)
+    $ => PC                 :MLOAD(lastPC)
+    D                       :MSTORE(SP++); [output => SP]
+    ; decrease depth
+    $ => A                  :MLOAD(depth)
+    A - 1                   :MSTORE(depth), JMP(readCode)
+/**
+ * @link [https://www.evm.codes/#fe?fork=berlin]
+ * @zk-counters
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: none
+ *  - stack output: none
+ */
+opINVALID:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep, invalidOpcode)

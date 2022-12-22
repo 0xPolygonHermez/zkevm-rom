@@ -1,25 +1,26 @@
 ; Input variables
-VAR GLOBAL globalHash ; globalHash = H_keccak(oldStateRoot | oldLocalStateRoot | newStateRoot | newLocalExitRoot | batchHashData | numBatch | timestamp | chainId )
-VAR GLOBAL globalExitRoot ; Global exit-tree root
 VAR GLOBAL oldStateRoot ; Previous state-tree root
-VAR GLOBAL oldLocalExitRoot ; Previous local exit-tree root
-VAR GLOBAL newLocalExitRoot ; Updated local exit-tree root
+VAR GLOBAL oldAccInputHash ; Previous accumulated input hash
+VAR GLOBAL globalExitRoot ; Global exit-tree root
+VAR GLOBAL oldNumBatch ; Previous batch processsed
 VAR GLOBAL sequencerAddr ; Coinbase address which will receive the fees
-VAR GLOBAL batchHashData ; batchHashData = H_keccak( transactions | globalExitRoot | sequencerAddr )
-VAR GLOBAL numBatch ; Current batch to process
+VAR GLOBAL batchHashData ; batchHashData = H_keccak( transactions )
 VAR GLOBAL timestamp ; Current batch timestamp
-VAR GLOBAL chainId ; Current batch chain id
+VAR GLOBAL chainID ; Current batch chain id
+
+; Output variables
+VAR GLOBAL newAccInputHash ; Final accumulated input hash. newAccInputHash = H_keccak( oldAccInputHash | batchHashData | globalExitRoot | timestamp | sequencerAddr )
+VAR GLOBAL newLocalExitRoot ; Updated local exit tree root
+VAR GLOBAL newNumBatch ; Current batch processsed
 
 VAR GLOBAL batchL2DataParsed ; Number of bytes read when decoding RLP transactions. Computed during RLP loop
 VAR GLOBAL pendingTxs ; Number of transactions decoded in RLP block
 VAR GLOBAL lastCtxUsed ; Last context that has been used
 VAR GLOBAL ctxTxToUse ; First context to be used when processing transactions
-VAR GLOBAL lastTxHashId ; First hash address to be used when processing transactions
 VAR GLOBAL lastHashKIdUsed ; Last hash address used
 VAR GLOBAL nextHashPId ; Next posidon hash address available
 
 VAR GLOBAL batchL2DataLength ; Transactions bytes read from the input
-VAR GLOBAL oldHashPos ; Save hash data position for globalHash
 VAR GLOBAL batchHashDataId ; hash address used when adding bytes to batchHashData
 VAR GLOBAL batchHashPos ; hash batchHashData position
 VAR GLOBAL currentCTX ; keeps track of the context used
@@ -38,8 +39,16 @@ VAR GLOBAL cntKeccakPreProcess ; Number of keccak counters needed to finish the 
 VAR GLOBAL nextFreeLogIndex ; pointer to the next free slot to store information in LOG opcode
 VAR GLOBAL originSR ; State root before processing each transaction
 VAR GLOBAL batchSR ; State root before processing any transaction
+VAR GLOBAL txCount ; Current transaction count
 
-VAR CTX txRLPLength ; transaction RLP list length
+VAR GLOBAL touchedSR ; touched tree root
+VAR GLOBAL numTopics ; number of topics depending on LOG opcode call
+VAR GLOBAL SPw ; aux variable to store Stack poimnter 'SP'
+VAR GLOBAL hashContractTxDestAddr ; state-tree hash bytecode leaf value of the 'to' address
+VAR GLOBAL auxSR ; auxiliaty variable. Temporary state root
+VAR GLOBAL txRLPLength ; transaction RLP list length
+VAR GLOBAL txDataRead ; aux varible to check transaction 'data' left that needs to be read
+
 VAR CTX txGasLimit ; transaction parameter: 'gas limit'
 VAR CTX txDestAddr ; transaction parameter: 'to'
 VAR CTX storageAddr ; address which the storage will be modified
@@ -51,36 +60,33 @@ VAR CTX txS ; transaction parameter: ecdsa signature S
 VAR CTX txR ; transaction parameter: ecdsa signature R
 VAR CTX txV ; transaction parameter: ecdsa signature V
 VAR CTX txSrcAddr ; address that sends a transaction 'message.sender'
+VAR CTX txHash ; signed tx hash
 VAR CTX txCalldataLen ; calldata length
 VAR CTX isCreateContract ; flag to determine if a transaction will create a new contract
 VAR CTX createContractAddress ; address computed of a new contract
 VAR CTX lengthNonce ; 'nonce' length used when computing a new contract address
 VAR CTX gasRefund ; keeps track of the transaction gas refund
 VAR CTX initSR ; state-tree once the initial upfront cost is substracted and nonce is increased
-VAR CTX txDataRead ; aux varible to check transaction 'data' left that needs to be read
 VAR CTX memLength ; current memory size
 VAR CTX lastMemLength ; length of bytes to copy to memory
 VAR CTX lastMemOffset ; offset to copy to memory
-VAR CTX auxSR ; auxiliaty variable. Temporary state root
 VAR CTX retCallOffset ; initial pointer to begin store the return data
 VAR CTX retCallLength ; size of the return data
 VAR CTX retDataOffset ; pointer to previous context return data offset
 VAR CTX retDataLength ; pointer to previous context return data length
 VAR CTX retDataCTX ; pointer to context where the return data is stored
 VAR CTX argsOffsetCall ; pointer to the init slot where the calldata begins
-VAR CTX hashContractTxDestAddr ; state-tree hash bytecode leaf value of the 'to' address
 VAR CTX bytecodeLength ; state-tree length bytecode leaf value of the 'to' address
 VAR CTX contractHashId ; hashP address used to store contract bytecode
 VAR CTX originCTX ; The source context of the current context
 VAR CTX lastSP ; Last stack pointer used of the previous context
 VAR CTX lastPC ; Last program counter used of the previous context
-VAR CTX numTopics ; number of topics depending on LOG opcode call
 VAR CTX isStaticCall ; flag to determine if a new context comes from a STATICCALL opcode
 VAR CTX isCreate ; flag to determine if a new context comes from a CREATE opcode
 VAR CTX isDelegateCall ; flag to determine if a new context comes from a DELEGATECALL opcode
 VAR CTX isCreate2 ; flag to determine if a new context comes from a CREATE2 opcode
 VAR CTX salt ; CREATE2 parameter 'salt' used to compute new contract address
 VAR CTX gasCTX ; remaining gas in the origin CTX when a new context is created
-VAR CTX sigDataSize ; hash position for the ethereum transaction hash
 VAR CTX dataStarts; hash position where de transaction 'data' starts in the batchHashData
-VAR CTX SPw ; aux variable to store Stack poimnter 'SP'
+VAR CTX isPreEIP155 ; flag to check if the current tx is legacy, previous to Spurious Dragon (EIP-155)
+VAR CTX initTouchedSR ; touched root once a new context begins

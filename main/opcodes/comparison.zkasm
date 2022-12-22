@@ -1,0 +1,458 @@
+/**
+ * @link [https://www.evm.codes/#10?fork=berlin]
+ * @zk-counters
+ *  - 1 binary
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [a, b]
+ *  - stack output: [a < b]
+ */
+opLT:
+    ; checks zk-counters
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 20       :JMPN(outOfCountersStep)
+
+    ; check stack underflow
+    SP - 2          :JMPN(stackUnderflow)
+
+    ; check out-of-gas
+    GAS - %GAS_FASTEST_STEP => GAS    :JMPN(outOfGas)
+
+    ; read two items from stack
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--) ; [a => A]
+    $ => B          :MLOAD(SP) ; [a => B]
+
+    ; call binary:lessThan state machine
+    ; and push the result into the stack
+    $               :LT, MSTORE(SP++), JMP(readCode) ; [(a < b) => SP]
+
+/**
+ * @link [https://www.evm.codes/#11?fork=berlin]
+ * @zk-counters
+ *  - 1 binary
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [a, b]
+ *  - stack output: [a > b]
+ */
+opGT:
+    ; checks zk-counters
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP -       20 :JMPN(outOfCountersStep)
+
+    ; check stack underflow
+    SP - 2          :JMPN(stackUnderflow)
+
+    ; check out-of-gas
+    GAS - %GAS_FASTEST_STEP => GAS    :JMPN(outOfGas)
+
+    ; read two items from the stack
+    SP - 1 => SP
+    $ => B          :MLOAD(SP--) ; [a => B]
+    $ => A          :MLOAD(SP) ; [b => A]
+
+    ; call binary:lessThan state machine
+    ; and push the result into the stack
+    $               :LT, MSTORE(SP++), JMP(readCode) ; [(b < a) => SP]
+
+/**
+ * @link [https://www.evm.codes/#12?fork=berlin]
+ * @zk-counters
+ *  - 1 binary
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [a, b]
+ *  - stack output: [signed(a < b)]
+ */
+opSLT:
+    ; checks zk-counters
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 20       :JMPN(outOfCountersStep)
+
+    ; check stack underflow
+    SP - 2          :JMPN(stackUnderflow)
+
+    ; check out-of-gas
+    GAS - %GAS_FASTEST_STEP => GAS    :JMPN(outOfGas)
+
+    ; read two items from the stack
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--) ; [a => A]
+    $ => B          :MLOAD(SP) ; [b => B]
+
+    ; call binary:SignedLessThan state machine
+    ; and push the result into the stack
+    $               :SLT, MSTORE(SP++), JMP(readCode) ; [signed(a < b) => SP]
+
+/**
+ * @link [https://www.evm.codes/#13?fork=berlin]
+ * @zk-counters
+ *  - 1 binary
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [a, b]
+ *  - stack output: [signed(a > b)]
+ */
+opSGT:
+    ; checks zk-counters
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 20       :JMPN(outOfCountersStep)
+
+    ; check stack underflow
+    SP - 2          :JMPN(stackUnderflow)
+
+    ; check out-of-gas
+    GAS - %GAS_FASTEST_STEP => GAS    :JMPN(outOfGas)
+
+    ; read two items from the stack
+    SP - 1 => SP
+    $ => B          :MLOAD(SP--) ; [a => B]
+    $ => A          :MLOAD(SP) ; [b => A]
+
+    ; call binary:SignedLessThan state machine
+    ; and push the result into the stack
+    $               :SLT, MSTORE(SP++), JMP(readCode) ; [signed(b < a) => SP]
+
+/**
+ * @link [https://www.evm.codes/#14?fork=berlin]
+ * @zk-counters
+ *  - 1 binary
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [a, b]
+ *  - stack output: [a == b]
+ */
+opEQ:
+    ; checks zk-counters
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 20       :JMPN(outOfCountersStep)
+
+    ; check stack underflow
+    SP - 2          :JMPN(stackUnderflow)
+
+    ; check out-of-gas
+    GAS - %GAS_FASTEST_STEP => GAS    :JMPN(outOfGas)
+
+    ; read two items from the stack
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--) ; [a => A]
+    $ => B          :MLOAD(SP) ; [b => B]
+
+    ; call binary:Equal state machine
+    ; and push the result into the stack
+    $               :EQ, MSTORE(SP++), JMP(readCode) ; [(a == b) => SP]
+
+/**
+ * @link [https://www.evm.codes/#15?fork=berlin]
+ * @zk-counters
+ *  - 1 binary
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [a]
+ *  - stack output: [a == 0]
+ */
+opISZERO:
+    ; checks zk-counters
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 20       :JMPN(outOfCountersStep)
+
+    ; check stack underflow
+    SP - 1          :JMPN(stackUnderflow)
+
+    ; check out-of-gas
+    GAS - %GAS_FASTEST_STEP => GAS    :JMPN(outOfGas)
+
+    ; read one item from stack
+    $ => A          :MLOAD(SP-1) ; [a => B]
+    0 => B
+
+    ; call binary:Equal state machine
+    ; and push the result into the stack
+    $               :EQ, MSTORE(SP-1), JMP(readCode) ; [(a == 0) ==> SP]
+
+/**
+ * @link [https://www.evm.codes/#16?fork=berlin]
+ * @zk-counters
+ *  - 1 binary
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [a, b]
+ *  - stack output: [a & b]
+ */
+opAND:
+    ; checks zk-counters
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 20       :JMPN(outOfCountersStep)
+
+    ; check stack underflow
+    SP - 2          :JMPN(stackUnderflow)
+
+    ; check out-of-gas
+    GAS - %GAS_FASTEST_STEP => GAS    :JMPN(outOfGas)
+
+    ; read two items from the stack
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--) ; [a => A]
+    $ => B          :MLOAD(SP) ; [b => B]
+
+    ; call binary:And state machine
+    ; and push the result into the stack
+    $               :AND, MSTORE(SP++), JMP(readCode) ; [ a & b => SP]
+
+/**
+ * @link [https://www.evm.codes/#17?fork=berlin]
+ * @zk-counters
+ *  - 1 binary
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [a, b]
+ *  - stack output: [a | b]
+ */
+opOR:
+    ; checks zk-counters
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 20       :JMPN(outOfCountersStep)
+
+    ; check stack underflow
+    SP - 2          :JMPN(stackUnderflow)
+
+    ; check out-of-gas
+    GAS - %GAS_FASTEST_STEP => GAS    :JMPN(outOfGas)
+
+    ; read two items from the stack
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--)
+    $ => B          :MLOAD(SP)
+
+    ; call binary:Or state machine
+    ; and push the result into the stack
+    $               :OR, MSTORE(SP++), JMP(readCode) ; [ a | b => SP]
+
+/**
+ * @link [https://www.evm.codes/#18?fork=berlin]
+ * @zk-counters
+ *  - 1 binary
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [a, b]
+ *  - stack output: [a ^ b]
+ */
+opXOR:
+    ; checks zk-counters
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 20       :JMPN(outOfCountersStep)
+
+    ; check stack underflow
+    SP - 2          :JMPN(stackUnderflow)
+
+    ; check out-of-gas
+    GAS - %GAS_FASTEST_STEP => GAS    :JMPN(outOfGas)
+
+    ; read two items from the stack
+    SP - 1 => SP
+    $ => A          :MLOAD(SP--) ; [a => A]
+    $ => B          :MLOAD(SP) ; [b => B]
+
+    ; call binary:Xor state machine
+    ; and push the result into the stack
+    $               :XOR,MSTORE(SP++), JMP(readCode) ; [ a ^ b => SP]
+
+/**
+ * @link [https://www.evm.codes/#19?fork=berlin]
+ * @zk-counters
+ *  - 1 binary
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [a]
+ *  - stack output: [ ~a ]
+ */
+opNOT:
+    ; checks zk-counters
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 20       :JMPN(outOfCountersStep)
+
+    ; check stack underflow
+    SP - 1          :JMPN(stackUnderflow)
+
+    ; check out-of-gas
+    GAS - %GAS_FASTEST_STEP => GAS    :JMPN(outOfGas)
+
+    ; read one item from the stack
+    $ => A          :MLOAD(SP-1)
+
+    0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn => B ; 2**226 - 1 =>
+    $ => A          :XOR,MSTORE(SP-1), JMP(readCode) ; [ NOT a => SP]
+
+/**
+ * @link [https://www.evm.codes/#1a?fork=berlin]
+ * @zk-counters
+ *  - 2 arith
+ *  - 4 binary
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [byte offset, 32-byte value]
+ *  - stack output: [byte]
+ */
+opBYTE:
+    ; checks zk-counters
+    %MAX_CNT_ARITH - CNT_ARITH - 2 :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 120 :JMPN(outOfCountersStep)
+
+    ; check stack underflow
+    SP - 2          :JMPN(stackUnderflow)
+
+    ; check out-of-gas
+    GAS - %GAS_FASTEST_STEP => GAS    :JMPN(outOfGas)
+
+    ; read two items from the stack
+    SP - 1 => SP
+    $ => B          :MLOAD(SP--) ; [byte offset => B]
+    $ => C          :MLOAD(SP) ; [32-byte value => C]
+
+    ; if the byte offset is out of range --> go to opBYTE0
+    31 => A
+    $ => D          :SUB, JMPC(opBYTE0)
+
+    ; call util function
+    C => A
+                    :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+
+    ; call binary:and state machine and push to the stack
+    255 => B
+    $               :AND, MSTORE(SP++), JMP(readCode) ; [ A & 255 => SP]
+
+opBYTE0:
+    0               :MSTORE(SP++), JMP(readCode) ; [ 0 => SP]
+
+/**
+ * @link [https://www.evm.codes/#1c?fork=berlin]
+ * @zk-counters
+ *  - 1 arith
+ *  - 3 binary
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [shift, value]
+ *  - stack output: [value >> shift]
+ */
+opSHR:
+    ; checks zk-counters
+    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 3    :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 120         :JMPN(outOfCountersStep)
+
+    ; check stack underflow
+    SP - 2              :JMPN(stackUnderflow)
+
+    ; check out-of-gas
+    GAS - %GAS_FASTEST_STEP => GAS      :JMPN(outOfGas)
+
+    ; read two items from the stack
+    SP - 1 => SP
+    $ => D          :MLOAD(SP--) ; [shift => D]
+    ; call SHRarithBit util
+    $ => A          :MLOAD(SP), CALL(SHRarithBit)   ; [value => A]; [ A >> D => A]
+    A               :MSTORE(SP++), JMP(readCode) ; [ A => SP]
+
+/**
+ * @link [https://www.evm.codes/#1b?fork=berlin]
+ * @zk-counters
+ *  - 1 arith
+ *  - 3 binary
+ *  - 120 steps
+ * @process-opcode
+ *  - stack input: [shift, value]
+ *  - stack output: [value << shift]
+ */
+opSHL:
+    ; checks zk-counters
+    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 3    :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 120         :JMPN(outOfCountersStep)
+
+    ; check stack underflow
+    SP - 2              :JMPN(stackUnderflow)
+
+    ; check out-of-gas
+    GAS - %GAS_FASTEST_STEP => GAS      :JMPN(outOfGas)
+
+    ; read two items from the stack
+    SP - 1 => SP
+    $ => D          :MLOAD(SP--)
+    $ => A          :MLOAD(SP)
+
+    ; CALL shl util
+                    :CALL(SHLarithBit)  ; [ A << D => A]
+    A               :MSTORE(SP++), JMP(readCode) ; [A => SP]
+
+/**
+ * @link [https://www.evm.codes/#1d?fork=berlin]
+ * @zk-counters
+ *  - 1 arith
+ *  - 9 binary
+ *  - 200 steps
+ * @process-opcode
+ *  - stack input: [shift, value]
+ *  - stack output: [value >> shift (signed)]
+ */
+opSAR:
+    ; checks zk-counters
+    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 9   :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 200         :JMPN(outOfCountersStep)
+
+    ; check stack underflow
+    SP - 2              :JMPN(stackUnderflow)
+
+    ; check out-of-gas
+    GAS - %GAS_FASTEST_STEP => GAS      :JMPN(outOfGas)
+
+    ; read two items form the stack
+    SP - 1 => SP
+    $ => C          :MLOAD(SP--) ; [shift (bits) => C]
+    $ => A          :MLOAD(SP) ; [value => A]
+
+    ; Sign of A [1 if negative, 0 positive] in E
+    0 => B
+    $ => E          :SLT ; [sign(A) => E]
+
+    ; check shift is less than 256 bits
+    A => D ; [value => D]
+    C => B ; [shift (bits) => B]
+    256 => A
+    $               :LT, JMPC(maxShiftSAR)
+
+    ; compute result depending on sign
+    E               :JMPZ(positiveValue, negativeValue)
+
+positiveValue:
+    ; call SHRarithBit util
+    D => A
+    C => D          :CALL(SHRarithBit) ; [shift (bits) => D]; [ A >> D => A]
+                    :JMP(endSAR)
+
+negativeValue:
+    D => A
+    %MAX_UINT_256 => B
+    $ => A          :XOR ; [~A => A]
+    C => D          :CALL(SHRarithBit) ; [shift (bits) => D]; [ A >> D => A]
+    $ => A          :XOR, JMP(endSAR) ; [~A => A]
+
+endSAR:
+    ; check shifted result is greater than 0
+    0 => B
+    $               :EQ, JMPC(maxShiftSAR)
+    A               :MSTORE(SP++), JMP(readCode)   ; [(value >> shift (signed)) => SP]
+
+
+; return 0 if sign is positive. return %MAX_UINT_256 if sign is negative
+maxShiftSAR:
+    0 => D ; [sign positive: 0 => D]
+
+    ; check sign negative or positive
+    E                      :JMPZ(endMaxShiftSAR)
+    %MAX_UINT_256 => D ; [sign negative: MAX_UINT_256 => D]
+
+endMaxShiftSAR:
+    D                       :MSTORE(SP++), JMP(readCode) ; [(value >> shift (signed)) => SP]

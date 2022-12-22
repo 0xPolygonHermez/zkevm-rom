@@ -1,0 +1,169 @@
+/**
+ * @link [https://www.evm.codes/#30?fork=berlin]
+ * @zk-counters
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: []
+ *  - stack output: [address]
+ */
+opADDRESS:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    ; check out-of-gas
+    GAS - %GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
+    ; check is a create
+    $ => A          :MLOAD(isCreateContract), JMPNZ(opADDRESSdeploy)
+    ; load current storage address
+    $ => A          :MLOAD(storageAddr), JMP(opADDRESSend)
+
+opADDRESSdeploy:
+    ; load create contract address
+    $ => A          :MLOAD(createContractAddress)
+
+opADDRESSend:
+    A               :MSTORE(SP++); [address(A) => SP]
+    ; check stack overflow
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
+
+/**
+ * @link [https://www.evm.codes/#47?fork=berlin]
+ * @zk-counters
+ *  - 255 poseidon
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: []
+ *  - stack output: [balance]
+ */
+opSELFBALANCE:
+    ; checks zk-counters
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    ; check out-of-gas
+    GAS - %GAS_FAST_STEP => GAS    :JMPN(outOfGas)
+
+    $ => A          :MLOAD(storageAddr)
+    ; set key for smt balance query
+    0 => B,C
+    ; balance in D
+    $ => D          :SLOAD
+    D               :MSTORE(SP++); [balance(D) => SP]
+    ; check stack overflow
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
+
+/**
+ * @link [https://www.evm.codes/#31?fork=berlin]
+ * @zk-counters
+ *  - 255 poseidon
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: [address]
+ *  - stack output: [balance]
+ */
+opBALANCE:
+    ; checks zk-counters
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 252 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    ; check stack underflow
+    SP - 1          :JMPN(stackUnderflow)
+    ; Mask address to 20 bytes
+    $ => A          :MLOAD(SP-1), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
+    ; set key for smt balance query
+    0 => B,C
+    ; balance in D
+    $ => D          :SLOAD
+    D               :MSTORE(SP-1), CALL(isColdAddress); [balance(D) => SP]; in: [A: address] out: [D: 0 if warm, 1 if cold]
+    ; check out-of-gas
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas, readCode)
+
+/**
+ * @link [https://www.evm.codes/#32?fork=berlin]
+ * @zk-counters
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: []
+ *  - stack output: [address]
+ */
+opORIGIN:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    ; check out-of-gas
+    GAS-%GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
+
+    $ => A          :MLOAD(txSrcOriginAddr)
+    A               :MSTORE(SP++); [address(A) => SP]
+    ; check stack overflow
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
+
+/**
+ * @link [https://www.evm.codes/#33?fork=berlin]
+ * @zk-counters
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: []
+ *  - stack output: [address]
+ */
+opCALLER:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    ; check out-of-gas
+    GAS - %GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
+
+    $ => A          :MLOAD(txSrcAddr)
+    A               :MSTORE(SP++); [address(A) => SP]
+    ; check stack overflow
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
+
+/**
+ * @link [https://www.evm.codes/#34?fork=berlin]
+ * @zk-counters
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: []
+ *  - stack output: [value]
+ */
+opCALLVALUE:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    ; check out-of-gas
+    GAS - %GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
+
+    $ => A          :MLOAD(txValue)
+    A               :MSTORE(SP++); [value(A) => SP]
+    ; check stack overflow
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
+
+/**
+ * @link [https://www.evm.codes/#3A?fork=berlin]
+ * @zk-counters
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: []
+ *  - stack output: [price]
+ */
+opGASPRICE:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    ; check out-of-gas
+    GAS - %GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
+
+    $ => A          :MLOAD(txGasPrice)
+    A               :MSTORE(SP++); [price(A) => SP]
+    ; check stack overflow
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
+
+/**
+ * @link [https://www.evm.codes/#5A?fork=berlin]
+ * @zk-counters
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: []
+ *  - stack output: [gas]
+ */
+opGAS:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    ; check out-of-gas
+    GAS - %GAS_QUICK_STEP => GAS  :JMPN(outOfGas)
+    GAS             :MSTORE(SP++); [gas(GAS) => SP]
+    ; check stack overflow
+    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)

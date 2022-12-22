@@ -7,29 +7,20 @@ VAR CTX exp
 MODEXP:
     $ => C          :MLOAD(argsLengthCall)
     $ => CTX        :MLOAD(originCTX)
-    $ => E          :MLOAD(argsOffsetCall)
-                    :CALL(MLOAD32)
-    A               :MSTORE(Bsize)
-                    :CALL(MLOAD32)
-    A               :MSTORE(Esize)
-                    :CALL(MLOAD32)
+    $ => E          :MLOAD(argsOffsetCall), CALL(MLOAD32)
+    A               :MSTORE(Bsize), CALL(MLOAD32)
+    A               :MSTORE(Esize), CALL(MLOAD32)
     A               :MSTORE(Msize)
-    $ => C          :MLOAD(Bsize)
-                    :CALL(MLOADX)
-    32 - C => D
-    zkPC+1 => RR    :JMP(SHRarith)
+    $ => C          :MLOAD(Bsize), CALL(MLOADX)
+    32 - C => D     :CALL(SHRarith)
     A => B
-    $ => C          :MLOAD(Esize)
-                    :CALL(MLOADX)
-    32 - C => D
-    zkPC+1 => RR    :JMP(SHRarith)
+    $ => C          :MLOAD(Esize), CALL(MLOADX)
+    32 - C => D     :CALL(SHRarith)
     A               :MSTORE(exp)
     A => D
-    $ => C          :MLOAD(Msize)
-                    :CALL(MLOADX)
+    $ => C          :MLOAD(Msize), CALL(MLOADX)
     D => E
-    32 - C => D
-    zkPC+1 => RR    :JMP(SHRarith)
+    32 - C => D     :CALL(SHRarith)
     E => D
     B => E
     0 => B
@@ -37,8 +28,7 @@ MODEXP:
     E => B
     ${exp(B,D)} => B
     ${B%A} => A
-    C => D
-                    :JMP(MODEXPfinal)
+    C => D          :JMP(MODEXPfinal)
 
 MODEXPreturn0:
     0 => A
@@ -52,11 +42,10 @@ MODEXPfinal:
 
     ;ASSERT C == D
     ;Result of the computation, with the same number of bytes as M
-    32 - D => D
-                    :CALL(SHLarith)
+    32 - D => D     :CALL(SHLarith)
     A               :MSTORE(bytesToStore)
     C - 32          :JMPN(MODEXPstoreX)
-                    :CALL(MSTORE32)
+                    :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
                     :JMP(MODEXPgas)
 
 MODEXPstoreX:
@@ -65,8 +54,7 @@ MODEXPstoreX:
 MODEXPgas:
     $ => A              :MLOAD(Bsize)
     $ => B              :MLOAD(Msize)
-    $ => D              :LT
-    D - 1               :JMPN(MODEXPgas2)
+    $ => D              :LT, JMPNC(MODEXPgas2)
     B => A
 
 MODEXPgas2:
@@ -76,9 +64,7 @@ MODEXPgas2:
     A                   :MSTORE(tmpVarA)
     $ => C              :MLOAD(Esize)
     $ => B              :MLOAD(exp)
-    C - 32              :JMPN(MODEXPgas3)
-    ;TODO +32 bytes
-                        :JMP(MODEXPgas4)
+    C - 32              :JMPN(MODEXPgas3, MODEXPgas4)
 
 MODEXPgas3:
     0 => A
@@ -88,18 +74,15 @@ MODEXPgas3:
 MODEXPgas4:
     1 => B
     D => A
-    $ => A              :LT
-    A - 1               :JMPN(MODEXPgasEnd)
+    $ => A              :LT, JMPNC(MODEXPgasEnd)
     1 => D ;iteration_count
 
 MODEXPgasEnd:
     $ => A              :MLOAD(tmpVarA)
     ${A*D/3} => A ;multiplication_complexity * iteration_count / 3 TODO: This is UNSAFE!!
     200 => B
-    $ => A              :LT
-    A - 1               :JMPN(MODEXPend)
+    $ => A              :LT, JMPNC(MODEXPend)
     200 => B
 
 MODEXPend:
-    GAS - B => GAS      :JMPN(outOfGas)
-                        :JMP(preEnd)
+    GAS - B => GAS      :JMPN(outOfGas, preEnd)
