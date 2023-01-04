@@ -409,7 +409,14 @@ computeGasSendCall:
     E                       :MSTORE(tmpVarEcompGas)
 
     ; compute all_but_one_64th gas
-    GAS - ${GAS/64} => A
+    GAS => A
+    ${A >> 6} => C
+    ${A & 0x3f} => D
+    C * 64 + D              :ASSERT
+    D => A
+    0x40 => B
+    $                       :LT,JMPNC(failAssert)
+    GAS - C => A
     $ => B                  :MLOAD(gasCall)
     ; gas_sent_with_call = min(requested_gas, all_but_one_64th)
     $                       :LT,JMPC(computeGasSendCallEnd)
@@ -426,14 +433,18 @@ computeGasSendCallEnd:
 VAR GLOBAL tmpVarAsaveMem
 VAR GLOBAL tmpVarBsaveMem
 VAR GLOBAL tmpVarCsaveMem
+VAR GLOBAL tmpVarDsaveMem
 VAR GLOBAL tmpVarEsaveMem
+VAR GLOBAL tmpZkPCsaveMem
 ; @info compute memory expansion gas cost
 ; @in: lastMemOffset: offset to copy bytes
 ; @in: lastMemLength: size of the bytes to copy
 saveMem:
+    RR                          :MSTORE(tmpZkPCsaveMem)
     A                           :MSTORE(tmpVarAsaveMem)
     B                           :MSTORE(tmpVarBsaveMem)
     C                           :MSTORE(tmpVarCsaveMem)
+    D                           :MSTORE(tmpVarDsaveMem)
     E                           :MSTORE(tmpVarEsaveMem)
     $ => E                      :MLOAD(lastMemOffset)
     $ => A                      :MLOAD(lastMemLength)
@@ -450,19 +461,45 @@ saveMem:
 saveMemGAS:
     ; store new memory length
     B                           :MSTORE(memLength)
+    A => D
     ; new memory size word= (memory_byte_size + 31) / 32 in E
-    ${(B+31)/32} => E
+    ; ${(B+31)/32} => E
+    31 => A
+    $ => C                      :ADD,JMPC(outOfGas)
+    C                           :MSTORE(arithA)
+    32                          :MSTORE(arithB),CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => E                      :MLOAD(arithRes1)
     ; old memory size word = (memory_byte_size + 31) / 32 in C
-    ${(A+31)/32} => C
+    ; ${(A+31)/32} => C
+    D => B
+    $ => C                      :ADD,JMPC(outOfGas)
+    C                           :MSTORE(arithA)
+    32                          :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => C                      :MLOAD(arithRes1)
     ; memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word)
-    GAS + 3*C + ${C*C/512} => GAS
+    ; ${C*C/512} => A
+    C                           :MSTORE(arithA)
+    C                           :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB, arithOverflow: set to 1 if operation causes overflow]
+    $ => A                      :MLOAD(arithRes1)
+    $                           :MLOAD(arithOverflow), JMPNZ(outOfGas)
+    A                           :MSTORE(arithA)
+    512                         :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => A                      :MLOAD(arithRes1)
+    GAS + 3*C + A => GAS
     ; memory_expansion_cost = new_memory_cost - last_memory_cost
     GAS => A
     3*E => B
     ; check enough gas for exapnsion cost
     $                           :LT,JMPC(outOfGas)
     A - B => A
-    ${E*E/512} => B
+    ; ${E*E/512} => B
+    E                           :MSTORE(arithA)
+    E                           :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB, arithOverflow: set to 1 if operation causes overflow]
+    $ => E                      :MLOAD(arithRes1)
+    $                           :MLOAD(arithOverflow), JMPNZ(outOfGas)
+    E                           :MSTORE(arithA)
+    512                         :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => B                      :MLOAD(arithRes1)
     $                           :LT,JMPC(outOfGas)
     ; update new gas
     A - B => GAS
@@ -472,6 +509,8 @@ saveMemEnd:
     $ => A                      :MLOAD(tmpVarAsaveMem)
     $ => B                      :MLOAD(tmpVarBsaveMem)
     $ => C                      :MLOAD(tmpVarCsaveMem)
+    $ => D                      :MLOAD(tmpVarDsaveMem)
+    $ => RR                     :MLOAD(tmpZkPCsaveMem)
     $ => E                      :MLOAD(tmpVarEsaveMem), RETURN
 
 VAR GLOBAL tmpVarAArith
@@ -910,8 +949,7 @@ readPush:
     B*4 + D                     :ASSERT
     D => A
     0x04 => B
-    $ => A                      :LT
-    1                           :ASSERT
+    $ => A                      :LT,JMPNC(failAssert)
     0 => B                      :JMP(readPushBlock)
 
 readPushBlock:
@@ -1367,3 +1405,8 @@ expADend:
     $ => C          :MLOAD(tmpVarCexp)
     $ => RR         :MLOAD(tmpZkPCexp)
     $ => E          :MLOAD(tmpVarEexp), RETURN
+
+;@info function to force a failed assertt
+failAssert:
+    1 => A
+    2               :ASSERT
