@@ -410,8 +410,8 @@ computeGasSendCall:
 
     ; compute all_but_one_64th gas
     GAS => A
-    ${A >> 6} => C
-    ${A & 0x3f} => D
+    ${GAS >> 6} => C
+    ${GAS & 0x3f} => D
     C * 64 + D              :ASSERT
     D => A
     0x40 => B
@@ -461,21 +461,32 @@ saveMem:
 saveMemGAS:
     ; store new memory length
     B                           :MSTORE(memLength)
-    A => D
+    B => E
+    A => C
+    ; check new memory length is lower than 2**32 - 31
+    0xffffffe1 => A
+    $                           :LT,JMPC(outOfGas)
+
     ; new memory size word= (memory_byte_size + 31) / 32 in E
     ; ${(B+31)/32} => E
-    31 => A
-    $ => C                      :ADD,JMPC(outOfGas)
-    C                           :MSTORE(arithA)
-    32                          :MSTORE(arithB),CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => E                      :MLOAD(arithRes1)
+    E + 31 => A
+    ${A >> 5} => E
+    ${A & 0x1f} => D
+    E * 32 + D              :ASSERT
+    D => A
+    0x20 => B
+    $                       :LT,JMPNC(failAssert)
+
     ; old memory size word = (memory_byte_size + 31) / 32 in C
+    ; old memory length is always lower than 32 bits
     ; ${(A+31)/32} => C
-    D => B
-    $ => C                      :ADD,JMPC(outOfGas)
-    C                           :MSTORE(arithA)
-    32                          :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => C                      :MLOAD(arithRes1)
+    C + 31 => A
+    ${A >> 5} => C
+    ${A & 0x1f} => D
+    C * 32 + D              :ASSERT
+    D => A
+    0x20 => B
+    $                       :LT,JMPNC(failAssert)
     ; memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word)
     ; ${C*C/512} => A
     C                           :MSTORE(arithA)
