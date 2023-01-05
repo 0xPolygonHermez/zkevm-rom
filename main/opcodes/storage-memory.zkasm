@@ -175,6 +175,7 @@ opSLOAD:
     ; check out-of-gas
     GAS - %SLOAD_GAS - A * %COLD_SLOAD_COST_RED => GAS    :JMPN(outOfGas, readCode)
 
+VAR GLOBAL tmpVarCsstore
 /**
  * @link [https://www.evm.codes/#55?fork=berlin]
  * @zk-counters
@@ -201,7 +202,7 @@ opSSTORE:
     $ => A          :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
 
     $ => C          :MLOAD(SP+1) ; [key => C]
-    C               :MSTORE(tmpVarC)
+    C               :MSTORE(tmpVarCsstore)
     $ => D          :MLOAD(SP) ; [value => D]
     ; check if is a create call
     $ => A          :MLOAD(isCreateContract), JMPNZ(deploymentSSTORE)
@@ -314,5 +315,5 @@ mloadContract:
 opSSTOREsr:
     ; set key for smt storage query
     %SMT_KEY_SC_STORAGE => B
-    $ => C          :MLOAD(tmpVarC); key => C
+    $ => C          :MLOAD(tmpVarCsstore); key => C
     $ => SR         :SSTORE, JMP(readCode)
