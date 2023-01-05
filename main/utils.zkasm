@@ -446,15 +446,18 @@ saveMem:
     C                           :MSTORE(tmpVarCsaveMem)
     D                           :MSTORE(tmpVarDsaveMem)
     E                           :MSTORE(tmpVarEsaveMem)
-    $ => E                      :MLOAD(lastMemOffset)
     $ => A                      :MLOAD(lastMemLength)
-    0 => B
-    ; If no len, no memory expansion
-    $                           :EQ, JMPC(saveMemEnd)
+    $ => B                      :MLOAD(lastMemOffset)
     ; If the binary has a carry, means the mem expansion is very big. We can jump to oog directly
-    E => B
+    ; offset + length in B
     $ => B                      :ADD, JMPC(outOfGas)
-    ; load old memory length
+    ; If no len, no memory expansion
+    A                           :JMPZ(saveMemEnd)
+    ; check new memory length is lower than 2**22 - 31 - 1 (max supported memory expansion for 30M of gas)
+    %MAX_MEM_EXPANSION_BYTES => A
+    $                           :LT,JMPC(outOfGas)
+
+    ; load old memory length, if is greater than new memory length, no expansion cost
     $ => A                      :MLOAD(memLength)
     $                           :LT, JMPC(saveMemGAS, saveMemEnd)
 
@@ -462,12 +465,7 @@ saveMemGAS:
     ; store new memory length
     B                           :MSTORE(memLength)
     B => E
-    A => C
-    ; check new memory length is lower than 2**32 - 31
-    0xffffffe1 => A
-    $                           :LT,JMPC(outOfGas)
-
-    ; new memory size word= (memory_byte_size + 31) / 32 in E
+    ; memory_size_word = (memory_byte_size + 31) / 32 in E
     ; ${(B+31)/32} => E
     E + 31 => A
     ${A >> 5} => E
@@ -475,45 +473,23 @@ saveMemGAS:
     E * 32 + D              :ASSERT
     D => A
     0x20 => B
-    $                       :LT,JMPNC(failAssert)
-
-    ; old memory size word = (memory_byte_size + 31) / 32 in C
-    ; old memory length is always lower than 32 bits
-    ; ${(A+31)/32} => C
-    C + 31 => A
-    ${A >> 5} => C
-    ${A & 0x1f} => D
-    C * 32 + D              :ASSERT
-    D => A
-    0x20 => B
-    $                       :LT,JMPNC(failAssert)
-    ; memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word)
-    ; ${C*C/512} => A
-    C                           :MSTORE(arithA)
-    C                           :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB, arithOverflow: set to 1 if operation causes overflow]
-    $ => A                      :MLOAD(arithRes1)
-    $                           :MLOAD(arithOverflow), JMPNZ(outOfGas)
-    A                           :MSTORE(arithA)
-    512                         :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => A                      :MLOAD(arithRes1)
-    GAS + 3*C + A => GAS
-    ; memory_expansion_cost = new_memory_cost - last_memory_cost
-    GAS => A
-    3*E => B
-    ; check enough gas for exapnsion cost
-    $                           :LT,JMPC(outOfGas)
-    A - B => A
-    ; ${E*E/512} => B
+    $                           :LT,JMPNC(failAssert)
+    ; memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word) in A
+    ; ${E*E/512} + 3*E=> A
     E                           :MSTORE(arithA)
     E                           :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB, arithOverflow: set to 1 if operation causes overflow]
-    $ => E                      :MLOAD(arithRes1)
+    $ => C                      :MLOAD(arithRes1)
     $                           :MLOAD(arithOverflow), JMPNZ(outOfGas)
-    E                           :MSTORE(arithA)
+    C                           :MSTORE(arithA)
     512                         :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => B                      :MLOAD(arithRes1)
-    $                           :LT,JMPC(outOfGas)
+    $ => A                      :MLOAD(arithRes1)
+    A + 3*E => A
+    $ => B                      :MLOAD(lastMemoryExpansionCost)
+    A                           :MSTORE(lastMemoryExpansionCost)
+    ; memory_expansion_cost = new_memory_cost - last_memory_cost
+    A - B => A
     ; update new gas
-    A - B => GAS
+    GAS - A => GAS               :JMPN(outOfGas)
 
 saveMemEnd:
     ; restore stored values
