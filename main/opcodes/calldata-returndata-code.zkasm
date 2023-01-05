@@ -419,24 +419,29 @@ VAR GLOBAL tmpContractLength
 opEXTCODECOPY:
     ; checks zk-counters
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_PADDING_PG - CNT_PADDING_PG - 11 :JMPN(outOfCountersPadding)
+    %MAX_CNT_PADDING_PG - CNT_PADDING_PG - 11  :JMPN(outOfCountersPadding)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2    :JMPN(outOfCountersMemalign)
     %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+
     ; check stack underflow
-    SP - 4 => SP          :JMPN(stackUnderflow)
+    SP - 4 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP+3), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
                     :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
+
     ; check out-of-gas
     GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS            :JMPN(outOfGas)
-                    :CALL(opEXTCODECOPYCheckHash)
+                    :CALL(opEXTCODECOPYLoadBytecode)
     $ => C          :MLOAD(SP+2); [destOffset => C]
     $ => D          :MLOAD(SP+1); [offset => D]
     $ => E          :MLOAD(SP); [size => E]
+
     ; store lastMemOffset for memory expansion gas cost
     C               :MSTORE(lastMemOffset)
+
     ; store lastMemLength for memory expansion gas cost
     E               :MSTORE(lastMemLength)
+
     ; check out-of-gas
     ;${3*((E+31)/32)}
     E+31 => A
@@ -471,7 +476,7 @@ opEXTCODECOPY2:
     E               :MSTORE(remainingBytes), JMP(opCODECOPYinit)
 
 VAR GLOBAL tmpZkPCext
-opEXTCODECOPYCheckHash:
+opEXTCODECOPYLoadBytecode:
     ; set key for smt smart contract length query
     %SMT_KEY_SC_LENGTH => B
     0 => C
@@ -482,6 +487,7 @@ opEXTCODECOPYCheckHash:
     0 => A
     D => B
     $                               :EQ, JMPC(opEXTCODECOPYCheckHashEnd)
+
     ; check poseidon counters
     ; 56 is the value used by the prover to increment poseidon counters depending on the hash length
     RR              :MSTORE(tmpZkPCext)
@@ -492,56 +498,21 @@ opEXTCODECOPYCheckHash:
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1 => A
     $               :LT, JMPC(outOfCountersPoseidon)
 
-    E => A
     ; set key for smt smart contract code query
+    E => A
     %SMT_KEY_SC_CODE => B
     0 => C
     $ => A          :SLOAD
+
     ; get a new hashPId
     $ => E                          :MLOAD(nextHashPId)
     E                               :MSTORE(tmpContractHashId)
     E + 1                           :MSTORE(nextHashPId)
 
-    ; set vars prior to loop
-    D => B
-    0 => HASHPOS                    :JMP(opEXTCODECOPYCheckHashLoop)
-
-; @info bytes are inserted byte by byte
-opEXTCODECOPYCheckHashLoop:
-        %MAX_CNT_STEPS - STEP - 20              :JMPN(outOfCountersStep)
-        ; finish reading bytecode
-        B                                       :JMPZ(opEXTCODECOPYCheckHashLoopEnd)
-        ; add bytes to hash contract bytecode
-        ${getBytecode(A, HASHPOS, 1)}           :HASHP1(E)
-        B - 1 => B                              :JMP(opEXTCODECOPYCheckHashLoop)
-
-opEXTCODECOPYCheckHashLoopEnd:
-        HASHPOS                         :HASHPLEN(E)
-        $ => E                          :HASHPDIGEST(E)
-        ; check hash computed matches hash in the smt leaf
-        E                               :ASSERT
+    ; load contract bytecode
+    A                               :HASHPDIGEST(E)
 opEXTCODECOPYCheckHashEnd:
-                                        :RETURN
-
-opEXTCODECOPYinit:
-    ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-    C               :JMPZ(readCode)
-    C - 32          :JMPN(opEXTCODECOPYfinal)
-    ${getBytecode(A,B,32)} => D
-    ; set bytesToStore with value to use in MSTORE
-    D               :MSTORE(bytesToStore)
-                    :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
-    C - 32 => C
-    B + 32 => B     :JMP(opEXTCODECOPYinit)
-
-opEXTCODECOPYfinal:
-    ; copy last bytes
-    ${getBytecode(A,B,C)} => A
-    32 - C  => D    :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    ; set bytesToStore with value to use in MSTORE
-    A               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
-                    :JMP(readCode)
+                                    :RETURN
 
 /**
  * @link [https://www.evm.codes/#3D?fork=berlin]
