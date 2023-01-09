@@ -409,7 +409,14 @@ computeGasSendCall:
     E                       :MSTORE(tmpVarEcompGas)
 
     ; compute all_but_one_64th gas
-    GAS - ${GAS/64} => A
+    GAS => A
+    ${GAS >> 6} => C
+    ${GAS & 0x3f} => D
+    C * 64 + D              :ASSERT
+    D => A
+    0x40 => B
+    $                       :LT,JMPNC(failAssert)
+    GAS - C => A
     $ => B                  :MLOAD(gasCall)
     ; gas_sent_with_call = min(requested_gas, all_but_one_64th)
     $                       :LT,JMPC(computeGasSendCallEnd)
@@ -426,52 +433,71 @@ computeGasSendCallEnd:
 VAR GLOBAL tmpVarAsaveMem
 VAR GLOBAL tmpVarBsaveMem
 VAR GLOBAL tmpVarCsaveMem
+VAR GLOBAL tmpVarDsaveMem
 VAR GLOBAL tmpVarEsaveMem
+VAR GLOBAL tmpZkPCsaveMem
 ; @info compute memory expansion gas cost
 ; @in: lastMemOffset: offset to copy bytes
 ; @in: lastMemLength: size of the bytes to copy
 saveMem:
+    RR                          :MSTORE(tmpZkPCsaveMem)
     A                           :MSTORE(tmpVarAsaveMem)
     B                           :MSTORE(tmpVarBsaveMem)
     C                           :MSTORE(tmpVarCsaveMem)
+    D                           :MSTORE(tmpVarDsaveMem)
     E                           :MSTORE(tmpVarEsaveMem)
-    $ => E                      :MLOAD(lastMemOffset)
     $ => A                      :MLOAD(lastMemLength)
-    0 => B
-    ; If no len, no memory expansion
-    $                           :EQ, JMPC(saveMemEnd)
+    $ => B                      :MLOAD(lastMemOffset)
     ; If the binary has a carry, means the mem expansion is very big. We can jump to oog directly
-    E => B
+    ; offset + length in B
     $ => B                      :ADD, JMPC(outOfGas)
-    ; load old memory length
+    ; If no len, no memory expansion
+    A                           :JMPZ(saveMemEnd)
+    ; check new memory length is lower than 2**22 - 31 - 1 (max supported memory expansion for %TX_GAS_LIMIT of gas)
+    %MAX_MEM_EXPANSION_BYTES => A
+    $                           :LT,JMPC(outOfGas)
+
+    ; load old memory length, if is greater than new memory length, no expansion cost
     $ => A                      :MLOAD(memLength)
     $                           :LT, JMPC(saveMemGAS, saveMemEnd)
 
 saveMemGAS:
     ; store new memory length
     B                           :MSTORE(memLength)
-    ; new memory size word= (memory_byte_size + 31) / 32 in E
-    ${(B+31)/32} => E
-    ; old memory size word = (memory_byte_size + 31) / 32 in C
-    ${(A+31)/32} => C
-    ; memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word)
-    GAS + 3*C + ${C*C/512} => GAS
+    B => E
+    ; memory_size_word = (memory_byte_size + 31) / 32 in E
+    ; ${(B+31)/32} => E
+    E + 31 => A
+    ${A >> 5} => E
+    ${A & 0x1f} => D
+    E * 32 + D              :ASSERT
+    D => A
+    0x20 => B
+    $                           :LT,JMPNC(failAssert)
+    ; memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word) in A
+    ; ${E*E/512} + 3*E=> A
+    E                           :MSTORE(arithA)
+    E                           :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB, arithOverflow: set to 1 if operation causes overflow]
+    $ => C                      :MLOAD(arithRes1)
+    $                           :MLOAD(arithOverflow), JMPNZ(outOfGas)
+    C                           :MSTORE(arithA)
+    512                         :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => A                      :MLOAD(arithRes1)
+    A + 3*E => A
+    $ => B                      :MLOAD(lastMemoryExpansionCost)
+    A                           :MSTORE(lastMemoryExpansionCost)
     ; memory_expansion_cost = new_memory_cost - last_memory_cost
-    GAS => A
-    3*E => B
-    ; check enough gas for exapnsion cost
-    $                           :LT,JMPC(outOfGas)
     A - B => A
-    ${E*E/512} => B
-    $                           :LT,JMPC(outOfGas)
     ; update new gas
-    A - B => GAS
+    GAS - A => GAS               :JMPN(outOfGas)
 
 saveMemEnd:
     ; restore stored values
     $ => A                      :MLOAD(tmpVarAsaveMem)
     $ => B                      :MLOAD(tmpVarBsaveMem)
     $ => C                      :MLOAD(tmpVarCsaveMem)
+    $ => D                      :MLOAD(tmpVarDsaveMem)
+    $ => RR                     :MLOAD(tmpZkPCsaveMem)
     $ => E                      :MLOAD(tmpVarEsaveMem), RETURN
 
 VAR GLOBAL tmpVarAArith
@@ -816,18 +842,25 @@ firstContextInvalid:
     0               :MSTORE(gasRefund)
     0 => GAS        :JMP(sendGasSeq)
 
+VAR GLOBAL tmpVarAoffsetUtil
+VAR GLOBAL tmpVarBoffsetUtil
 ;Get offset/32 & offset%32
 ;@in A offset
 ;@out E offset/32
 ;@out C offset%32
 offsetUtil:
-    ; ${A >> 5} -> E (*)
+    A                           :MSTORE(tmpVarAoffsetUtil)
+    B                           :MSTORE(tmpVarAoffsetUtil)
     ${A >> 5} => E
-    ; ${A & 0x1F} -> C
     ${A & 0x1F} => C
+    E * 32 + C      :ASSERT
+    C => A
+    0x20 => B
+    $               :LT,JMPNC(failAssert)
     0x0FFFF - E     :JMPN(stackUnderflow)
-    31-C            :JMPN(stackUnderflow)
-    E*32+C          :ASSERT, RETURN
+    31 - C          :JMPN(stackUnderflow)
+    $ => A          :MLOAD(tmpVarAoffsetUtil)
+    $ => B          :MLOAD(tmpVarBoffsetUtil), RETURN
 
 ;@info: move balances between two accounts
 ;@in: txSrcAddr: source address
@@ -907,11 +940,10 @@ readPush:
     B                           :MSTORE(numBlocks)
     ${A & 0x03} => D
     D                           :MSTORE(leftBytes)
-    B*4 + D                     :ASSERT
+    B * 4 + D                   :ASSERT
     D => A
     0x04 => B
-    $ => A                      :LT
-    1                           :ASSERT
+    $                           :LT,JMPNC(failAssert)
     0 => B                      :JMP(readPushBlock)
 
 readPushBlock:
@@ -1367,3 +1399,8 @@ expADend:
     $ => C          :MLOAD(tmpVarCexp)
     $ => RR         :MLOAD(tmpZkPCexp)
     $ => E          :MLOAD(tmpVarEexp), RETURN
+
+;@info function to force a failed assertt
+failAssert:
+    1 => A
+    2               :ASSERT
