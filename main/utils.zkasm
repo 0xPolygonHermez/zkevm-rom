@@ -453,7 +453,7 @@ saveMem:
     $ => B                      :ADD, JMPC(outOfGas)
     ; If no len, no memory expansion
     A                           :JMPZ(saveMemEnd)
-    ; check new memory length is lower than 2**22 - 31 - 1 (max supported memory expansion for 30M of gas)
+    ; check new memory length is lower than 2**22 - 31 - 1 (max supported memory expansion for %TX_GAS_LIMIT of gas)
     %MAX_MEM_EXPANSION_BYTES => A
     $                           :LT,JMPC(outOfGas)
 
@@ -842,18 +842,25 @@ firstContextInvalid:
     0               :MSTORE(gasRefund)
     0 => GAS        :JMP(sendGasSeq)
 
+VAR GLOBAL tmpVarAoffsetUtil
+VAR GLOBAL tmpVarBoffsetUtil
 ;Get offset/32 & offset%32
 ;@in A offset
 ;@out E offset/32
 ;@out C offset%32
 offsetUtil:
-    ; ${A >> 5} -> E (*)
+    A                           :MSTORE(tmpVarAoffsetUtil)
+    B                           :MSTORE(tmpVarAoffsetUtil)
     ${A >> 5} => E
-    ; ${A & 0x1F} -> C
     ${A & 0x1F} => C
+    E * 32 + C      :ASSERT
+    C => A
+    0x20 => B
+    $               :LT,JMPNC(failAssert)
     0x0FFFF - E     :JMPN(stackUnderflow)
-    31-C            :JMPN(stackUnderflow)
-    E*32+C          :ASSERT, RETURN
+    31 - C          :JMPN(stackUnderflow)
+    $ => A          :MLOAD(tmpVarAoffsetUtil)
+    $ => B          :MLOAD(tmpVarBoffsetUtil), RETURN
 
 ;@info: move balances between two accounts
 ;@in: txSrcAddr: source address
@@ -933,10 +940,10 @@ readPush:
     B                           :MSTORE(numBlocks)
     ${A & 0x03} => D
     D                           :MSTORE(leftBytes)
-    B*4 + D                     :ASSERT
+    B * 4 + D                   :ASSERT
     D => A
     0x04 => B
-    $ => A                      :LT,JMPNC(failAssert)
+    $                           :LT,JMPNC(failAssert)
     0 => B                      :JMP(readPushBlock)
 
 readPushBlock:
