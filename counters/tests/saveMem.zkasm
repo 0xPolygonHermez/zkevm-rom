@@ -1,0 +1,31 @@
+INCLUDE "../initIncludes.zkasm"
+
+start:
+    1000000 => GAS
+
+operation:
+    ; @info compute memory expansion gas cost
+    ; @in: lastMemOffset: offset to copy bytes
+    ; @in: lastMemLength: size of the bytes to copy
+    10000  :MSTORE(lastMemOffset)
+    10000  :MSTORE(lastMemLength)
+             :CALL(saveMem)
+
+    %SAVEMEM_STEP - STEP:JMPN(failedCounters)
+    ;%SAVEMEM_CNT_BINARY - CNT_BINARY :JMPNZ(failedCounters)
+    %SAVEMEM_CNT_ARITH - CNT_ARITH :JMPNZ(failedCounters)
+    %SAVEMEM_CNT_KECCAK_F - CNT_KECCAK_F :JMPNZ(failedCounters)
+    %SAVEMEM_CNT_MEM_ALIGN - CNT_MEM_ALIGN :JMPNZ(failedCounters)
+    %SAVEMEM_CNT_PADDING_PG - CNT_PADDING_PG :JMPNZ(failedCounters)
+    %SAVEMEM_CNT_POSEIDON_G - CNT_POSEIDON_G :JMPNZ(failedCounters)
+
+0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR ; Set all registers to 0
+finalizeExecution:
+                                                                        :JMP(finalWait)
+readCode:
+    :RETURN
+failedCounters:
+2 => A
+1       :ASSERT
+
+INCLUDE "../endIncludes.zkasm"

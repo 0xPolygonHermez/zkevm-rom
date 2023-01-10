@@ -10,8 +10,8 @@
  */
 opADD:
     ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
@@ -38,8 +38,7 @@ opADD:
  */
 opMUL:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
 
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
@@ -67,8 +66,8 @@ opMUL:
  */
 opSUB:
     ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
     ; check out-of-gas
@@ -91,9 +90,7 @@ opSUB:
  */
 opDIV:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
 
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
@@ -121,9 +118,8 @@ opDIV:
  */
 opSDIV:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 8 :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 50 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
     ; check out-of-gas
@@ -135,13 +131,13 @@ opSDIV:
     B => C
     $ => A          :MLOAD(SP), CALL(abs); [b => A]; in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
     ; if is neg (different signs => C != B), jump to sdivneg
-    C - B           :JMPNZ(opSDIVNeg)
+    C - B           :JMPNZ(SDIVNeg)
     E               :MSTORE(arithA)
     A               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
     B               :MSTORE(SP++), JMP(readCode); [a / b(B) => SP]
 
-opSDIVNeg:
+SDIVNeg:
     E               :MSTORE(arithA)
     A               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
@@ -161,9 +157,7 @@ opSDIVNeg:
  */
 opMOD:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
     ; check out-of-gas
@@ -189,9 +183,8 @@ opMOD:
  */
 opSMOD:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 8 :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
     ; check out-of-gas
@@ -226,9 +219,9 @@ opSMODNeg:
  */
 opADDMOD:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 80 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
     ; check out-of-gas
     GAS - %GAS_MID_STEP => GAS    :JMPN(outOfGas)
     ; check stack underflow
@@ -277,7 +270,8 @@ zeroOneAddMod:
  *  - stack output: [(a * b) % N]
  */
 opMULMOD:
-
+     ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     ; check stack underflow
     SP - 3          :JMPN(stackUnderflow)
     ; check out-of-gas
@@ -302,8 +296,7 @@ opMULMOD:
 
 opEXP:
     ; checks zk-counters
-    %MAX_CNT_BINARY - CNT_BINARY - 2    :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 20         :JMPN(outOfCountersStep)
 
     ; check stack underflow
     SP - 2              :JMPN(stackUnderflow)
@@ -334,8 +327,8 @@ opEXP:
  */
 opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/vm/src/evm/opcodes/functions.ts#L193
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 6 :JMPN(outOfCountersArith)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 6 :JMPN(outOfCountersBinary)
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
     ; check out-of-gas

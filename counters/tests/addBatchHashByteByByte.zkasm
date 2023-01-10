@@ -1,0 +1,33 @@
+INCLUDE "../initIncludes.zkasm"
+
+start:
+    1000000 => GAS
+
+operation:
+    ;@info: adds data to batchHashdata byte by byte
+    ;@in: A: bytes to add
+    ;@in D: bytes length
+    12 => A
+    80 => D
+             :CALL(addBatchHashByteByByte)
+
+    %ADDBATCHHASH_STEP*D - STEP:JMPN(failedCounters)
+    305 - CNT_BINARY :JMPNZ(failedCounters)
+    ;%ADDBATCHHASH_CNT_BINARY*D + D - CNT_BINARY :JMPNZ(failedCounters)
+    81 - CNT_ARITH :JMPNZ(failedCounters)
+    ;%ADDBATCHHASH_CNT_ARITH*D - CNT_ARITH :JMPNZ(failedCounters)
+    %ADDBATCHHASH_CNT_KECCAK_F - CNT_KECCAK_F :JMPNZ(failedCounters)
+    %ADDBATCHHASH_CNT_MEM_ALIGN - CNT_MEM_ALIGN :JMPNZ(failedCounters)
+    %ADDBATCHHASH_CNT_PADDING_PG - CNT_PADDING_PG :JMPNZ(failedCounters)
+    %ADDBATCHHASH_CNT_POSEIDON_G - CNT_POSEIDON_G :JMPNZ(failedCounters)
+
+0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR ; Set all registers to 0
+finalizeExecution:
+                                                                        :JMP(finalWait)
+readCode:
+    :RETURN
+failedCounters:
+2 => A
+1       :ASSERT
+
+INCLUDE "../endIncludes.zkasm"

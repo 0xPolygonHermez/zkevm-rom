@@ -1,0 +1,38 @@
+INCLUDE "../initIncludes.zkasm"
+
+start:
+    1000000 => GAS
+    1 => CTX
+; TODO
+operation:
+    10       :MSTORE(argsOffsetCall)
+    0x1005  :MSTORE(argsLengthCall)
+    CTX + 1 => CTX
+    1        :MSTORE(originCTX)
+             :CALL(copySP)
+
+    ; loop in SP
+    $ => C   :MLOAD(argsLengthCall)
+    ${C/32} => C
+    ; copysp + stepsCopySPLoop + mload32*loop + mloadx
+    %COPYSP_STEP + 10*C + %MLOAD32_STEP*C - STEP :JMPN(failedCounters)
+    263 - CNT_BINARY :JMPNZ(failedCounters)
+    ;%COPYSP_CNT_BINARY + %MLOAD32_CNT_BINARY*C - CNT_BINARY :JMPNZ(failedCounters)
+    3 - CNT_ARITH :JMPNZ(failedCounters)
+    ;%COPYSP_CNT_ARITH + %MLOAD32_CNT_ARITH*C - CNT_ARITH :JMPNZ(failedCounters)
+    %COPYSP_CNT_KECCAK_F + %MLOAD32_CNT_KECCAK_F*C - CNT_KECCAK_F :JMPNZ(failedCounters)
+    129 - CNT_MEM_ALIGN :JMPNZ(failedCounters)
+    ;%COPYSP_CNT_MEM_ALIGN + %MLOAD32_CNT_MEM_ALIGN*C - CNT_MEM_ALIGN :JMPNZ(failedCounters)
+    %COPYSP_CNT_PADDING_PG + %MLOAD32_CNT_PADDING_PG*C - CNT_PADDING_PG :JMPNZ(failedCounters)
+    %COPYSP_CNT_POSEIDON_G + %MLOAD32_CNT_POSEIDON_G*C - CNT_POSEIDON_G :JMPNZ(failedCounters)
+
+0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR ; Set all registers to 0
+finalizeExecution:
+                                                                        :JMP(finalWait)
+readCode:
+    :RETURN
+failedCounters:
+2 => A
+1       :ASSERT
+
+INCLUDE "../endIncludes.zkasm"
