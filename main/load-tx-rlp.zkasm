@@ -37,6 +37,7 @@ loadTx_rlp:
 
 longList:
         A - 0xf7 => D                   :CALL(addHashTx)
+                                        :CALL(checkLongRLP)
                                         :CALL(addBatchHashData)
                                         :JMP(endList)
 shortList:
@@ -61,11 +62,12 @@ nonceREAD:
         A - 0x89                        :JMPN(shortNonce, invalidTxRLP)
 
 nonce0:
-        0  => A                         :MSTORE(lengthNonce), JMP(endNonce)
+        0 => A                         :MSTORE(lengthNonce), JMP(endNonce)
 
 shortNonce:
         A - 0x80 => D
         D                               :MSTORE(lengthNonce), CALL(addHashTx)
+                                        :CALL(checkShortRLP)
                                         :CALL(addBatchHashData)
 
 endNonce:
@@ -85,9 +87,8 @@ gasPrice0:
         0 => A                          :JMP(endGasPrice)
 
 shortGasPrice:
-        A - 0x80 => D
-        D - 1                           :JMPN(endGasPrice)
-                                        :CALL(addHashTx)
+        A - 0x80 => D                   :CALL(addHashTx)
+                                        :CALL(checkShortRLP)
                                         :CALL(addBatchHashData)
 
 endGasPrice:
@@ -95,28 +96,27 @@ endGasPrice:
 
 
 ;; Read RLP 'gas limit'
-        ; 256 bits max
+        ; 64 bits max
 gasLimitREAD:
         1 => D                          :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(endGasLimit)
         A - 0x81                        :JMPN(gasLimit0)
-        A - 0xa1                        :JMPN(shortGasLimit, invalidTxRLP)
+        A - 0x89                        :JMPN(shortGasLimit, invalidTxRLP)
 
 gasLimit0:
         0 => A                          :JMP(endGasLimit)
 
 shortGasLimit:
-        A - 0x80 => D
-        D - 1                           :JMPN(endGasLimit)
-                                        :CALL(addHashTx)
+        A - 0x80 => D                   :CALL(addHashTx)
+                                        :CALL(checkShortRLP)
                                         :CALL(addBatchHashData)
 
 endGasLimit:
         A                               :MSTORE(txGasLimit)
 
 ;; Read RLP 'to'
-        ; 160 bits max
+        ; 160 bits or empty
 toREAD:
         1 => D                          :CALL(addHashTx)
                                         :CALL(addBatchHashData)
@@ -136,7 +136,6 @@ shortTo:
 
 endTo:
 
-
 ;; Read RLP 'value'
         ; 256 bits max
 valueREAD:
@@ -150,9 +149,8 @@ value0:
         0 => A                          :JMP(endValue)
 
 shortValue:
-        A - 0x80 => D
-        D - 1                           :JMPN(endValue)
-                                        :CALL(addHashTx)
+        A - 0x80 => D                   :CALL(addHashTx)
+                                        :CALL(checkShortRLP)
                                         :CALL(addBatchHashData)
 
 endValue:
@@ -183,6 +181,7 @@ shortData:
 
 longData:
         A - 0xb7 => D                   :CALL(addHashTx)
+                                        :CALL(checkLongRLP)
                                         :CALL(addBatchHashData)
         $ => D                          :MLOAD(batchHashPos)
         D                               :MSTORE(dataStarts)
@@ -198,6 +197,7 @@ readData:
 readDataFinal:
         B - 1                           :JMPN(endData)
         B => D                          :CALL(addHashTx)
+                                        :CALL(checkShortDataRLP)
         32 - D => D                     :CALL(SHLarith)
         A                               :MSTORE(SP)
         32 - D => D                     :CALL(addBatchHashByteByByte)
@@ -222,16 +222,14 @@ chainId0:
 
 
 shortChainId:
-        A - 0x80 => D
-        D - 1                           :JMPN(endChainId)
-                                        :CALL(addHashTx)
+        A - 0x80 => D                   :CALL(addHashTx)
+                                        :CALL(checkShortRLP)
                                         :CALL(addBatchHashData)
 
 endChainId:
         A                               :MSTORE(txChainId)
 
 ;; Read RLP last two values (0, 0)
-        ; 64 bits max
         2 => D                          :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         0x8080 => B
