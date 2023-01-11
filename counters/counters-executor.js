@@ -16,9 +16,10 @@ async function main() {
     // Compile pil
     const cmPols = await compilePil();
 
-    // Run all zkasm files
+    // Get all zkasm files
     const files = getTestFiles();
 
+    // Run all zkasm files
     for (let file of files) {
         await runTest(file, cmPols)
     }
@@ -33,10 +34,12 @@ async function runTest(testName, cmPols) {
         stepsN: 8388608,
     }
     console.log(`Running ${testName}`)
+    // Execute test
     const res = await smMain.execute(cmPols.Main, empty_input, rom, config);
     console.log(res.counters)
 }
 
+// Get all zkasm counter test files
 function getTestFiles() {
     if(argv.test){
         return [`${argv.test}.zkasm`]
