@@ -20,7 +20,7 @@ opJUMP:
     GAS - %GAS_MID_STEP => GAS      :JMPN(outOfGas)
 
     ; Check PC is a JUMPDEST
-    $ => B                         :MLOAD(SP), JMP(checkJumpDest); [counter => PC]
+    $ => A                         :MLOAD(SP), JMP(checkJumpDest); [counter => PC]
 /**
  * @link [https://www.evm.codes/#57?fork=berlin]
  * @zk-counters
@@ -41,36 +41,36 @@ opJUMPI:
     0 => A
     $                               :EQ, JMPC(readCode)
     ; Check PC is a JUMPDEST
-    $ => B                          :MLOAD(SP+1), JMP(checkJumpDest); [counter => PC]
+    $ => A                          :MLOAD(SP+1), JMP(checkJumpDest); [counter => PC]
 
 checkJumpDest:
     ; if it is a deploy we have to check the data from the calldata (not the bytecode)
-    $ => A                          :MLOAD(isCreateContract), JMPNZ(checkJumpDestDeployment)
-    $ => A                          :MLOAD(bytecodeLength)
-    $                               :LT,JMPC(invalidJump)
+    $ => B                          :MLOAD(isCreateContract), JMPNZ(checkJumpDestDeployment)
+    $ => B                          :MLOAD(bytecodeLength)
+    $                               :LT,JMPNC(invalidJump)
+    A => B
     B => PC
     B => HASHPOS
     ; get hashP address pointer where contract bytecode is stored
     $ => E                          :MLOAD(contractHashId)
     $ => A                          :HASHP1(E)
     ; check if is a jumpDest (0x5B)
-    0x5B => B
-    $                               :EQ, JMPC(readCode, invalidJump)
+    A - 0x5B                        :JMPZ(readCode, invalidJump)
+
 checkJumpDestDeployment:
     ; check jumpDest from calldata
-    $ => A                          :MLOAD(isCreate), JMPNZ(checkJumpDestDeploymentCreate)
+    $ => B                          :MLOAD(isCreate), JMPNZ(checkJumpDestDeploymentCreate)
     ; get position where data starts in the tx
     $ => HASHPOS                    :MLOAD(dataStarts)
-    ; add PC to data starts to point the bytes to read for the push
-    B => PC
+    ; add PC to data starts to point the bytes to read for the jumpdest
+    A => PC
     HASHPOS + PC => HASHPOS
     ; get memory pointer for hashing
     $ => E                          :MLOAD(batchHashDataId)
-    ; set number of bytes to hashK at D
+    ; set number of bytes to hashK
     $ => A                          :HASHK1(E)
     ; check if is a jumpDest (0x5B)
-    0x5B => B
-    $                               :EQ, JMPC(readCode, invalidJump)
+    A - 0x5B                        :JMPZ(readCode, invalidJump)
 
 checkJumpDestDeploymentCreate:
     ; get bytes from previous context memory
@@ -78,14 +78,13 @@ checkJumpDestDeploymentCreate:
     ; get offset call position
     $ => E                          :MLOAD(argsOffsetCall)
     ; increase current program counter (PC) to offset for getting pushed bytes to read
-    B => PC
+    A => PC
     E + PC => E
     ; set bytes to read from memory at C
     1 => C                          :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
     $ => CTX                        :MLOAD(currentCTX)
-    31 => D                         :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     ; check if is a jumpDest (0x5B)
-    0x5B => B
+    0x5b00000000000000000000000000000000000000000000000000000000000000n => B
     $                               :EQ, JMPC(readCode, invalidJump)
 
 /**

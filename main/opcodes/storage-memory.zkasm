@@ -58,7 +58,7 @@ opMLOAD:
     B               :MSTORE(bytesToStore)
     ; store lastMemOffset for memory expansion gas cost
     E               :MSTORE(lastMemOffset), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [A: value]
-    ; store lastMemOffset for memory expansion gas cost
+    ; store lastMemLength for memory expansion gas cost
     32              :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
                     :JMP(readCode)
 
@@ -162,7 +162,7 @@ opSLOAD:
     ; set key(C) as warmed storage for address(A)
     E               :MSTORE(SP++), CALL(isColdSlot); [value(E) => SP]
     ; check out-of-gas
-    GAS - %SLOAD_GAS - A * %COLD_SLOAD_COST_RED => GAS    :JMPN(outOfGas, readCode)
+    GAS - %SLOAD_GAS - A * %COLD_SLOAD_COST_REDUCED => GAS    :JMPN(outOfGas, readCode)
 
 VAR GLOBAL tmpVarCsstore
 /**
@@ -252,7 +252,7 @@ opSSTOREdifAB:
     $ => A          :EQ, JMPNC(opSSTOREdifA2)
     ; if orig_val == 0
     $ => A          :MLOAD(gasRefund)
-    A + 19900 => A  :MSTORE(gasRefund), JMP(opSSTOREend)
+    A + %SSTORE_SET_GAS_REDUCED => A  :MSTORE(gasRefund), JMP(opSSTOREend)
 
 opSSTOREdifA1:
     ; if orig_val != 0
@@ -277,7 +277,7 @@ opSSTOREdifA2:
     ; if orig_val != 0
     ; compute gas refund
     $ => A          :MLOAD(gasRefund)
-    A + 2800 => A   :MSTORE(gasRefund), JMP(opSSTOREend)
+    A + %SSTORE_RESET_GAS_REDUCED => A   :MSTORE(gasRefund), JMP(opSSTOREend)
 
 opSSTOREdifB:
     ; if orig_val != 0
