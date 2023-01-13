@@ -1,0 +1,29 @@
+INCLUDE "../initIncludes.zkasm"
+start:
+    1000000 => GAS
+
+operation:
+    ;Get offset/32 & offset%32
+    ;@in A offset
+    ;@out E offset/32
+    ;@out C offset%32
+    3 => A
+             :CALL(offsetUtil)
+
+    %OFFSETUTIL_STEP - STEP:JMPN(failedCounters)
+    %OFFSETUTIL_CNT_BINARY - CNT_BINARY :JMPNZ(failedCounters)
+    %OFFSETUTIL_CNT_ARITH - CNT_ARITH :JMPNZ(failedCounters)
+    %OFFSETUTIL_CNT_KECCAK_F - CNT_KECCAK_F :JMPNZ(failedCounters)
+    %OFFSETUTIL_CNT_MEM_ALIGN - CNT_MEM_ALIGN :JMPNZ(failedCounters)
+    %OFFSETUTIL_CNT_PADDING_PG - CNT_PADDING_PG :JMPNZ(failedCounters)
+    %OFFSETUTIL_CNT_POSEIDON_G - CNT_POSEIDON_G :JMPNZ(failedCounters)
+finalizeExecution:
+0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR ; Set all registers to 0
+                                                                        :JMP(finalWait)
+readCode:
+    :RETURN
+failedCounters:
+2 => A
+1       :ASSERT
+
+INCLUDE "../endIncludes.zkasm"

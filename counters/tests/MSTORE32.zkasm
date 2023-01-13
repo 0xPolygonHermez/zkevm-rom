@@ -1,0 +1,32 @@
+INCLUDE "../initIncludes.zkasm"
+
+start:
+    1000000 => GAS
+
+operation:
+    ; @info save value to memory 32 bytes with offset
+    ; @in bytesToStore => bytes to store in memory
+    ; @in E => offset
+    ; @out E => new offset
+    0x3fc1363ea8654a6e41d29644fef3f756784774c3e315c9796e4d483969d1d5a6n :MSTORE(bytesToStore)
+    50 => E
+             :CALL(MSTORE32)
+
+    %MSTORE32_STEP - STEP:JMPN(failedCounters)
+    %MSTORE32_CNT_BINARY - CNT_BINARY :JMPNZ(failedCounters)
+    %MSTORE32_CNT_ARITH - CNT_ARITH :JMPNZ(failedCounters)
+    %MSTORE32_CNT_KECCAK_F - CNT_KECCAK_F :JMPNZ(failedCounters)
+    %MSTORE32_CNT_MEM_ALIGN - CNT_MEM_ALIGN :JMPNZ(failedCounters)
+    %MSTORE32_CNT_PADDING_PG - CNT_PADDING_PG :JMPNZ(failedCounters)
+    %MSTORE32_CNT_POSEIDON_G - CNT_POSEIDON_G :JMPNZ(failedCounters)
+
+0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR ; Set all registers to 0
+finalizeExecution:
+                                                                        :JMP(finalWait)
+readCode:
+    :RETURN
+failedCounters:
+2 => A
+1       :ASSERT
+
+INCLUDE "../endIncludes.zkasm"

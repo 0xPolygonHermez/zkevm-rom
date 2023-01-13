@@ -6,6 +6,8 @@
  *  - stack output: none
  */
 opSTOP:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     ; check if first context
     ; if origin ctx is 0, end tx
     $ => B          :MLOAD(originCTX), JMPZ(handleGas)
@@ -52,11 +54,9 @@ opSTOPend:
  */
 opCREATE:
     ; checks zk-counters
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2     :JMPN(outOfCountersMemalign)
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 2          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*3 :JMPN(outOfCountersPoseidon)
 
     ; check out-of-gas
     GAS - %CREATE_GAS => GAS  :JMPN(outOfGas)
@@ -77,7 +77,6 @@ opCREATE:
     E                   :MSTORE(argsOffsetCall)
     $ => C              :MLOAD(SP); [size => C]
     C                   :MSTORE(argsLengthCall)
-
 
     ; store lastMemOffset for memory expansion gas cost
     E                   :MSTORE(lastMemOffset)
@@ -172,7 +171,8 @@ opCreateFail:
 opCALL:
 
     ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCountersBinary)
     ; increase depth
     $ => A          :MLOAD(depth)
     A + 1           :MSTORE(depth)
@@ -220,14 +220,7 @@ opCALL2:
     $ => D          :MLOAD(SP); [retSize => D]
     ; compute memory expansion gas cost of the return value
     D               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
-
-    ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 400:JMPN(outOfCountersStep)
-
-    $ => B                   :MLOAD(lastMemOffset)
+    $ => B          :MLOAD(lastMemOffset)
     ; check if an address is cold. If it is, add it to the touched tree
     $ => A          :MLOAD(addrCall), CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
 
@@ -241,7 +234,7 @@ opCALL2:
 
     GAS - %CALL_VALUE_TRANSFER_GAS => GAS :JMPN(outOfGas)
     ; if destAddress is an empty account, we should add 25k of gas to base cost
-    $ => E               :MLOAD(addrCall), CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
+    $ => E          :MLOAD(addrCall), CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
     GAS - %CALL_NEW_ACCOUNT_GAS*E => GAS :JMPN(outOfGas)
 
 opCALLend:
@@ -300,9 +293,9 @@ opCALLend:
  *  - stack output: [success]
  */
 opCALLCODE:
-
     ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
     ; increase depth
     $ => A          :MLOAD(depth)
     A + 1           :MSTORE(depth)
@@ -341,13 +334,6 @@ opCALLCODE:
     $ => D          :MLOAD(SP); [retSize => D]
     ; compute memory expansion gas cost of the return value
     D               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
-
-    ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 400:JMPN(outOfCountersStep)
-
     ; check if an address is cold. If it is, add it to the touched tree
     $ => A                   :MLOAD(addrCall), CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
 
@@ -416,16 +402,14 @@ opCALLCODEend:
  *  - stack output: none
  */
 opRETURN:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     ; check stack underflow
     SP - 2 => SP    :JMPN(stackUnderflow)
     $ => E          :MLOAD(SP+1); [offset => E]
     $ => C          :MLOAD(SP); [size => C]
 
-    ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
     ; store return data values
     E               :MSTORE(retDataOffset)
     C               :MSTORE(retDataLength)
@@ -461,11 +445,9 @@ preRETURN32:
     $ => B          :MLOAD(retCallOffset)
 
 ; Copy from memory current CTX to memory origin CTX
-opRETURN32:
+opRETURNloop:
     ; checks dynamic zk-counters
-    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
 
     C               :JMPZ(opRETURNend)
     C - 32          :JMPN(opRETURNfinal)
@@ -482,7 +464,7 @@ opRETURN32:
     D => E
     C - 32 => C
     ; restore current TX
-    $ => CTX        :MLOAD(currentCTX), JMP(opRETURN32)
+    $ => CTX        :MLOAD(currentCTX), JMP(opRETURNloop)
 
 opRETURNfinal:
     ; load last bytes
@@ -515,11 +497,8 @@ opRETURNdeploy:
 
 opRETURNcreate:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 192 :JMPN(outOfCountersBinary)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCountersMemalign)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1020 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*2 :JMPN(outOfCountersPoseidon)
 
     ; save offset memory and length to compute contract hash
     E               :MSTORE(memOffsetLinearPoseidon)
@@ -617,14 +596,6 @@ opDELEGATECALL:
     $ => E          :MLOAD(SP); [retSize => D]
     ;  Mem expansion gas cost return args
     E               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
-
-    ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 400:JMPN(outOfCountersStep)
-
-
     $ => B                   :MLOAD(lastMemOffset)
     ; check if an address is cold. If it is, add it to the touched tree
     $ => A                   :MLOAD(addrCall)
@@ -686,10 +657,9 @@ opDELEGATECALLend:
  */
 opCREATE2:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 3          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*2 :JMPN(outOfCountersPoseidon)
     ; check out-of-gas
     GAS - %CREATE_2_GAS => GAS  :JMPN(outOfGas)
 
@@ -808,6 +778,8 @@ opCREATE2:
  *  - stack output: [success]
  */
 opSTATICCALL:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 300 :JMPN(outOfCountersStep)
     ; increase depth
     $ => A          :MLOAD(depth)
     A + 1           :MSTORE(depth)
@@ -840,13 +812,6 @@ opSTATICCALL:
     $ => E          :MLOAD(SP); [retSize => E]
     ; compute memory expansion gas cost of the return value
     E               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
-
-    ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
-
     ; check if an address is cold. If it is, add it to the touched tree
     $ => A          :MLOAD(addrCall), CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ;gas_cost = base_gas + gas_sent_with_call
@@ -937,10 +902,9 @@ opREVERT:
 preREVERT32:
     $ => B          :MLOAD(retCallOffset)
 
-opREVERT32:
+opREVERTloop:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
-
     C              :JMPZ(opREVERTend)
     ; load first 32 bytes from memory at current CTX
     C - 32          :JMPN(opREVERTfinal)
@@ -955,7 +919,7 @@ opREVERT32:
     D => E
     C - 32 => C
     ; restore current CTX
-    $ => CTX        :MLOAD(currentCTX), JMP(opREVERT32)
+    $ => CTX        :MLOAD(currentCTX), JMP(opREVERTloop)
 
 opREVERTfinal:
     ; copy last bytes
@@ -990,9 +954,9 @@ opREVERTend:
  */
 opSENDALL:
     ; checks zk-counters
-    %MAX_CNT_BINARY - CNT_BINARY - 10 :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 2040 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*4 :JMPN(outOfCountersPoseidon)
     ; check out-of-gas
     GAS - %SENDALL_GAS => GAS   :JMPN(outOfGas)
 

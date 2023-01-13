@@ -1,0 +1,41 @@
+INCLUDE "../initIncludes.zkasm"
+
+start:
+    1000000 => GAS
+
+operation:
+    1 => CTX
+    100              :MSTORE(storageAddr)
+    100 => A
+    0 => B, C
+    100000 => D
+    $ => SR             :SSTORE
+    ; stack input: [gas, address, value, argsOffset, argsSize, retOffset, retSize]
+    ; stack output: [success]
+    1000     :MSTORE(SP++)
+    43       :MSTORE(SP++)
+    54       :MSTORE(SP++)
+    8        :MSTORE(SP++)
+    10000    :MSTORE(SP++)
+    100      :MSTORE(SP++)
+    1000     :MSTORE(SP++)
+             :JMP(opCALLCODE)
+checkCounters:
+600 - STEP:JMPN(failedCounters)
+31 - CNT_BINARY :JMPNZ(failedCounters)
+6 - CNT_ARITH :JMPNZ(failedCounters)
+%OPCALLCODE_CNT_KECCAK_F - CNT_KECCAK_F :JMPNZ(failedCounters)
+2 - CNT_MEM_ALIGN :JMPNZ(failedCounters)
+%OPCALLCODE_CNT_PADDING_PG - CNT_PADDING_PG :JMPNZ(failedCounters)
+10 - CNT_POSEIDON_G :JMPNZ(failedCounters)
+
+0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR ; Set all registers to 0
+finalizeExecution:
+                                                                        :JMP(finalWait)
+readCode:
+txType:
+    :JMP(checkCounters)
+failedCounters:
+2 => A
+1       :ASSERT
+INCLUDE "../endIncludes.zkasm"

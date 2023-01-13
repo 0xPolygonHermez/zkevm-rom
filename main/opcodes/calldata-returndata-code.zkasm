@@ -11,8 +11,7 @@
  */
  opCALLDATALOAD:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 64 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 66 :JMPN(outOfCountersBinary)
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
@@ -93,12 +92,10 @@ opCALLDATASIZEdep:
  */
 opCALLDATACOPY:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 192 :JMPN(outOfCountersBinary)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1 :JMPN(outOfCountersMemalign)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
     ; check stack underflow
-    SP - 3 => SP          :JMPN(stackUnderflow)
+    SP - 3 => SP    :JMPN(stackUnderflow)
     $ => E          :MLOAD(SP+2); [destOffset => E]
     $ => B          :MLOAD(SP+1); [offset => B]
     $ => C          :MLOAD(SP); [size => C]
@@ -128,17 +125,14 @@ opCALLDATACOPY:
     $               :LT,JMPC(opCALLDATACOPY0)
     A + C => A
     ; if offset + size is lower then calldata size => length
-    $               :LT,JMPC(opCALLDATACOPYX0, opCALLDATACOPYinit)
+    $               :LT,JMPC(opCALLDATACOPYX0, opCALLDATACOPYloop)
 
 opCALLDATACOPYX0:
     $ => C          :MLOAD(txCalldataLen)
 
-opCALLDATACOPYinit:
+opCALLDATACOPYloop:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 192 :JMPN(outOfCountersBinary)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1 :JMPN(outOfCountersMemalign)
-    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 300 :JMPN(outOfCountersStep)
     ; finish loop
     C               :JMPZ(opCALLDATACOPYcheckLen)
     ; copy last bytes
@@ -149,7 +143,7 @@ opCALLDATACOPYinit:
     $ => A          :MLOAD(arithRes1)
     A               :MSTORE(arithA)
     ; add %CALLDATA_OFFSET to offset to reach calldata in memory
-    %CALLDATA_OFFSET            :MSTORE(arithB), CALL(addARITH); in: [arithA, arithB] out[arithRes1: arithA*arithB]
+    %CALLDATA_OFFSET :MSTORE(arithB), CALL(addARITH); in: [arithA, arithB] out[arithRes1: arithA*arithB]
     $ => A          :MLOAD(arithRes1)
     ; set stack pointer to first byte to read
     A => SP
@@ -169,7 +163,7 @@ opCALLDATACOPYinit:
     $ => C          :MLOAD(SP); [size => C]
     C - 32 => C
     C               :MSTORE(SP); [size => SP]
-    B + 32 => B     :JMP(opCALLDATACOPYinit)
+    B + 32 => B     :JMP(opCALLDATACOPYloop)
 
 opCALLDATACOPYfinal:
     ; copy last bytes
@@ -238,8 +232,8 @@ opCALLDATACOPYend:
  */
 opCODESIZE:
     ; checks zk-counters
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 252 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_STEPS - STEP - 30 :JMPN(outOfCountersStep)
     ; check out-of-gas
     GAS-%GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
     ; if is create, get size from calldata
@@ -278,6 +272,8 @@ VAR GLOBAL memInteger
  *  - stack output: []
  */
 opCODECOPY:
+    ;Check counters
+    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     ; if is a create, copy from calldata
     $ => A          :MLOAD(isCreateContract), JMPNZ(opCALLDATACOPY)
     ; check stack underflow
@@ -289,10 +285,6 @@ opCODECOPY:
     C               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
     E               :MSTORE(lastMemLength)
-
-    ;Check counters
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
     ; check out-of-gas
     GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
@@ -333,7 +325,7 @@ opCODECOPY2:
     %MAX_CNT_STEPS - STEP - 100*E                :JMPN(outOfCountersStep)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - E     :JMPN(outOfCountersMemalign)
 
-opCODECOPYinit:
+opCODECOPYloop:
 
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
 
@@ -354,7 +346,7 @@ opCODECOPYinit:
     B               :MSTORE(remainingBytes)
     $ => A          :MLOAD(memOffset)
     A + 1 => A  ; increment offset to write the next byte
-    A               :MSTORE(memOffset), JMP(opCODECOPYinit)
+    A               :MSTORE(memOffset), JMP(opCODECOPYloop)
 
 
 ; @info Load 0 if read bytecode position is above bytecode length
@@ -382,8 +374,8 @@ readValueBytecode:
  */
 opEXTCODESIZE:
     ; checks zk-counters
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
     ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
@@ -418,11 +410,7 @@ VAR GLOBAL tmpContractLength
  */
 opEXTCODECOPY:
     ; checks zk-counters
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_PADDING_PG - CNT_PADDING_PG - 11  :JMPN(outOfCountersPadding)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2    :JMPN(outOfCountersMemalign)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 300 :JMPN(outOfCountersStep)
 
     ; check stack underflow
     SP - 4 => SP    :JMPN(stackUnderflow)
@@ -473,10 +461,11 @@ opEXTCODECOPY2:
     D               :MSTORE(codecopyHashId) ; set hashId to get bytes from
     B               :MSTORE(codecopyBytecodeLength) ; set contract bytecode length
     C               :MSTORE(memOffset)
-    E               :MSTORE(remainingBytes), JMP(opCODECOPYinit)
+    E               :MSTORE(remainingBytes), JMP(opCODECOPYloop)
 
 VAR GLOBAL tmpZkPCext
 opEXTCODECOPYLoadBytecode:
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
     ; set key for smt smart contract length query
     %SMT_KEY_SC_LENGTH => B
     0 => C
@@ -495,7 +484,7 @@ opEXTCODECOPYLoadBytecode:
     56              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => RR         :MLOAD(tmpZkPCext)
     $ => B          :MLOAD(arithRes1)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1 => A
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 - 1 => A
     $               :LT, JMPC(outOfCountersPoseidon)
 
     ; set key for smt smart contract code query
@@ -526,7 +515,7 @@ opEXTCODECOPYCheckHashEnd:
 opRETURNDATASIZE:
     ; checks zk-counters
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
 
     ; check out-of-gas
     GAS - %GAS_QUICK_STEP => GAS  :JMPN(outOfGas)
@@ -559,11 +548,8 @@ endOpRETURNDATASIZE:
  */
 opRETURNDATACOPY:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 2    :JMPN(outOfCountersMemalign)
+    %MAX_CNT_BINARY - CNT_BINARY - 2          :JMPN(outOfCountersBinary)
     ; check stack underflow
     SP - 3 => SP          :JMPN(stackUnderflow)
     ; check out-of-gas
@@ -608,7 +594,7 @@ opRETURNDATACOPY:
     ; check out-of-gas
     GAS - A => GAS  :JMPN(outOfGas)
 
-opRETURNDATACOPYinit:
+opRETURNDATACOPYloop:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     C               :JMPZ(readCode)
     C - 32          :JMPN(opRETURNDATACOPYfinal)
@@ -623,7 +609,7 @@ opRETURNDATACOPYinit:
     ; set bytesToStore with value to use in MSTORE
     A               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     E => D
-    C - 32 => C     :JMP(opRETURNDATACOPYinit)
+    C - 32 => C     :JMP(opRETURNDATACOPYloop)
 
 opRETURNDATACOPYfinal:
     B => E
@@ -653,8 +639,8 @@ opRETURNDATACOPYEmpty:
  */
 opEXTCODEHASH:
     ; checks zk-counters
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
     ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
