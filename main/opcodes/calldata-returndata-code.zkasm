@@ -16,11 +16,11 @@
     SP - 1 => SP    :JMPN(stackUnderflow)
     ; check out-of-gas
     GAS - %GAS_FASTEST_STEP => GAS    :JMPN(outOfGas)
-    $ => B          :MLOAD(SP); [offset => B]
-    $ => A          :MLOAD(txCalldataLen)
-    ; if offset is lower than calldata length, return 0
-    $               :LT,JMPC(CALLDATALOADreturn0)
-    B => E
+    $ => A          :MLOAD(SP); [offset => B]
+    $ => B          :MLOAD(txCalldataLen)
+    ; if offset is not lower than calldata length, return 0
+    $               :LT,JMPNC(CALLDATALOADreturn0)
+    A => E
     ; Div operation with Arith
     E               :MSTORE(arithA)
     32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
@@ -94,7 +94,7 @@ opCALLDATACOPY:
     ; check stack underflow
     SP - 3 => SP    :JMPN(stackUnderflow)
     $ => E          :MLOAD(SP+2); [destOffset => E]
-    $ => B          :MLOAD(SP+1); [offset => B]
+    $ => A          :MLOAD(SP+1); [offset => B]
     $ => C          :MLOAD(SP); [size => C]
     ; store lastMemOffset for memory expansion gas cost
     E               :MSTORE(lastMemOffset)
@@ -104,24 +104,26 @@ opCALLDATACOPY:
     GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
     ;${3*((C+31)/32)}
     ;(C+31)/32 => A
-    C+31 => A
-    A               :MSTORE(arithA)
+    C+31 => B
+    B               :MSTORE(arithA)
     32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => A          :MLOAD(arithRes1)
+    $ => B          :MLOAD(arithRes1)
     ; Mul operation with Arith
     ; 3*A
     3               :MSTORE(arithA)
-    A               :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
-    $ => A          :MLOAD(arithRes1)
-    GAS - A => GAS  :JMPN(outOfGas)
+    B               :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
+    $ => B          :MLOAD(arithRes1)
+    GAS - B => GAS  :JMPN(outOfGas)
                     :CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; save current stack pointer
     SP              :MSTORE(SPw)
-    $ => A          :MLOAD(txCalldataLen)
-    ; if offset is lower than calldata length, return 0
-    $               :LT,JMPC(opCALLDATACOPY0)
-    A + C => A
-    ; if offset + size is lower then calldata size => length
+    $ => B          :MLOAD(txCalldataLen)
+    A => D
+    ; if offset is not lower than calldata length, return 0
+    $               :LT,JMPNC(opCALLDATACOPY0)
+    B + C => A
+    D => B
+    ; if offset + size is lower than calldata size => length
     $               :LT,JMPC(opCALLDATACOPYX0, opCALLDATACOPYloop)
 
 opCALLDATACOPYX0:
