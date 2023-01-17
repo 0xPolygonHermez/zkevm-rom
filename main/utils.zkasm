@@ -182,7 +182,7 @@ MSTORE32:
     D               :MSTORE(tmpVarDmstore)
     ; check offset is lower than max memory
     E => A
-    %MEMORY_LENGTH => B
+    %MAX_MEM_EXPANSION_BYTES => B
     $               :LT,JMPC(initMSTORE, errorMLOADMSTORE)
 
 initMSTORE:
@@ -311,7 +311,7 @@ MLOAD32:
     D               :MSTORE(tmpVarDmload)
     ; check offset is lower than max memory
     E => A
-    %MEMORY_LENGTH => B
+    %MAX_MEM_EXPANSION_BYTES => B
     $               :LT,JMPC(initMLOAD, errorMLOADMSTORE)
 
 initMLOAD:
@@ -353,7 +353,7 @@ endMLOAD:
     $ => D          :MLOAD(tmpVarDmload), RETURN
 
 errorMLOADMSTORE:
-                    :JMP(handleError)
+                    :JMP(outOfGas)
 
 VAR GLOBAL tmpVarAemptyAcc
 VAR GLOBAL tmpVarBemptyAcc
@@ -899,24 +899,24 @@ firstContextInvalid:
 VAR GLOBAL tmpVarAoffsetUtil
 VAR GLOBAL tmpVarBoffsetUtil
 ;Get offset/32 & offset%32
-;@in A offset
+;@in A offset (offset is assumed to be less than %MAX_MEM_EXPANSION_BYTES)
 ;@out E offset/32
 ;@out C offset%32
 offsetUtil:
-    %MAX_CNT_STEPS - STEP - 20       :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
-    A                           :MSTORE(tmpVarAoffsetUtil)
-    B                           :MSTORE(tmpVarAoffsetUtil)
+    %MAX_CNT_STEPS - STEP - 20          :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
+    A                                   :MSTORE(tmpVarAoffsetUtil)
+    B                                   :MSTORE(tmpVarBoffsetUtil)
+
     ${A >> 5} => E
     ${A & 0x1F} => C
-    E * 32 + C      :ASSERT
+    E * 32 + C                          :ASSERT
     C => A
     0x20 => B
-    $               :LT,JMPNC(failAssert)
-    0x0FFFF - E     :JMPN(stackUnderflow)
-    31 - C          :JMPN(stackUnderflow)
-    $ => A          :MLOAD(tmpVarAoffsetUtil)
-    $ => B          :MLOAD(tmpVarBoffsetUtil), RETURN
+    $                                   :LT,JMPNC(failAssert)
+
+    $ => A                              :MLOAD(tmpVarAoffsetUtil)
+    $ => B                              :MLOAD(tmpVarBoffsetUtil), RETURN
 
 ;@info: move balances between two accounts
 ;@in: txSrcAddr: source address
