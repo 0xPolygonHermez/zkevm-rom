@@ -467,7 +467,7 @@ VAR GLOBAL tmpZkPCsaveMem
 saveMem:
     ; check zk-counters
     %MAX_CNT_STEPS - STEP - 100       :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCountersBinary)
+    %MAX_CNT_BINARY - CNT_BINARY - 5 :JMPN(outOfCountersBinary)
     RR                          :MSTORE(tmpZkPCsaveMem)
     A                           :MSTORE(tmpVarAsaveMem)
     B                           :MSTORE(tmpVarBsaveMem)
@@ -490,9 +490,21 @@ saveMem:
     $                           :LT, JMPC(saveMemGAS, saveMemEnd)
 
 saveMemGAS:
-    ; store new memory length
-    B                           :MSTORE(memLength)
-    B => E
+    ; store new memory length (multiple of 32)
+    B => A                     :MSTORE(memLength)
+    ${A >> 5} => E
+    ${A & 0x1f} => D
+    E * 32 + D                  :ASSERT
+    D => A
+    0x20 => B
+    $                           :LT,JMPNC(failAssert)
+    D                           :JMPZ(saveMemGAS2)
+    ; round up to multiple of 32 and store
+    E + 1 => E
+    E * 32 => E                 :MSTORE(memLength)
+
+saveMemGAS2:
+    $ => E                      :MLOAD(memLength)
     ; memory_size_word = (memory_byte_size + 31) / 32 in E
     ; ${(B+31)/32} => E
     E + 31 => A
