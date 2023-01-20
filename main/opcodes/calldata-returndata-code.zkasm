@@ -284,7 +284,8 @@ opCODECOPY:
     C               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
     E               :MSTORE(lastMemLength)
-
+    ; compute memory expansion gas cost
+                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; check out-of-gas
     GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
     ;${3*((E+31)/32)}
@@ -301,8 +302,7 @@ opCODECOPY:
 
     GAS - A => GAS  :JMPN(outOfGas)
 
-    ; compute memory expansion gas cost
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+
     ; if offset is above data len, length => offset
     D => A
     $ => B          :MLOAD(bytecodeLength)
@@ -618,7 +618,10 @@ opRETURNDATACOPYfinal:
 
 opRETURNDATACOPYEmpty:
     ; offset return data + len return data must be 0
-    E + C => B
+    E => A
+    C => B
+    $ => B          :ADD, JMPC(outOfGas)
+    0 => A
     $               :EQ, JMPC(readCode, outOfGas)
 
 /**
