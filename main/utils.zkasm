@@ -145,15 +145,16 @@ getLenBitsEnd:
     $ => RR         :MLOAD(tmpZkPCgetLen)
     $ => D          :MLOAD(tmpVarDgetLen), RETURN
 
-VAR GLOBAL tmpVarAmstore
-VAR GLOBAL tmpVarBmstore
-VAR GLOBAL tmpVarCmstore
-VAR GLOBAL tmpVarDmstore
-VAR GLOBAL tmpVarEmstore
-VAR GLOBAL tmpZkPCmstore
-
+VAR GLOBAL tmpVarAmstorex
+VAR GLOBAL tmpVarBmstorex
+VAR GLOBAL tmpVarCmstorex
+VAR GLOBAL tmpVarDmstorex
+VAR GLOBAL tmpVarEmstorex
+VAR GLOBAL tmpZkPCmstorex
+VAR GLOBAL auxmstorex
+VAR GLOBAL aux2mstorex
+VAR GLOBAL lenmstorex
 VAR GLOBAL bytesToStore
-VAR GLOBAL isMSTOREX
 ; @info save value to memory < 32 bytes with offset
 ; @in bytesToStore => bytes to store in memory
 ; @in E => offset
@@ -161,11 +162,56 @@ VAR GLOBAL isMSTOREX
 ; @out E => new offset
 MSTOREX:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-    C               :JMPZ(MSTOREXend)
     32 - C          :JMPN(errorMLOADMSTORE)
     32 - C - 1      :JMPN(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
-    1               :MSTORE(isMSTOREX)
+    RR              :MSTORE(tmpZkPCmstorex)
+    A               :MSTORE(tmpVarAmstorex)
+    B               :MSTORE(tmpVarBmstorex)
+    C               :MSTORE(tmpVarCmstorex)
+    D               :MSTORE(tmpVarDmstorex)
+    C => B          :JMPZ(endMSTOREX)
+    E + C           :MSTORE(tmpVarEmstorex)
+    E => A
+    zkPC+1 => RR    :JMP(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    $ => B          :MLOAD(bytesToStore), CALL(getLenBytes) ; in: [B: number] out: [A: byte length of B]
+    A => D          :MSTORE(aux2mstorex)
+    1 => B
+MSTOREXloop:
+    $ => A          :MLOAD(bytesToStore)
+    $ => D          :MLOAD(aux2mstorex)
+    D - B => D      :JMPN(MSTOREXloopZero, MSTOREXloopShift)
+MSTOREXloopZero:
+    0 => D
+MSTOREXloopShift:
+    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    A               :MSTORE(auxmstorex)
+    $ => A          :MLOAD(MEM:E)
+    ${memAlignWR8_W0(A,mem.auxmstorex,C)} => D
+    $               :MEM_ALIGN_WR8,MLOAD(auxmstorex)
+    D               :MSTORE(MEM:E)          ; write W0
+    C + 1 => C
+    32 - C          :JMPNZ(MSTOREXloop2)
+    E + 1 => E
+    0 => C
+MSTOREXloop2:
+    B + 1 => B
+    $ => A          :MLOAD(tmpVarCmstorex)
+    A - B + 1       :JMPNZ(MSTOREXloop)
+MSTOREXoffset:
+    $ => E          :MLOAD(tmpVarEmstorex)
+endMSTOREX:
+    $ => A          :MLOAD(tmpVarAmstorex)
+    $ => B          :MLOAD(tmpVarBmstorex)
+    $ => C          :MLOAD(tmpVarCmstorex)
+    $ => RR         :MLOAD(tmpZkPCmstorex)
+    $ => D          :MLOAD(tmpVarDmstorex), RETURN
 
+VAR GLOBAL tmpVarAmstore
+VAR GLOBAL tmpVarBmstore
+VAR GLOBAL tmpVarCmstore
+VAR GLOBAL tmpVarDmstore
+VAR GLOBAL tmpVarEmstore
+VAR GLOBAL tmpZkPCmstore
 ; @info save value to memory 32 bytes with offset
 ; @in bytesToStore => bytes to store in memory
 ; @in E => offset
@@ -188,69 +234,11 @@ MSTORE32:
     $               :LT,JMPC(initMSTORE, errorMLOADMSTORE)
 
 initMSTORE:
+    E => A
     zkPC+1 => RR    :JMP(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
-    ; is storing <32 bytes, jump to store last bytes or finish if 0 bytes left
-    $ => B          :MLOAD(isMSTOREX), JMPZ(finalMSTORE)
-    ; if C has value, bytes splitted in two memory slots
-    C               :JMPNZ(MSTOREX2)
-    $ => C          :MLOAD(tmpVarCmstore)
-    ; load bytes to store
-    $ => A          :MLOAD(bytesToStore)
-    32 - C => D
-    ; shift bytes to store
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    A => B
-    ; load from memoty
-    $ => A          :MLOAD(MEM:E)
-    32 - D => D
-    ; shift loaded bytes
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    A + B           :MSTORE(bytesToStore)
-    A + B => A
-    0 => C
-    0               :MSTORE(isMSTOREX), JMP(finalMSTORE)
-
-; used if memory to store is allocated in two different slots
-MSTOREX2:
-    $ => D          :MLOAD(tmpVarCmstore)
-    C + D => D
-    ; load memory from slot E
-    $ => A          :MLOAD(MEM:E)
-    ; shift loaded memory from slot E
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    $ => D          :MLOAD(tmpVarCmstore)
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    A => B
-    ; load memory from slot E+1
-    $ => A          :MLOAD(MEM:E+1)
-    32 - C => D
-    ; right shift loaded memory from slot E+1
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    ; join both results
-    A + B => B
-    $ => A          :MLOAD(bytesToStore)
-    $ => D          :MLOAD(tmpVarCmstore)
-    32 - D => D
-    ; shift bytes to store
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    ; append loaded bytes from concurrent slots
-    A + B => A      :MSTORE(bytesToStore)
-
-finalMSTORE:
-    C               :JMPNZ(memAlignOptionMSTORE)
-    $ => A          :MLOAD(bytesToStore)
-    A               :MSTORE(MEM:E)
-    E*32 => E       :JMP(offsetMSTORE32)
-
-memAlignOptionMSTORE:
     E               :MSTORE(tmpVarEmstore)
-
     $ => A          :MLOAD(MEM:E)
     $ => B          :MLOAD(MEM:E+1)
-
     ${memAlignWR_W0(A,mem.bytesToStore,C)} => D                    ; no trust calculate W0
     ${memAlignWR_W1(B,mem.bytesToStore,C)} => E                    ; no trust calculate W1
     $               :MEM_ALIGN_WR,MLOAD(bytesToStore)
@@ -258,14 +246,7 @@ memAlignOptionMSTORE:
     $ => E          :MLOAD(tmpVarEmstore)
     D               :MSTORE(MEM:E)          ; write W0
     A               :MSTORE(MEM:E+1)        ; write W1
-    E*32 + C => E
-    $ => A          :MLOAD(isMSTOREX), JMPZ(offsetMSTORE32)
-    $ => C          :MLOAD(tmpVarCmstore)
-    E*32 + C => E
-    0               :MSTORE(isMSTOREX), JMP(endMSTORE)
-
-offsetMSTORE32:
-    E + 32 => E
+    E*32 + C + 32 => E
 
 endMSTORE:
     $ => A          :MLOAD(tmpVarAmstore)
@@ -273,8 +254,8 @@ endMSTORE:
     $ => C          :MLOAD(tmpVarCmstore)
     $ => RR         :MLOAD(tmpZkPCmstore)
     $ => D          :MLOAD(tmpVarDmstore), RETURN
-MSTOREXend:
-                    :RETURN
+
+
 VAR GLOBAL tmpVarAmload
 VAR GLOBAL tmpVarBmload
 VAR GLOBAL tmpVarCmload
