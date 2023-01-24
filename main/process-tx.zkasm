@@ -238,15 +238,14 @@ nonceIs0:
 
 ;; compute new contract address as CREATE2 spec: keccak256(0xff ++ address ++ salt ++ keccak256(init_code))[12:] (https://eips.ethereum.org/EIPS/eip-1014)
 create2:
-        $ => C                          :MLOAD(txCalldataLen)
+        $ => C                          :MLOAD(txCalldataLen) ; less than 2**32 bytes. Enforced by memory expansion gas cost & smart contract batchL2DataHash
         ; Check keccak counters
         C + 1                           :MSTORE(arithA)
         136                             :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
         $ => B                          :MLOAD(arithRes1)
         $ => A                          :MLOAD(cntKeccakPreProcess)
         ; -2 because we will use one more keccack for generating contract address
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2 => A
-        $                               :LT, JMPC(outOfCountersKeccak)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2 - B :JMPN(outOfCountersKeccak)
 
         $ => CTX                        :MLOAD(originCTX)
         $ => B                          :MLOAD(argsOffsetCall)
@@ -393,11 +392,10 @@ callContract:
 
         ; check poseidon counters
         ; 56 is the value used by the prover to increment poseidon counters depending on the hash length
-        B               :MSTORE(arithA)
-        56              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-        $ => B          :MLOAD(arithRes1)
-        %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1 => A
-        $               :LT, JMPC(outOfCountersPoseidon)
+        B                                               :MSTORE(arithA)
+        56                                              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+        $ => B                                          :MLOAD(arithRes1)
+        %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1 - B    :JMPN(outOfCountersPoseidon)
 
         ; get hash contract
         $ => A                          :MLOAD(txDestAddr)

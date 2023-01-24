@@ -23,7 +23,7 @@ start: ; main zkROM entry point
         ${getGlobalExitRoot()}              :MSTORE(globalExitRoot)
         ${getSequencerAddr()}               :MSTORE(sequencerAddr)
         ${getTimestamp()}                   :MSTORE(timestamp)
-        ${getTxsLen()}                      :MSTORE(batchL2DataLength)
+        ${getTxsLen()}                      :MSTORE(batchL2DataLength) ; less than 300.000 bytes. Enforced by the smart contract
 
         B => SR ;set initial state root
 
@@ -81,9 +81,8 @@ skipSetGlobalExitRoot:
         136                                     :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
         $ => B                                  :MLOAD(arithRes1)
         ; Compute minimum necessary keccaks to finish the batch
-        B + 1 + %MIN_CNT_KECCAK_BATCH           :MSTORE(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F => A
-        $                                       :LT, JMPC(outOfCountersKeccak)
+        B + 1 + %MIN_CNT_KECCAK_BATCH => B      :MSTORE(cntKeccakPreProcess)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B    :JMPN(handleOOCKatRLP)
 
 ;;;;;;;;;;;;;;;;;;
 ;; C - Loop parsing RLP transactions
