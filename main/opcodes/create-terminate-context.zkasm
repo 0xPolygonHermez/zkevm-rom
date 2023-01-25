@@ -957,13 +957,11 @@ opSENDALL:
     ; balance in D
     $ => D              :SLOAD
 
-    $ => A              :MLOAD(SP); [address => A]
-    ; Mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
+    ; Address in A & Mask address to 20 bytes
+    $ => A              :MLOAD(SP), CALL(maskAddress); in: [A: address] out: [A: masked address]
 
     ; store address receiver in [C, E]
-    A => C
-    A => E
+    A => C, E
 
     ; check balance to move is greater than 0
     0 => A
@@ -1011,14 +1009,12 @@ opSENDALL2:
 
 opSENDALLend:
     ; if origin ctx is 0, end tx
-    $ => A                  :MLOAD(originCTX)
-    A                       :JMPZ(handleGas)
+    $ => A                  :MLOAD(originCTX), JMPZ(handleGas)
 
     ; decrease CTX
     $ => B                  :MLOAD(gasRefund)
-    $ => C                  :MLOAD(isCreate)
     1 => D
-    C                       :JMPZ(opSENDALLendContinue)
+    $ => C                  :MLOAD(isCreate), JMPZ(opSENDALLendContinue)
     $ => D                  :MLOAD(createContractAddress)
 
 opSENDALLendContinue:
