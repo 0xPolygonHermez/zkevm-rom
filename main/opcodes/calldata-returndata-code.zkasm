@@ -20,35 +20,26 @@
     $ => B          :MLOAD(txCalldataLen)
     ; if offset is not lower than calldata length, return 0
     $               :LT,JMPNC(CALLDATALOADreturn0)
-    A => E
     ; Div operation with Arith
-    E               :MSTORE(arithA)
-    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => B          :MLOAD(arithRes1)
-    ; if data not aligned (remainder > 0), shift
-    $ => A          :MLOAD(arithRes2), JMPNZ(opCALLDATALOAD2)
-    SP => C
+                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    ; store SP at D
+    SP => D
     ; add %CALLDATA_OFFSET to point calldata in the memory
-    %CALLDATA_OFFSET + B => SP
+    %CALLDATA_OFFSET + E => SP
+    ; if data not aligned (remainder > 0), shift
+    C               :JMPNZ(opCALLDATALOAD2)
     $ => B          :MLOAD(SP); [stack => B]
     ; recover previous stack pointer
-    C => SP
+    D => SP
     B               :MSTORE(SP++), JMP(readCode); [data(offset) => SP]
 
 opCALLDATALOAD2:
-    ; store SP at C
-    SP => C
-    ; remainder at D
-    A => D
-    ; set pointer to calldata
-    %CALLDATA_OFFSET + B => SP
-    $ => A          :MLOAD(SP++), CALL(SHLarith); [stack => A]; in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    A => B
-    32 - D => D
-    $ => A          :MLOAD(SP), CALL(SHRarith); [stack => A]; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    $ => A          :MLOAD(SP++)
+    $ => B          :MLOAD(SP)
+    $ => A          :MEM_ALIGN_RD
     ; recover SP
-    C => SP
-    B + A           :MSTORE(SP++), JMP(readCode); [data(offset) => SP]
+    D => SP
+    A           :MSTORE(SP++), JMP(readCode); [data(offset) => SP]
 
 CALLDATALOADreturn0:
     0               :MSTORE(SP++), JMP(readCode); [0 => SP]
