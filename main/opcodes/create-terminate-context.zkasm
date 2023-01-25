@@ -957,23 +957,33 @@ opSENDALL:
     ; balance in D
     $ => D              :SLOAD
 
-    $ => A              :MLOAD(SP); [address => A]
-    ; Mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
-    ; check if storage address has balance to withdraw
-    A => C
-    A => E
+    ; Address in A & Mask address to 20 bytes
+    $ => A              :MLOAD(SP), CALL(maskAddress); in: [A: address] out: [A: masked address]
+
+    ; store address receiver in [C, E]
+    A => C, E
+
+    ; check balance to move is greater than 0
     0 => A
     D => B
-    $                           :EQ,JMPC(opSENDALL2)
-                                :CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
+    $                           :EQ,JMPC(opSENDALLend) ; no balance to move
+
+    ; check receiver and storageAddr are not the same
+    $ => A                      :MLOAD(storageAddr)
+    C => B
+    $                           :EQ, JMPC(opSENDALLend)
+
+; move balances
+opSENDALL2:
+    ; check gas empty account
+                                                :CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
     GAS - %CALL_NEW_ACCOUNT_GAS * E => GAS      :JMPN(outOfGas)
 
-opSENDALL2:
+    ; save balance storageAddr in arithA for later usage
+    D                           :MSTORE(arithA)
     ; check is cold to compute gas cost
     C => A                      :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     GAS - %COLD_ACCOUNT_ACCESS_COST * D => GAS     :JMPN(outOfGas)
-    B                         :MSTORE(arithA)
     ; read previous balance receiver
     ; set key for smt balance query
     %SMT_KEY_BALANCE => B
@@ -996,17 +1006,18 @@ opSENDALL2:
     $ => A                  :MLOAD(storageAddr)
     0 => D
     $ => SR                 :SSTORE
-    ; if origin ctx is 0, end tx
-    $ => A                  :MLOAD(originCTX)
-    $                       :EQ,JMPC(handleGas)
-    ; decrease CTX
-    $ => B                  :MLOAD(gasRefund)
-    $ => C                  :MLOAD(isCreate)
-    1 => D
-    C                       :JMPZ(opSENDALLend)
-    $ => D                  :MLOAD(createContractAddress)
 
 opSENDALLend:
+    ; if origin ctx is 0, end tx
+    $ => A                  :MLOAD(originCTX), JMPZ(handleGas)
+
+    ; decrease CTX
+    $ => B                  :MLOAD(gasRefund)
+    1 => D
+    $ => C                  :MLOAD(isCreate), JMPZ(opSENDALLendContinue)
+    $ => D                  :MLOAD(createContractAddress)
+
+opSENDALLendContinue:
     A => CTX
     0                       :MSTORE(retDataCTX)
     CTX                     :MSTORE(currentCTX)
