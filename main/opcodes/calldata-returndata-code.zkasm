@@ -82,6 +82,7 @@ opCALLDATACOPY:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2   :JMPN(outOfCountersMemalign)
     ; check stack underflow
     SP - 3 => SP    :JMPN(stackUnderflow)
     $ => E          :MLOAD(SP+2); [destOffset => E]
@@ -123,26 +124,37 @@ opCALLDATACOPYloop:
     C               :JMPZ(opCALLDATACOPYcheckLen)
     ; copy last bytes
     C - 32          :JMPN(opCALLDATACOPYfinal)
-    B => A
+    ; Store B at artihB for later usage
+    B => A          :MSTORE(arithB)
     E => D
                     :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     ; add %CALLDATA_OFFSET to offset to reach calldata in memory
     ; set stack pointer to first byte to read
     %CALLDATA_OFFSET + E => SP
     D => E
-    C => D
-    $ => A          :MLOAD(SP++), CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]; [calldata => A]
-    A => C
-    ; get data from next memory slot
-    32 - D => D
-    ; align calldata
-    $ => A          :MLOAD(SP), CALL(SHRarith); [calldata => A]; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    ; set bytesToStore with value to use in MSTORE
-    A + C           :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    $ => A          :MLOAD(SP++)
+    $ => B          :MLOAD(SP)
+    $ => A          :MEM_ALIGN_RD, MSTORE(bytesToStore)
+    E => A
+    ; Store 32 bytes from calldata to memory
+                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    E               :MSTORE(arithA)
+    $ => A          :MLOAD(MEM:E)
+    $ => B          :MLOAD(MEM:E+1)
+    ${memAlignWR_W0(A,mem.bytesToStore,C)} => D                    ; no trust calculate W0
+    ${memAlignWR_W1(B,mem.bytesToStore,C)} => E                    ; no trust calculate W1
+    $               :MEM_ALIGN_WR,MLOAD(bytesToStore)
+    E => A
+    $ => E          :MLOAD(arithA)
+    D               :MSTORE(MEM:E)          ; write W0
+    A               :MSTORE(MEM:E+1)        ; write W1
     ; recover stack pointer
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP); [size => C]
     C - 32 => C     :MSTORE(SP); [size => SP]
+    $ => E          :MLOAD(lastMemOffset)
+    E + 32 => E     :MSTORE(lastMemOffset)
+    $ => B          :MLOAD(arithB)
     B + 32 => B     :JMP(opCALLDATACOPYloop)
 
 opCALLDATACOPYfinal:
