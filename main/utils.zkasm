@@ -735,7 +735,7 @@ SHRarithfinal:
 ;@info Shift left D bytes to A
 ;@in A - (A << D)
 ;@in D - (A << D) D bytes
-;@out A -  A << D => A
+;@out A -  A << D => A ; TODO: check D > 2**32
 SHLarith:
     ; check zk-counters
     %MAX_CNT_STEPS - STEP - 100       :JMPN(outOfCountersStep)
@@ -751,8 +751,7 @@ SHLarith:
     ; A bytes
     D => A
     8 => B
-    0 => C
-    0 => D
+    0 => C, D
     ; D = A * 8, D bits
     ${A*B} => D             :ARITH
     ; A init number
@@ -761,7 +760,7 @@ SHLarith:
 SHLarithBit:
     ; check zk-counters
     %MAX_CNT_STEPS - STEP - 100       :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCountersBinary)
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
     %MAX_CNT_ARITH - CNT_ARITH - 1   :JMPN(outOfCountersArith)
     RR                      :MSTORE(tmpSHXZkPC2)
     B                       :MSTORE(tmpVarBSHX)
@@ -789,38 +788,15 @@ SHLarithinit:
     E                       :MSTORE(result)
     ; D = 256 - D
     256 - D => D, RR
-                            :CALL(@exp_num + RR); out:[B: 2**RR]
-    A => E
-    B => A
-    1 => B
-    $ => A                  :SUB
-    E => B
-    ; A < B, 2**(256-D) - 1 < init number
-    $ => C                  :LT
-    ; A init number
-    E => A
-    ; E result
-    $ => E                  :MLOAD(result)
-    ; D = 256 - D
-    256 - D => D, RR
-                            :CALL(@exp_num + RR); out:[B: 2**RR]
-    ; if 2**D-1 < init number --> SHLarithBig
-    C                       :JMPNZ(SHLarithBig)
-    0 => D,C
-    ; init number * 2**D = init
+    B => C                  :CALL(@exp_num + RR); out:[B: 2**RR]
+    ${A/B} => D
+    C => B
+    0 => C
     E                       :ARITH, JMP(SHLarithfinal)
 
 SHLarith0:
     0 => E
                             :JMP(SHLarithfinal)
-
-SHLarithBig:
-    256 - D => D, RR
-    B => C                  :CALL(@exp_num + RR); out:[B: 2**RR]
-    ${A/B} => D
-    C => B
-    0 => C
-    E                       :ARITH
 
 SHLarithfinal:
     E => A
