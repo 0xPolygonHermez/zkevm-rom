@@ -4,11 +4,14 @@
 const { expect } = require('chai');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
+
 
 const { newCommitPolsArray } = require('pilcom');
 const smMain = require('@0xpolygonhermez/zkevm-proverjs/src/sm/sm_main/sm_main');
 
-const rom = require('../../build/rom.json');
+let rom = require('../../build/rom.json');
+let stepsN = 2 ** 23;
 
 const fileCachePil = path.join(__dirname, '../../node_modules/@0xpolygonhermez/zkevm-proverjs/cache-main-pil.json');
 
@@ -24,13 +27,22 @@ it(`${nameFile}`, async () => {
     }
     const pil = JSON.parse(fs.readFileSync(fileCachePil));
     const cmPols = newCommitPolsArray(pil);
+    if (input.gasLimit) {
+        if(!fs.existsSync(`../../build/rom-${input.gasLimit}.json`)) {
+            execSync(`cd ../../ && mkdir -p build && npx zkasm main/main.zkasm -o build/rom-${input.gasLimit}.json`)
+        }
+        rom = require(`../../build/rom-${input.gasLimit}.json`)
+    }
+    if (inputPath.includes("tests-OOC") && input.stepsN) {
+        stepsN = input.stepsN
+    }
     try {
         const config = {
             debug: true,
             debugInfo: {
                 inputName: path.basename(inputPath),
             },
-            stepsN: 2 ** 23,
+            stepsN: stepsN,
         };
         await smMain.execute(cmPols.Main, input, rom, config);
     } catch (err) {
