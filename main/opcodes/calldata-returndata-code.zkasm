@@ -10,45 +10,39 @@
  */
  opCALLDATALOAD:
     ; checks zk-counters
-    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1   :JMPN(outOfCountersMemalign)
+
     ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
     ; check out-of-gas
     GAS - %GAS_FASTEST_STEP => GAS    :JMPN(outOfGas)
-    $ => A          :MLOAD(SP); [offset => B]
+    $ => A          :MLOAD(SP); [offset => A]
     $ => B          :MLOAD(txCalldataLen)
     ; if offset is not lower than calldata length, return 0
     $               :LT,JMPNC(CALLDATALOADreturn0)
-    A => E
-    ; Div operation with Arith
-    E               :MSTORE(arithA)
-    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => B          :MLOAD(arithRes1)
-    ; if data not aligned (remainder > 0), shift
-    $ => A          :MLOAD(arithRes2), JMPNZ(opCALLDATALOAD2)
-    SP => C
+                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    ; store SP at D
+    SP => D
     ; add %CALLDATA_OFFSET to point calldata in the memory
-    %CALLDATA_OFFSET + B => SP
+    %CALLDATA_OFFSET + E => SP
+    C               :JMPNZ(opCALLDATALOAD2) ; data not aligned
     $ => B          :MLOAD(SP); [stack => B]
     ; recover previous stack pointer
-    C => SP
+    D => SP
     B               :MSTORE(SP++), JMP(readCode); [data(offset) => SP]
 
 opCALLDATALOAD2:
-    ; store SP at C
-    SP => C
-    ; remainder at D
-    A => D
-    ; set pointer to calldata
-    %CALLDATA_OFFSET + B => SP
-    $ => A          :MLOAD(SP++), CALL(SHLarith); [stack => A]; in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    A => B
-    32 - D => D
-    $ => A          :MLOAD(SP), CALL(SHRarith); [stack => A]; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    $ => A          :MLOAD(SP++)
+    ; reading beyond the calldata length will result in reading 0
+    ; calldata memory reservation in zkEVM (2**16 * 32 bytes) is larger than maximum bytes allowed as calldata fixed in the smart contract (300.000 bytes)
+    ; therefore it is assured that remaining memory space will be always 0 and never writen or over exceeded
+    $ => B          :MLOAD(SP)
+    $ => A          :MEM_ALIGN_RD
     ; recover SP
-    C => SP
-    B + A           :MSTORE(SP++), JMP(readCode); [data(offset) => SP]
+    D => SP
+    A           :MSTORE(SP++), JMP(readCode); [data(offset) => SP]
 
 CALLDATALOADreturn0:
     0               :MSTORE(SP++), JMP(readCode); [0 => SP]
@@ -78,6 +72,8 @@ opCALLDATASIZEdep:
     ; check stack overflow
     %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
 
+VAR GLOBAL calldatacopyAux1
+VAR GLOBAL calldatacopyAux2
 /**
  * @link [https://www.evm.codes/#37?fork=berlin]
  * @zk-counters
@@ -91,34 +87,31 @@ opCALLDATACOPY:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2   :JMPN(outOfCountersMemalign)
     ; check stack underflow
     SP - 3 => SP    :JMPN(stackUnderflow)
     $ => E          :MLOAD(SP+2); [destOffset => E]
-    $ => A          :MLOAD(SP+1); [offset => B]
+    $ => D          :MLOAD(SP+1); [offset => D]
     $ => C          :MLOAD(SP); [size => C]
     ; store lastMemOffset for memory expansion gas cost
     E               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
-    C               :MSTORE(lastMemLength)
+    C               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; check out-of-gas
     GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
     ;${3*((C+31)/32)}
     ;(C+31)/32 => A
-    C+31 => B
-    B               :MSTORE(arithA)
-    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => B          :MLOAD(arithRes1)
-    ; Mul operation with Arith
-    ; 3*A
-    3               :MSTORE(arithA)
-    B               :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
-    $ => B          :MLOAD(arithRes1)
-    GAS - B => GAS  :JMPN(outOfGas)
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    C+31 => A
+                        :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    GAS - 3*E => GAS    :JMPN(outOfGas)
     ; save current stack pointer
     SP              :MSTORE(SPw)
-    $ => B          :MLOAD(txCalldataLen)
-    A => D
+    ; Recover destOffset at E
+    $ => E          :MLOAD(lastMemOffset)
+    ; Recover size at C
+    $ => C          :MLOAD(lastMemLength)
+    $ => B          :MLOAD(txCalldataLen); less than 2**32 bytes (calldata). Enforced by memory expansion gas cost & smart contract batchL2DataHash
+    D => A
     ; if offset is not lower than calldata length, return 0
     $               :LT,JMPNC(opCALLDATACOPY0)
     B + C => A
@@ -136,47 +129,51 @@ opCALLDATACOPYloop:
     C               :JMPZ(opCALLDATACOPYcheckLen)
     ; copy last bytes
     C - 32          :JMPN(opCALLDATACOPYfinal)
-    B               :MSTORE(arithA)
-    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => D          :MLOAD(arithRes2)
-    $ => A          :MLOAD(arithRes1)
-    A               :MSTORE(arithA)
+
+    B => A          :MSTORE(calldatacopyAux2)
+    E => D
+                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     ; add %CALLDATA_OFFSET to offset to reach calldata in memory
-    %CALLDATA_OFFSET :MSTORE(arithB), CALL(addARITH); in: [arithA, arithB] out[arithRes1: arithA*arithB]
-    $ => A          :MLOAD(arithRes1)
     ; set stack pointer to first byte to read
-    A => SP
-    $ => A          :MLOAD(SP); [calldata => A]
-                    :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    A => C
-    $ => A          :MLOAD(arithRes1)
-    ; get data from next memory slot
-    A + 1 => SP
-    32 - D => D
-    ; align calldata
-    $ => A          :MLOAD(SP), CALL(SHRarith); [calldata => A]; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    ; set bytesToStore with value to use in MSTORE
-    A + C           :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    %CALLDATA_OFFSET + E => SP
+    D => E
+    $ => A          :MLOAD(SP++)
+    $ => B          :MLOAD(SP)
+    $ => A          :MEM_ALIGN_RD, MSTORE(bytesToStore)
+    E => A
+    ; Store 32 bytes from calldata to memory
+                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    E               :MSTORE(calldatacopyAux1)
+    $ => A          :MLOAD(MEM:E)
+    $ => B          :MLOAD(MEM:E+1)
+    ${memAlignWR_W0(A,mem.bytesToStore,C)} => D                    ; no trust calculate W0
+    ${memAlignWR_W1(B,mem.bytesToStore,C)} => E                    ; no trust calculate W1
+    $               :MEM_ALIGN_WR,MLOAD(bytesToStore)
+    E => A
+    $ => E          :MLOAD(calldatacopyAux1)
+    D               :MSTORE(MEM:E)          ; write W0
+    A               :MSTORE(MEM:E+1)        ; write W1
     ; recover stack pointer
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP); [size => C]
-    C - 32 => C
-    C               :MSTORE(SP); [size => SP]
+    C - 32 => C     :MSTORE(SP); [size => SP]
+    $ => E          :MLOAD(lastMemOffset)
+    E + 32 => E     :MSTORE(lastMemOffset)
+    $ => B          :MLOAD(calldatacopyAux2)
     B + 32 => B     :JMP(opCALLDATACOPYloop)
 
 opCALLDATACOPYfinal:
     ; copy last bytes
-    B               :MSTORE(arithA)
-    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => D          :MLOAD(arithRes2)
-    $ => B          :MLOAD(arithRes1)
+    B => A
+    E => D
+                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     ; add %CALLDATA_OFFSET to offset to reach calldata in memory
-    %CALLDATA_OFFSET            :MSTORE(arithA)
-    B               :MSTORE(arithB), CALL(addARITH); in: [arithA, arithB] out[arithRes1: arithA*arithB]
-    $ => B          :MLOAD(arithRes1)
     ; set SP to calldata
-    B => SP
+    %CALLDATA_OFFSET + E => SP, B
+    D => E
+    C => D
     $ => A          :MLOAD(SP), CALL(SHLarith); [calldata => A]; in: [A: value, D: #bytes to left shift] out: [A: shifted result]
+    ; Recover init SP to recover input size (todo: use an aux var)
     $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(SP); [size => C]
     ; point to next memory slot

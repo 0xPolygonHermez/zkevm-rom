@@ -33,9 +33,11 @@ opMLOAD:
  *  - stack input: [offset, value]
  *  - stack output: none
  */
+ VAR GLOBAL mstoreAux
  opMSTORE:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1   :JMPN(outOfCountersMemalign)
 
     ; check stack underflow
     SP - 2 => SP          :JMPN(stackUnderflow)
@@ -46,12 +48,24 @@ opMLOAD:
     $ => E          :MLOAD(SP+1); [offset => E]
     $ => B          :MLOAD(SP); [value => B]
 
-    ; store bytesToStore for MSTORE32 execution
-    B               :MSTORE(bytesToStore)
     ; store lastMemOffset for memory expansion gas cost
-    E               :MSTORE(lastMemOffset), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [A: value]
+    E               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
     32              :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    ; store bytesToStore for memalign execution
+    B               :MSTORE(bytesToStore)
+    E => A          :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+
+    E               :MSTORE(mstoreAux)
+    $ => A          :MLOAD(MEM:E)
+    $ => B          :MLOAD(MEM:E+1)
+    ${memAlignWR_W0(A,mem.bytesToStore,C)} => D                    ; no trust calculate W0
+    ${memAlignWR_W1(B,mem.bytesToStore,C)} => E                    ; no trust calculate W1
+    $               :MEM_ALIGN_WR,MLOAD(bytesToStore)
+    E => A
+    $ => E          :MLOAD(mstoreAux)
+    D               :MSTORE(MEM:E)          ; write W0
+    A               :MSTORE(MEM:E+1)        ; write W1
                     :JMP(readCode)
 
 /**

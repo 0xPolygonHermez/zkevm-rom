@@ -161,6 +161,7 @@ VAR GLOBAL isMSTOREX
 ; @out E => new offset
 MSTOREX:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    C               :JMPZ(endMSTOREX)
     32 - C          :JMPN(errorMLOADMSTORE)
     32 - C - 1      :JMPN(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     1               :MSTORE(isMSTOREX)
@@ -271,6 +272,8 @@ endMSTORE:
     $ => C          :MLOAD(tmpVarCmstore)
     $ => RR         :MLOAD(tmpZkPCmstore)
     $ => D          :MLOAD(tmpVarDmstore), RETURN
+endMSTOREX:
+                    :RETURN
 
 VAR GLOBAL tmpVarAmload
 VAR GLOBAL tmpVarBmload
@@ -467,7 +470,7 @@ VAR GLOBAL tmpZkPCsaveMem
 saveMem:
     ; check zk-counters
     %MAX_CNT_STEPS - STEP - 100       :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCountersBinary)
+    %MAX_CNT_BINARY - CNT_BINARY - 5 :JMPN(outOfCountersBinary)
     RR                          :MSTORE(tmpZkPCsaveMem)
     A                           :MSTORE(tmpVarAsaveMem)
     B                           :MSTORE(tmpVarBsaveMem)
@@ -475,15 +478,17 @@ saveMem:
     D                           :MSTORE(tmpVarDsaveMem)
     E                           :MSTORE(tmpVarEsaveMem)
     $ => A                      :MLOAD(lastMemLength)
+    ; If no len, no memory expansion
+    0 => B
+    $                           :EQ, JMPC(saveMemEnd)
     $ => B                      :MLOAD(lastMemOffset)
     ; If the binary has a carry, means the mem expansion is very big. We can jump to oog directly
     ; offset + length in B
     $ => B                      :ADD, JMPC(outOfGas)
-    ; If no len, no memory expansion
-    A                           :JMPZ(saveMemEnd)
     ; check new memory length is lower than 2**22 - 31 - 1 (max supported memory expansion for %TX_GAS_LIMIT of gas)
     %MAX_MEM_EXPANSION_BYTES => A
     $                           :LT,JMPC(outOfGas)
+
 
     ; load old memory length, if is greater than new memory length, no expansion cost
     $ => A                      :MLOAD(memLength)
@@ -751,8 +756,7 @@ SHLarith:
     ; A bytes
     D => A
     8 => B
-    0 => C
-    0 => D
+    0 => C, D
     ; D = A * 8, D bits
     ${A*B} => D             :ARITH
     ; A init number
@@ -761,7 +765,7 @@ SHLarith:
 SHLarithBit:
     ; check zk-counters
     %MAX_CNT_STEPS - STEP - 100       :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCountersBinary)
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
     %MAX_CNT_ARITH - CNT_ARITH - 1   :JMPN(outOfCountersArith)
     RR                      :MSTORE(tmpSHXZkPC2)
     B                       :MSTORE(tmpVarBSHX)
@@ -789,38 +793,15 @@ SHLarithinit:
     E                       :MSTORE(result)
     ; D = 256 - D
     256 - D => D, RR
-                            :CALL(@exp_num + RR); out:[B: 2**RR]
-    A => E
-    B => A
-    1 => B
-    $ => A                  :SUB
-    E => B
-    ; A < B, 2**(256-D) - 1 < init number
-    $ => C                  :LT
-    ; A init number
-    E => A
-    ; E result
-    $ => E                  :MLOAD(result)
-    ; D = 256 - D
-    256 - D => D, RR
-                            :CALL(@exp_num + RR); out:[B: 2**RR]
-    ; if 2**D-1 < init number --> SHLarithBig
-    C                       :JMPNZ(SHLarithBig)
-    0 => D,C
-    ; init number * 2**D = init
+    B => C                  :CALL(@exp_num + RR); out:[B: 2**RR]
+    ${A/B} => D
+    C => B
+    0 => C
     E                       :ARITH, JMP(SHLarithfinal)
 
 SHLarith0:
     0 => E
                             :JMP(SHLarithfinal)
-
-SHLarithBig:
-    256 - D => D, RR
-    B => C                  :CALL(@exp_num + RR); out:[B: 2**RR]
-    ${A/B} => D
-    C => B
-    0 => C
-    E                       :ARITH
 
 SHLarithfinal:
     E => A
