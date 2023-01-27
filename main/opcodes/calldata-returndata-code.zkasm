@@ -22,14 +22,12 @@
     $ => B          :MLOAD(txCalldataLen)
     ; if offset is not lower than calldata length, return 0
     $               :LT,JMPNC(CALLDATALOADreturn0)
-    ; Div operation with Arith
                     :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     ; store SP at D
     SP => D
     ; add %CALLDATA_OFFSET to point calldata in the memory
     %CALLDATA_OFFSET + E => SP
-    ; if data not aligned (remainder > 0), shift
-    C               :JMPNZ(opCALLDATALOAD2)
+    C               :JMPNZ(opCALLDATALOAD2) ; data not aligned
     $ => B          :MLOAD(SP); [stack => B]
     ; recover previous stack pointer
     D => SP
@@ -37,6 +35,9 @@
 
 opCALLDATALOAD2:
     $ => A          :MLOAD(SP++)
+    ; reading beyond the calldata length will result in reading 0
+    ; calldata memory reservation in zkEVM (2**16 * 32 bytes) is larger than maximum bytes allowed as calldata fixed in the smart contract (300.000 bytes)
+    ; therefore it is assured that remaining memory space will be always 0 and never writen or over exceeded
     $ => B          :MLOAD(SP)
     $ => A          :MEM_ALIGN_RD
     ; recover SP
@@ -101,8 +102,8 @@ opCALLDATACOPY:
     ;${3*((C+31)/32)}
     ;(C+31)/32 => A
     C+31 => A
-                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
-    GAS - 3*E => GAS  :JMPN(outOfGas)
+                        :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    GAS - 3*E => GAS    :JMPN(outOfGas)
     ; save current stack pointer
     SP              :MSTORE(SPw)
     ; Recover destOffset at E
@@ -128,7 +129,7 @@ opCALLDATACOPYloop:
     C               :JMPZ(opCALLDATACOPYcheckLen)
     ; copy last bytes
     C - 32          :JMPN(opCALLDATACOPYfinal)
-    ; Store B at artihB for later usage
+
     B => A          :MSTORE(calldatacopyAux2)
     E => D
                     :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
