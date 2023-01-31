@@ -245,6 +245,9 @@ sizeVerification:
         $                               :EQ,JMPC(sizeVerificationSuccess, invalidTxRLP)
 sizeVerificationSuccess:
         HASHPOS                         :HASHKLEN(E)
+        ;; compute signature
+        $ => A                          :HASHKDIGEST(E)
+        A                               :MSTORE(txHash)
 
 ;;;;;;;;;;;;;;;;;;
 ;; C - Read signature. Fill 'batchHashData' bytes
@@ -276,24 +279,29 @@ vREADTx:
         A + C => A                      :MSTORE(batchL2DataParsed)
 ;; increase number of transaction to process
         $ => A                          :MLOAD(pendingTxs)
-        A + 1 => A                      :MSTORE(pendingTxs)
-;; compute signature
-        $ => A                          :HASHKDIGEST(E)
-        A                               :MSTORE(txHash), JMP(txLoopRLP)
+        A + 1 => A                      :MSTORE(pendingTxs), JMP(txLoopRLP)
 
 ;;;;;;;;;
 ;; E - Handler error RLP fields
 ;;;;;;;;;
+handleOOCKatRLPNoClose:
+        $${eventLog(onError, OOCK)}
+        $ => SR                         :MLOAD(batchSR), JMP(invalidTxRLPNoCloseHash)
 handleOOCBatRLP:
-        $${eventLog(onError, OOCB)}      :JMP(handleOOCatRLP)
+        $${eventLog(onError, OOCB)}     :JMP(handleOOCatRLP)
 handleOOCKatRLP:
-        $${eventLog(onError, OOCK)}      :JMP(handleOOCatRLP)
+        $${eventLog(onError, OOCK)}     :JMP(handleOOCatRLP)
 handleOOCSatRLP:
-        $${eventLog(onError, OOCS)}      :JMP(handleOOCatRLP)
+        $${eventLog(onError, OOCS)}     :JMP(handleOOCatRLP)
 handleOOCatRLP:
         $ => SR                         :MLOAD(batchSR)
 
 invalidTxRLP:
+;; Close open hash
+        HASHPOS                         :HASHKLEN(E)
+        $ => A                          :HASHKDIGEST(E)
+
+invalidTxRLPNoCloseHash:
 ;; Append all missing 'batchL2Data' to 'batchDataHash' bytes
         $ => B                          :MLOAD(batchL2DataLength)
         $ => C                          :MLOAD(batchHashPos)
