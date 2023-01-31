@@ -27,7 +27,7 @@ it(`${nameFile}`, async () => {
     const pil = JSON.parse(fs.readFileSync(fileCachePil));
     const cmPols = newCommitPolsArray(pil);
     if (input.gasLimit) {
-        rom = require(`../../build/rom-${input.gasLimit}.json`)
+        rom = require(`../../build/rom-${input.gasLimit}.test.json`)
     }
     if (input.stepsN) {
         stepsN = input.stepsN
