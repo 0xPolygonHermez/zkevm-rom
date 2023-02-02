@@ -280,9 +280,8 @@ opCODECOPY:
     ; store lastMemOffset for memory expansion gas cost
     C               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
-    E               :MSTORE(lastMemLength)
     ; compute memory expansion gas cost
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    E               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; check out-of-gas
     GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
     ;${3*((E+31)/32)}
@@ -403,7 +402,8 @@ VAR GLOBAL tmpContractLength
  */
 opEXTCODECOPY:
     ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 300 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 300         :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
 
     ; check stack underflow
     SP - 4 => SP    :JMPN(stackUnderflow)
@@ -421,7 +421,8 @@ opEXTCODECOPY:
     C               :MSTORE(lastMemOffset)
 
     ; store lastMemLength for memory expansion gas cost
-    E               :MSTORE(lastMemLength)
+    ; compute memory expansion gas cost
+    E               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
 
     ; check out-of-gas
     ;${3*((E+31)/32)}
@@ -438,9 +439,6 @@ opEXTCODECOPY:
     $ => A          :MLOAD(arithRes1)
     ; check out-of-gas
     GAS - A => GAS  :JMPN(outOfGas)
-
-    ; compute memory expansion gas cost
-                    :CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; if offset is above data len, length => offset
     D => A
     $ => B          :MLOAD(tmpContractLength)
@@ -558,15 +556,21 @@ opRETURNDATACOPY:
     ; Load ret data length from last ctx
     B => CTX
     E => B
+
+    ; check offset is lower than max memory
+    %MAX_MEM_EXPANSION_BYTES => A
+    $                :LT,JMPC(outOfGas)
+
     $ => A          :MLOAD(retDataLength)
     $ => E          :MLOAD(retDataOffset)
     $ => CTX        :MLOAD(currentCTX)
     ; E ret data offset (memory pointer) of last context, B offset in return data  that want to retrive
     E + B => E
     ; if retDataSize <= retdataOffset + dataLen -> OOG
-    ;A retDataSize
+    ; A retDataSize
     B + C => B ; total offset (retdataOffset + dataLen)
-    $               :LT, JMPC(outOfGas)
+    A - B           :JMPN(outOfGas)
+
     E => B ; memory pointer where start to copy memory
     ;${3*((C+31)/32)}
     C+31 => A
