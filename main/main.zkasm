@@ -15,6 +15,12 @@ start: ; main zkROM entry point
 ;;;;;;;;;;;;;;;;;;
         STEP => A
         0                                   :ASSERT ; Ensure it is the beginning of the execution
+
+        ; it is assumed that forkID is less than 32 bits
+        ; hence, 'JMPZ' instruction is safe
+        CTX                                 :MSTORE(forkID)
+        CTX - %FORK_ID                      :JMPNZ(failAssert)
+
         B                                   :MSTORE(oldStateRoot)
         C                                   :MSTORE(oldAccInputHash)
         SP                                  :MSTORE(oldNumBatch)
@@ -194,6 +200,7 @@ processTxsEnd:
         $ => PC                         :MLOAD(newNumBatch)
 
         ; Set registers to its initials values
+        $ => CTX                        :MLOAD(forkID)
         $ => B                          :MLOAD(oldStateRoot)
         $ => C                          :MLOAD(oldAccInputHash)
         $ => SP                         :MLOAD(oldNumBatch)
