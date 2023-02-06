@@ -438,8 +438,16 @@ computeGasSendCall:
 
     ; compute all_but_one_64th gas
     GAS => A
-    ${GAS >> 6} => C
+
+    ; C = [c7, c6, ..., c0]
+    ; JMPN instruction assures c0 is within the range [0, 2**32 - 1]
+    ${GAS >> 6} => C        :JMPN(failAssert)
     ${GAS & 0x3f} => D
+
+    ; since D is assured to be less than 0x40
+    ; it is enforced that [c7, c6, ..., c1] are 0 since there is no value multiplied by 64
+    ; that equals the field
+    ; Since e0 is assured to be less than 32 bits, c0 * 64 + d0 could not overflow the field
     C * 64 + D              :ASSERT
     D => A
     0x40 => B
@@ -501,8 +509,16 @@ saveMemGAS:
     ; memory_size_word = (memory_byte_size + 31) / 32 in E
     ; ${(B+31)/32} => E
     E + 31 => A
-    ${A >> 5} => E
+
+    ; E = [e7, e6, ..., e0]
+    ; JMPN instruction assures e0 is within the range [0, 2**32 - 1]
+    ${A >> 5} => E              :JMPN(failAssert)
     ${A & 0x1f} => D
+
+    ; since D is assured to be less than 0x20
+    ; it is enforced that [e7, e6, ..., e1] are 0 since there is no value multiplied by 32
+    ; that equals the field
+    ; Since e0 is assured to be less than 32 bits, e0 * 32 + d0 could not overflow the field
     E * 32 + D                  :ASSERT
     D => A
     0x20 => B
@@ -889,8 +905,15 @@ offsetUtil:
     A                                   :MSTORE(tmpVarAoffsetUtil)
     B                                   :MSTORE(tmpVarBoffsetUtil)
 
-    ${A >> 5} => E
+    ; E = [e7, e6, ..., e0]
+    ; JMPN instruction assures e0 is within the range [0, 2**32 - 1]
+    ${A >> 5} => E                      :JMPN(failAssert)
     ${A & 0x1F} => C
+
+    ; since C is assured to be less than 0x20
+    ; it is enforced that [e7, e6, ..., e1] are 0 since there is no value multiplied by 32
+    ; that equals the field
+    ; Since e0 is assured to be less than 32 bits, e0 * 32 + c0 could not overflow the field
     E * 32 + C                          :ASSERT
     C => A
     0x20 => B
@@ -981,10 +1004,18 @@ readPush:
     D => A
     0                           :MSTORE(accumulator)
     PC + D - 1 => HASHPOS
-    ${A >> 2} => B
+
+    ; B = [b7, b6, ..., b0]
+    ; JMPN instruction assures b0 is within the range [0, 2**32 - 1]
+    ${A >> 2} => B              :JMPN(failAssert)
     B                           :MSTORE(numBlocks)
     ${A & 0x03} => D
     D                           :MSTORE(leftBytes)
+
+    ; since D is assured to be less than 0x04
+    ; it is enforced that [b7, b6, ..., b1] are 0 since there is no value multiplied by 4
+    ; that equals the field
+    ; Since b0 is assured to be less than 32 bits, b0 * 4 + d0 could not overflow the field
     B * 4 + D                   :ASSERT
     D => A
     0x04 => B
@@ -1174,10 +1205,11 @@ hashPoseidonLinearFromMemory:
     C                               :JMPZ(hashPoseidonReturn)
     ; check poseidon counters
     ; 56 is the value used by the prover to increment poseidon counters depending on the hash length
-    C                                               :MSTORE(arithA)
-    56                                              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => B                                          :MLOAD(arithRes1)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1 - B    :JMPN(outOfCountersPoseidon)
+    C                                                       :MSTORE(arithA)
+    56                                                      :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => B                                                  :MLOAD(arithRes1)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1 - B            :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_PADDING_PG_LIMIT - CNT_PADDING_PG - 1 - B      :JMPN(outOfCountersPadding)
 
     ; get a new hashPId
     $ => B                          :MLOAD(nextHashPId)
