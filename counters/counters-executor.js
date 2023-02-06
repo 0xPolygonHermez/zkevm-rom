@@ -28,7 +28,12 @@ async function main() {
 async function runTest(testName, cmPols) {
     const zkasmFile = `${testFilesDir}/${testName}`;
     // Compile rom
-    const rom = await zkasm.compile(zkasmFile);
+    const configZkasm = {
+        defines: [],
+        allowUndefinedLabels: true
+    };
+
+    const rom = await zkasm.compile(zkasmFile, null, configZkasm);
     const config = {
         debug: true,
         stepsN: 8388608,
