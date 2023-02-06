@@ -1,0 +1,26 @@
+revertPrecompiled:
+    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+
+    ; load initSR to revert all state changes
+    ; revert touched accounts
+    $ => SR         :MLOAD(initSR), CALL(revertTouched)
+    $${eventLog(onError, revert)}
+
+    ; check if it is the first context
+    $ => A          :MLOAD(originCTX), JMPZ(handleGas) ; first context
+    A => CTX        :MSTORE(currentCTX)
+
+    ; return gas not used to previous context
+    $ => B          :MLOAD(gasCTX)
+    GAS + B => GAS
+
+    ; restore SP and PC
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+
+    ; write 0 in previous context stack
+    0               :MSTORE(SP++)
+
+    ; decrease depth
+    $ => A          :MLOAD(depth)
+    A - 1           :MSTORE(depth), JMP(readCode)
