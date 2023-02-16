@@ -22,7 +22,7 @@ checkCounters:
 %OPADD_CNT_PADDING_PG - CNT_PADDING_PG :JMPNZ(failedCounters)
 %OPADD_CNT_POSEIDON_G - CNT_POSEIDON_G :JMPNZ(failedCounters)
 // Finalize execution
-0 => A,B,C,D,E,CTX, SP, PC, GAS, MAXMEM, SR, HASHPOS, RR ; Set all registers to 0
+0 => A,B,C,D,E,CTX, SP, PC, GAS,  SR, HASHPOS, RR ; Set all registers to 0
 finalizeExecution:
                                                                         :JMP(finalWait)
 readCode:
