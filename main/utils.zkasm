@@ -27,7 +27,7 @@ copySP:
     RR              :MSTORE(tmpZkPCcopy)
     ; store current ctx
     CTX             :MSTORE(currentCTX)
-    ; set SP at the begginning of calldata memory allocation
+    ; set SP at the beginning of calldata memory allocation
     %CALLDATA_OFFSET => SP
     ; retrieve previous context
     $ => CTX        :MLOAD(originCTX)
@@ -200,7 +200,7 @@ initMSTORE:
     zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
     A => B
-    ; load from memoty
+    ; load from memory
     $ => A          :MLOAD(MEM:E)
     32 - D => D
     ; shift loaded bytes
@@ -317,7 +317,7 @@ MLOADX:
     %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1   :JMPN(outOfCountersMemalign)
 
-    32 - C          :JMPN(errorMLOADMSTORE) ; TDDO Should be unreachable! check it
+    32 - C          :JMPN(errorMLOADMSTORE)
     32 - C - 1      :JMPN(MLOAD32)
     1               :MSTORE(isMLOADX)
 
@@ -353,7 +353,7 @@ initMLOAD:
 memAlignOptionMLOAD:
     $ => A          :MLOAD(MEM:E)
     $ => B          :MLOAD(MEM:E+1)
-    ; get memeory value
+    ; get memory value
     $ => A          :MEM_ALIGN_RD
     E*32 + C => E
     $ => B          :MLOAD(isMLOADX)
@@ -584,6 +584,7 @@ VAR GLOBAL arithRes1
 VAR GLOBAL arithRes2
 VAR GLOBAL arithOverflow
 
+VAR GLOBAL addArithOverflow
 ; @info binary addition
 ; @in: arithA: addend value
 ; @in: arithB: addend value
@@ -593,8 +594,13 @@ addARITH:
     RR              :MSTORE(tmpZkPCArith), CALL(storeTmp)
     $ => A          :MLOAD(arithA)
     $ => B          :MLOAD(arithB)
-    $ => E          :ADD, MSTORE(arithRes1)
+    $ => E          :ADD, MSTORE(arithRes1), JMPC(setAddArithOverflow)
+    0               :MSTORE(addArithOverflow), JMP(finishAddArith)
 
+setAddArithOverflow:
+    1               :MSTORE(addArithOverflow)
+
+finishAddArith:
     $ => RR         :MLOAD(tmpZkPCArith), JMP(loadTmp)
 
 ; @info binary substraction
@@ -635,7 +641,7 @@ mulARITH:
 ; @info arithmetic division
 ; @in: arithA: dividend value
 ; @in: arithB: divisor value
-; @out: arithRes1: quotien of division arithA / arithB
+; @out: arithRes1: quotient of division arithA / arithB
 ; @out: arithRes2: remainder of division arithA % arithB
 divARITH:
     ; check zk-counters
@@ -657,7 +663,7 @@ divARITH:
     $               :LT, JMPC(divisorSmallerDiv)
     C => A
 
-    ${E%A} => C ; reminder
+    ${E%A} => C ; remainder
     ${E/A} => B
     0 => D
     E               :ARITH
@@ -665,9 +671,9 @@ divARITH:
     B               :MSTORE(arithRes1)
     C               :MSTORE(arithRes2)
 
-    ; check divisor > reminder
+    ; check divisor > remainder
     A => B ; divisor
-    C => A ; reminder
+    C => A ; remainder
     $ => A          :LT
     1               :ASSERT,CALL(loadTmp)
     $ => RR         :MLOAD(tmpZkPCArith)
@@ -1043,7 +1049,7 @@ readPush:
     D => A
     0x04 => B
     $                           :LT,JMPNC(failAssert)
-    0 => B                      :JMP(readPushBlock)
+    0 => B
 
 readPushBlock:
     %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
@@ -1066,10 +1072,10 @@ readPushBlock:
 
     $ => A                      :HASHP1(E)
     HASHPOS - 2 => HASHPOS
-    A*16777216 + C => C         :JMP(doRotate)
+    A*16777216 + C => C
 
 doRotate:
-    B - 1 => A                  :JMP(doRotateLoop)
+    B - 1 => A
 
 doRotateLoop:
     %MAX_CNT_STEPS - STEP - 20  :JMPN(outOfCountersStep)
@@ -1156,7 +1162,7 @@ utilsAddBatchHashBytebyByteLoop:
         1 => D                          :CALL(addBatchHashData); in:[D: length of the hash]
         ; check loop
         B => D
-        ; D + 1 => D we set 33 in stead of 32 to earn 1 step
+        ; D + 1 => D, we set 33 instead of 32 to earn 1 step
         33 - D => D
         $ => B                          :MLOAD(tmpVarDaddB)
         D - B - 1                       :JMPN(utilsAddBatchHashBytebyByteLoop)
@@ -1187,7 +1193,7 @@ checkBytecodeStartsEF:
     $ => E                          :MLOAD(memOffsetLinearPoseidon)
 
     ; get 1 byte from memory
-    1 => C                          :CALL(MLOADX) ; in: [E: offset, C: lenght] out: [A: value , E: new offset]
+    1 => C                          :CALL(MLOADX) ; in: [E: offset, C: length] out: [A: value , E: new offset]
     31 => D                         :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
 
     ; check if byte read is equal to 0xEF
@@ -1285,7 +1291,7 @@ maskAddress:
     $ => A          :AND
     $ => B          :MLOAD(tmpVarBmask), RETURN
 
-;@info: updates the address sytem storage with current batch and state root
+;@info: updates the address system storage with current batch and state root
 updateSystemData:
     ; check keccak counters
     $ => A                              :MLOAD(cntKeccakPreProcess)
@@ -1294,12 +1300,14 @@ updateSystemData:
     %MAX_CNT_STEPS - STEP - 50 :JMPN(outOfCountersStep)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*2 :JMPN(outOfCountersPoseidon)
     ; Get last tx count
+    $ => A                              :MLOAD(txCount)
+    ;Update last tx Count at system storage
+    1 => B
+    $ => D                              :ADD, MSTORE(txCount)
+
     %LAST_TX_STORAGE_POS => C
     %ADDRESS_SYSTEM => A
     %SMT_KEY_SC_STORAGE => B
-    $ => D                              :MLOAD(txCount)
-    ;Update last tx Count at system storage
-    D + 1 => D                          :MSTORE(txCount)
     $ => SR                             :SSTORE
 
     ;Update state root mapping
@@ -1342,8 +1350,8 @@ utilMULMOD:
     ; A * B + 0 = D*2^256 + E
     ; K * N + mulModResult = D*2^256 + E
 
-    ; Since the k can be bigger than 2²⁵⁶ and therefore does not fit in a register we divedit in the
-    ; most significan and less significant part:
+    ; Since the k can be bigger than 2²⁵⁶ and therefore does not fit in a register, we split it in the
+    ; most significant and less significant part:
 
     ; (k.l + k.h * 2²⁵⁶) * N + mulModResult = (D1 + D2) * 2²⁵⁶ + E
     ; And divide this operation in 2 which fits in 2²⁵⁶ digits
@@ -1511,7 +1519,7 @@ expADend:
     $ => RR         :MLOAD(tmpZkPCexp)
     $ => E          :MLOAD(tmpVarEexp), RETURN
 
-;@info function to force a failed assertt
+;@info function to force a failed assert
 failAssert:
     1 => A
     2               :ASSERT
