@@ -190,7 +190,7 @@ initMSTORE:
     zkPC+1 => RR    :JMP(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     ; is storing <32 bytes, jump to store last bytes or finish if 0 bytes left
     $ => B          :MLOAD(isMSTOREX), JMPZ(finalMSTORE)
-    ; if C has value, bytes splitted in two memory slots
+    ; if C has value, offset != 0
     C               :JMPNZ(MSTOREX2)
     $ => C          :MLOAD(tmpVarCmstore)
     ; load bytes to store
@@ -211,10 +211,12 @@ initMSTORE:
     0 => C
     0               :MSTORE(isMSTOREX), JMP(finalMSTORE)
 
-; used if memory to store is allocated in two different slots
+; used if bytesToStore.length < 32 && offset != 0
 MSTOREX2:
     $ => D          :MLOAD(tmpVarCmstore)
     C + D => D
+    32 - D          :JMPN(MSTOREX3)
+    ; if bytesToStore.length < 32 && memory to load is allocated in two different slots
     ; load memory from slot E
     $ => A          :MLOAD(MEM:E)
     ; shift loaded memory from slot E
@@ -229,6 +231,27 @@ MSTOREX2:
     zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     ; join both results
     A + B => B
+    $ => A          :MLOAD(bytesToStore)
+    $ => D          :MLOAD(tmpVarCmstore)
+    32 - D => D
+    ; shift bytes to store
+    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
+    ; append loaded bytes from concurrent slots
+    A + B => A      :MSTORE(bytesToStore)
+                    :JMP(finalMSTORE)
+
+; used if bytesToStore.length < 32 && memory to load is allocated in one slot
+MSTOREX3:
+    D - 32 => D
+    ; load memory from slot E+1
+    $ => A          :MLOAD(MEM:E+1)
+    ; shift bytes to store
+    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
+    $ => D          :MLOAD(tmpVarCmstore)
+    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    ; join both results
+    A => B
     $ => A          :MLOAD(bytesToStore)
     $ => D          :MLOAD(tmpVarCmstore)
     32 - D => D
