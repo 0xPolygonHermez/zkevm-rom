@@ -1,0 +1,28 @@
+INCLUDE "../initIncludes.zkasm"
+
+start:
+    1000000 => GAS
+
+operation:
+    115792089237316195423570985008687907853269984665640564039457584007913129639936       :MSTORE(arithA)
+    2        :MSTORE(arithB)
+             :CALL(mulARITH)
+
+    %MULARITH_STEP - STEP:JMPN(failedCounters)
+    %MULARITH_CNT_BINARY - CNT_BINARY :JMPNZ(failedCounters)
+    %MULARITH_CNT_ARITH - CNT_ARITH :JMPNZ(failedCounters)
+    %MULARITH_CNT_KECCAK_F - CNT_KECCAK_F :JMPNZ(failedCounters)
+    %MULARITH_CNT_MEM_ALIGN - CNT_MEM_ALIGN :JMPNZ(failedCounters)
+    %MULARITH_CNT_PADDING_PG - CNT_PADDING_PG :JMPNZ(failedCounters)
+    %MULARITH_CNT_POSEIDON_G - CNT_POSEIDON_G :JMPNZ(failedCounters)
+
+finalizeExecution:
+0 => A,B,C,D,E,CTX, SP, PC, GAS,  SR, HASHPOS, RR ; Set all registers to 0
+                                                                        :JMP(finalWait)
+readCode:
+    :RETURN
+failedCounters:
+2 => A
+1       :ASSERT
+
+INCLUDE "../endIncludes.zkasm"

@@ -2,16 +2,16 @@
 /**
  * @link [Link EVM behaviour --> evm.codes?]
  * @zk-counters
+ *  - 20 steps
  *  - 1 binary
- *  - 100 steps
  * @process-opcode
  *  - stack input: [a, b]
  *  - stack output: [a + b]
  */
 opADD:
     ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
@@ -30,16 +30,14 @@ opADD:
 /**
  * @link [https://www.evm.codes/#02?fork=berlin]
  * @zk-counters
- *  - 1 arith
- *  - 100 steps
+ *  - 20 steps
  * @process-opcode
  *  - stack input: [a, b]
  *  - stack output: [a * b]
  */
 opMUL:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
 
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
@@ -59,16 +57,16 @@ opMUL:
 /**
  * @link [https://www.evm.codes/#03?fork=berlin]
  * @zk-counters
- *  - 1 arith
- *  - 100 steps
+ *  - 20 steps
+ *  - 1 binary
  * @process-opcode
  *  - stack input: [a, b]
  *  - stack output: [a - b]
  */
 opSUB:
     ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
     ; check out-of-gas
@@ -82,18 +80,14 @@ opSUB:
 /**
  * @link [https://www.evm.codes/#04?fork=berlin]
  * @zk-counters
- *  - 1 arith
- *  - 2 binary
- *  - 100 steps
+ *  - 20 steps
  * @process-opcode
  *  - stack input: [a, b]
  *  - stack output: [a / b]
  */
 opDIV:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
 
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
@@ -112,18 +106,16 @@ opDIV:
 /**
  * @link [https://www.evm.codes/#05?fork=berlin]
  * @zk-counters
- *  - 1 arith
- *  - 2 binary
- *  - 100 steps
+ *  - 50 steps
+ *  - 1 binary
  * @process-opcode
  *  - stack input: [a, b]
  *  - stack output: [a / b]
  */
 opSDIV:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 8 :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 50 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
     ; check out-of-gas
@@ -135,13 +127,13 @@ opSDIV:
     B => C
     $ => A          :MLOAD(SP), CALL(abs); [b => A]; in: [A: number] out: [A: |A|, B: Sign of A [1 if negative, 0 positive]]
     ; if is neg (different signs => C != B), jump to sdivneg
-    C - B           :JMPNZ(opSDIVNeg)
+    C - B           :JMPNZ(SDIVNeg)
     E               :MSTORE(arithA)
     A               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
     B               :MSTORE(SP++), JMP(readCode); [a / b(B) => SP]
 
-opSDIVNeg:
+SDIVNeg:
     E               :MSTORE(arithA)
     A               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B          :MLOAD(arithRes1)
@@ -152,18 +144,14 @@ opSDIVNeg:
 /**
  * @link [https://www.evm.codes/#06?fork=berlin]
  * @zk-counters
- *  - 1 arith
- *  - 2 binary
- *  - 100 steps
+ *  - 20 steps
  * @process-opcode
  *  - stack input: [a, b]
  *  - stack output: [a % b]
  */
 opMOD:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
     ; check out-of-gas
@@ -180,18 +168,16 @@ opMOD:
 /**
  * @link [https://www.evm.codes/#07?fork=berlin]
  * @zk-counters
- *  - 1 arith
- *  - 8 binary
- *  - 100 steps
+ *  - 20 steps
+ *  - 1 binary
  * @process-opcode
  *  - stack input: [a, b]
  *  - stack output: [a % b]
  */
 opSMOD:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 8 :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
     ; check out-of-gas
@@ -217,18 +203,18 @@ opSMODNeg:
 /**
  * @link [https://www.evm.codes/#08?fork=berlin]
  * @zk-counters
- *  - 1 arith
- *  - 4 binary
  *  - 80 steps
+ *  - 3 binary
+ *  - 1 arith
  * @process-opcode
  *  - stack input: [a, b, N]
  *  - stack output: [(a + b) % N]
  */
 opADDMOD:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 80 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
     ; check out-of-gas
     GAS - %GAS_MID_STEP => GAS    :JMPN(outOfGas)
     ; check stack underflow
@@ -269,15 +255,14 @@ zeroOneAddMod:
 /**
  * @link [https://www.evm.codes/#09?fork=berlin]
  * @zk-counters
- *  - 3 arith
- *  - 3 binary
- *  - 100 steps
+ *  - 20 steps
  * @process-opcode
  *  - stack input: [a, b, N]
  *  - stack output: [(a * b) % N]
  */
 opMULMOD:
-
+     ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     ; check stack underflow
     SP - 3          :JMPN(stackUnderflow)
     ; check out-of-gas
@@ -293,8 +278,7 @@ opMULMOD:
 /**
  * @link [https://www.evm.codes/#0A?fork=berlin]
  * @zk-counters
- *  - 5 binary
- *  - 100 steps
+ *  - 20 steps
  * @process-opcode
  *  - stack input: [a, exp]
  *  - stack output: [a ** exp]
@@ -302,8 +286,7 @@ opMULMOD:
 
 opEXP:
     ; checks zk-counters
-    %MAX_CNT_BINARY - CNT_BINARY - 2    :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 20         :JMPN(outOfCountersStep)
 
     ; check stack underflow
     SP - 2              :JMPN(stackUnderflow)
@@ -326,16 +309,16 @@ opEXP:
 /**
  * @link [https://www.evm.codes/#0B?fork=berlin]
  * @zk-counters
- *  - 6 arith
  *  - 100 steps
+ *  - 6 binary
  * @process-opcode
  *  - stack input: [b,x]
  *  - stack output: [y]
  */
 opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/vm/src/evm/opcodes/functions.ts#L193
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 6 :JMPN(outOfCountersArith)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 6 :JMPN(outOfCountersBinary)
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
     ; check out-of-gas

@@ -1,21 +1,13 @@
 /**
  * @link [https://www.evm.codes/#51?fork=berlin]
  * @zk-counters
- *  - 32 arith
- *  - 32 binary
- *  - 1 mem align
- *  - 255 poseidon
- *  - 120 steps
+ *  - 100 steps
  * @process-opcode
  *  - stack input: [offset]
  *  - stack output: [value]
  */
 opMLOAD:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32 :JMPN(outOfCountersBinary)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 1 :JMPN(outOfCountersMemalign)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
     ; check stack underflow
@@ -36,22 +28,16 @@ opMLOAD:
 /**
  * @link [https://www.evm.codes/#52?fork=berlin]
  * @zk-counters
- *  - 32 arith
- *  - 32 binary
- *  - 1 mem align
- *  - 255 poseidon
- *  - 120 steps
+ *  - 100 steps
  * @process-opcode
  *  - stack input: [offset, value]
  *  - stack output: none
  */
+ VAR GLOBAL mstoreAux
  opMSTORE:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32 :JMPN(outOfCountersBinary)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 1 :JMPN(outOfCountersMemalign)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1   :JMPN(outOfCountersMemalign)
 
     ; check stack underflow
     SP - 2 => SP          :JMPN(stackUnderflow)
@@ -62,31 +48,39 @@ opMLOAD:
     $ => E          :MLOAD(SP+1); [offset => E]
     $ => B          :MLOAD(SP); [value => B]
 
-    ; store bytesToStore for MSTORE32 execution
-    B               :MSTORE(bytesToStore)
     ; store lastMemOffset for memory expansion gas cost
-    E               :MSTORE(lastMemOffset), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [A: value]
-    ; store lastMemOffset for memory expansion gas cost
+    E               :MSTORE(lastMemOffset)
+    ; store lastMemLength for memory expansion gas cost
     32              :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    ; store bytesToStore for memalign execution
+    B               :MSTORE(bytesToStore)
+    E => A          :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+
+    E               :MSTORE(mstoreAux)
+    $ => A          :MLOAD(MEM:E)
+    $ => B          :MLOAD(MEM:E+1)
+    ${memAlignWR_W0(A,mem.bytesToStore,C)} => D                    ; no trust calculate W0
+    ${memAlignWR_W1(B,mem.bytesToStore,C)} => E                    ; no trust calculate W1
+    $               :MEM_ALIGN_WR,MLOAD(bytesToStore)
+    E => A
+    $ => E          :MLOAD(mstoreAux)
+    D               :MSTORE(MEM:E)          ; write W0
+    A               :MSTORE(MEM:E+1)        ; write W1
                     :JMP(readCode)
 
 /**
  * @link [https://www.evm.codes/#53?fork=berlin]
  * @zk-counters
- *  - 32 binary
+ *  - 100 steps
  *  - 1 mem align
- *  - 255 poseidon
- *  - 120 steps
  * @process-opcode
  *  - stack input: [offset, value]
  *  - stack output: none
  */
 opMSTORE8:
     ; checks zk-counters
-    %MAX_CNT_BINARY - CNT_BINARY - 32 :JMPN(outOfCountersBinary)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 1 :JMPN(outOfCountersMemalign)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 1 :JMPN(outOfCountersMemalign)
 
     ; check stack underflow
     SP - 2 => SP          :JMPN(stackUnderflow)
@@ -111,17 +105,13 @@ opMSTORE8:
 /**
  * @link [https://www.evm.codes/#59?fork=berlin]
  * @zk-counters
- *  - 1 arith
- *  - 3 binary
- *  - 200 steps
+ *  - 100 steps
  * @process-opcode
  *  - stack input: none
  *  - stack output: [size]
  */
 opMSIZE:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
     ; check out-of-gas
@@ -138,6 +128,7 @@ opMSIZE:
     $ => B          :MLOAD(arithRes2)
     ; check arithRes2 is 0, no need to round in this case
     0 => A
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     $               :EQ, JMPC(MSIZEend)
     ; Round size to 32bytes multiple
     C + 1 => C
@@ -150,16 +141,16 @@ MSIZEend:
 /**
  * @link [https://www.evm.codes/#54?fork=berlin]
  * @zk-counters
+ *  - 100 steps
  *  - 255 poseidon
- *  - 120 steps
  * @process-opcode
  *  - stack input: [key]
  *  - stack output: [value]
  */
 opSLOAD:
     ; checks zk-counters
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
 
     ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
@@ -170,28 +161,28 @@ opSLOAD:
     ; set key for smt storage query
     %SMT_KEY_SC_STORAGE => B
     $ => E          :SLOAD
+    $${eventLog(onUpdateStorage(C, E))}
     ; set key(C) as warmed storage for address(A)
     E               :MSTORE(SP++), CALL(isColdSlot); [value(E) => SP]
     ; check out-of-gas
-    GAS - %SLOAD_GAS - A * %COLD_SLOAD_COST_RED => GAS    :JMPN(outOfGas, readCode)
+    GAS - %SLOAD_GAS - A * %COLD_SLOAD_COST_REDUCED => GAS    :JMPN(outOfGas, readCode)
 
+VAR GLOBAL tmpVarCsstore
 /**
  * @link [https://www.evm.codes/#55?fork=berlin]
  * @zk-counters
+ *  - 400 steps
  *  - 10 binary
- *  - 1 mem align
- *  - 765 poseidon
- *  - 120 steps
+ *  - 255*3 poseidon
  * @process-opcode
  *  - stack input: [key, value]
  *  - stack output: none
  */
 opSSTORE:
     ; checks zk-counters
-    %MAX_CNT_BINARY - CNT_BINARY - 10 :JMPN(outOfCountersBinary)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1 :JMPN(outOfCountersMemalign)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 765 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 10 :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*3 :JMPN(outOfCountersPoseidon)
 
     ; check stack underflow
     SP - 2  => SP        :JMPN(stackUnderflow)
@@ -201,7 +192,7 @@ opSSTORE:
     $ => A          :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
 
     $ => C          :MLOAD(SP+1) ; [key => C]
-    C               :MSTORE(tmpVarC)
+    C               :MSTORE(tmpVarCsstore)
     $ => D          :MLOAD(SP) ; [value => D]
     ; check if is a create call
     $ => A          :MLOAD(isCreateContract), JMPNZ(deploymentSSTORE)
@@ -216,7 +207,7 @@ opSSTOREinit:
     ; set key for smt storage query
     %SMT_KEY_SC_STORAGE => B
     $ => E          :SLOAD
-    ; change context to check sotrage original value
+    ; change context to check storage original value
     SR              :MSTORE(auxSR)
     $ => SR         :MLOAD(originSR)
     $ => B          :SLOAD ; origin value
@@ -263,7 +254,7 @@ opSSTOREdifAB:
     $ => A          :EQ, JMPNC(opSSTOREdifA2)
     ; if orig_val == 0
     $ => A          :MLOAD(gasRefund)
-    A + 19900 => A  :MSTORE(gasRefund), JMP(opSSTOREend)
+    A + %SSTORE_SET_GAS_REDUCED => A  :MSTORE(gasRefund), JMP(opSSTOREend)
 
 opSSTOREdifA1:
     ; if orig_val != 0
@@ -288,7 +279,7 @@ opSSTOREdifA2:
     ; if orig_val != 0
     ; compute gas refund
     $ => A          :MLOAD(gasRefund)
-    A + 2800 => A   :MSTORE(gasRefund), JMP(opSSTOREend)
+    A + %SSTORE_RESET_GAS_REDUCED => A   :MSTORE(gasRefund), JMP(opSSTOREend)
 
 opSSTOREdifB:
     ; if orig_val != 0
@@ -314,5 +305,6 @@ mloadContract:
 opSSTOREsr:
     ; set key for smt storage query
     %SMT_KEY_SC_STORAGE => B
-    $ => C          :MLOAD(tmpVarC); key => C
+    $ => C          :MLOAD(tmpVarCsstore); key => C
+    $${eventLog(onUpdateStorage(C, D))}
     $ => SR         :SSTORE, JMP(readCode)

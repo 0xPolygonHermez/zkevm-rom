@@ -1,11 +1,14 @@
 /**
  * @link [https://www.evm.codes/#00?fork=berlin]
  * @zk-counters
+ *  - 20 steps
  * @process-opcode
  *  - stack input: none
  *  - stack output: none
  */
 opSTOP:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     ; check if first context
     ; if origin ctx is 0, end tx
     $ => B          :MLOAD(originCTX), JMPZ(handleGas)
@@ -41,22 +44,18 @@ opSTOPend:
 /**
  * @link [https://www.evm.codes/#f0?fork=berlin]
  * @zk-counters
- *  - 32 arith
- *  - 32 binary
- *  - 2 mem align
- *  - 510 poseidon
- *  - 600 steps
+ *  - 200 steps
+ *  - 2 binary
+ *  - 255*3 poseidon
  * @process-opcode
  *  - stack input:  [value, offset, size]
  *  - stack output: [address]
  */
 opCREATE:
     ; checks zk-counters
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2     :JMPN(outOfCountersMemalign)
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 3          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*3 :JMPN(outOfCountersPoseidon)
 
     ; check out-of-gas
     GAS - %CREATE_GAS => GAS  :JMPN(outOfGas)
@@ -78,7 +77,6 @@ opCREATE:
     $ => C              :MLOAD(SP); [size => C]
     C                   :MSTORE(argsLengthCall)
 
-
     ; store lastMemOffset for memory expansion gas cost
     E                   :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
@@ -98,7 +96,7 @@ opCREATE:
     D => B
     $                   :LT,JMPC(opCreateFail)
 
-    ; check nonce overlow
+    ; check nonce overflow
     $ => A             :MLOAD(storageAddr)
     ; set key for smt nonce query
     %SMT_KEY_NONCE => B
@@ -127,7 +125,8 @@ opCREATE:
                         :CALL(getLenBytes); in: [B: value] out: [A: value bytes length]
     A                   :MSTORE(lengthNonce)
     ; increase nonce
-    B + 1 => D
+    1 => A
+    $ => D              :ADD
     C => A
     ; set key for smt nonce query
     %SMT_KEY_NONCE => B
@@ -161,10 +160,8 @@ opCreateFail:
 /**
  * @link [https://www.evm.codes/#f1?fork=berlin]
  * @zk-counters
- *  - 32 arith
- *  - 32 binary
- *  - 510 poseidon
- *  - 1200 steps
+ *  - 200 steps
+ *  - 3 binary
  * @process-opcode
  *  - stack input: [gas, address, value, argsOffset, argsSize, retOffset, retSize]
  *  - stack output: [success]
@@ -172,7 +169,8 @@ opCreateFail:
 opCALL:
 
     ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCountersBinary)
     ; increase depth
     $ => A          :MLOAD(depth)
     A + 1           :MSTORE(depth)
@@ -220,20 +218,13 @@ opCALL2:
     $ => D          :MLOAD(SP); [retSize => D]
     ; compute memory expansion gas cost of the return value
     D               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
-
-    ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 400:JMPN(outOfCountersStep)
-
-    $ => B                   :MLOAD(lastMemOffset)
+    $ => B          :MLOAD(lastMemOffset)
     ; check if an address is cold. If it is, add it to the touched tree
     $ => A          :MLOAD(addrCall), CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
 
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
-    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS :JMPN(outOfGas)
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS :JMPN(outOfGas)
     ; Calculate positive_value_cost, if value call > 0 -> 9000
     $ => B          :MLOAD(valueCall)
     0 => A
@@ -241,7 +232,7 @@ opCALL2:
 
     GAS - %CALL_VALUE_TRANSFER_GAS => GAS :JMPN(outOfGas)
     ; if destAddress is an empty account, we should add 25k of gas to base cost
-    $ => E               :MLOAD(addrCall), CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
+    $ => E          :MLOAD(addrCall), CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
     GAS - %CALL_NEW_ACCOUNT_GAS*E => GAS :JMPN(outOfGas)
 
 opCALLend:
@@ -273,7 +264,7 @@ opCALLend:
     $ => C          :LT, CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX            :MLOAD(originCTX)
     GAS - A             :MSTORE(gasCTX)
-    ; add estipend (2300) in case of tx with value
+    ; add stipend (2300) in case of tx with value
     A + %CALL_STIPEND*C => A
     ; move is static bool value to following CTX
     $ => D              :MLOAD(isStaticCall)
@@ -291,18 +282,16 @@ opCALLend:
 /**
  * @link [https://www.evm.codes/#f1?fork=berlin]
  * @zk-counters
- *  - 32 arith
- *  - 32 binary
- *  - 510 poseidon
- *  - 1200 steps
+ *  - 200 steps
+ *  - 2 binary
  * @process-opcode
  *  - stack input: [gas, address, value, argsOffset, argsSize, retOffset, retSize]
  *  - stack output: [success]
  */
 opCALLCODE:
-
     ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
     ; increase depth
     $ => A          :MLOAD(depth)
     A + 1           :MSTORE(depth)
@@ -341,19 +330,12 @@ opCALLCODE:
     $ => D          :MLOAD(SP); [retSize => D]
     ; compute memory expansion gas cost of the return value
     D               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
-
-    ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 400:JMPN(outOfCountersStep)
-
     ; check if an address is cold. If it is, add it to the touched tree
     $ => A                   :MLOAD(addrCall), CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
 
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
-    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS    :JMPN(outOfGas)
     ; Calculate positive_value_cost, if value call > 0 -> 9000
     $ => B                   :MLOAD(valueCall)
     0 => A
@@ -390,7 +372,7 @@ opCALLCODEend:
     $ => C          :LT, CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
-    ; Add estipend (2300) in case of tx with value
+    ; Add stipend (2300) in case of tx with value
     A + %CALL_STIPEND*C => A
     ; move is static bool value to following CTX
     $ => D          :MLOAD(isStaticCall)
@@ -407,25 +389,21 @@ opCALLCODEend:
 /**
  * @link [https://www.evm.codes/#f3?fork=berlin]
  * @zk-counters
- *  - 32 arith
- *  - 32 binary
- *  - 510 poseidon
- *  - 600 steps
+ *  - 400 steps
+ *  - 1 binary
  * @process-opcode
  *  - stack input:  [offset, size]
  *  - stack output: none
  */
 opRETURN:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     ; check stack underflow
     SP - 2 => SP    :JMPN(stackUnderflow)
     $ => E          :MLOAD(SP+1); [offset => E]
     $ => C          :MLOAD(SP); [size => C]
 
-    ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
     ; store return data values
     E               :MSTORE(retDataOffset)
     C               :MSTORE(retDataLength)
@@ -461,11 +439,9 @@ preRETURN32:
     $ => B          :MLOAD(retCallOffset)
 
 ; Copy from memory current CTX to memory origin CTX
-opRETURN32:
+opRETURNloop:
     ; checks dynamic zk-counters
-    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
 
     C               :JMPZ(opRETURNend)
     C - 32          :JMPN(opRETURNfinal)
@@ -482,7 +458,7 @@ opRETURN32:
     D => E
     C - 32 => C
     ; restore current TX
-    $ => CTX        :MLOAD(currentCTX), JMP(opRETURN32)
+    $ => CTX        :MLOAD(currentCTX), JMP(opRETURNloop)
 
 opRETURNfinal:
     ; load last bytes
@@ -515,11 +491,8 @@ opRETURNdeploy:
 
 opRETURNcreate:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 192 :JMPN(outOfCountersBinary)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCountersMemalign)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1020 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*2 :JMPN(outOfCountersPoseidon)
 
     ; save offset memory and length to compute contract hash
     E               :MSTORE(memOffsetLinearPoseidon)
@@ -536,7 +509,7 @@ opRETURNcreate:
     $ => D          :MLOAD(txNonce)
 
     ; set bytecode length and read bytecode first byte
-    $ => A          :MLOAD(createContractAddress), CALL(checkBytecodeStartsEF)
+    $ => A          :MLOAD(createContractAddress), CALL(checkBytecodeStartsEF) ; in: [memOffset], out: [startsWithEFn
 
     ; check bytecode first byte != 0xEF
     $               :MLOAD(startsWithEF), JMPNZ(invalidCodeStartsEF)
@@ -570,10 +543,7 @@ opRETURNcreateEnd:
 /**
  * @link [https://www.evm.codes/#f4?fork=berlin]
  * @zk-counters
- *  - 32 arith
- *  - 32 binary
- *  - 510 poseidon
- *  - 1200 steps
+ *  - 400 steps
  * @process-opcode
  *  - stack input: [gas, address, argsOffset, argsSize, retOffset, retSize]
  *  - stack output: [success]
@@ -617,20 +587,12 @@ opDELEGATECALL:
     $ => E          :MLOAD(SP); [retSize => D]
     ;  Mem expansion gas cost return args
     E               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
-
-    ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 400:JMPN(outOfCountersStep)
-
-
     $ => B                   :MLOAD(lastMemOffset)
     ; check if an address is cold. If it is, add it to the touched tree
     $ => A                   :MLOAD(addrCall)
                              :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ;gas_cost = base_gas + gas_sent_with_call
-    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS    :JMPN(outOfGas)
 
     ; transition to new CTX
     $ => C          :MLOAD(txSrcAddr)
@@ -675,21 +637,18 @@ opDELEGATECALLend:
 /**
  * @link [https://www.evm.codes/#f5?fork=berlin]
  * @zk-counters
- *  - 32 arith
- *  - 32 binary
- *  - 2 mem align
+ *  - 400 steps
+ *  - 3 binary
  *  - 510 poseidon
- *  - 600 steps
  * @process-opcode
  *  - stack input:  [value, offset, size, salt]
  *  - stack output: [address]
  */
 opCREATE2:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 4          :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*2 :JMPN(outOfCountersPoseidon)
     ; check out-of-gas
     GAS - %CREATE_2_GAS => GAS  :JMPN(outOfGas)
 
@@ -720,16 +679,16 @@ opCREATE2:
     CTX                 :MSTORE(originAuxCTX)
 
     ; cost to hash the initialisation code
-    ${C+31}             :MSTORE(arithA)
+    C + 31              :MSTORE(arithA)
     32                  :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => C              :MLOAD(arithRes1)
     GAS => A
-    6*C => B
+    6 * C => B
     $                   :LT,JMPC(outOfGas)
     A - B => GAS
     GAS                 :MSTORE(gasCall)
 
-    ; check correctness of Create: depth, can transfer, nonce overlfow,
+    ; check correctness of Create: depth, can transfer, nonce overflow,
     ; can transfer
     $ => A              :MLOAD(storageAddr)
     ; set key for smt balance query
@@ -741,7 +700,7 @@ opCREATE2:
     $ => B              :MLOAD(valueCall)
     $                   :LT,JMPC(opCreateFail)
 
-    ; check nonce overlow
+    ; check nonce overflow
     $ => A              :MLOAD(storageAddr)
     ; set key for smt nonce query
     %SMT_KEY_NONCE => B
@@ -771,7 +730,9 @@ opCREATE2:
     B                   :MSTORE(txNonce), CALL(getLenBytes); in: [B: value] out: [A: value bytes length]
     A                   :MSTORE(lengthNonce)
     ; increase nonce
-    B + 1 => D
+    1 => A
+    $ => D                    :ADD
+
     C => A
     ; set key for smt nonce query
     %SMT_KEY_NONCE => B
@@ -799,15 +760,14 @@ opCREATE2:
 /**
  * @link [https://www.evm.codes/#fa?fork=berlin]
  * @zk-counters
- *  - 32 arith
- *  - 32 binary
- *  - 510 poseidon
- *  - 1200 steps
+ *  - 300 steps
  * @process-opcode
  *  - stack input: [gas, address, argsOffset, argsSize, retOffset, retSize]
  *  - stack output: [success]
  */
 opSTATICCALL:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 300 :JMPN(outOfCountersStep)
     ; increase depth
     $ => A          :MLOAD(depth)
     A + 1           :MSTORE(depth)
@@ -840,17 +800,10 @@ opSTATICCALL:
     $ => E          :MLOAD(SP); [retSize => E]
     ; compute memory expansion gas cost of the return value
     E               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
-
-    ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 32            :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 32          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
-
     ; check if an address is cold. If it is, add it to the touched tree
     $ => A          :MLOAD(addrCall), CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ;gas_cost = base_gas + gas_sent_with_call
-    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_RED => GAS    :JMPN(outOfGas)
+    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS    :JMPN(outOfGas)
 
     ; setup vars for next CTX
     $ => D          :MLOAD(storageAddr)
@@ -888,7 +841,7 @@ opSTATICCALL:
 /**
  * @link [https://www.evm.codes/#fd?fork=berlin]
  * @zk-counters
- *  - 1000 steps
+ *  - 400 steps
  * @process-opcode
  *  - stack input: [offset, size]
  *  - stack output: none
@@ -898,7 +851,7 @@ opREVERT:
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
     ; check stack underflow
     SP - 2 => SP          :JMPN(stackUnderflow)
-    ; load initSR to revert al state changes
+    ; load initSR to revert all state changes
     ; revert touched accounts
     $ => SR         :MLOAD(initSR), CALL(revertTouched)
 
@@ -937,10 +890,9 @@ opREVERT:
 preREVERT32:
     $ => B          :MLOAD(retCallOffset)
 
-opREVERT32:
+opREVERTloop:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
-
     C              :JMPZ(opREVERTend)
     ; load first 32 bytes from memory at current CTX
     C - 32          :JMPN(opREVERTfinal)
@@ -955,7 +907,7 @@ opREVERT32:
     D => E
     C - 32 => C
     ; restore current CTX
-    $ => CTX        :MLOAD(currentCTX), JMP(opREVERT32)
+    $ => CTX        :MLOAD(currentCTX), JMP(opREVERTloop)
 
 opREVERTfinal:
     ; copy last bytes
@@ -981,18 +933,18 @@ opREVERTend:
 /**
  * @link [https://www.evm.codes/#ff?fork=berlin] (selfdestruct)
  * @zk-counters
- *  - 10 binary
- *  - 2040 poseidon
- *  - 600 steps
+ *  - 400 steps
+ *  - 2 binary
+ *  - 255*4 poseidon
  * @process-opcode
  *  - stack input: [address]
  *  - stack output: none
  */
 opSENDALL:
     ; checks zk-counters
-    %MAX_CNT_BINARY - CNT_BINARY - 10 :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 2040 :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*4 :JMPN(outOfCountersPoseidon)
     ; check out-of-gas
     GAS - %SENDALL_GAS => GAS   :JMPN(outOfGas)
 
@@ -1008,23 +960,33 @@ opSENDALL:
     ; balance in D
     $ => D              :SLOAD
 
-    $ => A              :MLOAD(SP); [address => A]
-    ; Mask address to 20 bytes
-                    :CALL(maskAddress); in: [A: address] out: [A: masked address]
-    ; check if storage address has balance to withdraw
-    A => C
-    A => E
+    ; Address in A & Mask address to 20 bytes
+    $ => A              :MLOAD(SP), CALL(maskAddress); in: [A: address] out: [A: masked address]
+
+    ; store address receiver in [C, E]
+    A => C, E
+
+    ; check balance to move is greater than 0
     0 => A
     D => B
-    $                           :EQ,JMPC(opSENDALL2)
-                                :CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
+    $                           :EQ,JMPC(opSENDALLend) ; no balance to move
+
+    ; check receiver and storageAddr are not the same
+    $ => A                      :MLOAD(storageAddr)
+    C => B
+    $                           :EQ, JMPC(opSENDALLend)
+
+; move balances
+opSENDALL2:
+    ; check gas empty account
+                                                :CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
     GAS - %CALL_NEW_ACCOUNT_GAS * E => GAS      :JMPN(outOfGas)
 
-opSENDALL2:
+    ; save balance storageAddr in arithA for later usage
+    D                           :MSTORE(arithA)
     ; check is cold to compute gas cost
     C => A                      :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     GAS - %COLD_ACCOUNT_ACCESS_COST * D => GAS     :JMPN(outOfGas)
-    B                         :MSTORE(arithA)
     ; read previous balance receiver
     ; set key for smt balance query
     %SMT_KEY_BALANCE => B
@@ -1047,17 +1009,18 @@ opSENDALL2:
     $ => A                  :MLOAD(storageAddr)
     0 => D
     $ => SR                 :SSTORE
-    ; if origin ctx is 0, end tx
-    $ => A                  :MLOAD(originCTX)
-    $                       :EQ,JMPC(handleGas)
-    ; decrease CTX
-    $ => B                  :MLOAD(gasRefund)
-    $ => C                  :MLOAD(isCreate)
-    1 => D
-    C                       :JMPZ(opSENDALLend)
-    $ => D                  :MLOAD(createContractAddress)
 
 opSENDALLend:
+    ; if origin ctx is 0, end tx
+    $ => A                  :MLOAD(originCTX), JMPZ(handleGas)
+
+    ; decrease CTX
+    $ => B                  :MLOAD(gasRefund)
+    1 => D
+    $ => C                  :MLOAD(isCreate), JMPZ(opSENDALLendContinue)
+    $ => D                  :MLOAD(createContractAddress)
+
+opSENDALLendContinue:
     A => CTX
     0                       :MSTORE(retDataCTX)
     CTX                     :MSTORE(currentCTX)
@@ -1074,7 +1037,7 @@ opSENDALLend:
 /**
  * @link [https://www.evm.codes/#fe?fork=berlin]
  * @zk-counters
- *  - 120 steps
+ *  - 100 steps
  * @process-opcode
  *  - stack input: none
  *  - stack output: none

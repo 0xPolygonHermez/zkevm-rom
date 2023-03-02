@@ -2,30 +2,30 @@
 /**
  * @link [https://www.evm.codes/#56?fork=berlin]
  * @zk-counters
- *  - 32 binary
- *  - 120 steps
+ *  - 100 steps
+ *  - 2 binary
  * @process-opcode
  *  - stack input: [counter]
  *  - stack output: none
  */
 opJUMP:
     ; checks zk-counters
-    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
 
     ; check stack underflow
     SP - 1 => SP                    :JMPN(stackUnderflow)
 
     ; check out-of-gas
-    GAS - %GAS_MID_STEP => GAS                  :JMPN(outOfGas)
+    GAS - %GAS_MID_STEP => GAS      :JMPN(outOfGas)
 
     ; Check PC is a JUMPDEST
-    $ => B                         :MLOAD(SP), JMP(checkJumpDest); [counter => PC]
+    $ => A                         :MLOAD(SP), JMP(checkJumpDest); [counter => PC]
 /**
  * @link [https://www.evm.codes/#57?fork=berlin]
  * @zk-counters
- *  - 32 binary
- *  - 120 steps
+ *  - 100 steps
+ *  - 2 binary
  * @process-opcode
  *  - stack input: [counter, value]
  *  - stack output: none
@@ -33,77 +33,71 @@ opJUMP:
 opJUMPI:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
     ; check out-of-gas
     GAS - %GAS_SLOW_STEP => GAS                 :JMPN(outOfGas)
-
     SP - 2 => SP                    :JMPN(stackUnderflow)
     $ => B                          :MLOAD(SP); [value => B]
     0 => A
     $                               :EQ, JMPC(readCode)
     ; Check PC is a JUMPDEST
-    $ => B                          :MLOAD(SP+1), JMP(checkJumpDest); [counter => PC]
+    $ => A                          :MLOAD(SP+1), JMP(checkJumpDest); [counter => PC]
 
 checkJumpDest:
     ; if it is a deploy we have to check the data from the calldata (not the bytecode)
-    $ => A                          :MLOAD(isCreateContract), JMPNZ(checkJumpDestDeployment)
-    $ => A                          :MLOAD(bytecodeLength)
-    $                               :LT,JMPC(invalidJump)
+    $ => B                          :MLOAD(isCreateContract), JMPNZ(checkJumpDestDeployment)
+    $ => B                          :MLOAD(bytecodeLength)
+    $                               :LT,JMPNC(invalidJump)
+    A => B
     B => PC
     B => HASHPOS
     ; get hashP address pointer where contract bytecode is stored
     $ => E                          :MLOAD(contractHashId)
     $ => A                          :HASHP1(E)
     ; check if is a jumpDest (0x5B)
-    0x5B => B
-    $                               :EQ, JMPC(readCode, invalidJump)
+    A - 0x5B                        :JMPZ(readCode, invalidJump)
+
 checkJumpDestDeployment:
     ; check jumpDest from calldata
-    $ => A                          :MLOAD(isCreate), JMPNZ(checkJumpDestDeploymentCreate)
+    $ => B                          :MLOAD(isCreate), JMPNZ(checkJumpDestDeploymentCreate)
     ; get position where data starts in the tx
     $ => HASHPOS                    :MLOAD(dataStarts)
-    ; add PC to data starts to point the bytes to read for the push
-    B => PC
+    ; add PC to data starts to point the bytes to read for the jumpdest
+    A => PC
     HASHPOS + PC => HASHPOS
     ; get memory pointer for hashing
     $ => E                          :MLOAD(batchHashDataId)
-    ; set number of bytes to hashK at D
+    ; set number of bytes to hashK
     $ => A                          :HASHK1(E)
     ; check if is a jumpDest (0x5B)
-    0x5B => B
-    $                               :EQ, JMPC(readCode, invalidJump)
+    A - 0x5B                        :JMPZ(readCode, invalidJump)
 
 checkJumpDestDeploymentCreate:
-    ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 224 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 225 :JMPN(outOfCountersBinary)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCountersMemalign)
     ; get bytes from previous context memory
     $ => CTX                        :MLOAD(originCTX)
     ; get offset call position
     $ => E                          :MLOAD(argsOffsetCall)
     ; increase current program counter (PC) to offset for getting pushed bytes to read
-    B => PC
+    A => PC
     E + PC => E
     ; set bytes to read from memory at C
     1 => C                          :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
     $ => CTX                        :MLOAD(currentCTX)
-    31 => D                         :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     ; check if is a jumpDest (0x5B)
-    0x5B => B
+    0x5b00000000000000000000000000000000000000000000000000000000000000n => B
     $                               :EQ, JMPC(readCode, invalidJump)
 
 /**
  * @link [https://www.evm.codes/#58?fork=berlin]
  * @zk-counters
- *  - dynamic steps: 120 * pushed bytes
+ *  - 20 steps
  * @process-opcode
  *  - stack input: none
  *  - stack output: [PC]
  */
 opPC:
     ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
 
     ; check out-of-gas
     GAS - %GAS_QUICK_STEP => GAS      :JMPN(outOfGas)
@@ -116,14 +110,14 @@ opPC:
 /**
  * @link [https://www.evm.codes/#5B?fork=berlin]
  * @zk-counters
- *  - dynamic steps: 120 * pushed bytes
+ *  - 10 steps
  * @process-opcode
  *  - stack input: none
  *  - stack output: none
  */
 opJUMPDEST:
     ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
 
     ; check out-of-gas
     GAS - %JUMP_DEST_GAS => GAS  :JMPN(outOfGas, readCode)

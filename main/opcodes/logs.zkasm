@@ -1,8 +1,8 @@
 /**
  * @link [https://www.evm.codes/#a0?fork=berlin]
  * @zk-counters
- *  - dynamic binary
- *  - 200 steps
+ *  - 100 steps
+ *  - 1 binary
  * @process-opcode
  *  - stack input: [offset, size, topic]
  *  - stack output: none
@@ -10,7 +10,7 @@
 opLOG0:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     ; check stack underflow
     SP - 2              :JMPN(stackUnderflow)
 
@@ -31,7 +31,7 @@ opLOG0:
     ; store number of topics
     0                   :MSTORE(numTopics)
     ; calculate data size gas cost => lastMemLength * 8
-    8                   :MSTORE(arithA)
+    %LOG_DATA_GAS       :MSTORE(arithA)
     C                   :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
     $ => B              :MLOAD(arithRes1)
     GAS => A
@@ -44,7 +44,7 @@ opLOG0:
 opLOG1:
 
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     SP - 3              :JMPN(stackUnderflow)
     GAS - %LOG_GAS => GAS    :JMPN(outOfGas)
     $ => A              :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
@@ -67,7 +67,7 @@ opLOG1:
 opLOG2:
 
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     SP - 4              :JMPN(stackUnderflow)
     GAS - %LOG_GAS => GAS    :JMPN(outOfGas)
     $ => A              :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
@@ -90,7 +90,7 @@ opLOG2:
 opLOG3:
 
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     SP - 5              :JMPN(stackUnderflow)
     GAS - %LOG_GAS => GAS    :JMPN(outOfGas)
     $ => A              :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
@@ -113,7 +113,7 @@ opLOG3:
 opLOG4:
 
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     SP - 6              :JMPN(stackUnderflow)
     GAS - %LOG_GAS => GAS    :JMPN(outOfGas)
     $ => A              :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
@@ -135,9 +135,7 @@ opLOG4:
 
 opLOGLoop:
     ; checks zk-counters
-    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-
     C               :JMPZ(opSaveTopicsInit)
     ; load next 32 bytes
     C - 32          :JMPN(opLOGFinal)

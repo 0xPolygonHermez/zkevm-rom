@@ -1,4 +1,6 @@
 IDENTITY:
+    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1   :JMPN(outOfCountersBinary)
     ; Move balances if value > 0 just before executing the contract CALL
     $ => B          :MLOAD(txValue)
     0 => A
@@ -16,8 +18,9 @@ IDENTITY:
     GAS - %IDENTITY_WORD_GAS*A => GAS   :JMPN(outOfGas)
     CTX             :MSTORE(currentCTX)
     CTX => A
-    $ => CTX        :MLOAD(originCTX), JMPZ(handleGas)
-    A               :MSTORE(retDataCTX)
+    $ => B               :MLOAD(originCTX), JMPZ(handleGas)
+    B => CTX
+    A                    :MSTORE(retDataCTX)
     A => CTX
     0 => B
     0 => E
@@ -25,10 +28,8 @@ IDENTITY:
     B               :MSTORE(retDataOffset)
     C               :MSTORE(retDataLength)
 
-IDENTITYinit:
-    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
+IDENTITYloop:
     %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
-
     ; Copy from calldata to memory
     C               :JMPZ(IDENTITYreturn)
     C - 32          :JMPN(IDENTITYfinal)
@@ -36,7 +37,7 @@ IDENTITYinit:
     $ => B          :MLOAD(SP)
     B               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     A + 1 => A
-    C - 32 => C     :JMP(IDENTITYinit)
+    C - 32 => C     :JMP(IDENTITYloop)
 
 IDENTITYfinal:
     %CALLDATA_OFFSET + A => SP
@@ -61,7 +62,6 @@ IDENTITYreturn2:
     $ => B          :MLOAD(retCallOffset)
 
 IDENTITYreturnLoop:
-    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
 
     C               :JMPZ(IDENTITYend)

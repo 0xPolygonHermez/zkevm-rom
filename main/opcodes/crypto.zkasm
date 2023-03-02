@@ -1,23 +1,15 @@
 /**
  * @link [https://www.evm.codes/#20?fork=berlin]
  * @zk-counters
- *  - 192 arith
- *  - dynamic binary: 193 + length
- *  - 2 mem align
- *  - 2 keccak
- *  - 10 poseidon
- *  - dynamic steps: 200 + 100 * length
+ *  - dynamic steps: 400 + 100 * length
+ *  - dynamic keccaks: f(length)
  * @process-opcode
  *  - stack input: [offset, size]
  *  - stack output: [hash]
  */
 opSHA3:
     ; checks zk-counters
-    %MAX_CNT_ARITH - CNT_ARITH - 192 :JMPN(outOfCountersArith)
-    %MAX_CNT_BINARY - CNT_BINARY - 193 :JMPN(outOfCountersBinary)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2 :JMPN(outOfCountersMemalign)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 10 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
 
     ; check stack underflow
     SP - 2          :JMPN(stackUnderflow)
@@ -53,8 +45,7 @@ opSHA3:
     $ => B          :MLOAD(arithRes1)
     $ => A          :MLOAD(cntKeccakPreProcess)
     ; checks keccak counters
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 => A
-    $               :LT, JMPC(outOfCountersKeccak)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 - B :JMPN(outOfCountersKeccak)
 
     ; new hash id
     $ => B           :MLOAD(lastHashKIdUsed)
@@ -66,7 +57,6 @@ opSHA3:
 
 opSHA3Loop:
     ; checks zk-counters
-    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
     C               :JMPZ(opSHA3End)

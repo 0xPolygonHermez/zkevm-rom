@@ -1,0 +1,30 @@
+INCLUDE "../initIncludes.zkasm"
+
+start:
+    1000000 => GAS
+
+operation:
+    ; @info Compute gas to send to call following EIP 150
+    ; @in gasCall: gas sent to call
+    ; @out A => min( requested_gas , all_but_one_64th(63/64) )
+    1000000  :MSTORE(gasCall)
+             :CALL(computeGasSendCall)
+
+    %COMPUTEGASSENDCALL_STEP - STEP:JMPN(failedCounters)
+    %COMPUTEGASSENDCALL_CNT_BINARY - CNT_BINARY :JMPNZ(failedCounters)
+    %COMPUTEGASSENDCALL_CNT_ARITH - CNT_ARITH :JMPNZ(failedCounters)
+    %COMPUTEGASSENDCALL_CNT_KECCAK_F - CNT_KECCAK_F :JMPNZ(failedCounters)
+    %COMPUTEGASSENDCALL_CNT_MEM_ALIGN - CNT_MEM_ALIGN :JMPNZ(failedCounters)
+    %COMPUTEGASSENDCALL_CNT_PADDING_PG - CNT_PADDING_PG :JMPNZ(failedCounters)
+    %COMPUTEGASSENDCALL_CNT_POSEIDON_G - CNT_POSEIDON_G :JMPNZ(failedCounters)
+
+0 => A,B,C,D,E,CTX, SP, PC, GAS,  SR, HASHPOS, RR ; Set all registers to 0
+finalizeExecution:
+                                                                        :JMP(finalWait)
+readCode:
+    :RETURN
+failedCounters:
+2 => A
+1       :ASSERT
+
+INCLUDE "../endIncludes.zkasm"

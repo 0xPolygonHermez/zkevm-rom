@@ -1,0 +1,30 @@
+INCLUDE "../initIncludes.zkasm"
+
+start:
+    ; @info bits length of B
+    ; @in B => number
+    ; @out A => bits length
+    1000000 => GAS
+
+operation:
+    0xFFFFFFFFFFFFFFFFFFFFn => B
+    80 => C
+            :CALL(getLenBits)
+%GETLENBITS_STEP + %DIVARITH_STEP*C - STEP:JMPN(failedCounters)
+%GETLENBITS_CNT_BINARY + %DIVARITH_CNT_BINARY*C + C - CNT_BINARY :JMPNZ(failedCounters)
+%GETLENBITS_CNT_ARITH + %DIVARITH_CNT_ARITH*C - 1 - CNT_ARITH :JMPNZ(failedCounters)
+%GETLENBITS_CNT_KECCAK_F + %DIVARITH_CNT_KECCAK_F*C - CNT_KECCAK_F :JMPNZ(failedCounters)
+%GETLENBITS_CNT_MEM_ALIGN + %DIVARITH_CNT_MEM_ALIGN*C - CNT_MEM_ALIGN :JMPNZ(failedCounters)
+%GETLENBITS_CNT_PADDING_PG + %DIVARITH_CNT_PADDING_PG*C - CNT_PADDING_PG :JMPNZ(failedCounters)
+%GETLENBITS_CNT_POSEIDON_G + %DIVARITH_CNT_POSEIDON_G*C - CNT_POSEIDON_G :JMPNZ(failedCounters)
+
+0 => A,B,C,D,E,CTX, SP, PC, GAS,  SR, HASHPOS, RR ; Set all registers to 0
+finalizeExecution:
+                                                                        :JMP(finalWait)
+readCode:
+    :RETURN
+failedCounters:
+2 => A
+1       :ASSERT
+
+INCLUDE "../endIncludes.zkasm"

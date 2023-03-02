@@ -1,0 +1,28 @@
+INCLUDE "../initIncludes.zkasm"
+
+start:
+    1000000 => GAS
+
+operation:
+    10 :MSTORE(SP++)
+    3 :MSTORE(SP++)
+    2 :MSTORE(SP++)
+            :JMP(opADDMOD)
+checkCounters:
+%OPADDMOD_STEP - STEP:JMPN(failedCounters)
+%OPADDMOD_CNT_BINARY - CNT_BINARY :JMPNZ(failedCounters)
+%OPADDMOD_CNT_ARITH - CNT_ARITH :JMPNZ(failedCounters)
+%OPADDMOD_CNT_KECCAK_F - CNT_KECCAK_F :JMPNZ(failedCounters)
+%OPADDMOD_CNT_MEM_ALIGN - CNT_MEM_ALIGN :JMPNZ(failedCounters)
+%OPADDMOD_CNT_PADDING_PG - CNT_PADDING_PG :JMPNZ(failedCounters)
+%OPADDMOD_CNT_POSEIDON_G - CNT_POSEIDON_G :JMPNZ(failedCounters)
+
+0 => A,B,C,D,E,CTX, SP, PC, GAS,  SR, HASHPOS, RR ; Set all registers to 0
+finalizeExecution:
+                                                                        :JMP(finalWait)
+readCode:
+            :JMP(checkCounters)
+failedCounters:
+2 => A
+1       :ASSERT
+INCLUDE "../endIncludes.zkasm"
