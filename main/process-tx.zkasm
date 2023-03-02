@@ -81,7 +81,9 @@ endCheckChainId:
         $ => A                          :SLOAD
         $ => B                          :MLOAD(txNonce)
         $ => C                          :EQ, JMPNC(invalidIntrinsicTxNonce) ; Compare nonce state tree with nonce transaction
-        A + 1 => D
+        ; increase nonce by 1
+        1 => B
+        $ => D                          :ADD ; compute [nonce + 1 => D]
         E => A
         %SMT_KEY_NONCE => B
         0 => C
@@ -152,6 +154,7 @@ endCalldataIntrinsicGas:
         $ => B                          :MLOAD(txValue)
         D                               :MSTORE(arithA)
         B                               :MSTORE(arithB), CALL(addARITH)
+        $                               :MLOAD(addArithOverflow), JMPNZ(invalidIntrinsicTxBalance)
         $ => B                          :MLOAD(arithRes1)
         ; Comparison
         C => A
@@ -214,6 +217,11 @@ getContractAddress:
         $                               :LT,JMPC(nonce1byte)
         $ => C                          :MLOAD(lengthNonce)
         ; 1 byte length address + 20 bytes address + 1 byte length nonce + C bytes nonce
+        ; RLPlist[RLP(address):RLP(nonce)] --> 1 byte length address + 20 bytes address + 1 byte length nonce + C bytes nonce
+        ;                                  --> 0xc0 + address RLP bytes(1 + 20) + nonce RLP bytes (variable)
+        ; RLP(address) --> 20 bytes header + address value --> 0x94 + address value
+        ; RLP(nonce) --> nonce < 128 --> 1 byte --> value itself
+        ;            --> nonce > 128 --> (1 byte + length nonce) + value itself
         0xc0 + 22 + C                   :HASHK1(E)
         0x94                            :HASHK1(E)
         20 => D
@@ -435,7 +443,7 @@ endDeploy:
 
         ; save offset memory and length to compute hash bytecode. Read bytecode first byte
         E                               :MSTORE(memOffsetLinearPoseidon)
-        C                               :MSTORE(memSizeLinearPoseidon), CALL(checkBytecodeStartsEF)
+        C                               :MSTORE(memSizeLinearPoseidon), CALL(checkBytecodeStartsEF) ; in: [memOffset], out: [startsWithEFn]
 
         ; check bytecode first byte != 0xEF
         $                               :MLOAD(startsWithEF), JMPNZ(invalidCodeStartsEF)

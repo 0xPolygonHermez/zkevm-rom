@@ -10,10 +10,10 @@
  */
 opBLOCKHASH:
     ; checks zk-counters
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
-    $ => A                                     :MLOAD(cntKeccakPreProcess)
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1   :JMPN(outOfCountersKeccak)
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255  :JMPN(outOfCountersPoseidon)
+    $ => A                                      :MLOAD(cntKeccakPreProcess)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1    :JMPN(outOfCountersKeccak)
+    %MAX_CNT_STEPS - STEP - 100                 :JMPN(outOfCountersStep)
 
     ; check stack underflow
     SP - 1 => SP     :JMPN(stackUnderflow)
@@ -21,12 +21,9 @@ opBLOCKHASH:
     ; check out-of-gas
     GAS - %GAS_EXT_STEP => GAS  :JMPN(outOfGas)
 
-    ; Get last tx count
-    $ => B          :MLOAD(txCount)
-    B + 1 => B
-    $ => A          :MLOAD(SP) ; [blockNumber => A]
-    ; Check batch block is lt current block number, else return 0
-    B - A - 1       :JMPN(opBLOCKHASHzero)
+    $ => B          :MLOAD(SP) ; [blockNumber => B]
+    ; If block number does not exist in the smart conract system, it will return 0
+
     ; Create key for the batch hash mapping key
     ; set bytes length to D
     32 => D
@@ -34,7 +31,7 @@ opBLOCKHASH:
     0 => HASHPOS
     $ => E                              :MLOAD(lastHashKIdUsed)
     E+1 => E                            :MSTORE(lastHashKIdUsed)
-    A                                   :HASHK(E)
+    B                                   :HASHK(E)
     %STATE_ROOT_STORAGE_POS             :HASHK(E)
     HASHPOS                             :HASHKLEN(E)
     ; blockhash key = hash(blockNumber, STATE_ROOT_STORAGE_POS)
@@ -46,10 +43,6 @@ opBLOCKHASH:
     $ => E                              :SLOAD
     ; store result value in the stack
     E               :MSTORE(SP++), JMP(readCode); [hash(E) => SP]
-
-; Handle when is asking for the hash of a not computed batch, return 0
-opBLOCKHASHzero:
-    0               :MSTORE(SP++), JMP(readCode); [0 => SP]
 
 /**
  * @link [https://www.evm.codes/#41?fork=berlin]
@@ -105,8 +98,11 @@ opNUMBER:
     ; check out-of-gas
     GAS - %GAS_QUICK_STEP => GAS  :JMPN(outOfGas)
     ; Get current tx count
-    $ => D          :MLOAD(txCount)
-    D + 1           :MSTORE(SP++); [blockNumber => SP]
+    $ => A          :MLOAD(txCount)
+    1 => B
+
+    ; call binary:add state machine and push to the stack
+    $               :ADD, MSTORE(SP++); [blockNumber => SP]
     ; check stack overflow
     %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
 

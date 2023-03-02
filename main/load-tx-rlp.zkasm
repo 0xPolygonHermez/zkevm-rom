@@ -34,6 +34,10 @@ loadTx_rlp:
                                         :CALL(addBatchHashData)
         A - 0xc0                        :JMPN(invalidTxRLP)
         A - 0xf8                        :JMPN(shortList)
+        ; do not allow lists over 2**24 bytes
+        ; Transaction could not have more than 300.000 due to smart contract limitation (keccaks counters)
+        ; meaning that the RLP encoding is wrong
+        A - 0xfb                        :JMPN(longList, invalidTxRLP)
 
 longList:
         A - 0xf7 => D                   :CALL(addHashTx)
@@ -167,7 +171,10 @@ dataREAD:
         A - 0x80                        :JMPN(veryShortData)
         A - 0x81                        :JMPN(endData)
         A - 0xb8                        :JMPN(shortData)
-        A - 0xc0                        :JMPN(longData, invalidTxRLP)
+        ; do not allow string over 2**24 bytes
+        ; Transaction could not have more than 300.000 due to smart contract limitation (keccaks counters)
+        ; meaning that the RLP encoding is wrong
+        A - 0xbb                        :JMPN(longData, invalidTxRLP)
 
 veryShortData:
         1                               :MSTORE(txCalldataLen)
@@ -238,7 +245,7 @@ endChainId:
 setPreEIP155Flag:
         1                               :MSTORE(isPreEIP155)
 ;; size verification
-        ; checks RLP lenght read at the RLP header with bytes read during RLP parsing
+        ; checks RLP length read at the RLP header with bytes read during RLP parsing
 sizeVerification:
         C => A
         $ => B                          :MLOAD(txRLPLength)

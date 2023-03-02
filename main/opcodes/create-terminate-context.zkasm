@@ -54,7 +54,7 @@ opSTOPend:
 opCREATE:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 2          :JMPN(outOfCountersBinary)
+    %MAX_CNT_BINARY - CNT_BINARY - 3          :JMPN(outOfCountersBinary)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*3 :JMPN(outOfCountersPoseidon)
 
     ; check out-of-gas
@@ -96,7 +96,7 @@ opCREATE:
     D => B
     $                   :LT,JMPC(opCreateFail)
 
-    ; check nonce overlow
+    ; check nonce overflow
     $ => A             :MLOAD(storageAddr)
     ; set key for smt nonce query
     %SMT_KEY_NONCE => B
@@ -125,7 +125,8 @@ opCREATE:
                         :CALL(getLenBytes); in: [B: value] out: [A: value bytes length]
     A                   :MSTORE(lengthNonce)
     ; increase nonce
-    B + 1 => D
+    1 => A
+    $ => D              :ADD
     C => A
     ; set key for smt nonce query
     %SMT_KEY_NONCE => B
@@ -263,7 +264,7 @@ opCALLend:
     $ => C          :LT, CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX            :MLOAD(originCTX)
     GAS - A             :MSTORE(gasCTX)
-    ; add estipend (2300) in case of tx with value
+    ; add stipend (2300) in case of tx with value
     A + %CALL_STIPEND*C => A
     ; move is static bool value to following CTX
     $ => D              :MLOAD(isStaticCall)
@@ -371,7 +372,7 @@ opCALLCODEend:
     $ => C          :LT, CALL(computeGasSendCall); in: [gasCall: gas sent to call] out: [A: min( requested_gas , all_but_one_64th(63/64))]
     $ => CTX        :MLOAD(originCTX)
     GAS - A         :MSTORE(gasCTX)
-    ; Add estipend (2300) in case of tx with value
+    ; Add stipend (2300) in case of tx with value
     A + %CALL_STIPEND*C => A
     ; move is static bool value to following CTX
     $ => D          :MLOAD(isStaticCall)
@@ -508,7 +509,7 @@ opRETURNcreate:
     $ => D          :MLOAD(txNonce)
 
     ; set bytecode length and read bytecode first byte
-    $ => A          :MLOAD(createContractAddress), CALL(checkBytecodeStartsEF)
+    $ => A          :MLOAD(createContractAddress), CALL(checkBytecodeStartsEF) ; in: [memOffset], out: [startsWithEFn
 
     ; check bytecode first byte != 0xEF
     $               :MLOAD(startsWithEF), JMPNZ(invalidCodeStartsEF)
@@ -646,7 +647,7 @@ opDELEGATECALLend:
 opCREATE2:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 3          :JMPN(outOfCountersBinary)
+    %MAX_CNT_BINARY - CNT_BINARY - 4          :JMPN(outOfCountersBinary)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*2 :JMPN(outOfCountersPoseidon)
     ; check out-of-gas
     GAS - %CREATE_2_GAS => GAS  :JMPN(outOfGas)
@@ -687,7 +688,7 @@ opCREATE2:
     A - B => GAS
     GAS                 :MSTORE(gasCall)
 
-    ; check correctness of Create: depth, can transfer, nonce overlfow,
+    ; check correctness of Create: depth, can transfer, nonce overflow,
     ; can transfer
     $ => A              :MLOAD(storageAddr)
     ; set key for smt balance query
@@ -699,7 +700,7 @@ opCREATE2:
     $ => B              :MLOAD(valueCall)
     $                   :LT,JMPC(opCreateFail)
 
-    ; check nonce overlow
+    ; check nonce overflow
     $ => A              :MLOAD(storageAddr)
     ; set key for smt nonce query
     %SMT_KEY_NONCE => B
@@ -729,7 +730,9 @@ opCREATE2:
     B                   :MSTORE(txNonce), CALL(getLenBytes); in: [B: value] out: [A: value bytes length]
     A                   :MSTORE(lengthNonce)
     ; increase nonce
-    B + 1 => D
+    1 => A
+    $ => D                    :ADD
+
     C => A
     ; set key for smt nonce query
     %SMT_KEY_NONCE => B
