@@ -35,7 +35,7 @@ checkShortRLP:
 skipCheckShort:
                                         :RETURN
 
-;; check long list/value is over 55 bytes long. Error RLP: encoded list too short
+;; Check long list/value is over 55 bytes long. Error RLP: encoded list too short
 checkLongRLP:
         A - %MIN_BYTES_LONG             :JMPN(invalidTxRLP)
                                         :RETURN
@@ -48,3 +48,17 @@ checkShortDataRLP:
 
 skipCheckShortData:
                                         :RETURN
+
+;; Check non-negative integer RLP representation has no leading zeros and it is encoded in its shortest form
+VAR GLOBAL tmpVarAcheckNonLeadingZeros
+VAR GLOBAL tmpVarZkPCcheckNonLeadingZeros
+checkNonLeadingZeros:
+        RR              :MSTORE(tmpVarZkPCcheckNonLeadingZeros)
+        A               :MSTORE(tmpVarAcheckNonLeadingZeros)
+        ; set value to B and get its
+        A => B          :CALL(getLenBytes) ; in: [B: number] out: [A: byte length of B]
+        ${log(A, byteLength)}
+        ; check (bytes length - encoded length) > 0
+        D - A           :JMPNZ(invalidTxRLP)
+        $ => RR         :MLOAD(tmpVarZkPCcheckNonLeadingZeros)
+        $ => A          :MLOAD(tmpVarAcheckNonLeadingZeros), RETURN
