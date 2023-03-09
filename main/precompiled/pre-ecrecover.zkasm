@@ -6,6 +6,17 @@ funcECRECOVER:
     $                               :LT, JMPC(moveBalances)
 
     GAS - %ECRECOVER_GAS => GAS                   :JMPN(outOfGas) ; gas static = 3000
+
+    CTX                                 :MSTORE(currentCTX)
+    CTX => A
+    $ => B                              :MLOAD(originCTX), JMPZ(handleGas)
+    B => CTX
+    A                                   :MSTORE(retDataCTX)
+    $ => C                              :MLOAD(argsLengthCall)
+    A => CTX
+    0                                   :MSTORE(retDataOffset)
+    C                                   :MSTORE(retDataLength)
+
     ; read data stored in SP + %CALLDATA_OFFSET
     ; hash [32 bytes], v [32 bytes], r [32 bytes], s [32 bytes]
     %CALLDATA_OFFSET => SP
@@ -23,5 +34,4 @@ funcECRECOVER:
 
 endECRECOVER:
     $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
-    A => CTX
-                                        :JMP(preEnd)
+    A => CTX                            :MSTORE(currentCTX), JMP(preEnd)
