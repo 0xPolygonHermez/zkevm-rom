@@ -199,27 +199,26 @@ opAuxPUSHBend:
     %CALLDATA_OFFSET - SP                       :JMPN(stackOverflow, readCode)
 
 opAuxPUSHBcreate:
+    ; get bytes length
+    $ => B                          :MLOAD(txCalldataLen)
     ; PUSH in a create, we need to get bytes from memory (not calldata)
     ; get pushed bytes from previous context memory
-    0 => B
     $ => CTX                        :MLOAD(originCTX)
     ; get offset call position
     $ => E                          :MLOAD(argsOffsetCall)
-    ; get length args call
-    $ => B                          :MLOAD(argsLengthCall)
     ; increase current program counter (PC) to offset for getting pushed bytes to read
     E + PC => E
     D => C
-    E + D - B                       :JMPN(opAuxPUSHBcreate2)
-    B - E => C
+    C - B + PC                      :JMPN(opAuxPUSHBcreate2)
+    C - B + PC => C
 
 opAuxPUSHBcreate2:
     ; set length to read to C for MOLADX call
                                     :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
     ; increase to PC the length of the read bytes
-    PC + C => PC
+    PC + D => PC
     ; put in the lowest significant bytes, align value to right
-    32 - D => D                     :CALL(SHLarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    32 - D => D                     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     ; return to current context
     $ => CTX                        :MLOAD(currentCTX), JMP(opAuxPUSHBend)
 
