@@ -167,21 +167,32 @@ mulPointEc_square:
         ${yDblPointEc(A,B)} :ARITH_ECADD_SAME, MSTORE(mulPointEc_p3_y), JMP(mulPointEc_loop)
 
 mulPointEc_x_equals_before_add:
+        ; points to add: point1 (p3) + point2 (C,D)
+
+        ; A,C: point2.x
+        ; B: point1.x (p3.x)
+        ; D: point2.y
+
         ; p3_x == C, check if points are same or a point was oposite point
 
         D => A ; D contains y of point to add (depends of bits k1,k2)
-        $ => B :MLOAD(mulPointEc_p3_y)
+        $ => B :MLOAD(mulPointEc_p3_y) ; point1.y
                :EQ,JMPC(mulPointEc_same_point_to_add)
+
+        ; C: point2.x
+        ; B: point1.y (p3.y)
+        ; A,D: point2.y
 
         ; x1 = x2 and y1 != y2
         ; ASSUME y1 = -y2
         ; same instruction put HASHPOS and mulPointEc_p3_x to 0.
 
-        ; BUG : CHECK B, A no son un alias.
-        %FPEC_MINUS_ONE => B
+        ; check [A (FPEC_MINUS_ONE) >= B point1.y (mulPointEc_p3_y)] => LT == 0
+        %FPEC_MINUS_ONE => A
         0           :LT
 
-        $ => B      :MLOAD(mulPointEc_p3_y)
+        ; check [A (FPEC_MINUS_ONE) >= B point2.y (D)] => LT == 0
+        D => B
         0           :LT
 
         ; HASHPOS flag = 0, mulPointEc_p3 was empty, need addition must be an assignation
