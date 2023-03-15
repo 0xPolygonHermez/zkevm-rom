@@ -42,21 +42,22 @@ mulPointEc:
         C             :ASSERT
 
         ; check p1.y == p2.y
-        D => A        :EQ,JMPC(mulPointSameInitalPoints)
+        D => A
+                      :EQ,JMPC(mulPointSameInitalPoints)
 
         ; p2 == -p1
-        1n            :MSTORE(mulPointEc_p12_empty) ; means: no add p12 because it was origin point p = O + p = p
-                      :JMP(mulPointEc_loop)
+        ; mulPointEc_p12_empty = 1: no add p12 because it was origin point p = O + p = p
+        1n            :MSTORE(mulPointEc_p12_empty),JMP(mulPointEc_loop)
 
 mulPointSameInitalPoints:
         ; p2 == p1
         0n                        :MSTORE(mulPointEc_p12_empty)
         $ => A                    :MLOAD(mulPointEc_p1_x)
         ${xDblPointEc(A,B)} => E  :MSTORE(mulPointEc_p12_x)
-        ${xDblPointEc(A,B)}       :ARITH_ECADD_DIFFERENT, MSTORE(mulPointEc_p12_y)
-                                  :JMP(mulPointEc_loop)
+        ${xDblPointEc(A,B)}       :ARITH_ECADD_DIFFERENT, MSTORE(mulPointEc_p12_y),JMP(mulPointEc_loop)
 
 mulPointDiffInitalPoints:
+        ; p2.x != p1.x ==> p2 != p1
         0n                            :MSTORE(mulPointEc_p12_empty)
         ${xAddPointEc(A,B,C,D)} => E  :MSTORE(mulPointEc_p12_x)
         ${yAddPointEc(A,B,C,D)}       :ARITH_ECADD_DIFFERENT, MSTORE(mulPointEc_p12_y)
