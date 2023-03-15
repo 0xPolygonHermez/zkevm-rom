@@ -5,17 +5,7 @@ funcECRECOVER:
     zkPC+2 => RR
     $                               :LT, JMPC(moveBalances)
 
-    GAS - %ECRECOVER_GAS => GAS                   :JMPN(outOfGas) ; gas static = 3000
-
-    CTX                                 :MSTORE(currentCTX)
-    CTX => A
-    $ => B                              :MLOAD(originCTX), JMPZ(handleGas)
-    B => CTX
-    A                                   :MSTORE(retDataCTX)
-    $ => C                              :MLOAD(argsLengthCall)
-    A => CTX
-    0                                   :MSTORE(retDataOffset)
-    C                                   :MSTORE(retDataLength)
+    GAS - %ECRECOVER_GAS => GAS     :JMPN(outOfGas) ; gas static = 3000
 
     ; read data stored in SP + %CALLDATA_OFFSET
     ; hash [32 bytes], v [32 bytes], r [32 bytes], s [32 bytes]
@@ -23,15 +13,43 @@ funcECRECOVER:
     $ => A                              :MLOAD(SP++) ; hash
     $ => D                              :MLOAD(SP++) ; v
     $ => B                              :MLOAD(SP++) ; r
-    $ => C                              :MLOAD(SP) ,CALL(ecrecover_precompiled) ; in: [A: hash, B: r, C: s, D: v], out: [A: result_ecrecover] ; s
-    B                                   :JMPNZ(endECRECOVER)
-    ; prepare return data
-    $ => E                              :MLOAD(retCallOffset)
-    $ => C                              :MLOAD(originCTX), JMPZ(handleGas)
-    C => CTX
+    $ => C                              :MLOAD(SP) ,CALL(ecrecover_precompiled) ; in: [A: hash, B: r, C: s, D: v], out: [A: result_ecrecover, B: result_code]
+    B                                   :JMPNZ(endECRECOVERFail)
+
+    ; write ecrecover data into memory
+    0 => E
     A                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
-                                        :JMP(preEnd)
+
+    ; prepare return data
+    0                                   :MSTORE(retDataOffset)
+    32                                  :MSTORE(retDataLength)
+    $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
+    ; set retDataCTX
+    $ => B                              :MLOAD(currentCTX)
+    A => CTX
+    B                                   :MSTORE(retDataCTX)
+    B => CTX
+
+    ; write result ecrecover into previous context memory
+    $ => C                              :MLOAD(retCallLength), JMPZ(preEndECRECOVER)
+    $ => E                              :MLOAD(retCallOffset)
+
+    ; ecrecover result is in bytesToStore
+    C - 32                              :JMPN(continueEcrecover)
+    32 => C
+
+continueEcrecover:
+    $ => CTX                            :MLOAD(originCTX), CALL(MSTOREX)  ; in: [bytesToStore, E: offset, C: length] out: [E: new offset]
+                                        :JMP(endECRECOVER)
+
+endECRECOVERFail:
+    $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
+    A => CTX
+    0                                   :MSTORE(retDataCTX)
+    CTX                                 :MSTORE(currentCTX), JMP(preEnd)
+
+preEndECRECOVER:
+    $ => CTX                            :MLOAD(originCTX)
 
 endECRECOVER:
-    $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
-    A => CTX                            :MSTORE(currentCTX), JMP(preEnd)
+    CTX                                 :MSTORE(currentCTX), JMP(preEnd)
