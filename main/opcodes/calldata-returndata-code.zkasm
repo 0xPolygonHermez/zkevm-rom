@@ -121,15 +121,14 @@ opCALLDATACOPY:
     B => A
     $ => B          :MLOAD(auxOffset)
     B + C => B
-    ; if offset + size is lower than calldata size => length
+    ; if txCalldataLen < (offset + size) --> opCALLDATACOPYX0
     $               :LT,JMPC(opCALLDATACOPYX0)
     $ => B          :MLOAD(auxOffset),JMP(opCALLDATACOPYloop)
 
 opCALLDATACOPYX0:
     $ => C          :MLOAD(txCalldataLen)
     $ => B          :MLOAD(auxOffset)
-    C - B => C
-    C               :MSTORE(numLastBytes)
+    C - B => C      :MSTORE(numLastBytes)
 
 opCALLDATACOPYloop:
     ; checks zk-counters
@@ -162,7 +161,6 @@ opCALLDATACOPYloop:
     D               :MSTORE(MEM:E)          ; write W0
     A               :MSTORE(MEM:E+1)        ; write W1
     ; recover stack pointer
-    $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(numLastBytes)
     C - 32 => C     :MSTORE(numLastBytes)
     $ => E          :MLOAD(lastMemOffset)
@@ -182,10 +180,11 @@ opCALLDATACOPYfinal:
     D => E
     C => D
     $ => A          :MLOAD(SP++), CALL(SHLarith); [calldata => A]; in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    ; Recover init SP to recover input size (todo: use an aux var)
+    ; Recover init SP to recover input size
     $ => C          :MLOAD(numLastBytes); [size => C]
     ; point to next memory slot
     C - 32 + D => D :JMPN(opCALLDATACOPYxor)
+    D               :JMPZ(opCALLDATACOPYxor)
     A => B
     $ => A          :MLOAD(SP); [calldata => C]
     32 - D => D     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
@@ -196,6 +195,7 @@ opCALLDATACOPYfinal:
                     :JMP(opCALLDATACOPYcheckLen)
 
 opCALLDATACOPY0:
+    C               :JMPZ(opCALLDATACOPYend)
     32 - C          :JMPN(opCALLDATACOPY320)
     ; set bytesToStore with value to use in MSTORE
     0               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
@@ -269,7 +269,7 @@ VAR GLOBAL memInteger
  * @zk-counters
  *  - dynamic binary: 2 * size
  *  - dynamic mem align: 2 * size
- *  - dynamic poseidon: %MAX_CNT_POSEIDON_SLOAD_SSTORE * size
+ *  - dynamic poseidon: %MAX_CNT_POSEIDON_SLOAD_SSTORE * 2 * size
  *  - dynamic steps: 100 * size
  * @process-opcode
  *  - stack input: [destOffset, offset, size]
