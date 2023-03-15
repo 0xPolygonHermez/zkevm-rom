@@ -549,9 +549,9 @@ saveMemGAS:
     ; memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word) in A
     ; ${E*E/512} + 3*E=> A
     E                           :MSTORE(arithA)
-    E                           :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB, mulFlagOverflow: value overflow, mulFlagArithOverflow: set to 1 if operation causes overflow]
+    E                           :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB, mulFlagOverflow: value overflow, mulArithOverflowFlag: set to 1 if operation causes overflow]
     $ => C                      :MLOAD(arithRes1)
-    $                           :MLOAD(mulFlagArithOverflow), JMPNZ(outOfGas)
+    $                           :MLOAD(mulArithOverflowFlag), JMPNZ(outOfGas)
     C                           :MSTORE(arithA)
     512                         :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => A                      :MLOAD(arithRes1)
@@ -614,14 +614,14 @@ subARITH:
     $ => A          :SUB,MSTORE(arithRes1)
     $ => RR         :MLOAD(tmpZkPCArith),JMP(loadTmp)
 
-VAR GLOBAL mulArithOverflow
-VAR GLOBAL mulFlagArithOverflow
+VAR GLOBAL mulArithOverflowValue
+VAR GLOBAL mulArithOverflowFlag
 ; @info arithmetic multiplication
 ; @in: arithA: multiplier value
 ; @in: arithB: multiplicand value
 ; @out: arithRes1: product of multiplication arithA * arithB
-; @out: mulArithOverflow: overflow value
-; @out: mulFlagArithOverflow: set to 1 if operation causes overflow
+; @out: mulArithOverflowValue: overflow value
+; @out: mulArithOverflowFlag: set to 1 if operation causes overflow
 mulARITH:
     ; check zk-counters
     %MAX_CNT_STEPS - STEP - 50       :JMPN(outOfCountersStep)
@@ -637,14 +637,14 @@ mulARITH:
     ${_mulArith} => E :ARITH
 
     E               :MSTORE(arithRes1)
-    D               :MSTORE(mulArithOverflow)
+    D               :MSTORE(mulArithOverflowValue)
     D => A
     0 => B
     $               :EQ,JMPNC(setMulArithOverflow)
-    0               :MSTORE(mulFlagArithOverflow), JMP(finishMulArith)
+    0               :MSTORE(mulArithOverflowFlag), JMP(finishMulArith)
 
 setMulArithOverflow:
-    1               :MSTORE(mulFlagArithOverflow)
+    1               :MSTORE(mulArithOverflowFlag)
 
 finishMulArith:
     $ => RR        :MLOAD(tmpZkPCArith),JMP(loadTmp)
@@ -1201,9 +1201,7 @@ checkBytecodeStartsEF:
     RR                              :MSTORE(tmpZkPCEF)
 
     ; check length
-    $ => A                          :MLOAD(memSizeLinearPoseidon)
-    0 => B
-    $                               :EQ,JMPC(checkBytecodeStartsEFend)
+    $ => A                          :MLOAD(memSizeLinearPoseidon),JMPZ(checkBytecodeStartsEFend)
 
     ; load memOffset
     $ => E                          :MLOAD(memOffsetLinearPoseidon)
@@ -1381,7 +1379,7 @@ utilMULMOD:
     $${var _mulMod = A * B}
     A               :MSTORE(arithA)
     ; here we perform the: A * B + 0 = D*2^256 + E
-    ; result is stored in: arithRes1(E) and mulArithOverflow(D)
+    ; result is stored in: arithRes1(E) and mulArithOverflowValue(D)
     B               :MSTORE(arithB), CALL(mulARITH)
     C => A
     ; Check if modulus is 0 or 1
@@ -1408,7 +1406,7 @@ utilMULMOD:
     ; k.l * N + mulModResult = D1 * 2²⁵⁶ + E
     ; B * A + C = D*2^256 + E
     ; remember that:
-    ; result of mul is stored in: arithRes1(E) and mulArithOverflow(D)
+    ; result of mul is stored in: arithRes1(E) and mulArithOverflowValue(D)
 
     ${(_mulMod / A) % (1 << 256)} => B   ; k.l
     ${_mulMod % A} => C        ; mulModResult
@@ -1428,7 +1426,7 @@ utilMULMOD:
     D => A ; D1
     $ => B          :MLOAD(tmpVarDmulmod) ;D2
     $ => A          :ADD
-    $               :MLOAD(mulArithOverflow), ASSERT, JMP(utilMULMODend)
+    $               :MLOAD(mulArithOverflowValue), ASSERT, JMP(utilMULMODend)
 
 mulModNoKH:
     ; if theres no K.h the equation is simplified as:
@@ -1438,7 +1436,7 @@ mulModNoKH:
     C => A ; Modulus on A
     ${(_mulMod / A)} => B   ; k
     ${_mulMod % A} => C     ; mulModResult
-    $ => D         :MLOAD(mulArithOverflow)
+    $ => D         :MLOAD(mulArithOverflowValue)
     $              :MLOAD(arithRes1), ARITH
 
     A => B          ; modulus
