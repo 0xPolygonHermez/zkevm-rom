@@ -556,25 +556,22 @@ opRETURNDATACOPY:
     $ => B          :MLOAD(retDataCTX)
     0 => A
     $               :EQ, JMPC(opRETURNDATACOPYEmpty)
+
     ; Load ret data length from last ctx
     B => CTX
     E => B
 
-    ; check offset is lower than max memory
-    %MAX_MEM_EXPANSION_BYTES => A
-    $                :LT,JMPC(outOfGas)
-
     $ => A          :MLOAD(retDataLength)
     $ => E          :MLOAD(retDataOffset)
     $ => CTX        :MLOAD(currentCTX)
-    ; E ret data offset (memory pointer) of last context, B offset in return data  that want to retrive
-    E + B => E
-    ; if retDataSize <= retdataOffset + dataLen -> OOG
-    ; A retDataSize
-    B + C => B ; total offset (retdataOffset + dataLen)
-    A - B           :JMPN(outOfGas)
+    ; A is retDataLength
+    ; B is offset
+    $               :LT, JMPC(outOfGas)
+    ; if retDataLength < offset + size -> OOG
+    A - B - C       :JMPN(outOfGas)
 
-    E => B ; memory pointer where start to copy memory
+    ; E ret data offset (memory pointer) of last context, B offset in return data  that want to retrive
+    E + B => B ; memory pointer where start to copy memory
     ;${3*((C+31)/32)}
     C+31 => A
     ;(C+31)/32
