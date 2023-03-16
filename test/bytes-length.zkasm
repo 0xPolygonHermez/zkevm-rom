@@ -1,0 +1,39 @@
+VAR GLOBAL continueExecution
+CONSTL %errorCode = 0x55AA55AA55AA55AA55AA55AA55AA55AAn
+
+start:
+    1 => D
+    0x01 => A       :CALL(checkNonLeadingZeros)
+    A               :ASSERT
+
+    2 => D
+    zkPC+2          :MSTORE(continueExecution)
+    0x01 => A       :CALL(checkNonLeadingZeros)
+    %errorCode       :ASSERT
+    0 => A
+
+    1 => D
+    0xFF => A       :CALL(checkNonLeadingZeros)
+    A               :ASSERT
+
+    32 => D
+    zkPC+2          :MSTORE(continueExecution)
+    0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn => A       :CALL(checkNonLeadingZeros)
+    %errorCode       :ASSERT
+    0 => A
+
+    32 => D
+    0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn => A       :CALL(checkNonLeadingZeros)
+    A                :ASSERT
+
+
+endExecution:
+    0 => A,B,C,D,E,CTX, SP, PC, GAS,  SR, HASHPOS, RR
+                                                        :JMP(finalizeExecution)
+
+INCLUDE "../main/main.zkasm"
+
+invalidTxRLP:
+    %errorCode => A
+    $ => RR         :MLOAD(continueExecution)
+                    :RETURN
