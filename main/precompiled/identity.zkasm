@@ -8,7 +8,7 @@ IDENTITY:
     $               :LT, JMPC(moveBalances)
 
     GAS - %IDENTITY_GAS => GAS :JMPN(outOfGas)
-    $ => C          :MLOAD(argsLengthCall)
+    $ => C          :MLOAD(txCalldataLen)
     ;(C+31)/32 => A
     C + 31 => A
     A               :MSTORE(arithA)
@@ -16,37 +16,32 @@ IDENTITY:
     $ => A          :MLOAD(arithRes1)
 
     GAS - %IDENTITY_WORD_GAS*A => GAS   :JMPN(outOfGas)
-    CTX             :MSTORE(currentCTX)
-    CTX => A
-    $ => B               :MLOAD(originCTX), JMPZ(handleGas)
-    B => CTX
-    A                    :MSTORE(retDataCTX)
-    A => CTX
-    0 => B
-    0 => E
-    0 => A
-    B               :MSTORE(retDataOffset)
+    0 => B, E, A    :MSTORE(retDataOffset)
     C               :MSTORE(retDataLength)
+    %CALLDATA_OFFSET => SP
 
 IDENTITYloop:
     %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
     ; Copy from calldata to memory
     C               :JMPZ(IDENTITYreturn)
     C - 32          :JMPN(IDENTITYfinal)
-    %CALLDATA_OFFSET + A => SP
-    $ => B          :MLOAD(SP)
+    $ => B          :MLOAD(SP++)
     B               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
-    A + 1 => A
     C - 32 => C     :JMP(IDENTITYloop)
 
 IDENTITYfinal:
-    %CALLDATA_OFFSET + A => SP
     $ => A          :MLOAD(SP)
-    32 - C => D     :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-                    :CALL(SHLarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    A               :MSTORE(bytesToStore), CALL(MSTOREX)
+    A               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
 
 IDENTITYreturn:
+    ; handle CTX
+    $ => A               :MLOAD(originCTX), JMPZ(handleGas)
+    ; set retDataCTX
+    $ => B               :MLOAD(currentCTX)
+    A => CTX
+    B                    :MSTORE(retDataCTX)
+    B => CTX
+
 
     %MAX_CNT_BINARY - CNT_BINARY - 1   :JMPN(outOfCountersBinary)
 
@@ -73,8 +68,7 @@ IDENTITYreturnLoop:
     E => D
     $ => CTX        :MLOAD(originCTX)
     B => E
-    A               :MSTORE(bytesToStore)
-                    :CALL(MSTORE32)
+    A               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     E => B
     D => E
     C - 32 => C
