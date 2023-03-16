@@ -72,8 +72,10 @@ opCALLDATASIZEdep:
     ; check stack overflow
     %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
 
-VAR GLOBAL calldatacopyAux1
-VAR GLOBAL calldatacopyAux2
+VAR GLOBAL auxDestOffset
+VAR GLOBAL calldataOffset
+VAR GLOBAL auxOffset
+VAR GLOBAL numLastBytes
 /**
  * @link [https://www.evm.codes/#37?fork=berlin]
  * @zk-counters
@@ -91,8 +93,10 @@ opCALLDATACOPY:
     ; check stack underflow
     SP - 3 => SP    :JMPN(stackUnderflow)
     $ => E          :MLOAD(SP+2); [destOffset => E]
-    $ => D          :MLOAD(SP+1); [offset => D]
+    $ => B          :MLOAD(SP+1); [offset => B]
+    B               :MSTORE(auxOffset)
     $ => C          :MLOAD(SP); [size => C]
+    C               :MSTORE(numLastBytes)
     ; store lastMemOffset for memory expansion gas cost
     E               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost
@@ -110,17 +114,21 @@ opCALLDATACOPY:
     $ => E          :MLOAD(lastMemOffset)
     ; Recover size at C
     $ => C          :MLOAD(lastMemLength)
+    B => A
     $ => B          :MLOAD(txCalldataLen); less than 2**32 bytes (calldata). Enforced by memory expansion gas cost & smart contract batchL2DataHash
-    D => A
     ; if offset is not lower than calldata length, return 0
     $               :LT,JMPNC(opCALLDATACOPY0)
-    B + C => A
-    D => B
-    ; if offset + size is lower than calldata size => length
-    $               :LT,JMPC(opCALLDATACOPYX0, opCALLDATACOPYloop)
+    B => A
+    $ => B          :MLOAD(auxOffset)
+    B + C => B
+    ; if txCalldataLen < (offset + size) --> opCALLDATACOPYX0
+    $               :LT,JMPC(opCALLDATACOPYX0)
+    $ => B          :MLOAD(auxOffset),JMP(opCALLDATACOPYloop)
 
 opCALLDATACOPYX0:
     $ => C          :MLOAD(txCalldataLen)
+    $ => B          :MLOAD(auxOffset)
+    C - B => C      :MSTORE(numLastBytes)
 
 opCALLDATACOPYloop:
     ; checks zk-counters
@@ -129,56 +137,54 @@ opCALLDATACOPYloop:
     C               :JMPZ(opCALLDATACOPYcheckLen)
     ; copy last bytes
     C - 32          :JMPN(opCALLDATACOPYfinal)
-
-    B => A          :MSTORE(calldatacopyAux2)
-    E => D
+    B => A          :MSTORE(calldataOffset)
+    E => B
                     :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     ; add %CALLDATA_OFFSET to offset to reach calldata in memory
     ; set stack pointer to first byte to read
     %CALLDATA_OFFSET + E => SP
-    D => E
+    B => E
     $ => A          :MLOAD(SP++)
     $ => B          :MLOAD(SP)
     $ => A          :MEM_ALIGN_RD, MSTORE(bytesToStore)
     E => A
     ; Store 32 bytes from calldata to memory
                     :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
-    E               :MSTORE(calldatacopyAux1)
+    E               :MSTORE(auxDestOffset)
     $ => A          :MLOAD(MEM:E)
     $ => B          :MLOAD(MEM:E+1)
     ${memAlignWR_W0(A,mem.bytesToStore,C)} => D                    ; no trust calculate W0
     ${memAlignWR_W1(B,mem.bytesToStore,C)} => E                    ; no trust calculate W1
     $               :MEM_ALIGN_WR,MLOAD(bytesToStore)
     E => A
-    $ => E          :MLOAD(calldatacopyAux1)
+    $ => E          :MLOAD(auxDestOffset)
     D               :MSTORE(MEM:E)          ; write W0
     A               :MSTORE(MEM:E+1)        ; write W1
     ; recover stack pointer
-    $ => SP         :MLOAD(SPw)
-    $ => C          :MLOAD(SP); [size => C]
-    C - 32 => C     :MSTORE(SP); [size => SP]
+    $ => C          :MLOAD(numLastBytes)
+    C - 32 => C     :MSTORE(numLastBytes)
     $ => E          :MLOAD(lastMemOffset)
     E + 32 => E     :MSTORE(lastMemOffset)
-    $ => B          :MLOAD(calldatacopyAux2)
+    $ => B          :MLOAD(calldataOffset)
     B + 32 => B     :JMP(opCALLDATACOPYloop)
 
 opCALLDATACOPYfinal:
     ; copy last bytes
+    C               :MSTORE(numLastBytes)
     B => A
     E => D
                     :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     ; add %CALLDATA_OFFSET to offset to reach calldata in memory
     ; set SP to calldata
-    %CALLDATA_OFFSET + E => SP, B
+    %CALLDATA_OFFSET + E => SP
     D => E
     C => D
-    $ => A          :MLOAD(SP), CALL(SHLarith); [calldata => A]; in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    ; Recover init SP to recover input size (todo: use an aux var)
-    $ => SP         :MLOAD(SPw)
-    $ => C          :MLOAD(SP); [size => C]
+    $ => A          :MLOAD(SP++), CALL(SHLarith); [calldata => A]; in: [A: value, D: #bytes to left shift] out: [A: shifted result]
+    ; Recover init SP to recover input size
+    $ => C          :MLOAD(numLastBytes); [size => C]
     ; point to next memory slot
-    B + 1 => SP
     C - 32 + D => D :JMPN(opCALLDATACOPYxor)
+    D               :JMPZ(opCALLDATACOPYxor)
     A => B
     $ => A          :MLOAD(SP); [calldata => C]
     32 - D => D     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
@@ -189,6 +195,7 @@ opCALLDATACOPYfinal:
                     :JMP(opCALLDATACOPYcheckLen)
 
 opCALLDATACOPY0:
+    C               :JMPZ(opCALLDATACOPYend)
     32 - C          :JMPN(opCALLDATACOPY320)
     ; set bytesToStore with value to use in MSTORE
     0               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
@@ -210,7 +217,8 @@ opCALLDATACOPYcheckLen:
     ; fill missing values with 0 (size > calldata)
     $ => C          :MLOAD(lastMemLength)
     $ => A          :MLOAD(txCalldataLen)
-    C - A => C      :JMPN(opCALLDATACOPYend, opCALLDATACOPY0)
+    $ => B          :MLOAD(auxOffset)
+    C - A + B => C  :JMPN(opCALLDATACOPYend, opCALLDATACOPY0)
 
 
 opCALLDATACOPYend:
@@ -220,7 +228,7 @@ opCALLDATACOPYend:
 /**
  * @link [https://www.evm.codes/#38?fork=berlin]
  * @zk-counters
- *  - 255 poseidon
+ *  - %MAX_CNT_POSEIDON_SLOAD_SSTORE poseidon
  *  - 30 steps
  * @process-opcode
  *  - stack input: []
@@ -228,7 +236,7 @@ opCALLDATACOPYend:
  */
 opCODESIZE:
     ; checks zk-counters
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE :JMPN(outOfCountersPoseidon)
     %MAX_CNT_STEPS - STEP - 30 :JMPN(outOfCountersStep)
     ; check out-of-gas
     GAS-%GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
@@ -261,7 +269,7 @@ VAR GLOBAL memInteger
  * @zk-counters
  *  - dynamic binary: 2 * size
  *  - dynamic mem align: 2 * size
- *  - dynamic poseidon: 510 * size
+ *  - dynamic poseidon: %MAX_CNT_POSEIDON_SLOAD_SSTORE * 2 * size
  *  - dynamic steps: 100 * size
  * @process-opcode
  *  - stack input: [destOffset, offset, size]
@@ -315,6 +323,8 @@ opCODECOPY2:
     B               :MSTORE(codecopyBytecodeLength)
     C               :MSTORE(memOffset)
     E               :MSTORE(remainingBytes)
+
+opCODECOPYloopInit:
     ; checks zk-counters
     %MAX_CNT_BINARY - CNT_BINARY - 2*E           :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 100*E                :JMPN(outOfCountersStep)
@@ -322,7 +332,7 @@ opCODECOPY2:
 
 opCODECOPYloop:
 
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 510 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*2 :JMPN(outOfCountersPoseidon)
 
     $ => B          :MLOAD(remainingBytes), JMPZ(readCode)
     $ => A          :MLOAD(memOffset), CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
@@ -362,7 +372,7 @@ readValueBytecode:
  * @link [https://www.evm.codes/#3B?fork=berlin]
  * @zk-counters
  *  - 100 steps
- *  - 255 poseidon
+ *  - %MAX_CNT_POSEIDON_SLOAD_SSTORE poseidon
  * @process-opcode
  *  - stack input: [address]
  *  - stack output: [size]
@@ -370,7 +380,7 @@ readValueBytecode:
 opEXTCODESIZE:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE :JMPN(outOfCountersPoseidon)
     ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
@@ -395,7 +405,7 @@ VAR GLOBAL tmpContractLength
  * @link [https://www.evm.codes/#51?fork=berlin]
  * @zk-counters
  *  - dynamic: 100
- *  - dynamic poseidon: 255 + f(size)
+ *  - dynamic poseidon: %MAX_CNT_POSEIDON_SLOAD_SSTORE + f(size)
  * @process-opcode
  *  - stack input: [address, destOffset, offset, size]
  *  - stack output: []
@@ -452,11 +462,11 @@ opEXTCODECOPY2:
     D               :MSTORE(codecopyHashId) ; set hashId to get bytes from
     B               :MSTORE(codecopyBytecodeLength) ; set contract bytecode length
     C               :MSTORE(memOffset)
-    E               :MSTORE(remainingBytes), JMP(opCODECOPYloop)
+    E               :MSTORE(remainingBytes), JMP(opCODECOPYloopInit)
 
 VAR GLOBAL tmpZkPCext
 opEXTCODECOPYLoadBytecode:
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE :JMPN(outOfCountersPoseidon)
     ; set key for smt smart contract length query
     %SMT_KEY_SC_LENGTH => B
     0 => C
@@ -475,7 +485,7 @@ opEXTCODECOPYLoadBytecode:
     56                                                  :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => RR                                             :MLOAD(tmpZkPCext)
     $ => B                                              :MLOAD(arithRes1)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 - 1 - B  :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE - 1 - B  :JMPN(outOfCountersPoseidon)
     %MAX_CNT_PADDING_PG_LIMIT - CNT_PADDING_PG - 1 - B  :JMPN(outOfCountersPadding)
 
     ; set key for smt smart contract code query
@@ -554,25 +564,22 @@ opRETURNDATACOPY:
     $ => B          :MLOAD(retDataCTX)
     0 => A
     $               :EQ, JMPC(opRETURNDATACOPYEmpty)
+
     ; Load ret data length from last ctx
     B => CTX
     E => B
 
-    ; check offset is lower than max memory
-    %MAX_MEM_EXPANSION_BYTES => A
-    $                :LT,JMPC(outOfGas)
-
     $ => A          :MLOAD(retDataLength)
     $ => E          :MLOAD(retDataOffset)
     $ => CTX        :MLOAD(currentCTX)
-    ; E ret data offset (memory pointer) of last context, B offset in return data  that want to retrive
-    E + B => E
-    ; if retDataSize <= retdataOffset + dataLen -> OOG
-    ; A retDataSize
-    B + C => B ; total offset (retdataOffset + dataLen)
-    A - B           :JMPN(outOfGas)
+    ; A is retDataLength
+    ; B is offset
+    $               :LT, JMPC(outOfGas)
+    ; if retDataLength < offset + size -> OOG
+    A - B - C       :JMPN(outOfGas)
 
-    E => B ; memory pointer where start to copy memory
+    ; E ret data offset (memory pointer) of last context, B offset in return data  that want to retrive
+    E + B => B ; memory pointer where start to copy memory
     ;${3*((C+31)/32)}
     C+31 => A
     ;(C+31)/32
@@ -629,7 +636,7 @@ opRETURNDATACOPYEmpty:
  * @link [https://www.evm.codes/#3F?fork=berlin]
  * @zk-counters
  *  - 100 steps
- *  - 255 poseidon
+ *  - %MAX_CNT_POSEIDON_SLOAD_SSTORE poseidon
  * @process-opcode
  *  - stack input: [address]
  *  - stack output: [hash]
@@ -637,7 +644,7 @@ opRETURNDATACOPYEmpty:
 opEXTCODEHASH:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE :JMPN(outOfCountersPoseidon)
     ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
     $ => A          :MLOAD(SP), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
