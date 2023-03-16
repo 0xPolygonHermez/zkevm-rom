@@ -225,8 +225,7 @@ start:
         0x6789678967896789678967896789678967890000000000000000000033333333n     :MLOAD(MEM:E+2)
         0x4444444444444444444444444444444444444444444444444444444444444444n     :MLOAD(MEM:E+3)
 
-        ; TEST 14: size = 90, offset = 0, destOffset = 0, set MEM (txCalldataLen < size) TODO: NO PASS
-
+        ; TEST 14: size = 90, offset = 0, destOffset = 0, set MEM (txCalldataLen < size)
         0 => SP
         90              :MSTORE(SP++)   ;size
         0               :MSTORE(SP++)   ;offset
@@ -313,9 +312,9 @@ INCLUDE "../main/main.zkasm"
 
 VAR GLOBAL auxDestOffset2
 VAR GLOBAL calldataOffset2
-VAR GLOBAL tmpSHXZkPCtest
 VAR GLOBAL auxOffset2
 VAR GLOBAL numLastBytes2
+VAR GLOBAL tmpSHXZkPCtest
 /**
  * @link [https://www.evm.codes/#37?fork=berlin]
  * @zk-counters
@@ -362,15 +361,14 @@ opCALLDATACOPY2:
     B => A
     $ => B          :MLOAD(auxOffset2)
     B + C => B
-    ; if offset + size is lower than calldata size => length
+    ; if txCalldataLen < (offset + size) --> opCALLDATACOPYX0
     $               :LT,JMPC(opCALLDATACOPYX02)
     $ => B          :MLOAD(auxOffset2),JMP(opCALLDATACOPYloop2)
 
 opCALLDATACOPYX02:
     $ => C          :MLOAD(txCalldataLen)
     $ => B          :MLOAD(auxOffset2)
-    C - B => C
-    C               :MSTORE(numLastBytes2)
+    C - B => C      :MSTORE(numLastBytes2)
 
 opCALLDATACOPYloop2:
     ; checks zk-counters
@@ -403,7 +401,6 @@ opCALLDATACOPYloop2:
     D               :MSTORE(MEM:E)          ; write W0
     A               :MSTORE(MEM:E+1)        ; write W1
     ; recover stack pointer
-    $ => SP         :MLOAD(SPw)
     $ => C          :MLOAD(numLastBytes2)
     C - 32 => C     :MSTORE(numLastBytes2)
     $ => E          :MLOAD(lastMemOffset)
@@ -423,10 +420,11 @@ opCALLDATACOPYfinal2:
     D => E
     C => D
     $ => A          :MLOAD(SP++), CALL(SHLarith); [calldata => A]; in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    ; Recover init SP to recover input size (todo: use an aux var)
+    ; Recover init SP to recover input size
     $ => C          :MLOAD(numLastBytes2); [size => C]
     ; point to next memory slot
     C - 32 + D => D :JMPN(opCALLDATACOPYxor2)
+    D               :JMPZ(opCALLDATACOPYxor2)
     A => B
     $ => A          :MLOAD(SP); [calldata => C]
     32 - D => D     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
@@ -437,6 +435,7 @@ opCALLDATACOPYfinal2:
                     :JMP(opCALLDATACOPYcheckLen2)
 
 opCALLDATACOPY02:
+    C               :JMPZ(opCALLDATACOPYend2)
     32 - C          :JMPN(opCALLDATACOPY3202)
     ; set bytesToStore with value to use in MSTORE
     0               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
