@@ -1359,7 +1359,7 @@ VAR GLOBAL tmpZkPCmulmod
 utilMULMOD:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 3    :JMPN(outOfCountersBinary)
+    %MAX_CNT_BINARY - CNT_BINARY - 4    :JMPN(outOfCountersBinary)
     %MAX_CNT_ARITH - CNT_ARITH - 2      :JMPN(outOfCountersArith)
 
     RR              :MSTORE(tmpZkPCmulmod)
@@ -1396,7 +1396,14 @@ utilMULMOD:
 
     ${(_mulMod / C) >> 256} => B     ; k.h
     ; We can jump with Js, because later it's all verified by the ARITH
+    ; the two paths must be mutually exclusive.
+    ; mulModNoKH: if kh is non zero, not found a solution only with kl
     ${cond(B == 0)}  :JMPN(mulModNoKH)
+
+    ; in case of malicious prover, check that B was different of zero to
+    ; avoid dual path.
+    0 => A
+    0       :EQ ; assert B != 0
 
     ; Since there's k.h we will split the equation in those 2
     ;k.l * N + mulModResult = D1 * 2²⁵⁶ + E
@@ -1431,7 +1438,10 @@ utilMULMOD:
     ; Assert D1 + D2 = D ; ADD ;ASSERT
     D => A ; D1
     $ => B          :MLOAD(tmpVarDmulmod) ;D2
-    $ => A          :ADD
+
+    ; verify no carry, because D = D1 + D2 must be less than 2**256
+    ; to pass arithmetic equation A * B + C = D * 2**256 + op
+    $ => A          :ADD,JMPC(failAssert)
     $               :MLOAD(mulArithOverflowValue), ASSERT, JMP(utilMULMODend)
 
 mulModNoKH:
