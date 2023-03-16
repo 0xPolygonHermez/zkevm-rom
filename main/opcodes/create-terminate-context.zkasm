@@ -46,7 +46,7 @@ opSTOPend:
  * @zk-counters
  *  - 200 steps
  *  - 2 binary
- *  - 255*3 poseidon
+ *  - %MAX_CNT_POSEIDON_SLOAD_SSTORE*3 poseidon
  * @process-opcode
  *  - stack input:  [value, offset, size]
  *  - stack output: [address]
@@ -55,7 +55,7 @@ opCREATE:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 3          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*3 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*3 :JMPN(outOfCountersPoseidon)
 
     ; check out-of-gas
     GAS - %CREATE_GAS => GAS  :JMPN(outOfGas)
@@ -492,7 +492,7 @@ opRETURNdeploy:
 opRETURNcreate:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*2 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*2 :JMPN(outOfCountersPoseidon)
 
     ; save offset memory and length to compute contract hash
     E               :MSTORE(memOffsetLinearPoseidon)
@@ -639,7 +639,7 @@ opDELEGATECALLend:
  * @zk-counters
  *  - 400 steps
  *  - 3 binary
- *  - 510 poseidon
+ *  - %MAX_CNT_POSEIDON_SLOAD_SSTORE*2 poseidon
  * @process-opcode
  *  - stack input:  [value, offset, size, salt]
  *  - stack output: [address]
@@ -648,7 +648,7 @@ opCREATE2:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 4          :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*2 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*2 :JMPN(outOfCountersPoseidon)
     ; check out-of-gas
     GAS - %CREATE_2_GAS => GAS  :JMPN(outOfGas)
 
@@ -928,6 +928,7 @@ opREVERTend:
     $ => A          :MLOAD(depth)
     A - 1           :MSTORE(depth), JMP(readCode)
 
+VAR GLOBAL sendAllAddress
 ; SELFDESTRUCT is deprecated and EIP-4758 is implemented: https://eips.ethereum.org/EIPS/eip-4758
 ; SELFDESTRUCT is now SENDALL
 /**
@@ -935,7 +936,7 @@ opREVERTend:
  * @zk-counters
  *  - 400 steps
  *  - 2 binary
- *  - 255*4 poseidon
+ *  - %MAX_CNT_POSEIDON_SLOAD_SSTORE*4 poseidon
  * @process-opcode
  *  - stack input: [address]
  *  - stack output: none
@@ -944,7 +945,7 @@ opSENDALL:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*4 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*4 :JMPN(outOfCountersPoseidon)
     ; check out-of-gas
     GAS - %SENDALL_GAS => GAS   :JMPN(outOfGas)
 
@@ -962,6 +963,7 @@ opSENDALL:
 
     ; Address in A & Mask address to 20 bytes
     $ => A              :MLOAD(SP), CALL(maskAddress); in: [A: address] out: [A: masked address]
+    A                   :MSTORE(sendAllAddress)
 
     ; store address receiver in [C, E]
     A => C, E
@@ -1000,7 +1002,7 @@ opSENDALL2:
     $ => D          :MLOAD(arithRes1)
 
     ; transfer balance to receiver
-    $ => A                  :MLOAD(SP); [address => A]
+    $ => A                  :MLOAD(sendAllAddress); [address => A]
     %SMT_KEY_BALANCE => B
     0 => C
     $ => SR                 :SSTORE
