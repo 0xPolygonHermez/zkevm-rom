@@ -144,7 +144,7 @@ endCalldataIntrinsicGas:
         $ => B                          :MLOAD(txGasPrice)
         A                               :MSTORE(arithA)
         B                               :MSTORE(arithB), CALL(mulARITH)
-        $ => D                          :MLOAD(arithOverflow), JMPNZ(invalidIntrinsicTxGasOverflow)
+        $                               :MLOAD(mulArithOverflowFlag), JMPNZ(invalidIntrinsicTxGasOverflow)
         $ => D                          :MLOAD(arithRes1)
         ; Get caller balance
         $ => A                          :MLOAD(txSrcOriginAddr)
@@ -307,7 +307,7 @@ endContractAddress:
 ;; deploy contract in state-tree
 deploy:
         %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
-        %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*3 :JMPN(outOfCountersPoseidon)
+        %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*3 :JMPN(outOfCountersPoseidon)
         %MAX_CNT_BINARY - CNT_BINARY - 3   :JMPN(outOfCountersBinary)
                                 :CALL(isColdAddress) ; add address to touched addresses
         ; check if address is deployable ( nonce == bytecode == 0)
@@ -470,7 +470,7 @@ endDeploy:
 ;; compute maximum gas to refund
 handleGas:
         %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
-        %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 255*4 :JMPN(outOfCountersPoseidon)
+        %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*4 :JMPN(outOfCountersPoseidon)
         0 => A
         $ => B                          :MLOAD(gasRefund), JMPZ(refundGas)
         $ => A                          :MLOAD(txGasLimit)
