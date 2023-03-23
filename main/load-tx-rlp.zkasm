@@ -15,6 +15,10 @@ INCLUDE "load-tx-rlp-utils.zkasm"
 ;;;;;;;;;;;;;;;;;;
 
 loadTx_rlp:
+        ; check one keccak is available to begin processing the RLP
+        $ => D                                          :MLOAD(cntKeccakPreProcess)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1 - D        :JMPN(handleOOCKatRLP)
+
         ; A new hash with position 0 is started
         0 => HASHPOS
 
@@ -30,7 +34,7 @@ loadTx_rlp:
 
 ;; Read RLP list length
         ; Should be a list
-        1 => D                          :CALL(addHashTx)
+        1 => D                          :CALL(addHashTxBegin)
                                         :CALL(addBatchHashData)
         A - 0xc0                        :JMPN(invalidTxRLP)
         A - 0xf8                        :JMPN(shortList)
@@ -40,7 +44,7 @@ loadTx_rlp:
         A - 0xfb                        :JMPN(longList, invalidTxRLP)
 
 longList:
-        A - 0xf7 => D                   :CALL(addHashTx)
+        A - 0xf7 => D                   :CALL(addHashTxBegin)
                                         :CALL(addBatchHashData)
                                         :CALL(checkLongRLP)
                                         :CALL(checkNonLeadingZeros)
