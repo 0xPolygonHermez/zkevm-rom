@@ -1,8 +1,6 @@
 # zkevm-rom
 This repository contains the zkasm source code of the polygon-hermez zkevm
 
-> **WARNING**: All code here is in WIP
-
 ## Usage
 ````
 npm i
