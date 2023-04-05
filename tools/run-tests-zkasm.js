@@ -6,7 +6,6 @@ const chalk = require('chalk');
 const zkasm = require('@0xpolygonhermez/zkasmcom');
 const smMain = require('@0xpolygonhermez/zkevm-proverjs/src/sm/sm_main/sm_main');
 
-const nonEmptyInput = require('@0xpolygonhermez/zkevm-testvectors/inputs-executor/calldata/op-arith-final_0.json');
 const emptyInput = require('@0xpolygonhermez/zkevm-proverjs/test/inputs/empty_input.json');
 
 const { argv } = require('yargs')
@@ -46,12 +45,9 @@ async function runTest(pathTest, cmPols) {
         assertOutputs: false,
     };
 
-    // list test that needs a non empty input
-    const input = pathTest.includes('rotate.zkasm') ? nonEmptyInput : emptyInput;
-
     // execute zkasm tests
     try {
-        const result = await smMain.execute(cmPols.Main, input, rom, config);
+        const result = await smMain.execute(cmPols.Main, emptyInput, rom, config);
         console.log(chalk.green('   --> pass'), pathTest);
         if (argv.verbose) {
             console.log(chalk.blue('   --> verbose'));
