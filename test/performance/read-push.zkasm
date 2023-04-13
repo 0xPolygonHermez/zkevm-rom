@@ -1,0 +1,71 @@
+VAR GLOBAL test
+
+;; Comments 'readPush' function
+; @info Read bytes opcode PUSHX
+; @internalParam {numBlocks} 4 bytes blocks to read
+; @internalParam {leftBytes} remaining bytes
+; @in D => bytes to read
+; @out E => value read
+
+start:
+    ; init vars
+    0 => HASHPOS
+    1 => D
+    $${var rounds}
+
+    ; add bytes one by one
+    0x0102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F20n => A    :CALL(initLoop)
+    0x2122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F40n => A    :CALL(initLoop)
+    0x4142434445464748494A4B4C4D4E4F505152535455565758595A5B5C5D5E5F60n => A    :CALL(initLoop)
+
+    ; close hash
+    HASHPOS         :HASHPLEN(0)
+    $               :HASHPDIGEST(0)
+    0               :MSTORE(contractHashId)
+
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ;;;;;     INIT TESTS     ;;;;;
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ; log init counters
+    CNT_BINARY => A
+    ; ${log(A, binaryCouners)} ; result: 1
+    STEP => A
+    ; ${log(A, stepCounter)} ; result: 202
+
+    ; Start test PUSH1
+
+    ; PUSH1 reading 1 byte at position 0 in the bytecode
+    0 => PC
+    1 => D                 :CALL(readPush)
+    0x01 => A
+    E                       :ASSERT
+
+    ; PUSH1 reading 1 byte at position 1 in the bytecode
+    20 => PC
+    1 => D                 :CALL(readPush)
+    0x02 => A
+    E                       :ASSERT
+
+    ; PUSH1 reading 1 byte at position 2 in the bytecode
+    2 => PC
+    1 => D                 :CALL(readPush)
+    0x03 => A
+    E                       :ASSERT
+
+
+    0 => A,B,C,D,E,CTX, SP, PC, GAS,  SR, HASHPOS, RR ; Set all registers to 0
+                                                                        :JMP(finalizeExecution)
+
+initLoop:
+    $${rounds = 31}
+    0 => B ; to allow $$
+
+loopAdd32Byte:
+    ${(A >> (rounds * 8)) & 0xFF}   :HASHP1(0)
+    $${rounds = rounds - 1}
+    ${rounds}                  :JMPZ(endLoop, loopAdd32Byte)
+
+endLoop:
+                                :RETURN
+
+INCLUDE "../../main/main.zkasm"
