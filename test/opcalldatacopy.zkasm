@@ -13,6 +13,7 @@ start:
         20              :MSTORE(SP++)   ;size
         0               :MSTORE(SP++)   ;offset
         32              :MSTORE(SP)    ;destOffset
+        100000000 => GAS
 
         :CALL(fillCalldataPattern)
         :CALL(fillMemPattern0)
@@ -310,10 +311,6 @@ fillMemPattern:
 
 INCLUDE "../main/main.zkasm"
 
-VAR GLOBAL auxDestOffset2
-VAR GLOBAL calldataOffset2
-VAR GLOBAL auxOffset2
-VAR GLOBAL numLastBytes2
 VAR GLOBAL tmpSHXZkPCtest
 /**
  * @link [https://www.evm.codes/#37?fork=berlin]
@@ -325,143 +322,10 @@ VAR GLOBAL tmpSHXZkPCtest
  *  - stack output: []
  */
 opCALLDATACOPY2:
-    RR                      :MSTORE(tmpSHXZkPCtest)
-    ; checks zk-counters
-    ;%MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-    ;%MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
-    ;%MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2   :JMPN(outOfCountersMemalign)
-    ; check stack underflow
-    SP - 3 => SP    :JMPN(stackUnderflow)
-    $ => E          :MLOAD(SP+2); [destOffset => E]
-    $ => B          :MLOAD(SP+1); [offset => B]
-    B               :MSTORE(auxOffset2)
-    $ => C          :MLOAD(SP); [size => C]
-    C               :MSTORE(numLastBytes2)
-    ; store lastMemOffset for memory expansion gas cost
-    E               :MSTORE(lastMemOffset)
-    ; store lastMemLength for memory expansion gas cost
-    C               :MSTORE(lastMemLength);, CALL(saveMem); in: [lastMemOffset, lastMemLength]
-    ; check out-of-gas
-    ;GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
-    ;${3*((C+31)/32)}
-    ;(C+31)/32 => A
-    C+31 => A
-                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
-    ;GAS - 3*E => GAS    :JMPN(outOfGas)
-    ; save current stack pointer
-    SP              :MSTORE(SPw)
-    ; Recover destOffset at E
-    $ => E          :MLOAD(lastMemOffset)
-    ; Recover size at C
-    $ => C          :MLOAD(lastMemLength)
-    B => A
-    $ => B          :MLOAD(txCalldataLen); less than 2**32 bytes (calldata). Enforced by memory expansion gas cost & smart contract batchL2DataHash
-    ; if offset is not lower than calldata length, return 0
-    $               :LT,JMPNC(opCALLDATACOPY02)
-    B => A
-    $ => B          :MLOAD(auxOffset2)
-    B + C => B
-    ; if txCalldataLen < (offset + size) --> opCALLDATACOPYX0
-    $               :LT,JMPC(opCALLDATACOPYX02)
-    $ => B          :MLOAD(auxOffset2),JMP(opCALLDATACOPYloop2)
+    RR              :MSTORE(tmpSHXZkPCtest)
+                    :CALL(opCALLDATACOPY)
 
-opCALLDATACOPYX02:
-    $ => C          :MLOAD(txCalldataLen)
-    $ => B          :MLOAD(auxOffset2)
-    C - B => C      :MSTORE(numLastBytes2)
-
-opCALLDATACOPYloop2:
-    ; checks zk-counters
-    ;%MAX_CNT_STEPS - STEP - 300 :JMPN(outOfCountersStep)
-    ; finish loop
-    C               :JMPZ(opCALLDATACOPYcheckLen2)
-    ; copy last bytes
-    C - 32          :JMPN(opCALLDATACOPYfinal2)
-    B => A          :MSTORE(calldataOffset2)
-    E => B
-                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
-    ; add %CALLDATA_OFFSET to offset to reach calldata in memory
-    ; set stack pointer to first byte to read
-    %CALLDATA_OFFSET + E => SP
-    B => E
-    $ => A          :MLOAD(SP++)
-    $ => B          :MLOAD(SP)
-    $ => A          :MEM_ALIGN_RD, MSTORE(bytesToStore)
-    E => A
-    ; Store 32 bytes from calldata to memory
-                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
-    E               :MSTORE(auxDestOffset2)
-    $ => A          :MLOAD(MEM:E)
-    $ => B          :MLOAD(MEM:E+1)
-    ${memAlignWR_W0(A,mem.bytesToStore,C)} => D                    ; no trust calculate W0
-    ${memAlignWR_W1(B,mem.bytesToStore,C)} => E                    ; no trust calculate W1
-    $               :MEM_ALIGN_WR,MLOAD(bytesToStore)
-    E => A
-    $ => E          :MLOAD(auxDestOffset2)
-    D               :MSTORE(MEM:E)          ; write W0
-    A               :MSTORE(MEM:E+1)        ; write W1
-    ; recover stack pointer
-    $ => C          :MLOAD(numLastBytes2)
-    C - 32 => C     :MSTORE(numLastBytes2)
-    $ => E          :MLOAD(lastMemOffset)
-    E + 32 => E     :MSTORE(lastMemOffset)
-    $ => B          :MLOAD(calldataOffset2)
-    B + 32 => B     :JMP(opCALLDATACOPYloop2)
-
-opCALLDATACOPYfinal2:
-    ; copy last bytes
-    C               :MSTORE(numLastBytes2)
-    B => A
-    E => D
-                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
-    ; add %CALLDATA_OFFSET to offset to reach calldata in memory
-    ; set SP to calldata
-    %CALLDATA_OFFSET + E => SP
-    D => E
-    C => D
-    $ => A          :MLOAD(SP++), CALL(SHLarith); [calldata => A]; in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    ; Recover init SP to recover input size
-    $ => C          :MLOAD(numLastBytes2); [size => C]
-    ; point to next memory slot
-    C - 32 + D => D :JMPN(opCALLDATACOPYxor2)
-    D               :JMPZ(opCALLDATACOPYxor2)
-    A => B
-    $ => A          :MLOAD(SP); [calldata => C]
-    32 - D => D     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    32 - C => D     :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    B + A => A
-    ; set bytesToStore with value to use in MSTORE
-    A               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
-                    :JMP(opCALLDATACOPYcheckLen2)
-
-opCALLDATACOPY02:
-    C               :JMPZ(opCALLDATACOPYend2)
-    32 - C          :JMPN(opCALLDATACOPY3202)
-    ; set bytesToStore with value to use in MSTORE
-    0               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
-                    :JMP(opCALLDATACOPYend2)
-
-opCALLDATACOPY3202:
-    ; set bytesToStore with value to use in MSTORE
-    0               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
-    C - 32 => C     :JMP(opCALLDATACOPY02)
-
-
-opCALLDATACOPYxor2:
-    32 - C => D     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-                    :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    ; set bytesToStore with value to use in MSTORE
-    A               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
-
-opCALLDATACOPYcheckLen2:
-    ; fill missing values with 0 (size > calldata)
-    $ => C          :MLOAD(lastMemLength)
-    $ => A          :MLOAD(txCalldataLen)
-    $ => B          :MLOAD(auxOffset2)
-    C - A + B => C      :JMPN(opCALLDATACOPYend2, opCALLDATACOPY02)
-
-
-opCALLDATACOPYend2:
+opCALLDATACOPYend:
     ; retrieve SP
     $ => SP         :MLOAD(SPw)
     $ => RR         :MLOAD(tmpSHXZkPCtest)
