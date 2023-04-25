@@ -1,0 +1,59 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Optimal Ate Pairing e: G1 x G2 -> GT over the BN254 curve
+;; where G1 = E(Fp)[r] = E(Fp), G2 = E'(Fp2)[r] and GT = mu_r (the r-th roots of unity over (Fp12)^*)
+;; the involved curves are E/Fp: y² = x³ + 3 and E'/Fp2: y² = x³ + 3/(9+u)
+;;          input: P in G1 and Q in G2
+;;          output: e(P,Q) in GT
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL pairing_Px
+VAR GLOBAL pairing_Py
+VAR GLOBAL pairing_Qx1
+VAR GLOBAL pairing_Qx2
+VAR GLOBAL pairing_Qy1
+VAR GLOBAL pairing_Qy2
+
+INCLUDE "constants.zkasm"
+
+; TODO
+; ERROR CODES (B)
+; 0 - no error
+; 1 - P is not in G1
+; 2 - Q is not in G2
+; 3 - s is zero (0)
+; 4 - s is too big
+; 5 - v not valid value (1b, 1c)
+; 6 - not exists sqrt of y
+; 100 - fail sqrt, but has solution (!!!)
+
+pairing_subgroup_checks:
+    ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
+    $ => A,B    :MLOAD(pairing_Px),CALL(mulFpBN254); C = (Px)²
+    C => A                                         ; A = (Px)²
+    $ => B      :MLOAD(pairing_Px),CALL(mulFpBN254); C = (Px)³
+
+    3n => A     :CALL(addFpEc)                     ; C = (Px)³ + 3
+    C => D                                         ; D = (Px)³ + 3
+
+    $ => A,B    :MLOAD(pairing_Py),CALL(mulFpBN254); C = (Py)²
+
+    D => A
+    C => B
+    $           :EQ,JMPNC(pairing_P_is_not_in_G1)
+
+
+; ERRORS
+pairing_P_is_not_in_G1:
+    1 => B      :JMP(pairing_error)
+
+pairing_error:
+        0 => A
+
+pairing_end:
+        $ => RR     :MLOAD(ecrecover_RR)
+        :RETURN
+
+INCLUDE "addFpBN254.zkasm"
+INCLUDE "mulFpBN254.zkasm"
