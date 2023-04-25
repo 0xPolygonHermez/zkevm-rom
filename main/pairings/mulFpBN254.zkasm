@@ -1,0 +1,31 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; mulFpBN254 C = A * B (mod BN254_P)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+mulFpBN254:
+        0 => C
+
+        ; A * B + 0 = [D] * 2 ** 256 + [E]
+
+        $${var _mulFpBN254_AB = A * B}
+
+        ${_mulFpBN254_AB >> 256} => D
+
+        ;;
+        ;; result of command was only 256 bits, not need mask
+        ;; ${_mulFpBN254_AB & ((1 << 256) - 1)} == ${_mulFpBN254_AB}
+
+        ${_mulFpBN254_AB} => E:ARITH
+
+        ;
+        ; with committed E,D
+        ; FpEc * [k] + [C] = D * 2 ** 256 + E
+        ;
+
+        ${_mulFpBN254_AB % const.FPEC} => C
+        ${_mulFpBN254_AB / const.FPEC} => B
+        %BN254_P => A
+
+        E :ARITH,RETURN
