@@ -1,0 +1,228 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; MSMTwistBN254
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL MSMTwistBN254_p1_x1
+VAR GLOBAL MSMTwistBN254_p1_x2
+VAR GLOBAL MSMTwistBN254_p1_y1
+VAR GLOBAL MSMTwistBN254_p1_y2
+VAR GLOBAL MSMTwistBN254_p2_x1
+VAR GLOBAL MSMTwistBN254_p2_x2
+VAR GLOBAL MSMTwistBN254_p2_y1
+VAR GLOBAL MSMTwistBN254_p2_y2
+VAR GLOBAL MSMTwistBN254_k1
+VAR GLOBAL MSMTwistBN254_k2
+VAR GLOBAL MSMTwistBN254_p3_x1
+VAR GLOBAL MSMTwistBN254_p3_x2
+VAR GLOBAL MSMTwistBN254_p3_y1
+VAR GLOBAL MSMTwistBN254_p3_y2
+VAR GLOBAL MSMTwistBN254_RR
+VAR GLOBAL MSMTwistBN254_p12_x
+VAR GLOBAL MSMTwistBN254_p12_y
+VAR GLOBAL MSMTwistBN254_HASHPOS
+VAR GLOBAL MSMTwistBN254_p12_empty
+
+; PRECONDITION: p1,p2 are points of curve
+; PRECONDITION: p1,p2 are alias-free
+
+MSMTwistBN254:
+        RR      :MSTORE(MSMTwistBN254_RR)
+        HASHPOS :MSTORE(MSMTwistBN254_HASHPOS)
+
+        256 => RCX
+
+        ; HASHPOS used to MSMTwistBN254_p3_no_infinity
+        0n => HASHPOS :MSTORE(MSMTwistBN254_p3_x)
+
+        0n      :MSTORE(MSMTwistBN254_p3_y)
+
+        $ => A  :MLOAD(MSMTwistBN254_p1_x1)
+        $ => B  :MLOAD(MSMTwistBN254_p1_x2)
+        $ => C  :MLOAD(MSMTwistBN254_p2_x1)
+        $ => D  :MLOAD(MSMTwistBN254_p2_x2)
+
+        ; check p1.x == p2.x
+        ${A == C && B == D}     :JMPZ(MSMTwistDiffInitalPoints)
+        C                       :ASSERT
+        B => A                  
+        D                       :ASSERT
+
+        $ => A  :MLOAD(MSMTwistBN254_p1_y1)
+        $ => B  :MLOAD(MSMTwistBN254_p1_y2)
+        $ => C  :MLOAD(MSMTwistBN254_p2_y1)
+        $ => D  :MLOAD(MSMTwistBN254_p2_y2)
+
+        ; check p1.y == p2.y
+        ${A == C && B == D}     :JMPZ(MSMTwistSameInitalPoints)
+        C                       :ASSERT
+        B => A                  
+        D                       :ASSERT
+
+        ; p2.y == -p1.y
+        ; MSMTwistBN254_p12_empty = 1: no add p12 because it was origin point p = O + p = p
+        1n            :MSTORE(MSMTwistBN254_p12_empty),JMP(MSMTwistBN254_loop)
+
+MSMTwistSameInitalPoints:
+        ; p2 == p1
+        0n                        :MSTORE(MSMTwistBN254_p12_empty)
+        $ => A                    :MLOAD(MSMTwistBN254_p1_x)
+        ${xDblPointEc(A,B)} => E  :MSTORE(MSMTwistBN254_p12_x)
+        ${yDblPointEc(A,B)}       :ARITH_ECADD_SAME, MSTORE(MSMTwistBN254_p12_y),JMP(MSMTwistBN254_loop)
+
+MSMTwistDiffInitalPoints:
+        ; p2.x != p1.x ==> p2 != p1
+        0n                            :MSTORE(MSMTwistBN254_p12_empty)
+        ${xAddPointEc(A,B,C,D)} => E  :MSTORE(MSMTwistBN254_p12_x)
+        ${yAddPointEc(A,B,C,D)}       :ARITH_ECADD_DIFFERENT, MSTORE(MSMTwistBN254_p12_y)
+
+
+; Goes forward in different branches of code depending on the values of the
+; most significant bits of k1 and k2.
+; First branch was determined by k1 most significant bit.
+
+;
+; Most Significant bit was calculated ki + ki,
+;
+;    A b255 b254 b253 ... b1   b0
+;    A b255 b254 b253 ... b1   b0
+;   ---------------------------
+;    E b254 b253 b252 ... b0    0
+;
+;   if b255 == 1 then carry = 1
+;   if b255 == 0 then carry = 0
+;
+;   E = A << 1  (equivalent A + A)
+;
+;   store E to be used in next round
+;
+
+MSMTwistBN254_loop:
+        $ => A,B  :MLOAD(MSMTwistBN254_k1)
+        ; E = A*2 [carry] => bit 255 = 1
+        $ => E    :ADD,MSTORE(MSMTwistBN254_k1),JMPC(MSMTwistBN254_k11)
+
+; high_bit(k1) == 0 high_bit(k2) == ??
+MSMTwistBN254_k10:
+        ; store E on multipointEc_k1, E was A*2 equivalent SHL and 255 bit on carry.
+        $ => A,B  :MLOAD(MSMTwistBN254_k2)
+        ; E = A*2 [carry] => bit 255 = 1
+        $ => E    :ADD,MSTORE(MSMTwistBN254_k2),JMPC(MSMTwistBN254_k10_k21)
+
+; high_bit(k1) == 0 high_bit(k2) == 0
+MSMTwistBN254_k10_k20:
+        $ => A  :MLOAD(MSMTwistBN254_p3_x)
+        $ => B  :MLOAD(MSMTwistBN254_p3_y), JMP(MSMTwistBN254_square)
+
+; high_bit(k1) == 1 high_bit(k2) == ??
+MSMTwistBN254_k11:
+        $ => A,B  :MLOAD(MSMTwistBN254_k2)
+        $ => E    :ADD,MSTORE(MSMTwistBN254_k2),JMPC(MSMTwistBN254_k11_k21)
+
+; high_bit(k1) == 1 high_bit(k2) == 0
+MSMTwistBN254_k11_k20:
+        $ => C  :MLOAD(MSMTwistBN254_p1_x)
+        $ => D  :MLOAD(MSMTwistBN254_p1_y), JMP(MSMTwistBN254_p2_loaded)
+
+; high_bit(k1) == 1 high_bit(k2) == 1
+MSMTwistBN254_k11_k21:
+        ; if (MSMTwistBN254_p12_empty) k11_k21 same as k10_k20
+        $       :MLOAD(MSMTwistBN254_p12_empty),JMPNZ(MSMTwistBN254_k10_k20)
+
+        $ => C  :MLOAD(MSMTwistBN254_p12_x)
+        $ => D  :MLOAD(MSMTwistBN254_p12_y), JMP(MSMTwistBN254_p2_loaded)
+
+; high_bit(k1) == 0 high_bit(k2) == 1
+MSMTwistBN254_k10_k21:
+        $ => C  :MLOAD(MSMTwistBN254_p2_x)
+        $ => D  :MLOAD(MSMTwistBN254_p2_y), JMP(MSMTwistBN254_p2_loaded)
+
+; in this point C,D have point to be add
+MSMTwistBN254_p2_loaded:
+
+        ; check if p3 has a value, isn't point at infinity (Origin point)
+        HASHPOS   :JMPZ(MSMTwistBN254_p3_assignment)
+
+        ; check C == p3.x
+        C => A  ; point_x
+        $ => B  :MLOAD(MSMTwistBN254_p3_x)
+        $        :EQ,JMPC(MSMTwistBN254_x_equals_before_add)
+
+        ; p3 = (A,B)
+        $ => A  :MLOAD(MSMTwistBN254_p3_x)
+        $ => B  :MLOAD(MSMTwistBN254_p3_y)
+
+        ; p3 = p3 + (C,D)
+        ${xAddPointEc(A,B,C,D)} => E :MSTORE(MSMTwistBN254_p3_x)
+        ${yAddPointEc(A,B,C,D)} => B :ARITH_ECADD_DIFFERENT, MSTORE(MSMTwistBN254_p3_y)
+
+MSMTwistBN254_after_add:
+
+        E => A  :JMP(MSMTwistBN254_square)
+
+MSMTwistBN254_p3_assignment:
+
+        ; p3 = (C,D)
+        1 => HASHPOS    ; flag, MSMTwistBN254_p3 has a value, no-empty
+        C => A   :MSTORE(MSMTwistBN254_p3_x)
+        D => B   :MSTORE(MSMTwistBN254_p3_y)
+
+MSMTwistBN254_square:
+
+        ; E,A = p3_x  B = p3_y
+        RCX - 1 => RCX    :JMPZ(MSMTwistBN254_end_loop)
+
+        ; if p3 was empty, no square, because O = O + O
+        HASHPOS           :JMPZ(MSMTwistBN254_loop)
+
+        $ => A  :MLOAD(MSMTwistBN254_p3_x)
+        $ => B  :MLOAD(MSMTwistBN254_p3_y)
+
+        ${xDblPointEc(A,B)} => E  :MSTORE(MSMTwistBN254_p3_x)
+        ${yDblPointEc(A,B)} :ARITH_ECADD_SAME, MSTORE(MSMTwistBN254_p3_y), JMP(MSMTwistBN254_loop)
+
+MSMTwistBN254_x_equals_before_add:
+        ; points to add: point1 (p3) + point2 (C,D)
+
+        ; A,C: point2.x
+        ; B: point1.x (p3.x)
+        ; D: point2.y
+
+        ; p3_x == C, check if points are same or a point was oposite point
+
+        D => A ; D contains y of point to add (depends of bits k1,k2)
+        $ => B :MLOAD(MSMTwistBN254_p3_y) ; point1.y
+        $      :EQ,JMPC(MSMTwistBN254_same_point_to_add)
+
+        ; C: point2.x
+        ; B: point1.y (p3.y)
+        ; A,D: point2.y
+
+        ; x1 = x2 and y1 != y2
+        ; ASSUME y1 = -y2
+        ; same instruction put HASHPOS and MSMTwistBN254_p3_x to 0.
+
+        ; check [A (BN254_P_MINUS_ONE) >= B point1.y (MSMTwistBN254_p3_y)] => LT == 0
+        %BN254_P_MINUS_ONE => A
+        0           :LT
+
+        ; check [A (BN254_P_MINUS_ONE) >= B point2.y (D)] => LT == 0
+        D => B
+        0           :LT
+
+        ; HASHPOS flag = 0, MSMTwistBN254_p3 was empty, need addition must be an assignation
+        0n => HASHPOS   :MSTORE(MSMTwistBN254_p3_x)
+        0n              :MSTORE(MSMTwistBN254_p3_y), JMP(MSMTwistBN254_square)
+
+MSMTwistBN254_same_point_to_add:
+        C => A
+        D => B
+
+        ${xDblPointEc(A,B)} => E  :MSTORE(MSMTwistBN254_p3_x)
+        ${yDblPointEc(A,B)} => B  :ARITH_ECADD_SAME, MSTORE(MSMTwistBN254_p3_y), JMP(MSMTwistBN254_after_add)
+
+MSMTwistBN254_end_loop:
+
+        $ => RR         :MLOAD(MSMTwistBN254_RR)
+        $ => HASHPOS    :MLOAD(MSMTwistBN254_HASHPOS), RETURN

@@ -9,11 +9,17 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 VAR GLOBAL pairing_Px
+VAR GLOBAL pairing_Px3 
 VAR GLOBAL pairing_Py
 VAR GLOBAL pairing_Qx1
 VAR GLOBAL pairing_Qx2
 VAR GLOBAL pairing_Qy1
 VAR GLOBAL pairing_Qy2
+
+VAR GLOBAL psi_x1
+VAR GLOBAL psi_x2
+VAR GLOBAL psi_y1
+VAR GLOBAL psi_y2 
 
 INCLUDE "constants.zkasm"
 
@@ -28,20 +34,53 @@ INCLUDE "constants.zkasm"
 ; 6 - not exists sqrt of y
 ; 100 - fail sqrt, but has solution (!!!)
 
+pairing:
+                :JMP(pairing_subgroup_checks)
+
+; TODO: I think I check that Px,Py,Qx1,Qx2,Qy1,Qy2 are field elements before anything else, otherwise do the modulo 
 pairing_subgroup_checks:
     ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
+    ; 1] Compute LHS and RHS
     $ => A,B    :MLOAD(pairing_Px),CALL(mulFpBN254); C = (Px)²
     C => A                                         ; A = (Px)²
     $ => B      :MLOAD(pairing_Px),CALL(mulFpBN254); C = (Px)³
 
-    3n => A     :CALL(addFpEc)                     ; C = (Px)³ + 3
-    C => D                                         ; D = (Px)³ + 3
+    3n => A     :CALL(addFpBN254)                  ; C = (Px)³ + 3
+    C           :MSTORE(pairing_Px3)               ; pairing_Px3 = (Px)³ + 3
 
     $ => A,B    :MLOAD(pairing_Py),CALL(mulFpBN254); C = (Py)²
 
-    D => A
-    C => B
+    ; 2] Check if LHS == RHS
+    C => A
+    $ => B      :MLOAD(pairing_Px3) 
     $           :EQ,JMPNC(pairing_P_is_not_in_G1)
+
+    ; Q in G2 iff psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
+    ; 1] Compute psi(Q)                   
+    %BN254_P => A
+    $ => B      :MLOAD(pairing_Qx2)             
+    $ => D      :SUB                                ; D = -Qx2
+    %FROBENIUS_GAMMA121 => A
+    %FROBENIUS_GAMMA122 => B
+    $ => C      :MLOAD(pairing_Qx1),CALL(mulFp2BN254)
+    E           :MSTORE(psi_x1)
+    C           :MSTORE(psi_x2)
+
+    %BN254_P => A
+    $ => B      :MLOAD(pairing_Qy2)             
+    $ => D      :SUB                                ; D = -Qx2
+    %FROBENIUS_GAMMA131 => A
+    %FROBENIUS_GAMMA132 => B
+    $ => C      :MLOAD(pairing_Qy1),CALL(mulFp2BN254)
+    E           :MSTORE(psi_y1)
+    C           :MSTORE(psi_y2)
+    ; ${dump(mem.psi_x1, mem.psi_x2)}
+    ; ${dump(mem.psi_y1, mem.psi_y2)}
+    ; ${dump(2n == 2n && 1n == 1n)}
+    ; 2] Compute [6x²]Q
+
+
+    ; 3] Check if psi(Q) == [6x²]Q
 
 
 ; ERRORS
@@ -52,8 +91,10 @@ pairing_error:
         0 => A
 
 pairing_end:
-        $ => RR     :MLOAD(ecrecover_RR)
+        ; $ => RR     :MLOAD(ecrecover_RR)
         :RETURN
 
 INCLUDE "addFpBN254.zkasm"
 INCLUDE "mulFpBN254.zkasm"
+INCLUDE "mulFp2BN254.zkasm"
+; INCLUDE "MSMTwistBN254.zkasm"
