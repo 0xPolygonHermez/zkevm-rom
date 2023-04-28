@@ -1,9 +1,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; addPointBN254:
-;;         (addPointBN254_p1_x1 + addPointBN254_p1_x2 · u, addPointBN254_p1_y1 + addPointBN254_p1_y2 · u) + 
-;;         (addPointBN254_p2_x1 + addPointBN254_p2_x2 · u, addPointBN254_p2_y1 + addPointBN254_p2_y2 · u) =
-;;         (addPointBN254_p3_x1 + addPointBN254_p3_x2 · u, addPointBN254_p3_y1 + addPointBN254_p3_y2 · u)
+;;         (addPointBN254_p1_x1 + addPointBN254_p1_x2·u, addPointBN254_p1_y1 + addPointBN254_p1_y2·u) + 
+;;         (addPointBN254_p2_x1 + addPointBN254_p2_x2·u, addPointBN254_p2_y1 + addPointBN254_p2_y2·u) =
+;;         (addPointBN254_p3_x1 + addPointBN254_p3_x2·u, addPointBN254_p3_y1 + addPointBN254_p3_y2·u)
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -23,32 +23,36 @@ VAR GLOBAL addPointBN254_p3_x1
 VAR GLOBAL addPointBN254_p3_x2
 VAR GLOBAL addPointBN254_p3_y1
 VAR GLOBAL addPointBN254_p3_y2
-VAR GLOBAL addPointBN254_lambda
+VAR GLOBAL addPointBN254_lambda_x
+VAR GLOBAL addPointBN254_lambda_y
 VAR GLOBAL addPointBN254_RR
 
 addPointBN254:
-        RR      :MSTORE(MSMTwistBN254_RR)
+        RR      :MSTORE(addPointBN254_RR)
 
-        0n      :MSTORE(addPointBN254_p3_x1)
-        0n      :MSTORE(addPointBN254_p3_x2)
-        0n      :MSTORE(addPointBN254_p3_y1)
-        0n      :MSTORE(addPointBN254_p3_y2)
+        ; Check if p1 = 0
+        ${Fp2BN254neq0(mem.addPointBN254_p1_x1) || Fp2BN254neq0(mem.addPointBN254_p1_x2) || Fp2BN254neq0(mem.addPointBN254_p1_y1) || Fp2BN254neq0(mem.addPointBN254_p1_y2)}   :JMPZ(addPointBN254_p1_is_zero)
+        
+        ; Check if p2 = 0
+        ${Fp2BN254neq0(mem.addPointBN254_p2_x1) || Fp2BN254neq0(mem.addPointBN254_p2_x2) || Fp2BN254neq0(mem.addPointBN254_p2_y1) || Fp2BN254neq0(mem.addPointBN254_p2_y2)}   :JMPZ(addPointBN254_p2_is_zero)
 
-        $ => A  :MLOAD(MSMTwistBN254_p1_x1)
-        $ => B  :MLOAD(MSMTwistBN254_p1_x2)
-        $ => C  :MLOAD(MSMTwistBN254_p2_x1)
-        $ => D  :MLOAD(MSMTwistBN254_p2_x2)
+        ; p1 and p2 are not 0, let's check whether they are different points, the same point or inverses of each other
+        $ => A  :MLOAD(addPointBN254_p1_x1)
+        $ => B  :MLOAD(addPointBN254_p1_x2)
+        $ => C  :MLOAD(addPointBN254_p2_x1)
+        $ => D  :MLOAD(addPointBN254_p2_x2)
 
+        ; TODO: I have to do it modulo p
         ; check p1.x == p2.x
         ${(A == C) && (B == D)}     :JMPZ(addPointBN254_different)
         C                           :ASSERT
         B => A                  
         D                           :ASSERT
 
-        $ => A  :MLOAD(MSMTwistBN254_p1_y1)
-        $ => B  :MLOAD(MSMTwistBN254_p1_y2)
-        $ => C  :MLOAD(MSMTwistBN254_p2_y1)
-        $ => D  :MLOAD(MSMTwistBN254_p2_y2)
+        $ => A  :MLOAD(addPointBN254_p1_y1)
+        $ => B  :MLOAD(addPointBN254_p1_y2)
+        $ => C  :MLOAD(addPointBN254_p2_y1)
+        $ => D  :MLOAD(addPointBN254_p2_y2)
 
         ; check p1.y == p2.y
         ${(A == C) && (B == D)}     :JMPZ(addPointBN254_end)
@@ -59,185 +63,214 @@ addPointBN254:
         ; p1 == p2
                                     :JMP(addPointBN254_same)
 
-addPointBN254_same:        
-        RR      :MSTORE(addPointBN254_RR)
-
-        ; (p1.y1 + p1.y2·u) + (p1.y1 + p1.y2·u)
+addPointBN254_p1_is_zero:
+        ; TODO: Check if this is correct
+        ; Check that p1 is zero
+        $ => A  :MLOAD(addPointBN254_p1_x1)
+        0: ARITH
+        $ => A  :MLOAD(addPointBN254_p1_x2)
+        0: ARITH
 
         $ => A  :MLOAD(addPointBN254_p1_y1)
-        $ => C  :MLOAD(addPointBN254_p1_y1)
-                :CALL(addFpEc)
-        C       :MSTORE(addPointBN254_p1_y1_double)
-
+        0: ARITH
         $ => A  :MLOAD(addPointBN254_p1_y2)
-        $ => C  :MLOAD(addPointBN254_p1_y2)
-                :CALL(addFpEc)
-        C       :MSTORE(addPointBN254_p1_y2_double)
-
-        C => A
-        :CALL(invFpEc)
-
-        ; inv(lambda) * 3
-        3 => A 
-        :CALL(mulFpEc)
-
-        ; inv (lambda) * 3 * p1_x
-        C => A
-        $ => B   :MLOAD(addPointBN254_p1_x)
-        :CALL(mulFpEc)
-
-        ; inv(lambda) * 3 * p1_x * p1_x
-        C => A
-        $ => B   :MLOAD(addPointBN254_p1_x)
-        :CALL(mulFpEc)
-
-        ; C = inv(lamda) * 3 * p1_x * p1_x 
-        C       :MSTORE(addPointBN254_lambda)
-
-        C => A, B
-        :CALL(mulFpEc)
-
-        ; C = lambda ** 2
-
-        C => E
-        $ => C      :MLOAD(addPointBN254_p1_x)
-        :CALL(subFpEc)
-
-        ; A = lambda ** 2 - p1_x
-
-        A => E
-        $ => C      :MLOAD(addPointBN254_p1_x)
-        :CALL(subFpEc)
-
-        ; A = lambda ** 2 - p1_x - p1_x
-
-        :JMP(addPointBN254_common_calculate)  
-
-addPointBN254_different:        
-        RR      :MSTORE(addPointBN254_RR)
-        
-        1 => B
-        0 => C,D
-
-        ${cond(mem.addPointBN254_p1_x || mem.addPointBN254_p1_y)}   :JMPC(addPointBN254_p1_not_zero)
-
-addPointBN254_p1_is_zero:        
-        
-        $ => A :MLOAD(addPointBN254_p1_x)
         0: ARITH
 
-        $ => A :MLOAD(addPointBN254_p1_y)
-        0: ARITH
+        ; p3 = p2
+        $ => B  :MLOAD(addPointBN254_p2_x1)
+        $ => C  :MLOAD(addPointBN254_p2_x2)
+        B       :MSTORE(addPointBN254_p3_x1)
+        C       :MSTORE(addPointBN254_p3_x2)
 
-        $ => B :MLOAD(addPointBN254_p2_x)
-        B      :MSTORE(addPointBN254_p3_x)
+        $ => B  :MLOAD(addPointBN254_p2_y1)
+        $ => C  :MLOAD(addPointBN254_p2_y2)
+        B       :MSTORE(addPointBN254_p3_y1)
+        C       :MSTORE(addPointBN254_p3_y2)
 
-        $ => B :MLOAD(addPointBN254_p2_y)
-        B      :MSTORE(addPointBN254_p3_y)
-
-        :JMP(addPointBN254_end)
-
-addPointBN254_p1_not_zero:        
-
-        ${cond(mem.addPointBN254_p2_x || mem.addPointBN254_p2_y)}   :JMPC(addPointBN254_p2_not_zero)
+                :JMP(addPointBN254_end)
 
 addPointBN254_p2_is_zero:
 
-        $ => A :MLOAD(addPointBN254_p2_x)
+        ; Check that p2 is zero
+        $ => A  :MLOAD(addPointBN254_p2_x1)
+        0: ARITH
+        $ => A  :MLOAD(addPointBN254_p2_x2)
         0: ARITH
 
-        $ => A :MLOAD(addPointBN254_p2_y)
+        $ => A  :MLOAD(addPointBN254_p2_y1)
+        0: ARITH
+        $ => A  :MLOAD(addPointBN254_p2_y2)
         0: ARITH
 
-        $ => B :MLOAD(addPointBN254_p1_x)
-        B      :MSTORE(addPointBN254_p3_x)
+        ; p3 = p1
+        $ => B  :MLOAD(addPointBN254_p1_x1)
+        $ => C  :MLOAD(addPointBN254_p1_x2)
+        B       :MSTORE(addPointBN254_p3_x1)
+        C       :MSTORE(addPointBN254_p3_x2)
 
-        $ => B :MLOAD(addPointBN254_p1_y)
-        B      :MSTORE(addPointBN254_p3_y)
+        $ => B  :MLOAD(addPointBN254_p1_y1)
+        $ => C  :MLOAD(addPointBN254_p1_y2)
+        B       :MSTORE(addPointBN254_p3_y1)
+        C       :MSTORE(addPointBN254_p3_y2)
 
-        :JMP(addPointBN254_end)
+                :JMP(addPointBN254_end)    
 
-addPointBN254_p2_not_zero:
-        ${cond((mem.addPointBN254_p1_x != mem.addPointBN254_p2_x) || (mem.addPointBN254_p1_y != mem.addPointBN254_p2_y))}   :JMPC(addPointBN254_points_not_equals)      
+; TODO: Do it with Fp2 arithmetic
+addPointBN254_same:        
+        RR      :MSTORE(addPointBN254_RR)
 
-addPointBN254_points_not_equals:
+        ; E + C·u = 2y
+        $ => A  :MLOAD(addPointBN254_p1_y1)
+        $ => B  :MLOAD(addPointBN254_p1_y2)
+        $ => C  :MLOAD(addPointBN254_p1_y1)
+        $ => D  :MLOAD(addPointBN254_p1_y2)
+                :CALL(addFp2BN254)
 
-        ;;;;;;;;;;;
-        ;; TODO compare to verify that points are really differents
-        ;;;;;;;;
+        ; C + D·u = 1 / 2y
+        E => A
+        C => B
+                :CALL(invFp2BN254)
 
-        ; p2.x - p1.x
+        ; E + C·u = 3/2y
+        3n => A 
+        0n => B
+                :CALL(mulFp2BN254)
 
-        $ => E  :MLOAD(addPointBN254_p2_x)
-        $ => C  :MLOAD(addPointBN254_p1_x)
-        :CALL(subFpEc)
+        ; E + C·u = 3x/2y
+        $ => A  :MLOAD(addPointBN254_p1_x1)
+        $ => B  :MLOAD(addPointBN254_p1_x2)
+        C => D
+        E => C
+                :CALL(mulFp2BN254)
 
-        :CALL(invFpEc)
+        ; E + C·u = lambda = 3x²/2y
+        $ => A  :MLOAD(addPointBN254_p1_x1)
+        $ => B  :MLOAD(addPointBN254_p1_x2)
+        C => D
+        E => C
+                :CALL(mulFp2BN254)
+
+        ; E + C·u = lambda
+        E       :MSTORE(addPointBN254_lambda_x)
+        C       :MSTORE(addPointBN254_lambda_y)
+
+        ; E + C·u = lambda²
+        E => A
+        C => B,D
+        E => C
+                :CALL(mulFp2BN254)
+
+        ; E + C·u = lambda² - x
+        E => A  
+        C => B  
+        $ => C  :MLOAD(addPointBN254_p1_x1)
+        $ => D  :MLOAD(addPointBN254_p1_x2)
+                :CALL(subFp2BN254)
+
+        ; E + C·u = lambda² - x - x
+        E => A  
+        C => B  
+        $ => C  :MLOAD(addPointBN254_p1_x1)
+        $ => D  :MLOAD(addPointBN254_p1_x2)
+                :CALL(subFp2BN254)
+
+                :JMP(addPointBN254_common_calculate)
+
+addPointBN254_different:
+        ; E + C·u = p2.x - p1.x
+        $ => A  :MLOAD(addPointBN254_p2_x1)
+        $ => B  :MLOAD(addPointBN254_p2_x2)
+        $ => C  :MLOAD(addPointBN254_p1_x1)
+        $ => D  :MLOAD(addPointBN254_p1_x2)
+                :CALL(subFp2BN254)
+        ; ${dump(mem.addPointBN254_p2_x1,mem.addPointBN254_p2_x2,mem.addPointBN254_p1_x1,mem.addPointBN254_p1_x2)}
+        ; ${dump(E,C)}
+
+        ; C + D·u = 1 / (p2_x - p1_x)
+        E => A
+        C => B
+                :CALL(invFp2BN254)
         
-        ; B = inv(p2_x - p1_x)
 
-        B       :MSTORE(addPointBN254_lambda)
+        C       :MSTORE(addPointBN254_lambda_x)
+        D       :MSTORE(addPointBN254_lambda_y)
 
-        $ => E  :MLOAD(addPointBN254_p2_y)
-        $ => C  :MLOAD(addPointBN254_p1_y)
-        :CALL(subFpEc)
+        ; E + C·u = p2.y - p1.y
+        $ => A  :MLOAD(addPointBN254_p2_y1)
+        $ => B  :MLOAD(addPointBN254_p2_y2)
+        $ => C  :MLOAD(addPointBN254_p1_y1)
+        $ => D  :MLOAD(addPointBN254_p1_y2)
+                :CALL(subFp2BN254)
 
-        ; A = p2_y - p1_y
 
-        $ => B  :MLOAD(addPointBN254_lambda)
-        :CALL(mulFpEc)
+        ; E + C·u = lambda = (p2_y - p1_y) / (p2_x - p1_x)
+        $ => A  :MLOAD(addPointBN254_lambda_x)
+        $ => B  :MLOAD(addPointBN254_lambda_y)
+        C => D
+        E => C
+                :CALL(mulFp2BN254)
 
-        ; C = lambda * (p2_y - p1_y)
+        E       :MSTORE(addPointBN254_lambda_x)
+        C       :MSTORE(addPointBN254_lambda_y)
 
-        C       :MSTORE(addPointBN254_lambda)
+        ; E + C·u = lambda² 
+        $ => A  :MLOAD(addPointBN254_lambda_x)
+        $ => B  :MLOAD(addPointBN254_lambda_y)
+        $ => C  :MLOAD(addPointBN254_lambda_x)
+        $ => D  :MLOAD(addPointBN254_lambda_y)
+                :CALL(mulFp2BN254)
 
-addPointBN254_p3_calculate:
-                
-        C => A, B
-        :CALL(mulFpEc)
+        ; E + C·u = lambda² - p1.x
+        E => A
+        C => B
+        $ => C  :MLOAD(addPointBN254_p1_x1)
+        $ => D  :MLOAD(addPointBN254_p1_x2)
+                :CALL(subFp2BN254)
 
-        ; C = lambda ** 2
-
-        C => E
-        $ => C      :MLOAD(addPointBN254_p1_x)
-        :CALL(subFpEc)
-
-        ; A = lambda ** 2 - p1_x
-
-        A => E
-        $ => C      :MLOAD(addPointBN254_p2_x)
-        :CALL(subFpEc)
-
-        ; A = lambda ** 2 - p1_x - p2_x
+        ; E + C·u = lambda² - p1.x - p2.x
+        E => A
+        C => B
+        $ => C  :MLOAD(addPointBN254_p2_x1)
+        $ => D  :MLOAD(addPointBN254_p2_x2)
+                :CALL(subFp2BN254)
 
 addPointBN254_common_calculate:
 
-        A           :MSTORE(addPointBN254_p3_x)
+        ; p3.x = lambda² - p1.x - p2.x
+        E           :MSTORE(addPointBN254_p3_x1)
+        C           :MSTORE(addPointBN254_p3_x2)       
 
-        ; p3_x = lambda ** 2 - (p1_x + p2_x)        
+        ; E + C·u = p1.x - p3.x 
+        $ => A  :MLOAD(addPointBN254_p1_x1)
+        $ => B  :MLOAD(addPointBN254_p1_x2)
+        C => D
+        E => C
+                :CALL(subFp2BN254)
 
-        $ => E      :MLOAD(addPointBN254_p1_x)
-        A => C
-        :CALL(subFpEc)
+        ; E + C·u = lambda·(p1.x - p3.x) 
+        $ => A  :MLOAD(addPointBN254_lambda_x)
+        $ => B  :MLOAD(addPointBN254_lambda_y)
+        C => D
+        E => C
+                :CALL(mulFp2BN254)
 
-        ; A = p1_x - p3_x
+        ; E + C·u = lambda·(p1.x - p3.x) - p1.y
+        E => A  
+        C => B  
+        $ => C  :MLOAD(addPointBN254_p1_y1)
+        $ => D  :MLOAD(addPointBN254_p1_y2)
+                :CALL(subFp2BN254)
 
-        $ => B      :MLOAD(addPointBN254_lambda)
-        :CALL(mulFpEc)
-
-        ; C = lambda * (p1_x - p3_x)
-
-        C => E
-        $ => C      :MLOAD(addPointBN254_p1_y)
-        :CALL(subFpEc)
-
-        ; A = lambda * (p1_x - p3_x ) - p1_y
-
-        A           :MSTORE(addPointBN254_p3_y)
-
-        ; p3_X = lambda * (p1_x - p3_x ) - p1_y
+        E           :MSTORE(addPointBN254_p3_y1)
+        C           :MSTORE(addPointBN254_p3_y2)
 
 addPointBN254_end:
 
         $ => RR     :MLOAD(addPointBN254_RR)
         :RETURN
+
+INCLUDE "../addFpBN254.zkasm"
+INCLUDE "../FP2BN254/addFp2BN254.zkasm"
+INCLUDE "../FP2BN254/subFp2BN254.zkasm"
+INCLUDE "../FP2BN254/mulFp2BN254.zkasm"
+INCLUDE "../FP2BN254/invFp2BN254.zkasm"

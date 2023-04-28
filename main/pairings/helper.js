@@ -4,14 +4,10 @@
 // const FrBN254 = new F1Field(21888242871839275222246405745257275088548364400416034343698204186575808495617n);
 
 module.exports = class myHelper {
-    setup (props) {
+    setup(props) {
         for(const name in props) {
             this[name] = props[name];
         }
-    }
-    eval_helloHector(ctx, tag) {
-        console.log('hello, Hector !!');
-        return 0n;
     }
     eval_hello(ctx, tag) {
         const p1 = this.evalCommand(ctx, tag.params[0]);
@@ -19,6 +15,7 @@ module.exports = class myHelper {
         // return p1 + 10n * p2;
         return [p1 + 10n*p2, 2n**32n, 0n, 0n, 0n, 0n, 0n, 0n];
     }
+
     eval_helloFe(ctx, tag) {
         const p1 = this.evalCommand(ctx, tag.params[0]);
         const p2 = this.evalCommand(ctx, tag.params[1]);
@@ -45,6 +42,36 @@ module.exports = class myHelper {
             console.log(`${param.regName}: [${ctx[param.regName].map(x => "0x"+x.toString(16).padStart(16, '0')).join(',')}]`);
         }
         return 0n;
+    }
+
+    eval_Fp2BN254eq(ctx, tag) {
+        const ctxFullFe = { ...ctx, fullFe: true };
+        let a = this.evalCommand(ctxFullFe, tag.params[0]);
+        let b = this.evalCommand(ctxFullFe, tag.params[1]);
+        a = ctx.FpBN254.normalize(a, ctx.FpBN254.p);
+        b = ctx.FpBN254.normalize(b, ctx.FpBN254.p);
+
+        return ctx.FpBN254.eq(a, b);
+    }
+
+    eval_Fp2BN254eq0(ctx, tag) {
+        const ctxFullFe = { ...ctx, fullFe: true };
+        let a = this.evalCommand(ctxFullFe, tag.params[0]);
+        a = ctx.FpBN254.normalize(a,ctx.FpBN254.p);
+
+        return ctx.FpBN254.isZero(a);
+    }
+
+    eval_Fp2BN254neq0(ctx, tag) {
+        return !this.eval_Fp2BN254eq0(ctx, tag);
+    }
+
+    eval_fp2BN254sub(ctx, tag) {
+        const ctxFullFe = { ...ctx, fullFe: true };
+        const a = this.evalCommand(ctxFullFe, tag.params[0]);
+        const b = this.evalCommand(ctxFullFe, tag.params[1]);
+
+        return ctx.FpBN254.sub(a, b);
     }
 
     eval_fp2InvBN254_x(ctx, tag) {
