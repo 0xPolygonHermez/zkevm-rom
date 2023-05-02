@@ -16,6 +16,8 @@ VAR GLOBAL pairing_Q_x2
 VAR GLOBAL pairing_Q_y1
 VAR GLOBAL pairing_Q_y2
 
+VAR GLOBAL pairing_RR
+
 VAR GLOBAL psi_x1
 VAR GLOBAL psi_x2
 VAR GLOBAL psi_y1
@@ -35,6 +37,7 @@ INCLUDE "constants.zkasm"
 ; 100 - fail sqrt, but has solution (!!!)
 
 pairing:
+    RR          :MSTORE(pairing_RR)
                 :JMP(pairing_subgroup_checks)
 
 ; TODO: I think I check that Px,Py,Qx1,Qx2,Qy1,Qy2 are field elements before anything else, otherwise do the modulo 
@@ -74,37 +77,35 @@ pairing_subgroup_checks:
     $ => C      :MLOAD(pairing_Q_y1),CALL(mulFp2BN254)
     E           :MSTORE(psi_y1)
     C           :MSTORE(psi_y2)
-    ${dump(mem.psi_x1, mem.psi_x2)}
-    ${dump(mem.psi_y1, mem.psi_y2)}
     ; ${dump(2n == 2n && 1n == 1n)}
     ; 2] Compute [6x²]Q
     $ => A      :MLOAD(pairing_Q_x1)
     $ => B      :MLOAD(pairing_Q_x2)
     $ => C      :MLOAD(pairing_Q_y1)
     $ => D      :MLOAD(pairing_Q_y2)
-    A           :MSTORE(escalarMulBN254_p_x1)
-    B           :MSTORE(escalarMulBN254_p_x2)
-    C           :MSTORE(escalarMulBN254_p_y1)
-    D           :MSTORE(escalarMulBN254_p_y2)
+    A           :MSTORE(escalarMulBN254_P_x1)
+    B           :MSTORE(escalarMulBN254_P_x2)
+    C           :MSTORE(escalarMulBN254_P_y1)
+    D           :MSTORE(escalarMulBN254_P_y2)
     147946756881789318990833708069417712966n :MSTORE(escalarMulBN254_k) ; 6x²
                 :CALL(escalarMulBN254)
 
 
     ; 3] Check if psi(Q) == [6x²]Q
     $ => A      :MLOAD(psi_x1)
-    $ => B      :MLOAD(escalarMulBN254_q_x1)
+    $ => B      :MLOAD(escalarMulBN254_Q_x1)
     $           :EQ,JMPNC(pairing_Q_is_not_in_G2)
 
     $ => A      :MLOAD(psi_x2)
-    $ => B      :MLOAD(escalarMulBN254_q_x2)
+    $ => B      :MLOAD(escalarMulBN254_Q_x2)
     $           :EQ,JMPNC(pairing_Q_is_not_in_G2)
 
     $ => A      :MLOAD(psi_y1)
-    $ => B      :MLOAD(escalarMulBN254_q_y1)
+    $ => B      :MLOAD(escalarMulBN254_Q_y1)
     $           :EQ,JMPNC(pairing_Q_is_not_in_G2)
 
     $ => A      :MLOAD(psi_y2)
-    $ => B      :MLOAD(escalarMulBN254_q_y2)
+    $ => B      :MLOAD(escalarMulBN254_Q_y2)
     $           :EQ,JMPNC(pairing_Q_is_not_in_G2)
 
     0 => B      :JMP(pairing_end)
@@ -121,7 +122,7 @@ pairing_error:
         0 => A
 
 pairing_end:
-        ; $ => RR     :MLOAD(ecrecover_RR)
+        $ => RR     :MLOAD(pairing_RR)
         ${dump(B)}
         :RETURN
 
