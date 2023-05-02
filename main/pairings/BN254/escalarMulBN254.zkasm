@@ -1,0 +1,156 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; escalarMulBN254:
+;;         [k]·(escalarMulBN254_p_x1 + escalarMulBN254_p_x2·u, escalarMulBN254_p_y1 + escalarMulBN254_p_y2·u) =
+;;             (escalarMulBN254_q_x1 + escalarMulBN254_q_x2·u, escalarMulBN254_q_y1 + escalarMulBN254_q_y2·u)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL escalarMulBN254_p_x1
+VAR GLOBAL escalarMulBN254_p_x2
+VAR GLOBAL escalarMulBN254_p_y1
+VAR GLOBAL escalarMulBN254_p_y2
+VAR GLOBAL escalarMulBN254_k
+VAR GLOBAL escalarMulBN254_q_x1
+VAR GLOBAL escalarMulBN254_q_x2
+VAR GLOBAL escalarMulBN254_q_y1
+VAR GLOBAL escalarMulBN254_q_y2
+VAR GLOBAL escalarMulBN254_RR
+
+; PRECONDITION: p1,p2 are points of curve
+; PRECONDITION: p1,p2 are alias-free
+
+; TODO: Should I handle what happens if k < 0??? Or I can assume that k is well-formed?
+; TODO: Think if I need to check at each step if the result is the point at infinity for efficiency
+
+escalarMulBN254:
+        RR      :MSTORE(escalarMulBN254_RR)
+
+        ; 257 => RCX; TODO: Check this number
+        ${log2(mem.escalarMulBN254_k)} => RCX
+
+        ; Check if p = 0
+        ${Fp2BN254neq0(mem.escalarMulBN254_p_x1) || Fp2BN254neq0(mem.escalarMulBN254_p_x2) || Fp2BN254neq0(mem.escalarMulBN254_p_y1) || Fp2BN254neq0(mem.escalarMulBN254_p_y2)}   :JMPZ(escalarMulBN254_p_is_zero)
+
+        ; Check if k = 0
+        ${Fp2BN254neq0(mem.escalarMulBN254_k)}   :JMPZ(escalarMulBN254_k_is_zero)
+
+        $ => A  :MLOAD(escalarMulBN254_p_x1)
+        $ => B  :MLOAD(escalarMulBN254_p_x2)
+        $ => C  :MLOAD(escalarMulBN254_p_y1)
+        $ => D  :MLOAD(escalarMulBN254_p_y2)
+        A       :MSTORE(escalarMulBN254_q_x1)
+        B       :MSTORE(escalarMulBN254_q_x2)
+        C       :MSTORE(escalarMulBN254_q_y1)
+        D       :MSTORE(escalarMulBN254_q_y2)
+
+                :JMP(escalarMulBN254_find_MSB_k)
+
+escalarMulBN254_p_is_zero:
+        ; TODO: Check if this is correct
+        ; Check that p is zero
+        $ => A  :MLOAD(escalarMulBN254_p_x1)
+        0       :ARITH
+        $ => A  :MLOAD(escalarMulBN254_p_x2)
+        0       :ARITH
+
+        $ => A  :MLOAD(escalarMulBN254_p_y1)
+        0       :ARITH
+        $ => A  :MLOAD(escalarMulBN254_p_y2)
+        0       :ARITH
+
+        0n      :MSTORE(escalarMulBN254_q_x1)
+        0n      :MSTORE(escalarMulBN254_q_x2)
+        0n      :MSTORE(escalarMulBN254_q_y1)
+        0n      :MSTORE(escalarMulBN254_q_y2)
+
+                :JMP(escalarMulBN254_end)
+
+escalarMulBN254_k_is_zero:
+        ; Check that k is zero
+        $ => A  :MLOAD(escalarMulBN254_k)
+        0: ARITH
+
+        0n      :MSTORE(escalarMulBN254_q_x1)
+        0n      :MSTORE(escalarMulBN254_q_x2)
+        0n      :MSTORE(escalarMulBN254_q_y1)
+        0n      :MSTORE(escalarMulBN254_q_y2)
+
+                :JMP(escalarMulBN254_end)
+
+; Assumes k is well-formed
+escalarMulBN254_find_MSB_k:
+        $ => A,B        :MLOAD(escalarMulBN254_k)
+        ; E = 2A
+        $ => E          :ADD,MSTORE(escalarMulBN254_k),JMPNC(escalarMulBN254_find_MSB_k)
+
+
+escalarMulBN254_loop:
+        RCX - 1 => RCX    :JMPZ(escalarMulBN254_end)
+
+        ; We always double: q = q + q
+        ; TODO: Can I write the following in a more compact way?
+        $ => A  :MLOAD(escalarMulBN254_q_x1)
+        $ => B  :MLOAD(escalarMulBN254_q_x2)
+        $ => C  :MLOAD(escalarMulBN254_q_y1)
+        $ => D  :MLOAD(escalarMulBN254_q_y2)
+        A       :MSTORE(addPointBN254_p1_x1)
+        B       :MSTORE(addPointBN254_p1_x2)
+        C       :MSTORE(addPointBN254_p1_y1)
+        D       :MSTORE(addPointBN254_p1_y2)
+        A       :MSTORE(addPointBN254_p2_x1)
+        B       :MSTORE(addPointBN254_p2_x2)
+        C       :MSTORE(addPointBN254_p2_y1)
+        D       :MSTORE(addPointBN254_p2_y2), CALL(addPointBN254)
+
+        ; q = q + q
+        $ => A  :MLOAD(addPointBN254_p3_x1)
+        $ => B  :MLOAD(addPointBN254_p3_x2)
+        $ => C  :MLOAD(addPointBN254_p3_y1)
+        $ => D  :MLOAD(addPointBN254_p3_y2)
+        A       :MSTORE(escalarMulBN254_q_x1)
+        B       :MSTORE(escalarMulBN254_q_x2)
+        C       :MSTORE(escalarMulBN254_q_y1)
+        D       :MSTORE(escalarMulBN254_q_y2)
+
+        ; 2] We check if the MSB b of k is either 1 or 0. If b==1, we should add p to q.
+        ;    Then, update the value of k.
+        $ => A,B        :MLOAD(escalarMulBN254_k)
+        ; E = 2A
+        $ => E          :ADD,MSTORE(escalarMulBN254_k),JMPNC(escalarMulBN254_loop)
+
+escalarMulBN254_add:
+        $ => A  :MLOAD(escalarMulBN254_q_x1)
+        $ => B  :MLOAD(escalarMulBN254_q_x2)
+        $ => C  :MLOAD(escalarMulBN254_q_y1)
+        $ => D  :MLOAD(escalarMulBN254_q_y2)
+        A       :MSTORE(addPointBN254_p1_x1)
+        B       :MSTORE(addPointBN254_p1_x2)
+        C       :MSTORE(addPointBN254_p1_y1)
+        D       :MSTORE(addPointBN254_p1_y2)
+
+        $ => A  :MLOAD(escalarMulBN254_p_x1)
+        $ => B  :MLOAD(escalarMulBN254_p_x2)
+        $ => C  :MLOAD(escalarMulBN254_p_y1)
+        $ => D  :MLOAD(escalarMulBN254_p_y2)
+        A       :MSTORE(addPointBN254_p2_x1)
+        B       :MSTORE(addPointBN254_p2_x2)
+        C       :MSTORE(addPointBN254_p2_y1)
+        D       :MSTORE(addPointBN254_p2_y2), CALL(addPointBN254)
+
+        ; q = q + p
+        $ => A  :MLOAD(addPointBN254_p3_x1)
+        $ => B  :MLOAD(addPointBN254_p3_x2)
+        $ => C  :MLOAD(addPointBN254_p3_y1)
+        $ => D  :MLOAD(addPointBN254_p3_y2)
+        A       :MSTORE(escalarMulBN254_q_x1)
+        B       :MSTORE(escalarMulBN254_q_x2)
+        C       :MSTORE(escalarMulBN254_q_y1)
+        D       :MSTORE(escalarMulBN254_q_y2), JMP(escalarMulBN254_loop)
+
+
+escalarMulBN254_end:
+
+        $ => RR :MLOAD(escalarMulBN254_RR)
+                :RETURN
+
+INCLUDE "addPointBN254.zkasm"
