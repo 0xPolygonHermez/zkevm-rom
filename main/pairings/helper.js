@@ -44,6 +44,32 @@ module.exports = class myHelper {
         return 0n;
     }
 
+    // export function log2(x: bigint): number {
+    //     if (x == 0n) return 0;
+    
+    //     let r = 1;
+    //     while (x > 1n) {
+    //         x = x >> 1n;
+    //         r += 1;
+    //     }
+    //     return r;
+    // }
+
+    eval_log2(ctx, tag) {
+        const ctxFullFe = { ...ctx, fullFe: true };
+        let a = this.evalCommand(ctxFullFe, tag.params[0]);
+
+        if (a === 0n) return 0;
+
+        let r = 1;
+        while (a > 1n) {
+            a >>= 1n;
+            r += 1;
+        }
+
+        return r;
+    }
+
     eval_Fp2BN254eq(ctx, tag) {
         const ctxFullFe = { ...ctx, fullFe: true };
         let a = this.evalCommand(ctxFullFe, tag.params[0]);
@@ -91,54 +117,4 @@ module.exports = class myHelper {
 
         return ctx.FpBN254.div(ctx.FpBN254.neg(b), den);
     }
-
-    // eval_xAddPointTwistBN254(ctx, tag) {
-    //     return eval_AddPointTwistBN254(ctx, tag, false)[0];
-    // }
-    
-    // eval_yAddPointTwistBN254(ctx, tag) {
-    //     return eval_AddPointTwistBN254(ctx, tag, false)[1];
-    // }
-    
-    // eval_xDblPointTwistBN254(ctx, tag) {
-    //     return eval_AddPointTwistBN254(ctx, tag, true)[0];
-    // }
-    
-    // eval_yDblPointTwistBN254(ctx, tag) {
-    //     return eval_AddPointTwistBN254(ctx, tag, true)[1];
-    // }
-    
-    // eval_AddPointTwistBN254(ctx, tag, dbl)
-    // {
-    //     const x11 = evalCommand(ctx, tag.params[0]);
-    //     const x12 = evalCommand(ctx, tag.params[1]);
-    //     const y11 = evalCommand(ctx, tag.params[2]);
-    //     const y12 = evalCommand(ctx, tag.params[3]);
-    //     const x21 = evalCommand(ctx, tag.params[dbl ? 0 : 4]);
-    //     const x22 = evalCommand(ctx, tag.params[dbl ? 1 : 5]);
-    //     const y21 = evalCommand(ctx, tag.params[dbl ? 2 : 6]);
-    //     const y22 = evalCommand(ctx, tag.params[dbl ? 3 : 7]);
-    
-    //     let s;
-    //     if (dbl) {
-    //         // Division by zero must be managed by ROM before call ARITH
-    //         const divisor = ctx.Fec.add(y1, y1)
-    //         if (ctx.Fec.isZero(divisor)) {
-    //             throw new Error(`Invalid AddPointTwistBN254 (divisionByZero) ${ctx.sourceRef}`);
-    //         }
-    //         s = ctx.Fec.div(ctx.Fec.mul(3n, ctx.Fec.mul(x1, x1)), divisor);
-    //     }
-    //     else {
-    //         const deltaX = ctx.Fec.sub(x2, x1)
-    //         if (ctx.Fec.isZero(deltaX)) {
-    //             throw new Error(`Invalid AddPointTwistBN254 (divisionByZero) ${ctx.sourceRef}`);
-    //         }
-    //         s = ctx.Fec.div(ctx.Fec.sub(y2, y1), deltaX );
-    //     }
-    
-    //     const x3 = ctx.Fec.sub(ctx.Fec.mul(s, s), ctx.Fec.add(x1, x2));
-    //     const y3 = ctx.Fec.sub(ctx.Fec.mul(s, ctx.Fec.sub(x1,x3)), y1);
-    
-    //     return [x3, y3];
-    // }
 }
