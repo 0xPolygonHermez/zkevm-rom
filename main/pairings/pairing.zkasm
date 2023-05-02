@@ -8,13 +8,13 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-VAR GLOBAL pairing_Px
-VAR GLOBAL pairing_Px3 
-VAR GLOBAL pairing_Py
-VAR GLOBAL pairing_Qx1
-VAR GLOBAL pairing_Qx2
-VAR GLOBAL pairing_Qy1
-VAR GLOBAL pairing_Qy2
+VAR GLOBAL pairing_P_x
+VAR GLOBAL pairing_P_x3 
+VAR GLOBAL pairing_P_y
+VAR GLOBAL pairing_Q_x1
+VAR GLOBAL pairing_Q_x2
+VAR GLOBAL pairing_Q_y1
+VAR GLOBAL pairing_Q_y2
 
 VAR GLOBAL psi_x1
 VAR GLOBAL psi_x2
@@ -41,60 +41,91 @@ pairing:
 pairing_subgroup_checks:
     ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
     ; 1] Compute LHS and RHS
-    $ => A,B    :MLOAD(pairing_Px),CALL(mulFpBN254); C = (Px)²
+    $ => A,B    :MLOAD(pairing_P_x),CALL(mulFpBN254); C = (Px)²
     C => A                                         ; A = (Px)²
-    $ => B      :MLOAD(pairing_Px),CALL(mulFpBN254); C = (Px)³
+    $ => B      :MLOAD(pairing_P_x),CALL(mulFpBN254); C = (Px)³
 
     3n => A     :CALL(addFpBN254)                  ; C = (Px)³ + 3
-    C           :MSTORE(pairing_Px3)               ; pairing_Px3 = (Px)³ + 3
+    C           :MSTORE(pairing_P_x3)               ; pairing_P_x3 = (Px)³ + 3
 
-    $ => A,B    :MLOAD(pairing_Py),CALL(mulFpBN254); C = (Py)²
+    $ => A,B    :MLOAD(pairing_P_y),CALL(mulFpBN254); C = (Py)²
 
     ; 2] Check if LHS == RHS
     C => A
-    $ => B      :MLOAD(pairing_Px3) 
+    $ => B      :MLOAD(pairing_P_x3) 
     $           :EQ,JMPNC(pairing_P_is_not_in_G1)
 
     ; Q in G2 iff psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
     ; 1] Compute psi(Q)                   
     %BN254_P => A
-    $ => B      :MLOAD(pairing_Qx2)             
+    $ => B      :MLOAD(pairing_Q_x2)             
     $ => D      :SUB                                ; D = -Qx2
     %FROBENIUS_GAMMA121 => A
     %FROBENIUS_GAMMA122 => B
-    $ => C      :MLOAD(pairing_Qx1),CALL(mulFp2BN254)
+    $ => C      :MLOAD(pairing_Q_x1),CALL(mulFp2BN254)
     E           :MSTORE(psi_x1)
     C           :MSTORE(psi_x2)
 
     %BN254_P => A
-    $ => B      :MLOAD(pairing_Qy2)             
+    $ => B      :MLOAD(pairing_Q_y2)             
     $ => D      :SUB                                ; D = -Qx2
     %FROBENIUS_GAMMA131 => A
     %FROBENIUS_GAMMA132 => B
-    $ => C      :MLOAD(pairing_Qy1),CALL(mulFp2BN254)
+    $ => C      :MLOAD(pairing_Q_y1),CALL(mulFp2BN254)
     E           :MSTORE(psi_y1)
     C           :MSTORE(psi_y2)
-    ; ${dump(mem.psi_x1, mem.psi_x2)}
-    ; ${dump(mem.psi_y1, mem.psi_y2)}
+    ${dump(mem.psi_x1, mem.psi_x2)}
+    ${dump(mem.psi_y1, mem.psi_y2)}
     ; ${dump(2n == 2n && 1n == 1n)}
     ; 2] Compute [6x²]Q
+    $ => A      :MLOAD(pairing_Q_x1)
+    $ => B      :MLOAD(pairing_Q_x2)
+    $ => C      :MLOAD(pairing_Q_y1)
+    $ => D      :MLOAD(pairing_Q_y2)
+    A           :MSTORE(escalarMulBN254_p_x1)
+    B           :MSTORE(escalarMulBN254_p_x2)
+    C           :MSTORE(escalarMulBN254_p_y1)
+    D           :MSTORE(escalarMulBN254_p_y2)
+    147946756881789318990833708069417712966n :MSTORE(escalarMulBN254_k) ; 6x²
+                :CALL(escalarMulBN254)
 
 
     ; 3] Check if psi(Q) == [6x²]Q
+    $ => A      :MLOAD(psi_x1)
+    $ => B      :MLOAD(escalarMulBN254_q_x1)
+    $           :EQ,JMPNC(pairing_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(psi_x2)
+    $ => B      :MLOAD(escalarMulBN254_q_x2)
+    $           :EQ,JMPNC(pairing_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(psi_y1)
+    $ => B      :MLOAD(escalarMulBN254_q_y1)
+    $           :EQ,JMPNC(pairing_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(psi_y2)
+    $ => B      :MLOAD(escalarMulBN254_q_y2)
+    $           :EQ,JMPNC(pairing_Q_is_not_in_G2)
+
+    0 => B      :JMP(pairing_end)
 
 
 ; ERRORS
 pairing_P_is_not_in_G1:
     1 => B      :JMP(pairing_error)
 
+pairing_Q_is_not_in_G2:
+    2 => B      :JMP(pairing_error)
+
 pairing_error:
         0 => A
 
 pairing_end:
         ; $ => RR     :MLOAD(ecrecover_RR)
+        ${dump(B)}
         :RETURN
 
-INCLUDE "addFpBN254.zkasm"
+; INCLUDE "addFpBN254.zkasm"
 INCLUDE "mulFpBN254.zkasm"
-INCLUDE "mulFp2BN254.zkasm"
-; INCLUDE "MSMTwistBN254.zkasm"
+; INCLUDE "./FP2BN254/mulFp2BN254.zkasm"
+INCLUDE "./BN254/escalarMulBN254.zkasm"
