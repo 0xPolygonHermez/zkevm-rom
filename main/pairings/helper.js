@@ -117,4 +117,24 @@ module.exports = class myHelper {
 
         return ctx.FpBN254.div(ctx.FpBN254.neg(b), den);
     }
+
+    eval_fp6MulBN254_x(ctx, tag) {
+        const ctxFullFe = { ...ctx, fullFe: true };
+        const a1 = this.evalCommand(ctxFullFe, tag.params[0]);
+        const a2 = this.evalCommand(ctxFullFe, tag.params[1]);
+        const a3 = this.evalCommand(ctxFullFe, tag.params[2]);
+        const a4 = this.evalCommand(ctxFullFe, tag.params[3]);
+        const a5 = this.evalCommand(ctxFullFe, tag.params[4]);
+        const a6 = this.evalCommand(ctxFullFe, tag.params[5]);
+        const b1 = this.evalCommand(ctxFullFe, tag.params[6]);
+        const b2 = this.evalCommand(ctxFullFe, tag.params[7]);
+        const b3 = this.evalCommand(ctxFullFe, tag.params[8]);
+        const b4 = this.evalCommand(ctxFullFe, tag.params[9]);
+        const b5 = this.evalCommand(ctxFullFe, tag.params[10]);
+        const b6 = this.evalCommand(ctxFullFe, tag.params[11]);
+
+        const den = ctx.FpBN254.add(ctx.FpBN254.mul(a, a), ctx.FpBN254.mul(b, b));
+
+        return ctx.FpBN254.div(a, den);
+    }
 }
