@@ -872,10 +872,13 @@ SHLarithfinal:
 
 ; out of counters full tracer event trigger
 outOfCountersStep:
+    $                           :MLOAD(isLoadRLP),JMPNZ(handleOOCSatRLP)
     $${eventLog(onError, OOCS)} :JMP(handleBatchError)
 outOfCountersKeccak:
+    $                           :MLOAD(isLoadRLP),JMPNZ(handleOOCKatRLP)
     $${eventLog(onError, OOCK)} :JMP(handleBatchError)
 outOfCountersBinary:
+    $                           :MLOAD(isLoadRLP),JMPNZ(handleOOCBatRLP)
     $${eventLog(onError, OOCB)} :JMP(handleBatchError)
 outOfCountersMemalign:
     $${eventLog(onError, OOCM)} :JMP(handleBatchError)
@@ -1153,6 +1156,7 @@ finalPush:
 VAR GLOBAL tmpVarDaddB
 VAR GLOBAL tmpZkPCaddB
 VAR GLOBAL auxBytes
+VAR GLOBAL auxLengthBytes
 ;@info: adds data to batchHashdata byte by byte
 ;@in: A: bytes to add
 ;@in D: bytes length
@@ -1161,6 +1165,7 @@ addBatchHashByteByByte:
         RR                              :MSTORE(tmpZkPCaddB)
         A                               :MSTORE(auxBytes)
         D                               :MSTORE(tmpVarDaddB)
+        D                               :MSTORE(auxLengthBytes)
         1 => D
 
 utilsAddBatchHashBytebyByteLoop:
@@ -1174,6 +1179,8 @@ utilsAddBatchHashBytebyByteLoop:
         D => B
         ; add last byte to batchHashData
         1 => D                          :CALL(addBatchHashData); in:[D: length of the hash]
+        $ => D                          :MLOAD(auxLengthBytes)
+        D - 1                           :MSTORE(auxLengthBytes)
         ; check loop
         B => D
         ; D + 1 => D, we set 33 instead of 32 to earn 1 step
