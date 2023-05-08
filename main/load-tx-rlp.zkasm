@@ -17,7 +17,7 @@ INCLUDE "load-tx-rlp-utils.zkasm"
 loadTx_rlp:
         ; check one keccak is available to begin processing the RLP
         $ => D                                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1 - D        :JMPN(handleOOCKatRLP)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1 - D        :JMPN(outOfCountersKeccak)
 
         ; A new hash with position 0 is started
         0 => HASHPOS
@@ -59,7 +59,7 @@ endList:
         136                             :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
         $ => B                          :MLOAD(arithRes1)
         $ => D                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B - D - 1:JMPN(handleOOCKatRLP)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B - D - 1:JMPN(outOfCountersKeccak)
 
 ;; Read RLP 'nonce'
         ; 64 bits max
@@ -290,10 +290,10 @@ vREADTx:
 ;;;;;;;;;
 ;; update bytes parsed
         $ => A                          :MLOAD(batchL2DataParsed)
-        A + C => A                      :MSTORE(batchL2DataParsed)
+        A + C                           :MSTORE(batchL2DataParsed)
 ;; increase number of transaction to process
         $ => A                          :MLOAD(pendingTxs)
-        A + 1 => A                      :MSTORE(pendingTxs)
+        A + 1                           :MSTORE(pendingTxs)
 ;; compute signature
         $ => A                          :HASHKDIGEST(E)
         A                               :MSTORE(txHash), JMP(txLoopRLP)
@@ -301,21 +301,11 @@ vREADTx:
 ;;;;;;;;;
 ;; E - Handler error RLP fields
 ;;;;;;;;;
-handleOOCBatRLP:
-        $${eventLog(onError, OOCB)}      :JMP(handleOOCatRLP)
-handleOOCKatRLP:
-        $${eventLog(onError, OOCK)}      :JMP(handleOOCatRLP)
-handleOOCSatRLP:
-        $${eventLog(onError, OOCS)}      :JMP(handleOOCatRLP)
-handleOOCatRLP:
-        $ => SR                          :MLOAD(batchSR)
-
 invalidTxRLP:
 ;; Append all missing 'batchL2Data' to 'batchDataHash' bytes
-        $ => B                          :MLOAD(auxLengthBytes)
-        $${p = p - B}
         $ => B                          :MLOAD(batchL2DataLength)
         $ => C                          :MLOAD(batchHashPos)
+        $${p = C}
         $ => HASHPOS                    :MLOAD(batchHashPos)
         $ => E                          :MLOAD(batchHashDataId)
 
