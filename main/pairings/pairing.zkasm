@@ -15,10 +15,23 @@ VAR GLOBAL pairing_Q_x1
 VAR GLOBAL pairing_Q_x2
 VAR GLOBAL pairing_Q_y1
 VAR GLOBAL pairing_Q_y2
+
 VAR GLOBAL pairing_R_x1
 VAR GLOBAL pairing_R_x2
 VAR GLOBAL pairing_R_y1
 VAR GLOBAL pairing_R_y2
+VAR GLOBAL pairing_f11_x
+VAR GLOBAL pairing_f11_y
+VAR GLOBAL pairing_f12_x
+VAR GLOBAL pairing_f12_y
+VAR GLOBAL pairing_f13_x
+VAR GLOBAL pairing_f13_y
+VAR GLOBAL pairing_f21_x
+VAR GLOBAL pairing_f21_y
+VAR GLOBAL pairing_f22_x
+VAR GLOBAL pairing_f22_y
+VAR GLOBAL pairing_f23_x
+VAR GLOBAL pairing_f23_y
 
 VAR GLOBAL pairing_RR
 
@@ -45,6 +58,7 @@ pairing:
                 :JMP(pairing_subgroup_checks)
 
 ; TODO: I think I check that Px,Py,Qx1,Qx2,Qy1,Qy2 are field elements before anything else, otherwise do the modulo 
+; TODO: Do the proper branching for some of the points being 0
 pairing_subgroup_checks:
     ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
     ; 1] Compute LHS and RHS
@@ -112,7 +126,33 @@ pairing_subgroup_checks:
     $ => B      :MLOAD(escalarMulBN254_Q_y2)
     $           :EQ,JMPNC(pairing_Q_is_not_in_G2)
 
-    0 => B      :JMP(pairing_end)
+    ; 0 => B      :JMP(pairing_end)
+
+pairing_Miller_loop_init:
+    65 => RCX
+
+    ; Initiliaze Miller loop with R = Q and f = 1
+    $ => A      :MLOAD(pairing_Q_x1)
+    $ => B      :MLOAD(pairing_Q_x2)
+    $ => C      :MLOAD(pairing_Q_y1)
+    $ => D      :MLOAD(pairing_Q_y2)
+    A           :MSTORE(pairing_R_x1)
+    B           :MSTORE(pairing_R_x2)
+    C           :MSTORE(pairing_R_y1)
+    D           :MSTORE(pairing_R_y2)
+    1n          :MSTORE(pairing_f11_x)
+
+pairing_Miller_loop:
+    RCX - 1 => RCX    :JMPZ(pairing_end)
+
+
+
+
+
+
+
+
+
 
 
 ; ERRORS
