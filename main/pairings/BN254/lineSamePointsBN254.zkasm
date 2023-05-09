@@ -1,0 +1,104 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; lineSamePointsBN254:
+;;              in: P ∈ E'(Fp2) such that P = (x1,y1) with x1,y1 ∈ Fp2
+;;                  and Q ∈ E(Fp) such that Q = (x,y) with x,y ∈ Fp
+;;             out: line_{twist(P), twist(P)}(Q) = (3·x1³ - 2·y1²)·(9 + u) + (2·y·y1)·w³ + (-3·x·x1²)·w⁴ ∈ Fp12
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL lineSamePointsBN254_P_x1
+VAR GLOBAL lineSamePointsBN254_P_x2
+VAR GLOBAL lineSamePointsBN254_P_y1
+VAR GLOBAL lineSamePointsBN254_P_y2
+VAR GLOBAL lineSamePointsBN254_Q_x
+VAR GLOBAL lineSamePointsBN254_Q_y
+
+VAR GLOBAL lineSamePointsBN254_Px_square_x
+VAR GLOBAL lineSamePointsBN254_Px_square_y
+VAR GLOBAL lineSamePointsBN254_Py2_square_x
+VAR GLOBAL lineSamePointsBN254_Py2_square_y
+
+VAR GLOBAL lineSamePointsBN254_l1_x
+VAR GLOBAL lineSamePointsBN254_l1_y
+VAR GLOBAL lineSamePointsBN254_l4_x
+VAR GLOBAL lineSamePointsBN254_l4_y
+VAR GLOBAL lineSamePointsBN254_l5_x
+VAR GLOBAL lineSamePointsBN254_l5_y
+
+VAR GLOBAL lineSamePointsBN254_RR
+
+; TODO: This is not sound, but correct
+lineSamePointsBN254:
+        RR              :MSTORE(lineSamePointsBN254_RR)
+
+        ; 1] (3·P.x³ - 2·P.y²)·(9 + u)
+        $ => A          :MLOAD(lineSamePointsBN254_P_y1)
+        $ => B          :MLOAD(lineSamePointsBN254_P_y2)
+                        :CALL(squareFp2BN254)
+        C => D
+        E => C
+        2n => A
+                        :CALL(escalarMulFp2BN254)
+        E               :MSTORE(lineSamePointsBN254_Py2_square_x)
+        C               :MSTORE(lineSamePointsBN254_Py2_square_y)
+
+        $ => A          :MLOAD(lineSamePointsBN254_P_x1)
+        $ => B          :MLOAD(lineSamePointsBN254_P_x2)
+                        :CALL(squareFp2BN254)
+        ; save it for the last step
+        E               :MSTORE(lineSamePointsBN254_Px_square_x)
+        C               :MSTORE(lineSamePointsBN254_Px_square_y)
+        E => A
+        C => B
+        $ => C          :MLOAD(lineSamePointsBN254_P_x1)
+        $ => D          :MLOAD(lineSamePointsBN254_P_x2)
+                        :CALL(mulFp2BN254)
+        C => D
+        E => C
+        3n => A
+                        :CALL(escalarMulFp2BN254)
+
+        E => A 
+        C => B
+        $ => C          :MLOAD(lineSamePointsBN254_Py2_square_x)
+        $ => D          :MLOAD(lineSamePointsBN254_Py2_square_y)
+                        :CALL(subFp2BN254)
+
+        E => A
+        C => B
+        9n => C
+        1n => D
+                        :CALL(mulFp2BN254)
+        
+        E               :MSTORE(lineSamePointsBN254_l1_x)
+        C               :MSTORE(lineSamePointsBN254_l1_y)
+
+
+        ; 2] 2·y·y1
+        2n => A
+        $ => B          :MLOAD(lineSamePointsBN254_Q_y)
+
+                        :CALL(mulFpBN254)
+
+        C => A 
+        $ => C          :MLOAD(lineSamePointsBN254_P_y1)
+        $ => D          :MLOAD(lineSamePointsBN254_P_y2)
+                        :CALL(escalarMulFp2BN254)
+        
+        E               :MSTORE(lineSamePointsBN254_l4_x)
+        C               :MSTORE(lineSamePointsBN254_l4_y)
+
+        ; 3] -3·x·x1²
+        %BN254_P - 3n => A
+        $ => B          :MLOAD(lineSamePointsBN254_Q_x)
+                        :CALL(mulFpBN254)
+        C => A
+        $ => C          :MLOAD(lineSamePointsBN254_Px_square_x)
+        $ => D          :MLOAD(lineSamePointsBN254_Px_square_y)
+                        :CALL(escalarMulFp2BN254)
+        
+        E               :MSTORE(lineSamePointsBN254_l5_x)
+        C               :MSTORE(lineSamePointsBN254_l5_y)
+
+        $ => RR         :MLOAD(lineSamePointsBN254_RR),RETURN

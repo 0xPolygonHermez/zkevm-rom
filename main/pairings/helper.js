@@ -55,6 +55,14 @@ module.exports = class myHelper {
     //     return r;
     // }
 
+    eval_fpBN254mul(ctx, tag) {
+        const ctxFullFe = { ...ctx, fullFe: true };
+        const a = this.evalCommand(ctxFullFe, tag.params[0]);
+        const b = this.evalCommand(ctxFullFe, tag.params[1]);
+
+        return ctx.FpBN254.mul(a, b);
+    }
+
     eval_log2(ctx, tag) {
         const ctxFullFe = { ...ctx, fullFe: true };
         let a = this.evalCommand(ctxFullFe, tag.params[0]);
@@ -98,6 +106,26 @@ module.exports = class myHelper {
         const b = this.evalCommand(ctxFullFe, tag.params[1]);
 
         return ctx.FpBN254.sub(a, b);
+    }
+
+    eval_fp2SquareBN254_x(ctx, tag) {
+        const ctxFullFe = { ...ctx, fullFe: true };
+        const a = this.evalCommand(ctxFullFe, tag.params[0]);
+        const b = this.evalCommand(ctxFullFe, tag.params[1]);
+        const a1a2sub = ctx.FpBN254.sub(a, b);
+        const a1a2sum = ctx.FpBN254.add(a, b);
+
+        return ctx.FpBN254.mul(a1a2sub, a1a2sum);
+    }
+
+    eval_fp2SquareBN254_y(ctx, tag) {
+        const ctxFullFe = { ...ctx, fullFe: true };
+        const a = this.evalCommand(ctxFullFe, tag.params[0]);
+        const b = this.evalCommand(ctxFullFe, tag.params[1]);
+        const a1a2 = ctx.FpBN254.mul(a, b);
+        const two = 2n;
+
+        return ctx.FpBN254.mul(two, a1a2);
     }
 
     eval_fp2InvBN254_x(ctx, tag) {
