@@ -32,6 +32,18 @@ VAR GLOBAL pairing_f22_x
 VAR GLOBAL pairing_f22_y
 VAR GLOBAL pairing_f23_x
 VAR GLOBAL pairing_f23_y
+VAR GLOBAL pairing_fsquare11_x
+VAR GLOBAL pairing_fsquare11_y
+VAR GLOBAL pairing_fsquare12_x
+VAR GLOBAL pairing_fsquare12_y
+VAR GLOBAL pairing_fsquare13_x
+VAR GLOBAL pairing_fsquare13_y
+VAR GLOBAL pairing_fsquare21_x
+VAR GLOBAL pairing_fsquare21_y
+VAR GLOBAL pairing_fsquare22_x
+VAR GLOBAL pairing_fsquare22_y
+VAR GLOBAL pairing_fsquare23_x
+VAR GLOBAL pairing_fsquare23_y
 
 VAR GLOBAL pairing_RR
 
@@ -145,11 +157,150 @@ pairing_Miller_loop_init:
 pairing_Miller_loop:
     RCX - 1 => RCX    :JMPZ(pairing_end)
 
+    ; TODO: The product f² and line_{twist(R),twist(R)}(P) can be optimized since second
+    ;       has half of the cofficients equal to 0
+    ; 1] f = f² · line_{twist(R),twist(R)}(P)
+
+    ; f²
+    $ => A      :MLOAD(pairing_f11_x)
+    $ => B      :MLOAD(pairing_f11_y)
+    A           :MSTORE(squareFp12BN254_a11_x)
+    B           :MSTORE(squareFp12BN254_a11_y)
+    $ => A      :MLOAD(pairing_f12_x)
+    $ => B      :MLOAD(pairing_f12_y)
+    A           :MSTORE(squareFp12BN254_a12_x)
+    B           :MSTORE(squareFp12BN254_a12_y)
+    $ => A      :MLOAD(pairing_f13_x)
+    $ => B      :MLOAD(pairing_f13_y)
+    A           :MSTORE(squareFp12BN254_a13_x)
+    B           :MSTORE(squareFp12BN254_a13_y)
+    $ => A      :MLOAD(pairing_f21_x)
+    $ => B      :MLOAD(pairing_f21_y)
+    A           :MSTORE(squareFp12BN254_a21_x)
+    B           :MSTORE(squareFp12BN254_a21_y)
+    $ => A      :MLOAD(pairing_f22_x)
+    $ => B      :MLOAD(pairing_f22_y)
+    A           :MSTORE(squareFp12BN254_a22_x)
+    B           :MSTORE(squareFp12BN254_a22_y)
+    $ => A      :MLOAD(pairing_f23_x)
+    $ => B      :MLOAD(pairing_f23_y)
+    A           :MSTORE(squareFp12BN254_a23_x)
+    B           :MSTORE(squareFp12BN254_a23_y)
+                :CALL(squareFp12BN254)
+    $ => A      :MLOAD(squareFp12BN254_c11_x)
+    $ => B      :MLOAD(squareFp12BN254_c11_y)
+    A           :MSTORE(pairing_fsquare11_x)
+    B           :MSTORE(pairing_fsquare11_y)
+    $ => A      :MLOAD(squareFp12BN254_c12_x)
+    $ => B      :MLOAD(squareFp12BN254_c12_y)
+    A           :MSTORE(pairing_fsquare12_x)
+    B           :MSTORE(pairing_fsquare12_y)
+    $ => A      :MLOAD(squareFp12BN254_c13_x)
+    $ => B      :MLOAD(squareFp12BN254_c13_y)
+    A           :MSTORE(pairing_fsquare13_x)
+    B           :MSTORE(pairing_fsquare13_y)
+    $ => A      :MLOAD(squareFp12BN254_c21_x)
+    $ => B      :MLOAD(squareFp12BN254_c21_y)
+    A           :MSTORE(pairing_fsquare21_x)
+    B           :MSTORE(pairing_fsquare21_y)
+    $ => A      :MLOAD(squareFp12BN254_c22_x)
+    $ => B      :MLOAD(squareFp12BN254_c22_y)
+    A           :MSTORE(pairing_fsquare22_x)
+    B           :MSTORE(pairing_fsquare22_y)
+    $ => A      :MLOAD(squareFp12BN254_c23_x)
+    $ => B      :MLOAD(squareFp12BN254_c23_y)
+    A           :MSTORE(pairing_fsquare23_x)
+    B           :MSTORE(pairing_fsquare23_y)
+
+    ; line_{twist(R),twist(R)}(P)
+    $ => A      :MLOAD(pairing_R_x1)
+    $ => B      :MLOAD(pairing_R_x2)
+    $ => C      :MLOAD(pairing_R_y1)
+    $ => D      :MLOAD(pairing_R_y2)
+    A           :MSTORE(lineSamePointsBN254_P_x1)
+    B           :MSTORE(lineSamePointsBN254_P_x2)
+    C           :MSTORE(lineSamePointsBN254_P_y1)
+    D           :MSTORE(lineSamePointsBN254_P_y2)
+    $ => A      :MLOAD(pairing_P_x)
+    $ => B      :MLOAD(pairing_P_y)
+    A           :MSTORE(lineSamePointsBN254_Q_x)
+    B           :MSTORE(lineSamePointsBN254_Q_y)
+                :CALL(lineSamePointsBN254)
+    $ => A      :MLOAD(pairing_fsquare11_x)
+    $ => B      :MLOAD(pairing_fsquare11_y)
+    A           :MSTORE(mulFp12BN254_a11_x)
+    B           :MSTORE(mulFp12BN254_a11_y)
+    $ => A      :MLOAD(pairing_fsquare12_x)
+    $ => B      :MLOAD(pairing_fsquare12_y)
+    A           :MSTORE(mulFp12BN254_a12_x)
+    B           :MSTORE(mulFp12BN254_a12_y)
+    $ => A      :MLOAD(pairing_fsquare13_x)
+    $ => B      :MLOAD(pairing_fsquare13_y)
+    A           :MSTORE(mulFp12BN254_a13_x)
+    B           :MSTORE(mulFp12BN254_a13_y)
+    $ => A      :MLOAD(pairing_fsquare21_x)
+    $ => B      :MLOAD(pairing_fsquare21_y)
+    A           :MSTORE(mulFp12BN254_a21_x)
+    B           :MSTORE(mulFp12BN254_a21_y)
+    $ => A      :MLOAD(pairing_fsquare22_x)
+    $ => B      :MLOAD(pairing_fsquare22_y)
+    A           :MSTORE(mulFp12BN254_a22_x)
+    B           :MSTORE(mulFp12BN254_a22_y)
+    $ => A      :MLOAD(pairing_fsquare23_x)
+    $ => B      :MLOAD(pairing_fsquare23_y)
+    A           :MSTORE(mulFp12BN254_a23_x)
+    B           :MSTORE(mulFp12BN254_a23_y)
+
+    $ => A      :MLOAD(lineSamePointsBN254_l11_x)
+    $ => B      :MLOAD(lineSamePointsBN254_l11_y)
+    A           :MSTORE(mulFp12BN254_b11_x)
+    B           :MSTORE(mulFp12BN254_b11_y)
+    0n          :MLOAD(mulFp12BN254_b12_x)
+    0n          :MLOAD(mulFp12BN254_b12_y)
+    $ => A      :MLOAD(lineSamePointsBN254_l13_x)
+    $ => B      :MLOAD(lineSamePointsBN254_l13_y)
+    A           :MSTORE(mulFp12BN254_b13_x)
+    B           :MSTORE(mulFp12BN254_b13_y)
+    0n          :MSTORE(mulFp12BN254_b21_x)
+    0n          :MSTORE(mulFp12BN254_b21_y)
+    $ => A      :MLOAD(lineSamePointsBN254_l22_x)
+    $ => B      :MLOAD(lineSamePointsBN254_l22_y)
+    A           :MSTORE(mulFp12BN254_b22_x)
+    B           :MSTORE(mulFp12BN254_b22_y)
+    0n          :MSTORE(mulFp12BN254_b23_x)
+    0n          :MSTORE(mulFp12BN254_b23_y)
+                :CALL(mulFp12BN254)
+    $ => A      :MLOAD(mulFp12BN254_c11_x)
+    $ => B      :MLOAD(mulFp12BN254_c11_y)
+    A           :MSTORE(pairing_f11_x)
+    B           :MSTORE(pairing_f11_y)
+    $ => A      :MLOAD(mulFp12BN254_c12_x)
+    $ => B      :MLOAD(mulFp12BN254_c12_y)
+    A           :MSTORE(pairing_f12_x)
+    B           :MSTORE(pairing_f12_y)
+    $ => A      :MLOAD(mulFp12BN254_c13_x)
+    $ => B      :MLOAD(mulFp12BN254_c13_y)
+    A           :MSTORE(pairing_f13_x)
+    B           :MSTORE(pairing_f13_y)
+    $ => A      :MLOAD(mulFp12BN254_c21_x)
+    $ => B      :MLOAD(mulFp12BN254_c21_y)
+    A           :MSTORE(pairing_f21_x)
+    B           :MSTORE(pairing_f21_y)
+    $ => A      :MLOAD(mulFp12BN254_c22_x)
+    $ => B      :MLOAD(mulFp12BN254_c22_y)
+    A           :MSTORE(pairing_f22_x)
+    B           :MSTORE(pairing_f22_y)
+    $ => A      :MLOAD(mulFp12BN254_c23_x)
+    $ => B      :MLOAD(mulFp12BN254_c23_y)
+    A           :MSTORE(pairing_f23_x)
+    B           :MSTORE(pairing_f23_y)
+
+    ; 2] R = 2·R
 
 
 
 
-
+    0 => B      :JMP(pairing_end) ; For testing purposes
 
 
 
@@ -172,5 +323,12 @@ pairing_end:
 
 ; INCLUDE "addFpBN254.zkasm"
 INCLUDE "mulFpBN254.zkasm"
-; INCLUDE "./FP2BN254/mulFp2BN254.zkasm"
+INCLUDE "./FP2BN254/squareFp2BN254.zkasm"
+INCLUDE "./FP2BN254/escalarMulFp2BN254.zkasm"
+INCLUDE "./FP6BN254/addFp6BN254.zkasm"
+INCLUDE "./FP6BN254/subFp6BN254.zkasm"
+INCLUDE "./FP6BN254/mulFp6BN254.zkasm"
+INCLUDE "./FP12BN254/squareFp12BN254.zkasm"
+INCLUDE "./FP12BN254/mulFp12BN254.zkasm"
 INCLUDE "./BN254/escalarMulBN254.zkasm"
+INCLUDE "./BN254/lineSamePointsBN254.zkasm"
