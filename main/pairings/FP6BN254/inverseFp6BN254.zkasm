@@ -3,9 +3,9 @@
 ;; inverseFp6BN254:
 ;;             in: (a1 + a2·v + a3·v²) ∈ Fp6, where ai ∈ Fp2
 ;;             out: (c1 + c2·v + c3·v²) ∈ Fp6, where:
-;;                  - c1 = 
-;;                  - c2 = 
-;;                  - c3 = 
+;;                  - c1 = (a1² - (9 + u)·(a2·a3))·last
+;;                  - c2 = ((9 + u)·a3² - (a1·a2))·last
+;;                  - c3 = (a2²-a1·a3)·last
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -42,6 +42,10 @@ VAR GLOBAL inverseFp6BN254_c3mid_x
 VAR GLOBAL inverseFp6BN254_c3mid_y
 VAR GLOBAL inverseFp6BN254_im_x
 VAR GLOBAL inverseFp6BN254_im_y
+
+VAR GLOBAL inverseFp6BN254_a3c2mid_x
+VAR GLOBAL inverseFp6BN254_a3c2mid_y
+
 VAR GLOBAL inverseFp6BN254_xia2c3mid_x
 VAR GLOBAL inverseFp6BN254_xia2c3mid_y
 VAR GLOBAL inverseFp6BN254_last_x
@@ -101,21 +105,21 @@ inverseFp6BN254:
         E               :MSTORE(inverseFp6BN254_a2a3mul_x)
         C               :MSTORE(inverseFp6BN254_a2a3mul_y)
 
-        ; 7] c1mid
+        ; 7] c1mid = a1² - (9 + u)·(a2·a3)
         9n => A
         1n => B
         $ => C          :MLOAD(inverseFp6BN254_a2a3mul_x)
         $ => D          :MLOAD(inverseFp6BN254_a2a3mul_y)
                         :CALL(mulFp2BN254)
         $ => A          :MLOAD(inverseFp6BN254_a1square_x)
-        $ => C          :MLOAD(inverseFp6BN254_a1square_y)
+        $ => B          :MLOAD(inverseFp6BN254_a1square_y)
         C => D
         E => C
                         :CALL(subFp2BN254)
         E               :MSTORE(inverseFp6BN254_c1mid_x)
         C               :MSTORE(inverseFp6BN254_c1mid_y)
 
-        ; 8] c2mid
+        ; 8] c2mid = (9 + u)·a3² - (a1·a2)
         9n => A
         1n => B
         $ => C          :MLOAD(inverseFp6BN254_a3square_x)
@@ -129,16 +133,16 @@ inverseFp6BN254:
         E               :MSTORE(inverseFp6BN254_c2mid_x)
         C               :MSTORE(inverseFp6BN254_c2mid_y)
 
-        ; 9] c3mid
+        ; 9] c3mid = a2² - (a1·a3)
         $ => A          :MLOAD(inverseFp6BN254_a2square_x)
         $ => B          :MLOAD(inverseFp6BN254_a2square_y)
         $ => C          :MLOAD(inverseFp6BN254_a1a3mul_x)
         $ => D          :MLOAD(inverseFp6BN254_a1a3mul_y)
-                        :CALL(mulFp2BN254)
+                        :CALL(subFp2BN254)
         E               :MSTORE(inverseFp6BN254_c3mid_x)
         C               :MSTORE(inverseFp6BN254_c3mid_y)
 
-        ; 10] intermediate comps
+        ; 10] im = a1·c1mid
         $ => A          :MLOAD(inverseFp6BN254_a1_x)
         $ => B          :MLOAD(inverseFp6BN254_a1_y)
         $ => C          :MLOAD(inverseFp6BN254_c1mid_x)
@@ -147,32 +151,34 @@ inverseFp6BN254:
         E               :MSTORE(inverseFp6BN254_im_x)
         C               :MSTORE(inverseFp6BN254_im_y)
 
-        ; 11] ((im + xi·a3·c2mid) + xi·a2·c3mid)⁻¹
-        9n => A
-        1n => B
-        $ => C          :MLOAD(inverseFp6BN254_a2_x)
-        $ => D          :MLOAD(inverseFp6BN254_a2_y)
-                        :CALL(mulFp2BN254)
-        E => A 
-        C => B
-        $ => C          :MLOAD(inverseFp6BN254_c3mid_x)
-        $ => D          :MLOAD(inverseFp6BN254_c3mid_y)
-                        :CALL(mulFp2BN254)  
-        E               :MSTORE(inverseFp6BN254_xia2c3mid_x)
-        C               :MSTORE(inverseFp6BN254_xia2c3mid_y)     
-
-        9n => A
-        1n => B
-        $ => C          :MLOAD(inverseFp6BN254_a3_x)
-        $ => D          :MLOAD(inverseFp6BN254_a3_y)
-                        :CALL(mulFp2BN254)
-        E => A 
-        C => B
+        ; 11] (im + xi·(a3·c2mid + a2·c3mid))⁻¹
+        $ => A          :MLOAD(inverseFp6BN254_a3_x)
+        $ => B          :MLOAD(inverseFp6BN254_a3_y)
         $ => C          :MLOAD(inverseFp6BN254_c2mid_x)
         $ => D          :MLOAD(inverseFp6BN254_c2mid_y)
                         :CALL(mulFp2BN254)
-        A               :MLOAD(inverseFp6BN254_im_x)
-        B               :MLOAD(inverseFp6BN254_im_y)
+        E               :MSTORE(inverseFp6BN254_a3c2mid_x)
+        C               :MSTORE(inverseFp6BN254_a3c2mid_y)
+
+        $ => A          :MLOAD(inverseFp6BN254_a2_x)
+        $ => B          :MLOAD(inverseFp6BN254_a2_y)
+        $ => C          :MLOAD(inverseFp6BN254_c3mid_x)
+        $ => D          :MLOAD(inverseFp6BN254_c3mid_y)
+                        :CALL(mulFp2BN254)
+        
+        $ => A          :MLOAD(inverseFp6BN254_a3c2mid_x)
+        $ => B          :MLOAD(inverseFp6BN254_a3c2mid_y)
+        C => D 
+        E => C
+                        :CALL(addFp2BN254)
+        9n => A
+        1n => B
+        C => D 
+        E => C
+                        :CALL(mulFp2BN254)
+
+        $ => A          :MLOAD(inverseFp6BN254_im_x)
+        $ => B          :MLOAD(inverseFp6BN254_im_y)
         C => D 
         E => C
                         :CALL(addFp2BN254)
