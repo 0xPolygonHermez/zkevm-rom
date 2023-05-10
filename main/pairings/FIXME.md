@@ -1,1 +1,2 @@
 - [ ] $\mathbb{F}_p$ arithmetic fails if the input is a negative big integer, we should fix this! It's working properly otherwise
+- [ ] Think and fix edge cases
