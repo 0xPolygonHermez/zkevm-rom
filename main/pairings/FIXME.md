@@ -2,3 +2,4 @@
 - [ ] Think and fix edge cases
 - [ ] Unify inverse Fp2 and Fp2 arithmetic in general
 - [ ] Implement fast square and fast exponentiation in the 12-th cyclotomic subgroup as per https://eprint.iacr.org/2010/542.pdf
+- [ ] Rename `Fp2BN254neq0` in `helper.js` to `FpBN254neq0`
