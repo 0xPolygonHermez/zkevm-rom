@@ -87,7 +87,7 @@ skipSetGlobalExitRoot:
         $ => B                                  :MLOAD(arithRes1)
         ; Compute minimum necessary keccaks to finish the batch
         B + 1 + %MIN_CNT_KECCAK_BATCH => B      :MSTORE(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B    :JMPN(handleOOCKatRLP)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B    :JMPN(outOfCountersKeccak)
 
 ;;;;;;;;;;;;;;;;;;
 ;; C - Loop parsing RLP transactions
@@ -102,6 +102,8 @@ skipSetGlobalExitRoot:
         A                                   :MSTORE(ctxTxToUse) ; Points at first context to be used when processing transactions
 
         $${var p = 0}
+        ; set flag isLoadingRLP to 1
+        1               :MSTORE(isLoadingRLP)
 
 txLoopRLP:
         $ => A          :MLOAD(lastCtxUsed)
@@ -110,7 +112,10 @@ txLoopRLP:
         $ => A          :MLOAD(batchL2DataLength)
         $ => C          :MLOAD(batchL2DataParsed)
         C - A           :JMPN(loadTx_rlp, endCheckRLP)
+
 endCheckRLP:
+        ; set flag isLoadingRLP to 0
+        0               :MSTORE(isLoadingRLP)
                         :JMP(txLoop)
 
 ;;;;;;;;;;;;;;;;;;
@@ -120,7 +125,7 @@ endCheckRLP:
 
 txLoop:
         $ => A          :MLOAD(pendingTxs)
-        A-1 => A        :MSTORE(pendingTxs), JMPN(processTxsEnd)
+        A-1             :MSTORE(pendingTxs), JMPN(processTxsEnd)
 
         $ => A          :MLOAD(ctxTxToUse) ; Load first context used by transaction
         A+1 => CTX      :MSTORE(ctxTxToUse),JMP(processTx)

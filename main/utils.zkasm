@@ -928,6 +928,7 @@ handleError:
 handleBatchError:
     ; restore init state root and finish batch
     $ => SR         :MLOAD(batchSR)
+    $               :MLOAD(isLoadingRLP),JMPNZ(invalidTxRLP)
     $${eventLog(onFinishTx)}
     $${eventLog(onFinishBatch)} :JMP(processTxsEnd)
 
@@ -1153,19 +1154,20 @@ finalPush:
 VAR GLOBAL tmpVarDaddB
 VAR GLOBAL tmpZkPCaddB
 VAR GLOBAL auxBytes
+
 ;@info: adds data to batchHashdata byte by byte
 ;@in: A: bytes to add
 ;@in D: bytes length
 addBatchHashByteByByte:
-        %MAX_CNT_STEPS - STEP - 10      :JMPN(handleOOCSatRLP)
+        %MAX_CNT_STEPS - STEP - 10      :JMPN(outOfCountersStep)
         RR                              :MSTORE(tmpZkPCaddB)
         A                               :MSTORE(auxBytes)
         D                               :MSTORE(tmpVarDaddB)
         1 => D
 
 utilsAddBatchHashBytebyByteLoop:
-        %MAX_CNT_STEPS - STEP - 50 :JMPN(handleOOCSatRLP)
-        %MAX_CNT_BINARY - CNT_BINARY - 1   :JMPN(handleOOCBatRLP)
+        %MAX_CNT_STEPS - STEP - 50      :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY - 1   :JMPN(outOfCountersBinary)
         32 - D => D
         $ => A                          :MLOAD(auxBytes), CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
         ; get last byte in A
