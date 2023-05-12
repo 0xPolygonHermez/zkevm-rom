@@ -1,0 +1,96 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; frob3Fp12BN254:
+;;             in: (a1 + a2·w) = ((a11 + a12v + a13v²) + (a21 + a22v + a23v²)) ∈ Fp12, where ai ∈ Fp6 and aij ∈ Fp2
+;;             out: (c1 + c2·w) ∈ Fp12, where:
+;;                  - c1 = a̅11     + a̅12·γ32·v + a̅13·γ34·v²
+;;                  - c2 = a̅21·γ31 + a̅22·γ33·v + a̅23·γ35·v²
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL frob3Fp12BN254_a11_x
+VAR GLOBAL frob3Fp12BN254_a11_y
+VAR GLOBAL frob3Fp12BN254_a12_x
+VAR GLOBAL frob3Fp12BN254_a12_y
+VAR GLOBAL frob3Fp12BN254_a13_x
+VAR GLOBAL frob3Fp12BN254_a13_y
+VAR GLOBAL frob3Fp12BN254_a21_x
+VAR GLOBAL frob3Fp12BN254_a21_y
+VAR GLOBAL frob3Fp12BN254_a22_x
+VAR GLOBAL frob3Fp12BN254_a22_y
+VAR GLOBAL frob3Fp12BN254_a23_x
+VAR GLOBAL frob3Fp12BN254_a23_y
+VAR GLOBAL frob3Fp12BN254_c11_x
+VAR GLOBAL frob3Fp12BN254_c11_y
+VAR GLOBAL frob3Fp12BN254_c12_x
+VAR GLOBAL frob3Fp12BN254_c12_y
+VAR GLOBAL frob3Fp12BN254_c13_x
+VAR GLOBAL frob3Fp12BN254_c13_y
+VAR GLOBAL frob3Fp12BN254_c21_x
+VAR GLOBAL frob3Fp12BN254_c21_y
+VAR GLOBAL frob3Fp12BN254_c22_x
+VAR GLOBAL frob3Fp12BN254_c22_y
+VAR GLOBAL frob3Fp12BN254_c23_x
+VAR GLOBAL frob3Fp12BN254_c23_y
+
+VAR GLOBAL frob3Fp12BN254_RR
+
+; TODO: This is not sound, but correct
+frob3Fp12BN254:
+        RR              :MSTORE(frob3Fp12BN254_RR)
+
+        ; 1] c1 = a̅11 + a̅12·γ32·v + a̅13·γ34·v²
+        $ => A          :MLOAD(frob3Fp12BN254_a11_x)
+        $ => B          :MLOAD(frob3Fp12BN254_a11_y)
+        A               :MSTORE(frob3Fp12BN254_c11_x)
+        ${const.BN254_P - B}               :MSTORE(frob3Fp12BN254_c11_y)
+
+        %FROBENIUS_GAMMA321 => A
+        %FROBENIUS_GAMMA322 => B
+        $ => C          :MLOAD(frob3Fp12BN254_a12_x)
+        $ => D          :MLOAD(frob3Fp12BN254_a12_y)
+        ${const.BN254_P - D} => D 
+                        :CALL(mulFp2BN254)
+        E               :MSTORE(frob3Fp12BN254_c12_x)
+        C               :MSTORE(frob3Fp12BN254_c12_y)
+
+        %FROBENIUS_GAMMA341 => A
+        %FROBENIUS_GAMMA342 => B
+        $ => C          :MLOAD(frob3Fp12BN254_a13_x)
+        $ => D          :MLOAD(frob3Fp12BN254_a13_y)
+        ${const.BN254_P - D} => D
+        ${dump(A,B,C,D)}
+                        :CALL(mulFp2BN254)
+        E               :MSTORE(frob3Fp12BN254_c13_x)
+        C               :MSTORE(frob3Fp12BN254_c13_y)
+
+        ; 2] c2 = a̅21·γ11 + a̅22·γ13·v + a̅23·γ15·v²
+        %FROBENIUS_GAMMA311 => A
+        %FROBENIUS_GAMMA312 => B
+        $ => C          :MLOAD(frob3Fp12BN254_a21_x)
+        $ => D          :MLOAD(frob3Fp12BN254_a21_y)
+        ${const.BN254_P - D} => D
+                        :CALL(mulFp2BN254)
+        E               :MSTORE(frob3Fp12BN254_c21_x)
+        C               :MSTORE(frob3Fp12BN254_c21_y)
+
+        %FROBENIUS_GAMMA331 => A
+        %FROBENIUS_GAMMA332 => B
+        $ => C          :MLOAD(frob3Fp12BN254_a22_x)
+        $ => D          :MLOAD(frob3Fp12BN254_a22_y)
+        ${const.BN254_P - D} => D
+                        :CALL(mulFp2BN254)
+        E               :MSTORE(frob3Fp12BN254_c22_x)
+        C               :MSTORE(frob3Fp12BN254_c22_y)
+
+        %FROBENIUS_GAMMA351 => A
+        %FROBENIUS_GAMMA352 => B
+        $ => C          :MLOAD(frob3Fp12BN254_a23_x)
+        $ => D          :MLOAD(frob3Fp12BN254_a23_y)
+        ${const.BN254_P - D} => D
+                        :CALL(mulFp2BN254)
+        E               :MSTORE(frob3Fp12BN254_c23_x)
+        C               :MSTORE(frob3Fp12BN254_c23_y)
+
+        $ => RR         :MLOAD(frob3Fp12BN254_RR)
+                        :RETURN
