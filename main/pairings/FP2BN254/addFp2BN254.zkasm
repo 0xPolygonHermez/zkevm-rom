@@ -1,49 +1,35 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; addFp2BN254:
-;;             in: (A + B·u), (C + D·u)
-;;             out: E = A + C (mod BN254_P)
-;;                  C = B + D (mod BN254_P)
+;;             in: (A + B·u), (C + D·u) ∈ Fp2, where A,B,C,D ∈ Fp
+;;             out: E + C·u = (A + C) + (B + D)·u ∈ Fp2
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; addFpEc:
-;         1 => B
+VAR GLOBAL addFp2BN254_B
+VAR GLOBAL addFp2BN254_C
+VAR GLOBAL addFp2BN254_D
 
-;         ; A + C = [D] * 2 ** 256 + [E]
+VAR GLOBAL addFp2BN254_RR
 
-;         $${var _addFpEc_AC = A + C}
-
-;         ${_addFpEc_AC >> 256} => D
-;         ${_addFpEc_AC} => E :ARITH
-
-;         ;
-;         ; with committed E,D
-;         ; FpEc * [k] + [C] = D * 2 ** 256 + E
-;         ;
-
-;         ${_addFpEc_AC / const.FPEC} => B        ; times p
-;         ${_addFpEc_AC % const.FPEC} => C        ; A + C (256 bits)
-;         %FPEC => A
-
-;         E :ARITH,RETURN
-
-; VAR GLOBAL addFp2BN254_B
-; VAR GLOBAL addFp2BN254_C
-; VAR GLOBAL addFp2BN254_D
-
-; TODO: This is not sound, but correct
 addFp2BN254:
-        ; B       :MSTORE(addFp2BN254_B)
-        ; C       :MSTORE(addFp2BN254_C)
-        ; D       :MSTORE(addFp2BN254_D)
+        RR      :MSTORE(addFp2BN254_RR)
 
-        ; ; A·B + C = D·2²⁵⁶ + E
-        ; 1 => B
-        ; $${var _addFp2BN254_AC = A + C}
-        ; ${_addFp2BN254_AC >> 256} => D
-        ; ${_addFp2BN254_AC} => E :ARITH
+        B       :MSTORE(addFp2BN254_B)
+        D       :MSTORE(addFp2BN254_D)
 
-        ${(A+C) % const.BN254_P} => E
-        ${(B+D) % const.BN254_P} => C
+        ; 1] Compute A + C
+                :CALL(addFpBN254)
+        C       :MSTORE(addFp2BN254_C)
+
+        ; 2] Compute B + D
+        $ => A  :MLOAD(addFp2BN254_B)
+        $ => C  :MLOAD(addFp2BN254_D)
+                :CALL(addFpBN254)
+
+        $ => E  :MLOAD(addFp2BN254_C)
+
+        ; ${(A+C) % const.BN254_P} => E
+        ; ${(B+D) % const.BN254_P} => C
+        $ => RR         :MLOAD(addFp2BN254_RR)
                                         :RETURN

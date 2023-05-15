@@ -1,11 +1,39 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; addFp2BN254:
+;; subFp2BN254:
 ;;             in: (A + B·u), (C + D·u)
 ;;             out: E = A - C (mod BN254_P)
 ;;                  C = B - D (mod BN254_P)
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL subFp2BN254_B
+VAR GLOBAL subFp2BN254_C
+VAR GLOBAL subFp2BN254_D
+
+VAR GLOBAL subFp2BN254_RR
+
+subFp2BN254:
+        RR      :MSTORE(subFp2BN254_RR)
+
+        B       :MSTORE(subFp2BN254_B)
+        D       :MSTORE(subFp2BN254_D)
+
+        ; 1] Compute A + C
+                :CALL(addFpBN254)
+        C       :MSTORE(subFp2BN254_C)
+
+        ; 2] Compute B + D
+        $ => A  :MLOAD(subFp2BN254_B)
+        $ => C  :MLOAD(subFp2BN254_D)
+                :CALL(addFpBN254)
+
+        $ => E  :MLOAD(subFp2BN254_C)
+
+        ; ${(A+C) % const.BN254_P} => E
+        ; ${(B+D) % const.BN254_P} => C
+        $ => RR         :MLOAD(subFp2BN254_RR)
+                                        :RETURN
 
 VAR GLOBAL subFp2_tmp
 
