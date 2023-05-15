@@ -1,0 +1,43 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; invFpBN254:
+;;             in: A ∈ Fp
+;;             out: B = A⁻¹ (mod BN254_P) ∈ Fp
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL invFpBN254_tmp
+
+invFpBN254:
+        ; If A >= BN254_P, then compute A - BN254_P, so that A ∈ [0,BN254_P)
+        %BN254_P => B
+        $       :LT,JMPC(invFpBN254_normalized)
+        $ => A  :SUB
+
+invFpBN254_normalized:
+        ; Check if A = 0
+        A   :JMPZ(invFpBN254_A_is_zero)
+
+        ; 1] Compute and check the inverse over Z
+        ; A·B + [0] = [D]·2²⁵⁶ + [E]
+        0 => C
+        ${var _invFpBN254_A = fpBN254inv(A)} => B :MSTORE(invFpBN254_tmp);
+        $${var _invFpBN254_AB = A * _invFpBN254_A}
+        ${_invFpBN254_AB >> 256} => D
+        ${_invFpBN254_AB} => E :ARITH
+
+        ; 2] Check it over Fp, that is, it must be satisfied that:
+        ; [BN254_P]·[A·A⁻¹] + [1] = D·2²⁵⁶ + E
+        %BN254_P => A
+        ${_invFpBN254_AB / const.BN254_P} => B        ; residue  (256 bits)
+        1n => C                                       ; quotient (1 bit)
+
+        E :ARITH
+        $ => B   :MLOAD(invFpBN254_tmp),RETURN
+
+invFpBN254_A_is_zero:
+        ; Check that A is zero
+        0n => B
+        1       :EQ
+
+        0 => B   :MSTORE(invFpBN254_tmp),RETURN

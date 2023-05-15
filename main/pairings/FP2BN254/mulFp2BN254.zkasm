@@ -1,17 +1,61 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; mulFp2BN254:
-;;             in: (A + B·u), (C + D·u)
-;;             out: E = A·C - B·D (mod BN254_P)
-;;                  C = A·D + B·C (mod BN254_P)
+;;             in: (A + B·u), (C + D·u) ∈ Fp2, where A,B,C,D ∈ Fp
+;;             out: E + C·u = (A·C - B·D) + (A·D + B·C)·u ∈ Fp2
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-VAR GLOBAL mulFp2_tmp
+; TODO: Use the complex multiplication OPCODE 
 
-; TODO: This is not sound, but correct
+VAR GLOBAL mulFp2BN254_A
+VAR GLOBAL mulFp2BN254_B
+VAR GLOBAL mulFp2BN254_C
+VAR GLOBAL mulFp2BN254_D
+
+VAR GLOBAL mulFp2BN254_AC
+VAR GLOBAL mulFp2BN254_AD
+
+VAR GLOBAL mulFp2BN254_real
+
+VAR GLOBAL mulFp2BN254_RR
+
 mulFp2BN254:
-        ${ARITH_BN254_MULFP2_X(A,B,C,D)} => E
-        ${ARITH_BN254_MULFP2_Y(A,B,C,D)}       :MSTORE(mulFp2_tmp),ARITH_BN254_MULFP2
+        RR      :MSTORE(mulFp2BN254_RR)
+
+        A       :MSTORE(mulFp2BN254_A)
+        B       :MSTORE(mulFp2BN254_B)
+        C       :MSTORE(mulFp2BN254_C)
+        D       :MSTORE(mulFp2BN254_D)
+
+        ; 1] Compute A·C - B·D
+        C => B
+                :CALL(mulFpBN254)
+        C       :MSTORE(mulFp2BN254_AC)
+
+        $ => A  :MLOAD(mulFp2BN254_B)
+        $ => B  :MLOAD(mulFp2BN254_D)
+                :CALL(mulFpBN254)
+
+        $ => A  :MLOAD(mulFp2BN254_AC)
+                :CALL(subFpBN254)
         
-        $ => C                           :MLOAD(mulFp2_tmp),RETURN
+        C       :MSTORE(mulFp2BN254_real)
+
+        ; 2] Compute A·D + B·C
+        $ => A  :MLOAD(mulFp2BN254_A)
+        $ => B  :MLOAD(mulFp2BN254_D)
+                :CALL(mulFpBN254)
+        C       :MSTORE(mulFp2BN254_AD)
+
+        $ => A  :MLOAD(mulFp2BN254_B)
+        $ => B  :MLOAD(mulFp2BN254_C)
+                :CALL(mulFpBN254)
+
+        $ => A  :MLOAD(mulFp2BN254_AD)
+                :CALL(addFpBN254)
+        
+        $ => E  :MLOAD(mulFp2BN254_real)
+
+        $ => RR         :MLOAD(mulFp2BN254_RR)
+                        :RETURN

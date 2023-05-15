@@ -63,6 +63,13 @@ module.exports = class myHelper {
         return ctx.FpBN254.mul(a, b);
     }
 
+    eval_fpBN254inv(ctx, tag) {
+        const ctxFullFe = { ...ctx, fullFe: true };
+        const a = this.evalCommand(ctxFullFe, tag.params[0]);
+
+        return ctx.FpBN254.inv(a);
+    }
+
     eval_log2(ctx, tag) {
         const ctxFullFe = { ...ctx, fullFe: true };
         let a = this.evalCommand(ctxFullFe, tag.params[0]);

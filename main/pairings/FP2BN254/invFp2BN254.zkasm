@@ -1,18 +1,59 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; invFp2BN254
-;;             in: (A + B·u)
-;;             out: C =  A / (A² + B²) (mod BN254_P)
-;;                  D = -B / (A² + B²) (mod BN254_P)
+;;             in: (A + B·u) ∈ Fp2, where A,B ∈ Fp
+;;             out: C + D·u = (A·(A² + B²)⁻¹) + (-B·(A² + B²)⁻¹)·u ∈ Fp2
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-VAR GLOBAL invFp2_tmp
+; TODO: Use the complex multiplication OPCODE 
 
-; TODO: This is not sound, but correct
+VAR GLOBAL invFp2BN254_A
+VAR GLOBAL invFp2BN254_B
+VAR GLOBAL invFp2BN254_C
+VAR GLOBAL invFp2BN254_D
+
+VAR GLOBAL invFp2BN254_Asq
+VAR GLOBAL invFp2BN254_ABsq
+
+VAR GLOBAL invFp2BN254_im
+
+VAR GLOBAL invFp2BN254_RR
+
 invFp2BN254:
-        ${fp2InvBN254_x(A,B)} => C
-        ${fp2InvBN254_y(A,B)} => D
+        RR      :MSTORE(invFp2BN254_RR)
 
-        1n => E
-        0n                              :ARITH_BN254_MULFP2,RETURN
+        A       :MSTORE(invFp2BN254_A)
+        B       :MSTORE(invFp2BN254_B)
+        C       :MSTORE(invFp2BN254_C)
+        D       :MSTORE(invFp2BN254_D)
+
+        ; 1] Compute (A² + B²)⁻¹
+                :CALL(squareFpBN254)
+        B       :MSTORE(invFp2BN254_Asq) 
+        $ => A  :MLOAD(invFp2BN254_B)
+                :CALL(squareFpBN254)
+        $ => A  :MLOAD(invFp2BN254_Asq)
+        B => C
+                :CALL(addFpBN254)
+
+        C => A  :CALL(invFpBN254)
+        B       :MSTORE(invFp2BN254_ABsq)
+
+
+        ; 2] Compute -B·(A² + B²)⁻¹
+        $ => A  :MLOAD(invFp2BN254_B)
+        ${const.BN254_P - A} => A
+        $ => B  :MLOAD(invFp2BN254_ABsq)
+                :CALL(mulFpBN254)
+        C       :MSTORE(invFp2BN254_im)
+
+        ; 3] Compute A·(A² + B²)⁻¹
+        $ => A  :MLOAD(invFp2BN254_A)
+        $ => B  :MLOAD(invFp2BN254_ABsq)
+                :CALL(mulFpBN254)
+        
+        $ => D  :MLOAD(invFp2BN254_im)
+
+        $ => RR         :MLOAD(invFp2BN254_RR)
+                        :RETURN
