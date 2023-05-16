@@ -726,6 +726,8 @@ pairingBN254_Miller_loop:
     ; else, "add"
 
 pairingBN254_Miller_loop_add:
+    ; TODO: The product f and line_{twist(R),twist(Q)}(P) can be optimized since second
+    ;       has half of the cofficients equal to 0
     ; 1] f = f · line_{twist(R),twist(Q)}(P)
     $ => A      :MLOAD(pairingBN254_R_x1)
     $ => B      :MLOAD(pairingBN254_R_x2)
@@ -859,12 +861,18 @@ pairingBN254_Miller_loop_sub:
     D           :MSTORE(lineDiffPointsBN254_P1_y2)
     $ => A      :MLOAD(pairingBN254_Q_x1)
     $ => B      :MLOAD(pairingBN254_Q_x2)
-    $ => C      :MLOAD(pairingBN254_Q_y1)
-    $ => D      :MLOAD(pairingBN254_Q_y2)
     A           :MSTORE(lineDiffPointsBN254_P2_x1)
     B           :MSTORE(lineDiffPointsBN254_P2_x2)
-    ${const.BN254_P - C}           :MSTORE(lineDiffPointsBN254_P2_y1)
-    ${const.BN254_P - D}           :MSTORE(lineDiffPointsBN254_P2_y2)
+    $ => C      :MLOAD(pairingBN254_Q_y1)
+    ${const.BN254_P - C} => A      :MSTORE(lineDiffPointsBN254_P2_y1)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => C,D      :MLOAD(pairingBN254_Q_y2)
+    ${const.BN254_P - D} => A      :MSTORE(lineDiffPointsBN254_P2_y2)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
 
     $ => A      :MLOAD(pairingBN254_P_x)
     $ => B      :MLOAD(pairingBN254_P_y)
@@ -955,9 +963,18 @@ pairingBN254_Miller_loop_sub:
     $ => D      :MLOAD(pairingBN254_Q_y2)
     A           :MSTORE(addPointBN254_P2_x1)
     B           :MSTORE(addPointBN254_P2_x2)
-    ; TODO: Use the SUB instruction
-    ${const.BN254_P - C}           :MSTORE(addPointBN254_P2_y1)
-    ${const.BN254_P - D}           :MSTORE(addPointBN254_P2_y2)
+    D => E
+    ${const.BN254_P - C}  => A      :MSTORE(addPointBN254_P2_y1)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+
+    E => C
+    ${const.BN254_P - C}  => A      :MSTORE(addPointBN254_P2_y2)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+
                 :CALL(addPointBN254)
     $ => A      :MLOAD(addPointBN254_P3_x1)
     $ => B      :MLOAD(addPointBN254_P3_x2)
@@ -972,20 +989,31 @@ pairingBN254_Miller_loop_sub:
 
 pairingBN254_last_two_lines:
     ; 1] Given Q = (x,y) with x,y ∈ Fp2, compute Frobenius1(Q) = (\gamma12·x̄, \gamma13·ȳ)
+    $ => D      :MLOAD(pairingBN254_Q_x2)
+    ${const.BN254_P - D} => A 
+    1n => B
+    D => C
+    0n => D
+    %BN254_P    :ARITH
+    A => D
     %FROBENIUS_GAMMA121 => A
     %FROBENIUS_GAMMA122 => B
     $ => C      :MLOAD(pairingBN254_Q_x1)
-    $ => D      :MLOAD(pairingBN254_Q_x2)
-    ${const.BN254_P - D} => D
                 :CALL(mulFp2BN254)
     E           :MSTORE(pairingBN254_Frobenius1_Q_x1)
     C           :MSTORE(pairingBN254_Frobenius1_Q_x2)
 
+
+    $ => D      :MLOAD(pairingBN254_Q_y2)
+    ${const.BN254_P - D} => A
+    1n => B
+    D => C
+    0n => D
+    %BN254_P    :ARITH
+    A => D
     %FROBENIUS_GAMMA131 => A
     %FROBENIUS_GAMMA132 => B
     $ => C      :MLOAD(pairingBN254_Q_y1)
-    $ => D      :MLOAD(pairingBN254_Q_y2)
-    ${const.BN254_P - D} => D
                 :CALL(mulFp2BN254)
     E           :MSTORE(pairingBN254_Frobenius1_Q_y1)
     C           :MSTORE(pairingBN254_Frobenius1_Q_y2)
@@ -1111,20 +1139,31 @@ pairingBN254_last_two_lines:
     D           :MSTORE(pairingBN254_R_y2)
 
     ; 4] Given Frobenius1(Q) = (x,y) with x,y ∈ Fp2, compute -Frobenius2(Q) = (\gamma12·x̄, -\gamma13·ȳ)
+
+    $ => D      :MLOAD(pairingBN254_Frobenius1_Q_x2)
+    ${const.BN254_P - D} => A
+    1n => B
+    D => C
+    0n => D
+    %BN254_P    :ARITH
+    A => D
     %FROBENIUS_GAMMA121 => A
     %FROBENIUS_GAMMA122 => B
     $ => C      :MLOAD(pairingBN254_Frobenius1_Q_x1)
-    $ => D      :MLOAD(pairingBN254_Frobenius1_Q_x2)
-    ${const.BN254_P - D} => D
                 :CALL(mulFp2BN254)
     E           :MSTORE(pairingBN254_nFrobenius2_Q_x1)
     C           :MSTORE(pairingBN254_nFrobenius2_Q_x2)
 
+    $ => D      :MLOAD(pairingBN254_Frobenius1_Q_y2)
+    ${const.BN254_P - D} => A
+    1n => B
+    D => C
+    0n => D
+    %BN254_P    :ARITH
+    A => D
     %FROBENIUS_GAMMA131_NEGATED => A
     %FROBENIUS_GAMMA132_NEGATED => B
     $ => C      :MLOAD(pairingBN254_Frobenius1_Q_y1)
-    $ => D      :MLOAD(pairingBN254_Frobenius1_Q_y2)
-    ${const.BN254_P - D} => D
                 :CALL(mulFp2BN254)
 
     ; 5] f = f · line_{twist(R),twist(-Frobenius2(Q))}(P)
@@ -1285,18 +1324,36 @@ pairingBN254_final_exponentiation:
     $ => B      :MLOAD(pairingBN254_f13_y)
     A           :MSTORE(mulFp12BN254_a13_x)
     B           :MSTORE(mulFp12BN254_a13_y)
-    $ => A      :MLOAD(pairingBN254_f21_x)
-    $ => B      :MLOAD(pairingBN254_f21_y)
-    ${const.BN254_P - A}          :MSTORE(mulFp12BN254_a21_x)
-    ${const.BN254_P - B}          :MSTORE(mulFp12BN254_a21_y)
-    $ => A      :MLOAD(pairingBN254_f22_x)
-    $ => B      :MLOAD(pairingBN254_f22_y)
-    ${const.BN254_P - A}          :MSTORE(mulFp12BN254_a22_x)
-    ${const.BN254_P - B}          :MSTORE(mulFp12BN254_a22_y)
-    $ => A      :MLOAD(pairingBN254_f23_x)
-    $ => B      :MLOAD(pairingBN254_f23_y)
-    ${const.BN254_P - A}          :MSTORE(mulFp12BN254_a23_x)
-    ${const.BN254_P - B}          :MSTORE(mulFp12BN254_a23_y)
+    $ => A,C    :MLOAD(pairingBN254_f21_x)
+    ${const.BN254_P - A}  => A    :MSTORE(mulFp12BN254_a21_x)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C    :MLOAD(pairingBN254_f21_y)
+    ${const.BN254_P - B} => A     :MSTORE(mulFp12BN254_a21_y)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => A,C    :MLOAD(pairingBN254_f22_x)
+    ${const.BN254_P - A}  => A    :MSTORE(mulFp12BN254_a22_x)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C    :MLOAD(pairingBN254_f22_y)
+    ${const.BN254_P - B}  => A    :MSTORE(mulFp12BN254_a22_y)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => A,C    :MLOAD(pairingBN254_f23_x)
+    ${const.BN254_P - A}  => A    :MSTORE(mulFp12BN254_a23_x)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C    :MLOAD(pairingBN254_f23_y)
+    ${const.BN254_P - B}  => A    :MSTORE(mulFp12BN254_a23_y)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
                 :CALL(mulFp12BN254)
     $ => A      :MLOAD(mulFp12BN254_c11_x)
     $ => B      :MLOAD(mulFp12BN254_c11_y)
@@ -1633,8 +1690,7 @@ pairingBN254_final_exponentiation:
     $ => B      :MLOAD(frobFp12BN254_c23_y)
     A           :MSTORE(pairingBN254_mp23_x)
     B           :MSTORE(pairingBN254_mp23_y)
-    ; ${dump(mem.pairingBN254_mp11_x,mem.pairingBN254_mp11_y,mem.pairingBN254_mp12_x,mem.pairingBN254_mp12_y,mem.pairingBN254_mp13_x,mem.pairingBN254_mp13_y,mem.pairingBN254_mp21_x,mem.pairingBN254_mp21_y,mem.pairingBN254_mp22_x,mem.pairingBN254_mp22_y,mem.pairingBN254_mp23_x,mem.pairingBN254_mp23_y)}
-
+    
     $ => A      :MLOAD(pairingBN254_f11_x)
     $ => B      :MLOAD(pairingBN254_f11_y)
     A           :MSTORE(frob2Fp12BN254_a11_x)
@@ -1684,7 +1740,6 @@ pairingBN254_final_exponentiation:
     $ => B      :MLOAD(frob2Fp12BN254_c23_y)
     A           :MSTORE(pairingBN254_mpp23_x)
     B           :MSTORE(pairingBN254_mpp23_y)
-    ; ${dump(mem.pairingBN254_mpp11_x,mem.pairingBN254_mpp11_y,mem.pairingBN254_mpp12_x,mem.pairingBN254_mpp12_y,mem.pairingBN254_mpp13_x,mem.pairingBN254_mpp13_y,mem.pairingBN254_mpp21_x,mem.pairingBN254_mpp21_y,mem.pairingBN254_mpp22_x,mem.pairingBN254_mpp22_y,mem.pairingBN254_mpp23_x,mem.pairingBN254_mpp23_y)}
 
     $ => A      :MLOAD(pairingBN254_f11_x)
     $ => B      :MLOAD(pairingBN254_f11_y)
@@ -1735,7 +1790,6 @@ pairingBN254_final_exponentiation:
     $ => B      :MLOAD(frob3Fp12BN254_c23_y)
     A           :MSTORE(pairingBN254_mppp23_x)
     B           :MSTORE(pairingBN254_mppp23_y)
-    ; ${dump(mem.pairingBN254_mppp11_x,mem.pairingBN254_mppp11_y,mem.pairingBN254_mppp12_x,mem.pairingBN254_mppp12_y,mem.pairingBN254_mppp13_x,mem.pairingBN254_mppp13_y,mem.pairingBN254_mppp21_x,mem.pairingBN254_mppp21_y,mem.pairingBN254_mppp22_x,mem.pairingBN254_mppp22_y,mem.pairingBN254_mppp23_x,mem.pairingBN254_mppp23_y)}
 
     $ => A      :MLOAD(pairingBN254_mx11_x)
     $ => B      :MLOAD(pairingBN254_mx11_y)
@@ -2076,18 +2130,36 @@ pairingBN254_final_exponentiation:
     $ => B      :MLOAD(pairingBN254_f13_y)
     A           :MSTORE(pairingBN254_y2_13_x)
     B           :MSTORE(pairingBN254_y2_13_y)
-    $ => A      :MLOAD(pairingBN254_f21_x)
-    $ => B      :MLOAD(pairingBN254_f21_y)
-    ${const.BN254_P - A}           :MSTORE(pairingBN254_y2_21_x)
-    ${const.BN254_P - B}           :MSTORE(pairingBN254_y2_21_y)
-    $ => A      :MLOAD(pairingBN254_f22_x)
-    $ => B      :MLOAD(pairingBN254_f22_y)
-    ${const.BN254_P - A}           :MSTORE(pairingBN254_y2_22_x)
-    ${const.BN254_P - B}           :MSTORE(pairingBN254_y2_22_y)
-    $ => A      :MLOAD(pairingBN254_f23_x)
-    $ => B      :MLOAD(pairingBN254_f23_y)
-    ${const.BN254_P - A}           :MSTORE(pairingBN254_y2_23_x)
-    ${const.BN254_P - B}           :MSTORE(pairingBN254_y2_23_y)
+    $ => A,C    :MLOAD(pairingBN254_f21_x)
+    ${const.BN254_P - A} => A      :MSTORE(pairingBN254_y2_21_x)
+    1n => B 
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C      :MLOAD(pairingBN254_f21_y)
+    ${const.BN254_P - B} => A      :MSTORE(pairingBN254_y2_21_y)
+    1n => B 
+    0n => D
+    %BN254_P    :ARITH
+    $ => A,C      :MLOAD(pairingBN254_f22_x)
+    ${const.BN254_P - A} => A      :MSTORE(pairingBN254_y2_22_x)
+    1n => B 
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C      :MLOAD(pairingBN254_f22_y)
+    ${const.BN254_P - B} => A      :MSTORE(pairingBN254_y2_22_y)
+    1n => B 
+    0n => D
+    %BN254_P    :ARITH
+    $ => A,C      :MLOAD(pairingBN254_f23_x)
+    ${const.BN254_P - A} => A      :MSTORE(pairingBN254_y2_23_x)
+    1n => B 
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C      :MLOAD(pairingBN254_f23_y)
+    ${const.BN254_P - B} => A      :MSTORE(pairingBN254_y2_23_y)
+    1n => B 
+    0n => D
+    %BN254_P    :ARITH
 
     ; 5] y3 = (m^x²)^p²
     ; This has already been computed
@@ -2105,18 +2177,36 @@ pairingBN254_final_exponentiation:
     $ => B      :MLOAD(pairingBN254_mxp13_y)
     A           :MSTORE(pairingBN254_y4_13_x)
     B           :MSTORE(pairingBN254_y4_13_y)
-    $ => A      :MLOAD(pairingBN254_mxp21_x)
-    $ => B      :MLOAD(pairingBN254_mxp21_y)
-    ${const.BN254_P - A}           :MSTORE(pairingBN254_y4_21_x)
-    ${const.BN254_P - B}           :MSTORE(pairingBN254_y4_21_y)
-    $ => A      :MLOAD(pairingBN254_mxp22_x)
-    $ => B      :MLOAD(pairingBN254_mxp22_y)
-    ${const.BN254_P - A}           :MSTORE(pairingBN254_y4_22_x)
-    ${const.BN254_P - B}           :MSTORE(pairingBN254_y4_22_y)
-    $ => A      :MLOAD(pairingBN254_mxp23_x)
-    $ => B      :MLOAD(pairingBN254_mxp23_y)
-    ${const.BN254_P - A}           :MSTORE(pairingBN254_y4_23_x)
-    ${const.BN254_P - B}           :MSTORE(pairingBN254_y4_23_y)
+    $ => A,C    :MLOAD(pairingBN254_mxp21_x)
+    ${const.BN254_P - A} => A      :MSTORE(pairingBN254_y4_21_x)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C    :MLOAD(pairingBN254_mxp21_y)
+    ${const.BN254_P - B} => A      :MSTORE(pairingBN254_y4_21_y)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => A,C    :MLOAD(pairingBN254_mxp22_x)
+    ${const.BN254_P - A} => A      :MSTORE(pairingBN254_y4_22_x)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C    :MLOAD(pairingBN254_mxp22_y)
+    ${const.BN254_P - B} => A      :MSTORE(pairingBN254_y4_22_y)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => A,C    :MLOAD(pairingBN254_mxp23_x)
+    ${const.BN254_P - A} => A      :MSTORE(pairingBN254_y4_23_x)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C    :MLOAD(pairingBN254_mxp23_y)
+    ${const.BN254_P - B} => A      :MSTORE(pairingBN254_y4_23_y)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
 
     ; 7] y5 = \bar{m^x·(m^x²)^p}
     $ => A      :MLOAD(pairingBN254_mx11_x)
@@ -2180,18 +2270,36 @@ pairingBN254_final_exponentiation:
     $ => B      :MLOAD(mulFp12BN254_c13_y)
     A           :MSTORE(pairingBN254_y5_13_x)
     B           :MSTORE(pairingBN254_y5_13_y)
-    $ => A      :MLOAD(mulFp12BN254_c21_x)
-    $ => B      :MLOAD(mulFp12BN254_c21_y)
-    ${const.BN254_P - A}           :MSTORE(pairingBN254_y5_21_x)
-    ${const.BN254_P - B}           :MSTORE(pairingBN254_y5_21_y)
-    $ => A      :MLOAD(mulFp12BN254_c22_x)
-    $ => B      :MLOAD(mulFp12BN254_c22_y)
-    ${const.BN254_P - A}           :MSTORE(pairingBN254_y5_22_x)
-    ${const.BN254_P - B}           :MSTORE(pairingBN254_y5_22_y)
-    $ => A      :MLOAD(mulFp12BN254_c23_x)
-    $ => B      :MLOAD(mulFp12BN254_c23_y)
-    ${const.BN254_P - A}           :MSTORE(pairingBN254_y5_23_x)
-    ${const.BN254_P - B}           :MSTORE(pairingBN254_y5_23_y)
+    $ => A,C    :MLOAD(mulFp12BN254_c21_x)
+    ${const.BN254_P - A} => A      :MSTORE(pairingBN254_y5_21_x)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C    :MLOAD(mulFp12BN254_c21_y)
+    ${const.BN254_P - B} => A      :MSTORE(pairingBN254_y5_21_y)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => A,C    :MLOAD(mulFp12BN254_c22_x)
+    ${const.BN254_P - A} => A      :MSTORE(pairingBN254_y5_22_x)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C    :MLOAD(mulFp12BN254_c22_y)
+    ${const.BN254_P - B} => A      :MSTORE(pairingBN254_y5_22_y)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => A,C    :MLOAD(mulFp12BN254_c23_x)
+    ${const.BN254_P - A} => A      :MSTORE(pairingBN254_y5_23_x)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C    :MLOAD(mulFp12BN254_c23_y)
+    ${const.BN254_P - B} => A      :MSTORE(pairingBN254_y5_23_y)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
 
     ; 8] y6 = \bar{m^x²}
     $ => A      :MLOAD(pairingBN254_mxx11_x)
@@ -2206,18 +2314,36 @@ pairingBN254_final_exponentiation:
     $ => B      :MLOAD(pairingBN254_mxx13_y)
     A           :MSTORE(pairingBN254_y6_13_x)
     B           :MSTORE(pairingBN254_y6_13_y)
-    $ => A      :MLOAD(pairingBN254_mxx21_x)
-    $ => B      :MLOAD(pairingBN254_mxx21_y)
-    ${const.BN254_P - A}           :MSTORE(pairingBN254_y6_21_x)
-    ${const.BN254_P - B}           :MSTORE(pairingBN254_y6_21_y)
-    $ => A      :MLOAD(pairingBN254_mxx22_x)
-    $ => B      :MLOAD(pairingBN254_mxx22_y)
-    ${const.BN254_P - A}           :MSTORE(pairingBN254_y6_22_x)
-    ${const.BN254_P - B}           :MSTORE(pairingBN254_y6_22_y)
-    $ => A      :MLOAD(pairingBN254_mxx23_x)
-    $ => B      :MLOAD(pairingBN254_mxx23_y)
-    ${const.BN254_P - A}           :MSTORE(pairingBN254_y6_23_x)
-    ${const.BN254_P - B}           :MSTORE(pairingBN254_y6_23_y)
+    $ => A,C    :MLOAD(pairingBN254_mxx21_x)
+    ${const.BN254_P - A} => A      :MSTORE(pairingBN254_y6_21_x)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C    :MLOAD(pairingBN254_mxx21_y)
+    ${const.BN254_P - B} => A      :MSTORE(pairingBN254_y6_21_y)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => A,C    :MLOAD(pairingBN254_mxx22_x)
+    ${const.BN254_P - A} => A      :MSTORE(pairingBN254_y6_22_x)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C    :MLOAD(pairingBN254_mxx22_y)
+    ${const.BN254_P - B} => A      :MSTORE(pairingBN254_y6_22_y)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => A,C    :MLOAD(pairingBN254_mxx23_x)
+    ${const.BN254_P - A} => A      :MSTORE(pairingBN254_y6_23_x)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C    :MLOAD(pairingBN254_mxx23_y)
+    ${const.BN254_P - B} => A      :MSTORE(pairingBN254_y6_23_y)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
 
     ; 9] y7 = \bar{m^x³·(m^x³)^p}
     $ => A      :MLOAD(pairingBN254_mxxx11_x)
@@ -2281,18 +2407,36 @@ pairingBN254_final_exponentiation:
     $ => B      :MLOAD(mulFp12BN254_c13_y)
     A           :MSTORE(pairingBN254_y7_13_x)
     B           :MSTORE(pairingBN254_y7_13_y)
-    $ => A      :MLOAD(mulFp12BN254_c21_x)
-    $ => B      :MLOAD(mulFp12BN254_c21_y)
-    ${const.BN254_P - A}           :MSTORE(pairingBN254_y7_21_x)
-    ${const.BN254_P - B}           :MSTORE(pairingBN254_y7_21_y)
-    $ => A      :MLOAD(mulFp12BN254_c22_x)
-    $ => B      :MLOAD(mulFp12BN254_c22_y)
-    ${const.BN254_P - A}           :MSTORE(pairingBN254_y7_22_x)
-    ${const.BN254_P - B}           :MSTORE(pairingBN254_y7_22_y)
-    $ => A      :MLOAD(mulFp12BN254_c23_x)
-    $ => B      :MLOAD(mulFp12BN254_c23_y)
-    ${const.BN254_P - A}           :MSTORE(pairingBN254_y7_23_x)
-    ${const.BN254_P - B}           :MSTORE(pairingBN254_y7_23_y)
+    $ => A,C    :MLOAD(mulFp12BN254_c21_x)
+    ${const.BN254_P - A} => A      :MSTORE(pairingBN254_y7_21_x)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C    :MLOAD(mulFp12BN254_c21_y)
+    ${const.BN254_P - B} => A      :MSTORE(pairingBN254_y7_21_y)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => A,C    :MLOAD(mulFp12BN254_c22_x)
+    ${const.BN254_P - A} => A      :MSTORE(pairingBN254_y7_22_x)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C    :MLOAD(mulFp12BN254_c22_y)
+    ${const.BN254_P - B} => A      :MSTORE(pairingBN254_y7_22_y)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => A,C    :MLOAD(mulFp12BN254_c23_x)
+    ${const.BN254_P - A} => A      :MSTORE(pairingBN254_y7_23_x)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
+    $ => B,C    :MLOAD(mulFp12BN254_c23_y)
+    ${const.BN254_P - B} => A      :MSTORE(pairingBN254_y7_23_y)
+    1n => B
+    0n => D
+    %BN254_P    :ARITH
 
 
     ; 10] Compute y1·y2²·y3⁶·y4¹²·y5¹⁸·y6³⁰·y7³⁶ as follows
