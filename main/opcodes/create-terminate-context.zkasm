@@ -75,6 +75,7 @@ opCREATE:
     $ => E              :MLOAD(SP--); [offset => E]
     E                   :MSTORE(argsOffsetCall)
     $ => C              :MLOAD(SP); [size => C]
+    %MAX_INITCODE_SIZE - C  :JMPN(invalidCreateInitcodeSize)
     C                   :MSTORE(argsLengthCall)
 
     ; store lastMemOffset for memory expansion gas cost
@@ -84,6 +85,16 @@ opCREATE:
     C                   :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; store current CTX to auxiliary var for later usage
     CTX                 :MSTORE(originAuxCTX)
+
+    ; initcode cost
+    C + 31              :MSTORE(arithA)
+    32                  :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => C              :MLOAD(arithRes1)
+    GAS => A
+    %INITCODE_WORD_COST * C => B
+    $                   :LT,JMPC(outOfGas)
+    A - B => GAS
+    GAS                 :MSTORE(gasCall)
 
     ; check if source address has enough balance to send to the new account
     $ => A              :MLOAD(storageAddr)
@@ -487,7 +498,7 @@ opRETURNend:
 
 opRETURNdeploy:
     ; code size limit = 0x6000
-    %CODE_SIZE_LIMIT - C      :JMPN(invalidCodeSize)
+    %MAX_CODE_SIZE - C      :JMPN(invalidCodeSize)
     ;code_deposit_cost = 200 * returned_code_size
     GAS - %RETURN_GAS_COST * C => GAS    :JMPN(outOfGas)
     ; check if first context
@@ -670,6 +681,7 @@ opCREATE2:
     $ => E              :MLOAD(SP--); [offset => E]
     E                   :MSTORE(argsOffsetCall)
     $ => C              :MLOAD(SP--); [size => C]
+    %MAX_INITCODE_SIZE - C  :JMPN(invalidCreateInitcodeSize)
     C                   :MSTORE(argsLengthCall)
     $ => D              :MLOAD(SP); [salt => D]
 
@@ -682,11 +694,14 @@ opCREATE2:
     ; store current CTX to auxiliary var for later usage
     CTX                 :MSTORE(originAuxCTX)
 
-    ; cost to hash the initialisation code
+    ; initcode cost and cost to hash the initialisation code
     C + 31              :MSTORE(arithA)
     32                  :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => C              :MLOAD(arithRes1)
     GAS => A
+    %INITCODE_WORD_COST * C => B
+    $                   :LT,JMPC(outOfGas)
+    A - B => A
     6 * C => B
     $                   :LT,JMPC(outOfGas)
     A - B => GAS

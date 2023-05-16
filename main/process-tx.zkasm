@@ -59,13 +59,14 @@ checkAndSaveFrom:
         ; Don't check chainId for legacy transactions
         $ => A                          :MLOAD(isPreEIP155), JMPNZ(endCheckChainId)
         $ => A                          :MLOAD(txChainId)
-        $ => B                          :MLOAD(chainID)                                       ; A: chainId tx
+        $ => B                          :MLOAD(chainID)         ; A: chainId tx
         $                               :EQ,JMPC(endCheckChainId, invalidIntrinsicTxChainId)  ; If A == B --> endCheckChainId
 endCheckChainId:
 
 ;; Reset warm/cold information
         $ => A                          :MLOAD(txSrcOriginAddr), CALL(initTouchedTree)
                                         :CALL(isColdAddress) ; add tx.origin to touched addresses
+        $ => A                          :MLOAD(sequencerAddr), CALL(isColdAddress) ; add coinbase to touched addresses
         0                               :MSTORE(depth) ; Initial depth is 0
 
 ;; Set gasPrice global var
@@ -80,13 +81,12 @@ endCheckChainId:
         0 => C
         $ => A                          :SLOAD
         $ => B                          :MLOAD(txNonce)
-        $ => C                          :EQ, JMPNC(invalidIntrinsicTxNonce) ; Compare nonce state tree with nonce transaction
+        $                               :EQ, JMPNC(invalidIntrinsicTxNonce) ; Compare nonce state tree with nonce transaction
         ; increase nonce by 1
         1 => B
         $ => D                          :ADD ; compute [nonce + 1 => D]
         E => A
         %SMT_KEY_NONCE => B
-        0 => C
         $ => SR                         :SSTORE ; Store the nonce plus one
 
 ;;;;;;;;;;;;;;;;;;
@@ -101,22 +101,26 @@ endCheckChainId:
 
         ; Intrinsic gas --> gas Limit >= 21000 + calldata cost + deployment cost
         %BASE_TX_GAS => E ; Store init intrinsic gas at E
-        $ => A                          :MLOAD(isCreateContract), JMPNZ(addDeploymentGasCost, getCalldataGasCost)
+        $ => A                          :MLOAD(txCalldataLen),JMPZ(endCalldataIntrinsicGas)
+        $                               :MLOAD(isCreateContract), JMPNZ(addDeploymentGasCost, addGas)
 
 addDeploymentGasCost:
         %BASE_TX_DEPLOY_GAS => E ; 53000 gas if transaction is a create
-
-getCalldataGasCost:
-        $ => A                          :MLOAD(txCalldataLen)
-        0 => B
-        $                               :EQ,JMPC(endCalldataIntrinsicGas)
+        ; Check initcode max size (EIP-3860) MAX_INITCODE_SIZE = 2 * MAX_CODE_SIZE = 2 * 24576
+        %MAX_INITCODE_SIZE - A          :JMPN(invalidInitcodeLimit)
+        ; A < 2 * MAX_CODE_SIZE --> A < 49152
+        ; Add initcode_cost: INITCODE_WORD_COST * ceil(len(initcode) / 32)
+        A                               :MSTORE(arithA)
+        32                              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+        $ => B                          :MLOAD(arithRes1)
+        E + %INITCODE_WORD_COST * B => E
 
 addGas:
         $ => HASHPOS                    :MLOAD(dataStarts)
-        0 => C                          :JMP(loopBytes)
+        0 => C
 
 loopBytes:
-        %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 10      :JMPN(outOfCountersStep)
         A - C - 1                       :JMPN(endCalldataIntrinsicGas)
         E => B
         $ => E                          :MLOAD(batchHashDataId)
@@ -148,8 +152,9 @@ endCalldataIntrinsicGas:
         $ => D                          :MLOAD(arithRes1)
         ; Get caller balance
         $ => A                          :MLOAD(txSrcOriginAddr)
-        0 => B, C
-        $ => C                          :SLOAD
+        %SMT_KEY_BALANCE => B
+        0 => C
+        $ => A                          :SLOAD
         ; (gas price * gas limit) + value
         $ => B                          :MLOAD(txValue)
         D                               :MSTORE(arithA)
@@ -157,16 +162,16 @@ endCalldataIntrinsicGas:
         $                               :MLOAD(addArithOverflow), JMPNZ(invalidIntrinsicTxBalance)
         $ => B                          :MLOAD(arithRes1)
         ; Comparison
-        C => A
         $                               :LT, JMPC(invalidIntrinsicTxBalance)
 
         ; Substract (gas price * gas limit) from caller balance
-        C                               :MSTORE(arithA)
+        A                               :MSTORE(arithA)
         D                               :MSTORE(arithB), CALL(subARITH)
         ; Substracted balance result in D
         $ => D                          :MLOAD(arithRes1)
         $ => A                          :MLOAD(txSrcOriginAddr)
-        0 => B,C
+        %SMT_KEY_BALANCE => B
+        0 => C
         $ => SR                         :SSTORE
 
         ; Store state root with upfront cost substracted and nonce increased
@@ -477,7 +482,7 @@ handleGas:
         A - GAS => A
         ; Div operation with Arith
         A                               :MSTORE(arithA)
-        2                               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+        %MAX_REFUND_QUOTIENT            :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
         $ => A                          :MLOAD(arithRes1)
         A - B                           :JMPN(refundGas)
         B => A
@@ -552,6 +557,9 @@ invalidIntrinsicBatchGasLimit:
 
 invalidIntrinsicTxSenderCode:
         $${eventLog(onError, intrinsic_invalid_sender_code)} :JMP(handleIntrinsicError)
+
+invalidInitcodeLimit:
+        $${eventLog(onError, invalid_initcode_limit)}  :JMP(handleIntrinsicError)
 
 handleIntrinsicError:
         $ => SR                         :MLOAD(originSR), JMP(processTxFinished)
