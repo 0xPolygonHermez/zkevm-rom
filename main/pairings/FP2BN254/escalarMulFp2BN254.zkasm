@@ -6,28 +6,43 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-VAR GLOBAL escalarMulFp2BN254_A
-VAR GLOBAL escalarMulFp2BN254_D
-
-VAR GLOBAL escalarMulFp2BN254_AC
-
-VAR GLOBAL escalarMulFp2BN254_RR
+VAR GLOBAL escalarMulFp2BN254_i
 
 escalarMulFp2BN254:
-        RR      :MSTORE(escalarMulFp2BN254_RR)
+        ; Compute and check the mul
+        ; A·C - B·D = [E] + (q0·BN254_P)
+        ; A·D + B·C = [OP] + (q1·BN254_P)
+        0n => B
+        ${ARITH_BN254_MULFP2_X(A,B,C,D)} => E
+        ${ARITH_BN254_MULFP2_Y(A,B,C,D)}      :MSTORE(escalarMulFp2BN254_i),ARITH_BN254_MULFP2
 
-        A       :MSTORE(escalarMulFp2BN254_A)
-        D       :MSTORE(escalarMulFp2BN254_D)
+        $ => C  :MLOAD(escalarMulFp2BN254_i),RETURN
 
-        C => B 
-                :CALL(mulFpBN254)
-        C       :MSTORE(escalarMulFp2BN254_AC)
 
-        $ => A  :MLOAD(escalarMulFp2BN254_A)
-        $ => B  :MLOAD(escalarMulFp2BN254_D)
-                :CALL(mulFpBN254)
+; Below, hand-crafted escalar multiplication
+; ==============================================
+; VAR GLOBAL escalarMulFp2BN254_A
+; VAR GLOBAL escalarMulFp2BN254_D
 
-        $ => E  :MLOAD(escalarMulFp2BN254_AC)
+; VAR GLOBAL escalarMulFp2BN254_AC
 
-        $ => RR         :MLOAD(escalarMulFp2BN254_RR)
-                        :RETURN
+; VAR GLOBAL escalarMulFp2BN254_RR
+
+; escalarMulFp2BN254:
+;         RR      :MSTORE(escalarMulFp2BN254_RR)
+
+;         A       :MSTORE(escalarMulFp2BN254_A)
+;         D       :MSTORE(escalarMulFp2BN254_D)
+
+;         C => B 
+;                 :CALL(mulFpBN254)
+;         C       :MSTORE(escalarMulFp2BN254_AC)
+
+;         $ => A  :MLOAD(escalarMulFp2BN254_A)
+;         $ => B  :MLOAD(escalarMulFp2BN254_D)
+;                 :CALL(mulFpBN254)
+
+;         $ => E  :MLOAD(escalarMulFp2BN254_AC)
+
+;         $ => RR         :MLOAD(escalarMulFp2BN254_RR)
+;                         :RETURN

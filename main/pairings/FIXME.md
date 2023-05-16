@@ -5,3 +5,4 @@
 - [ ] Rename `Fp2BN254neq0` in `helper.js` to `FpBN254neq0`
 - [ ] Why is `${const.BN254_P - C} => C` correct and `%BN254_P - C => C` is not?
 - [ ] Fix all Check if 0!!!! I should use EQ rather than ARITH
+- [ ] Sums are for free, I do not need to normalize.

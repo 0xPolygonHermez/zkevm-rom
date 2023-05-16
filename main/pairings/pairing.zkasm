@@ -317,24 +317,76 @@ VAR GLOBAL psi_y2
 
 INCLUDE "constants.zkasm"
 
-; TODO
 ; ERROR CODES (B)
 ; 0 - no error
 ; 1 - P is not in G1
 ; 2 - Q is not in G2
-; 3 - s is zero (0)
-; 4 - s is too big
-; 5 - v not valid value (1b, 1c)
-; 6 - not exists sqrt of y
-; 100 - fail sqrt, but has solution (!!!)
+
+; TODO: I think I should check that Px,Py,Qx1,Qx2,Qy1,Qy2 are field elements before anything else, otherwise do the modulo 
 
 pairing:
     RR          :MSTORE(pairing_RR)
-                :JMP(pairing_subgroup_checks)
 
-; TODO: I think I check that Px,Py,Qx1,Qx2,Qy1,Qy2 are field elements before anything else, otherwise do the modulo 
-; TODO: Do the proper branching for some of the points being 0
-pairing_subgroup_checks:
+    ; Check if P = 0
+    ${Fp2BN254neq0(mem.pairing_P_x) || Fp2BN254neq0(mem.pairing_P_y)}   :JMPZ(pairing_P_is_zero)
+
+    ; Check if Q = 0
+    ${Fp2BN254neq0(mem.pairing_Q_x1) || Fp2BN254neq0(mem.pairing_Q_x2) || Fp2BN254neq0(mem.pairing_Q_y1) || Fp2BN254neq0(mem.pairing_Q_y2)}   :JMPZ(pairing_Q_is_zero)
+
+                :JMP(pairing_P_subgroup_check)
+
+
+pairing_P_is_zero:
+        ; Check that P is zero
+        0n => B
+        $ => A  :MLOAD(pairing_P_x)
+        1       :EQ
+        $ => A  :MLOAD(pairing_P_y)
+        1       :EQ
+
+        1n      :MSTORE(pairing_f11_x)
+        0n      :MSTORE(pairing_f11_y)
+        0n      :MSTORE(pairing_f12_x)
+        0n      :MSTORE(pairing_f12_y)
+        0n      :MSTORE(pairing_f13_x)
+        0n      :MSTORE(pairing_f13_y)
+        0n      :MSTORE(pairing_f21_x)
+        0n      :MSTORE(pairing_f21_y)
+        0n      :MSTORE(pairing_f22_x)
+        0n      :MSTORE(pairing_f22_y)
+        0n      :MSTORE(pairing_f23_x)
+        0n      :MSTORE(pairing_f23_y)
+
+                :JMP(pairing_end)
+
+pairing_Q_is_zero:
+        ; Check that Q is zero
+        0n => B
+        $ => A  :MLOAD(pairing_Q_x1)
+        1       :EQ
+        $ => A  :MLOAD(pairing_Q_x2)
+        1       :EQ
+        $ => A  :MLOAD(pairing_Q_y1)
+        1       :EQ
+        $ => A  :MLOAD(pairing_Q_y2)
+        1       :EQ
+
+        1n      :MSTORE(pairing_f11_x)
+        0n      :MSTORE(pairing_f11_y)
+        0n      :MSTORE(pairing_f12_x)
+        0n      :MSTORE(pairing_f12_y)
+        0n      :MSTORE(pairing_f13_x)
+        0n      :MSTORE(pairing_f13_y)
+        0n      :MSTORE(pairing_f21_x)
+        0n      :MSTORE(pairing_f21_y)
+        0n      :MSTORE(pairing_f22_x)
+        0n      :MSTORE(pairing_f22_y)
+        0n      :MSTORE(pairing_f23_x)
+        0n      :MSTORE(pairing_f23_y)
+
+                :JMP(pairing_end)
+
+pairing_P_subgroup_check:
     ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
     ; 1] Compute LHS and RHS
     $ => A,B    :MLOAD(pairing_P_x),CALL(mulFpBN254); C = (Px)²
@@ -351,6 +403,7 @@ pairing_subgroup_checks:
     $ => B      :MLOAD(pairing_P_x3) 
     $           :EQ,JMPNC(pairing_P_is_not_in_G1)
 
+pairing_Q_subgroup_check:
     ; Q in G2 iff psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
     ; 1] Compute psi(Q)                   
     %BN254_P => A
@@ -400,8 +453,6 @@ pairing_subgroup_checks:
     $ => A      :MLOAD(psi_y2)
     $ => B      :MLOAD(escalarMulBN254_Q_y2)
     $           :EQ,JMPNC(pairing_Q_is_not_in_G2)
-
-    ; 0 => B      :JMP(pairing_end)
 
 pairing_Miller_loop_init:
     65 => RCX
@@ -2888,26 +2939,36 @@ pairing_end:
         ${dump(B)}
         :RETURN
 
-; INCLUDE "./FPBN254/addFpBN254.zkasm" ; TODO: Fix this
+INCLUDE "./FPBN254/addFpBN254.zkasm"
 INCLUDE "./FPBN254/subFpBN254.zkasm"
 INCLUDE "./FPBN254/mulFpBN254.zkasm"
-INCLUDE "./FPBN254/invFpBN254.zkasm"
 INCLUDE "./FPBN254/squareFpBN254.zkasm"
+INCLUDE "./FPBN254/invFpBN254.zkasm"
+
+INCLUDE "./FP2BN254/addFp2BN254.zkasm"
+INCLUDE "./FP2BN254/subFp2BN254.zkasm"
+INCLUDE "./FP2BN254/mulFp2BN254.zkasm"
 INCLUDE "./FP2BN254/squareFp2BN254.zkasm"
 INCLUDE "./FP2BN254/escalarMulFp2BN254.zkasm"
+INCLUDE "./FP2BN254/invFp2BN254.zkasm"
+
 INCLUDE "./FP6BN254/addFp6BN254.zkasm"
 INCLUDE "./FP6BN254/subFp6BN254.zkasm"
 INCLUDE "./FP6BN254/mulFp6BN254.zkasm"
-INCLUDE "./FP6BN254/inverseFp6BN254.zkasm"
 INCLUDE "./FP6BN254/squareFp6BN254.zkasm"
-INCLUDE "./FP12BN254/squareFp12BN254.zkasm"
+INCLUDE "./FP6BN254/inverseFp6BN254.zkasm"
+
 INCLUDE "./FP12BN254/mulFp12BN254.zkasm"
+INCLUDE "./FP12BN254/squareFp12BN254.zkasm"
 INCLUDE "./FP12BN254/inverseFp12BN254.zkasm"
 INCLUDE "./FP12BN254/expFp12BN254.zkasm"
 INCLUDE "./FP12BN254/frobFp12BN254.zkasm"
 INCLUDE "./FP12BN254/frob2Fp12BN254.zkasm"
 INCLUDE "./FP12BN254/frob3Fp12BN254.zkasm"
+
+INCLUDE "./BN254/addPointBN254.zkasm"
 INCLUDE "./BN254/escalarMulBN254.zkasm"
 INCLUDE "./BN254/lineSamePointsBN254.zkasm"
 INCLUDE "./BN254/lineDiffPointsBN254.zkasm"
+
 INCLUDE "loopLengthBN254.zkasm"

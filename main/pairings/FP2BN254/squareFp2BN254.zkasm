@@ -6,57 +6,63 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-VAR GLOBAL squareFp2_tmp
-
-; TODO: This is not sound, but correct
-; squareFp2BN254:
-;         ${fp2SquareBN254_x(A,B,C,D)} => E
-;         ${fp2SquareBN254_y(A,B,C,D)}            :MSTORE(squareFp2_tmp)
-        
-;         $ => C                                  :MLOAD(squareFp2_tmp),RETURN
-
-
-VAR GLOBAL squareFp2BN254_A
-VAR GLOBAL squareFp2BN254_B
-VAR GLOBAL squareFp2BN254_C
-VAR GLOBAL squareFp2BN254_D
-
-VAR GLOBAL squareFp2BN254_AmB
-VAR GLOBAL squareFp2BN254_ABsq
-
-VAR GLOBAL squareFp2BN254_RR
+VAR GLOBAL squareFp2BN254_i
 
 squareFp2BN254:
-        RR      :MSTORE(squareFp2BN254_RR)
+        ; Compute and check the squaring
+        ; A·A - B·B = [E] + (q0·BN254_P)
+        ; A·B + B·A = [OP] + (q1·BN254_P)
+        A => C
+        B => D
+        ${ARITH_BN254_MULFP2_X(A,B,A,B)} => E
+        ${ARITH_BN254_MULFP2_Y(A,B,A,B)}      :MSTORE(squareFp2BN254_i),ARITH_BN254_MULFP2
 
-        A       :MSTORE(squareFp2BN254_A)
-        B       :MSTORE(squareFp2BN254_B)
-        C       :MSTORE(squareFp2BN254_C)
-        D       :MSTORE(squareFp2BN254_D)
+        $ => C  :MLOAD(squareFp2BN254_i),RETURN
 
-        ; 1] Compute (A - B)·(A + B)
-        B => C
-                :CALL(subFpBN254)
-        C       :MSTORE(squareFp2BN254_AmB)
 
-        $ => A  :MLOAD(squareFp2BN254_A)
-        $ => C  :MLOAD(squareFp2BN254_B)
-                :CALL(addFpBN254)
+; Below, hand-crafted squaring
+; ==============================================
+; VAR GLOBAL squareFp2BN254_A
+; VAR GLOBAL squareFp2BN254_B
+; VAR GLOBAL squareFp2BN254_C
+; VAR GLOBAL squareFp2BN254_D
 
-        $ => A  :MLOAD(squareFp2BN254_AmB)
-        C => B
-                :CALL(mulFpBN254)
-        C       :MSTORE(squareFp2BN254_ABsq)
+; VAR GLOBAL squareFp2BN254_AmB
+; VAR GLOBAL squareFp2BN254_ABsq
 
-        ; 2] Compute 2·A·B
-        $ => A  :MLOAD(squareFp2BN254_A)
-        $ => B  :MLOAD(squareFp2BN254_B)
-                :CALL(mulFpBN254)
-        2n => A
-        C => B 
-                :CALL(mulFpBN254)
+; VAR GLOBAL squareFp2BN254_RR
 
-        $ => E  :MLOAD(squareFp2BN254_ABsq)
+; squareFp2BN254:
+;         RR      :MSTORE(squareFp2BN254_RR)
 
-        $ => RR         :MLOAD(squareFp2BN254_RR)
-                        :RETURN
+;         A       :MSTORE(squareFp2BN254_A)
+;         B       :MSTORE(squareFp2BN254_B)
+;         C       :MSTORE(squareFp2BN254_C)
+;         D       :MSTORE(squareFp2BN254_D)
+
+;         ; 1] Compute (A - B)·(A + B)
+;         B => C
+;                 :CALL(subFpBN254)
+;         C       :MSTORE(squareFp2BN254_AmB)
+
+;         $ => A  :MLOAD(squareFp2BN254_A)
+;         $ => C  :MLOAD(squareFp2BN254_B)
+;                 :CALL(addFpBN254)
+
+;         $ => A  :MLOAD(squareFp2BN254_AmB)
+;         C => B
+;                 :CALL(mulFpBN254)
+;         C       :MSTORE(squareFp2BN254_ABsq)
+
+;         ; 2] Compute 2·A·B
+;         $ => A  :MLOAD(squareFp2BN254_A)
+;         $ => B  :MLOAD(squareFp2BN254_B)
+;                 :CALL(mulFpBN254)
+;         2n => A
+;         C => B 
+;                 :CALL(mulFpBN254)
+
+;         $ => E  :MLOAD(squareFp2BN254_ABsq)
+
+;         $ => RR         :MLOAD(squareFp2BN254_RR)
+;                         :RETURN
