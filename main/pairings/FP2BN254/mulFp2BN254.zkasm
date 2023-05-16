@@ -6,56 +6,68 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; TODO: Use the complex multiplication OPCODE 
-
-VAR GLOBAL mulFp2BN254_A
-VAR GLOBAL mulFp2BN254_B
-VAR GLOBAL mulFp2BN254_C
-VAR GLOBAL mulFp2BN254_D
-
-VAR GLOBAL mulFp2BN254_AC
-VAR GLOBAL mulFp2BN254_AD
-
-VAR GLOBAL mulFp2BN254_real
-
-VAR GLOBAL mulFp2BN254_RR
+VAR GLOBAL mulFp2BN254_i
 
 mulFp2BN254:
-        RR      :MSTORE(mulFp2BN254_RR)
+        ; Compute and check the mul
+        ; A·C - B·D = [E] + (q0·BN254_P)
+        ; A·D + B·C = [OP] + (q1·BN254_P)
+        ${ARITH_BN254_MULFP2_X(A,B,C,D)} => E
+        ${ARITH_BN254_MULFP2_Y(A,B,C,D)}      :MSTORE(mulFp2BN254_i),ARITH_BN254_MULFP2
 
-        A       :MSTORE(mulFp2BN254_A)
-        B       :MSTORE(mulFp2BN254_B)
-        C       :MSTORE(mulFp2BN254_C)
-        D       :MSTORE(mulFp2BN254_D)
+        $ => C  :MLOAD(mulFp2BN254_i),RETURN
 
-        ; 1] Compute A·C - B·D
-        C => B
-                :CALL(mulFpBN254)
-        C       :MSTORE(mulFp2BN254_AC)
 
-        $ => A  :MLOAD(mulFp2BN254_B)
-        $ => B  :MLOAD(mulFp2BN254_D)
-                :CALL(mulFpBN254)
+; Below, hand-crafted multiplication
+; ==============================================
+; VAR GLOBAL mulFp2BN254_A
+; VAR GLOBAL mulFp2BN254_B
+; VAR GLOBAL mulFp2BN254_C
+; VAR GLOBAL mulFp2BN254_D
 
-        $ => A  :MLOAD(mulFp2BN254_AC)
-                :CALL(subFpBN254)
+; VAR GLOBAL mulFp2BN254_AC
+; VAR GLOBAL mulFp2BN254_AD
+
+; VAR GLOBAL mulFp2BN254_real
+
+; VAR GLOBAL mulFp2BN254_RR
+
+; mulFp2BN254:
+;         RR      :MSTORE(mulFp2BN254_RR)
+
+;         A       :MSTORE(mulFp2BN254_A)
+;         B       :MSTORE(mulFp2BN254_B)
+;         C       :MSTORE(mulFp2BN254_C)
+;         D       :MSTORE(mulFp2BN254_D)
+
+;         ; 1] Compute A·C - B·D
+;         C => B
+;                 :CALL(mulFpBN254)
+;         C       :MSTORE(mulFp2BN254_AC)
+
+;         $ => A  :MLOAD(mulFp2BN254_B)
+;         $ => B  :MLOAD(mulFp2BN254_D)
+;                 :CALL(mulFpBN254)
+
+;         $ => A  :MLOAD(mulFp2BN254_AC)
+;                 :CALL(subFpBN254)
         
-        C       :MSTORE(mulFp2BN254_real)
+;         C       :MSTORE(mulFp2BN254_real)
 
-        ; 2] Compute A·D + B·C
-        $ => A  :MLOAD(mulFp2BN254_A)
-        $ => B  :MLOAD(mulFp2BN254_D)
-                :CALL(mulFpBN254)
-        C       :MSTORE(mulFp2BN254_AD)
+;         ; 2] Compute A·D + B·C
+;         $ => A  :MLOAD(mulFp2BN254_A)
+;         $ => B  :MLOAD(mulFp2BN254_D)
+;                 :CALL(mulFpBN254)
+;         C       :MSTORE(mulFp2BN254_AD)
 
-        $ => A  :MLOAD(mulFp2BN254_B)
-        $ => B  :MLOAD(mulFp2BN254_C)
-                :CALL(mulFpBN254)
+;         $ => A  :MLOAD(mulFp2BN254_B)
+;         $ => B  :MLOAD(mulFp2BN254_C)
+;                 :CALL(mulFpBN254)
 
-        $ => A  :MLOAD(mulFp2BN254_AD)
-                :CALL(addFpBN254)
+;         $ => A  :MLOAD(mulFp2BN254_AD)
+;                 :CALL(addFpBN254)
         
-        $ => E  :MLOAD(mulFp2BN254_real)
+;         $ => E  :MLOAD(mulFp2BN254_real)
 
-        $ => RR         :MLOAD(mulFp2BN254_RR)
-                        :RETURN
+;         $ => RR         :MLOAD(mulFp2BN254_RR)
+;                         :RETURN

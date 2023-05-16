@@ -6,54 +6,64 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; TODO: Use the complex multiplication OPCODE 
-
-VAR GLOBAL invFp2BN254_A
-VAR GLOBAL invFp2BN254_B
-VAR GLOBAL invFp2BN254_C
-VAR GLOBAL invFp2BN254_D
-
-VAR GLOBAL invFp2BN254_Asq
-VAR GLOBAL invFp2BN254_ABsq
-
-VAR GLOBAL invFp2BN254_im
-
-VAR GLOBAL invFp2BN254_RR
-
 invFp2BN254:
-        RR      :MSTORE(invFp2BN254_RR)
+        ; Remember that an element y ∈ Fp2 is the inverse of x ∈ Fp2 if and only if x·y = 1 in Fp2
+        ; We therefore check that (A + B·u)·(C + D·u) = 1 + 0·u
+        ; A·C - B·D = [E] + (q0·BN254_P)
+        ; A·D + B·C = [OP] + (q1·BN254_P)
+        ${fp2InvBN254_x(A,B)} => C
+        ${fp2InvBN254_y(A,B)} => D
+        1n => E
+        0n                      :ARITH_BN254_MULFP2,RETURN
 
-        A       :MSTORE(invFp2BN254_A)
-        B       :MSTORE(invFp2BN254_B)
-        C       :MSTORE(invFp2BN254_C)
-        D       :MSTORE(invFp2BN254_D)
+; Below, hand-crafted inversion
+; ==============================================
+; VAR GLOBAL invFp2BN254_A
+; VAR GLOBAL invFp2BN254_B
+; VAR GLOBAL invFp2BN254_C
+; VAR GLOBAL invFp2BN254_D
 
-        ; 1] Compute (A² + B²)⁻¹
-                :CALL(squareFpBN254)
-        B       :MSTORE(invFp2BN254_Asq) 
-        $ => A  :MLOAD(invFp2BN254_B)
-                :CALL(squareFpBN254)
-        $ => A  :MLOAD(invFp2BN254_Asq)
-        B => C
-                :CALL(addFpBN254)
+; VAR GLOBAL invFp2BN254_Asq
+; VAR GLOBAL invFp2BN254_ABsq
 
-        C => A  :CALL(invFpBN254)
-        B       :MSTORE(invFp2BN254_ABsq)
+; VAR GLOBAL invFp2BN254_im
+
+; VAR GLOBAL invFp2BN254_RR
+
+; invFp2BN254:
+;         RR      :MSTORE(invFp2BN254_RR)
+
+;         A       :MSTORE(invFp2BN254_A)
+;         B       :MSTORE(invFp2BN254_B)
+;         C       :MSTORE(invFp2BN254_C)
+;         D       :MSTORE(invFp2BN254_D)
+
+;         ; 1] Compute (A² + B²)⁻¹
+;                 :CALL(squareFpBN254)
+;         B       :MSTORE(invFp2BN254_Asq) 
+;         $ => A  :MLOAD(invFp2BN254_B)
+;                 :CALL(squareFpBN254)
+;         $ => A  :MLOAD(invFp2BN254_Asq)
+;         B => C
+;                 :CALL(addFpBN254)
+
+;         C => A  :CALL(invFpBN254)
+;         B       :MSTORE(invFp2BN254_ABsq)
 
 
-        ; 2] Compute -B·(A² + B²)⁻¹
-        $ => A  :MLOAD(invFp2BN254_B)
-        ${const.BN254_P - A} => A
-        $ => B  :MLOAD(invFp2BN254_ABsq)
-                :CALL(mulFpBN254)
-        C       :MSTORE(invFp2BN254_im)
+;         ; 2] Compute -B·(A² + B²)⁻¹
+;         $ => A  :MLOAD(invFp2BN254_B)
+;         ${const.BN254_P - A} => A
+;         $ => B  :MLOAD(invFp2BN254_ABsq)
+;                 :CALL(mulFpBN254)
+;         C       :MSTORE(invFp2BN254_im)
 
-        ; 3] Compute A·(A² + B²)⁻¹
-        $ => A  :MLOAD(invFp2BN254_A)
-        $ => B  :MLOAD(invFp2BN254_ABsq)
-                :CALL(mulFpBN254)
+;         ; 3] Compute A·(A² + B²)⁻¹
+;         $ => A  :MLOAD(invFp2BN254_A)
+;         $ => B  :MLOAD(invFp2BN254_ABsq)
+;                 :CALL(mulFpBN254)
         
-        $ => D  :MLOAD(invFp2BN254_im)
+;         $ => D  :MLOAD(invFp2BN254_im)
 
-        $ => RR         :MLOAD(invFp2BN254_RR)
-                        :RETURN
+;         $ => RR         :MLOAD(invFp2BN254_RR)
+;                         :RETURN
