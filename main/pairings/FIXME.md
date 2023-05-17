@@ -1,5 +1,5 @@
-- [ ] $\mathbb{F}_p$ arithmetic fails if the input is a negative big integer, we should fix this! It's working properly otherwise
-- [ ] Think and fix edge cases
+- [ ] $\mathbb{F}_p$ arithmetic fails if the input is a negative big integer, should we fix this? It's working properly otherwise
+- [ ] Implement cyclotomic exponentiation.
 - [ ] Unify inverse Fp2 and Fp2 arithmetic in general
 - [ ] Implement fast square and fast exponentiation in the 12-th cyclotomic subgroup as per https://eprint.iacr.org/2010/542.pdf
 - [ ] Rename `Fp2BN254neq0` in `helper.js` to `FpBN254neq0`
