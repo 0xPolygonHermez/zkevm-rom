@@ -187,14 +187,17 @@ opSSTORE:
 
     ; check stack underflow
     SP - 2  => SP        :JMPN(stackUnderflow)
-    ; check out-of-gas
-    GAS - %SSTORE_ENTRY_EIP_2200_GAS - 1  :JMPN(outOfGas)
-    ; check is static call
-    $ => A          :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
 
     $ => C          :MLOAD(SP+1) ; [key => C]
     C               :MSTORE(tmpVarCsstore)
     $ => D          :MLOAD(SP) ; [value => D]
+
+    $${eventLog(onUpdateStorage(C, D))}
+
+    ; check out-of-gas
+    GAS - %SSTORE_ENTRY_EIP_2200_GAS - 1  :JMPN(outOfGas)
+    ; check is static call
+    $ => A          :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
     ; check if is a create call
     $ => A          :MLOAD(isCreateContract), JMPNZ(deploymentSSTORE)
     ; load current storage address
@@ -307,5 +310,4 @@ opSSTOREsr:
     ; set key for smt storage query
     %SMT_KEY_SC_STORAGE => B
     $ => C          :MLOAD(tmpVarCsstore); key => C
-    $${eventLog(onUpdateStorage(C, D))}
     $ => SR         :SSTORE, JMP(readCode)
