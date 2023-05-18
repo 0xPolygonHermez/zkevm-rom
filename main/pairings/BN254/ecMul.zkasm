@@ -1,0 +1,145 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; ecMul:
+;;             in: k, P = (P.x, P.y) ∈ E(Fp), where k ∈ [0,ord(E)-1]
+;;             out: Q = (Q.x, Q.y) = k·P ∈ E(Fp)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Since the curve is E/Fp: y² = x³ + 3, there is no issue in representing the point at infinity as (0, 0).
+
+VAR GLOBAL ecMul_k
+VAR GLOBAL ecMul_P_x
+VAR GLOBAL ecMul_P_y
+VAR GLOBAL ecMul_Q_x
+VAR GLOBAL ecMul_Q_y
+
+VAR GLOBAL ecMul_RR
+
+; ERROR CODES (B)
+; 0 - no error
+; 1 - P is not in E(Fp)
+
+ecMul:
+        RR      :MSTORE(ecMul_RR)
+
+        ; Check if P = 0
+        ${Fp2BN254neq0(mem.ecMul_P_x) || Fp2BN254neq0(mem.ecMul_P_y)}   :JMPZ(ecMul_P_is_zero)
+
+        ; 1] Check if P is in E(Fp)
+        ; P in E iff (P.y)² == (P.x)³ + 3 (mod p)
+        ; 1.1] Compute LHS and RHS
+        $ => A    :MLOAD(ecMul_P_x),CALL(squareFpBN254)
+        ; B = (P.x)²
+
+        $ => A      :MLOAD(ecMul_P_x),CALL(mulFpBN254)
+        ; C = (P.x)³
+
+        3n => A     :CALL(addFpBN254)
+        ; C = (P.x)³ + 3
+        C           :MSTORE(ecMul_Q_x)
+
+        $ => A    :MLOAD(ecMul_P_y),CALL(squareFpBN254)
+        ; B = (Py)²
+
+        ; 1.2] Check if LHS == RHS
+        B => A
+        $ => B      :MLOAD(ecMul_Q_x) 
+        $           :EQ,JMPNC(ecMul_P_is_not_in_E)
+
+        ; Check if k = 0
+        ${Fp2BN254neq0(mem.ecMul_k)}   :JMPZ(ecMul_k_is_zero)
+
+        ; ${log2(mem.ecMul_k)} => RCX
+        257 => RCX
+
+        $ => A  :MLOAD(ecMul_P_x)
+        $ => C  :MLOAD(ecMul_P_y)
+        A       :MSTORE(ecMul_Q_x)
+        C       :MSTORE(ecMul_Q_y)
+
+                :JMP(ecMul_find_MSB_k)
+
+ecMul_P_is_zero:
+        ; Check that P is zero
+        0n => B
+        $ => A  :MLOAD(ecMul_P_x)
+        1       :EQ
+        $ => A  :MLOAD(ecMul_P_y)
+        1       :EQ
+
+        0n      :MSTORE(ecMul_Q_x)
+        0n      :MSTORE(ecMul_Q_y)
+
+        0 => B  :JMP(ecMul_end)
+
+ecMul_k_is_zero:
+        ; Check that k is zero
+        0n => B
+        $ => A  :MLOAD(ecMul_k)
+        1       :EQ
+
+        0n      :MSTORE(ecMul_Q_x)
+        0n      :MSTORE(ecMul_Q_y)
+
+        0 => B  :JMP(ecMul_end)
+
+; Assumes k is well-formed
+ecMul_find_MSB_k:
+        RCX - 1 => RCX
+        $ => A,B        :MLOAD(ecMul_k)
+        ; E = 2A
+        $ => E          :ADD,MSTORE(ecMul_k),JMPNC(ecMul_find_MSB_k)
+
+
+ecMul_loop:
+        RCX - 1 => RCX    :JMPZ(ecMul_end)
+
+        ; We always double
+        $ => A  :MLOAD(ecMul_Q_x)
+        $ => B  :MLOAD(ecMul_Q_y)
+        A       :MSTORE(ecAdd_P1_x)
+        B       :MSTORE(ecAdd_P1_y)
+        A       :MSTORE(ecAdd_P2_x)
+        B       :MSTORE(ecAdd_P2_y), CALL(ecAdd)
+        ; Q = Q + Q
+
+        $ => A  :MLOAD(ecAdd_P3_x)
+        $ => B  :MLOAD(ecAdd_P3_y)
+        A       :MSTORE(ecMul_Q_x)
+        B       :MSTORE(ecMul_Q_y)
+
+        ; We check if the MSB b of k is either 1 or 0. If b==1, we should add P to Q.
+        ; Then, update the value of k.
+        $ => A,B        :MLOAD(ecMul_k)
+        ; E = 2A
+        $ => E          :ADD,MSTORE(ecMul_k),JMPNC(ecMul_loop)
+
+ecMul_add:
+        ; We add
+        $ => A  :MLOAD(ecMul_Q_x)
+        $ => B  :MLOAD(ecMul_Q_y)
+        $ => C  :MLOAD(ecMul_P_x)
+        $ => D  :MLOAD(ecMul_P_y)
+        A       :MSTORE(ecAdd_P1_x)
+        B       :MSTORE(ecAdd_P1_y)
+        C       :MSTORE(ecAdd_P2_x)
+        D       :MSTORE(ecAdd_P2_y), CALL(ecAdd)
+        ; Q = Q + P
+
+        $ => A  :MLOAD(ecAdd_P3_x)
+        $ => B  :MLOAD(ecAdd_P3_y)
+        A       :MSTORE(ecMul_Q_x)
+        B       :MSTORE(ecMul_Q_y), JMP(ecMul_loop)
+
+
+; ERRORS
+ecMul_P_is_not_in_E:
+    1 => B      :JMP(ecMul_error)
+
+ecMul_error:
+        0 => A
+
+ecMul_end:
+        $ => RR         :MLOAD(ecMul_RR)
+                        :RETURN

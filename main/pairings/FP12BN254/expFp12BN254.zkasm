@@ -38,18 +38,18 @@ VAR GLOBAL expFp12BN254_RR
 
 ; TODO: Should I also check the (improbable) case where a = 0
 ; TODO: There are optimitzation if a is in some subfield...
-; TODO: This is not sound, but correct
 ; TODO: In our case, we can speed it up by using pseudobinary encoding instead of binary encoding
 expFp12BN254:
         RR              :MSTORE(expFp12BN254_RR)
-
-        ${log2(mem.expFp12BN254_e)} => RCX
 
         ; Check if a = 1
         ${Fp2BN254neq1(mem.expFp12BN254_a11_x) || Fp2BN254neq0(mem.expFp12BN254_a11_y) || Fp2BN254neq0(mem.expFp12BN254_a12_x) || Fp2BN254neq0(mem.expFp12BN254_a12_y || Fp2BN254neq0(mem.expFp12BN254_a13_x) || Fp2BN254neq0(mem.expFp12BN254_a13_y) || Fp2BN254neq0(mem.expFp12BN254_a21_x) || Fp2BN254neq0(mem.expFp12BN254_a21_y) || mem.expFp12BN254_a22_x) || Fp2BN254neq0(mem.expFp12BN254_a22_y) || Fp2BN254neq0(mem.expFp12BN254_a23_x) || Fp2BN254neq0(mem.expFp12BN254_a23_y)}   :JMPZ(expFp12BN254_a_is_one)
 
         ; Check if e = 0
         ${Fp2BN254neq0(mem.expFp12BN254_e)}   :JMPZ(expFp12BN254_e_is_zero)
+
+        ; ${log2(mem.expFp12BN254_e)} => RCX
+        257 => RCX
 
         $ => A  :MLOAD(expFp12BN254_a11_x)
         $ => B  :MLOAD(expFp12BN254_a11_y)
@@ -143,6 +143,7 @@ expFp12BN254_e_is_zero:
 
 ; Assumes e is well-formed
 expFp12BN254_find_MSB_e:
+        RCX - 1 => RCX
         $ => A,B        :MLOAD(expFp12BN254_e)
         ; E = 2A
         $ => E          :ADD,MSTORE(expFp12BN254_e),JMPNC(expFp12BN254_find_MSB_e)
