@@ -1,0 +1,333 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;;  halfPairingBN254:
+;;          input: P ∈ G1 and Q ∈ G2
+;;          output: It returns 1 ∈ Fp12 if either P = 0 or Q = 0 or f_{r,Q}(P) ∈ Fp12 otherwise
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL halfPairingBN254_P_x
+VAR GLOBAL halfPairingBN254_P_x3 
+VAR GLOBAL halfPairingBN254_P_y
+VAR GLOBAL halfPairingBN254_Q_x1
+VAR GLOBAL halfPairingBN254_Q_x2
+VAR GLOBAL halfPairingBN254_Q_y1
+VAR GLOBAL halfPairingBN254_Q_y2
+
+VAR GLOBAL halfPairingBN254_f11_x
+VAR GLOBAL halfPairingBN254_f11_y
+VAR GLOBAL halfPairingBN254_f12_x
+VAR GLOBAL halfPairingBN254_f12_y
+VAR GLOBAL halfPairingBN254_f13_x
+VAR GLOBAL halfPairingBN254_f13_y
+VAR GLOBAL halfPairingBN254_f21_x
+VAR GLOBAL halfPairingBN254_f21_y
+VAR GLOBAL halfPairingBN254_f22_x
+VAR GLOBAL halfPairingBN254_f22_y
+VAR GLOBAL halfPairingBN254_f23_x
+VAR GLOBAL halfPairingBN254_f23_y
+
+VAR GLOBAL halfPairingBN254_RR
+
+VAR GLOBAL halfPairingBN254_psi_x1
+VAR GLOBAL halfPairingBN254_psi_x2
+VAR GLOBAL halfPairingBN254_psi_y1
+VAR GLOBAL halfPairingBN254_psi_y2 
+
+INCLUDE "constants.zkasm"
+
+; ERROR CODES (B)
+; 0 - no error
+; 1 - P is not in G1
+; 2 - Q is not in G2
+
+; TODO: I think I should check that Px,Py,Qx1,Qx2,Qy1,Qy2 are field elements before anything else, otherwise do the modulo 
+
+halfPairingBN254:
+    RR          :MSTORE(halfPairingBN254_RR)
+
+    ; Check if P = 0
+    ${Fp2BN254neq0(mem.halfPairingBN254_P_x) || Fp2BN254neq0(mem.halfPairingBN254_P_y)}   :JMPZ(halfPairingBN254_P_is_zero)
+
+    ; Check if Q = 0
+    ${Fp2BN254neq0(mem.halfPairingBN254_Q_x1) || Fp2BN254neq0(mem.halfPairingBN254_Q_x2) || Fp2BN254neq0(mem.halfPairingBN254_Q_y1) || Fp2BN254neq0(mem.halfPairingBN254_Q_y2)}   :JMPZ(halfPairingBN254_Q_is_zero)
+
+                :JMP(halfPairingBN254_P_subgroup_check)
+
+
+halfPairingBN254_P_is_zero:
+    ; Check that P is zero
+    0n => B
+    $ => A  :MLOAD(halfPairingBN254_P_x)
+    1       :EQ
+    $ => A  :MLOAD(halfPairingBN254_P_y)
+    1       :EQ
+
+    ; Check that Q is in G2
+    ; Q in G2 iff psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
+    ; 1] Compute psi(Q)                   
+    %BN254_P => A
+    $ => B      :MLOAD(halfPairingBN254_Q_x2)             
+    $ => D      :SUB                                ; D = -Qx2
+    %FROBENIUS_GAMMA121 => A
+    %FROBENIUS_GAMMA122 => B
+    $ => C      :MLOAD(halfPairingBN254_Q_x1),CALL(mulFp2BN254)
+    E           :MSTORE(halfPairingBN254_psi_x1)
+    C           :MSTORE(halfPairingBN254_psi_x2)
+
+    %BN254_P => A
+    $ => B      :MLOAD(halfPairingBN254_Q_y2)             
+    $ => D      :SUB                                ; D = -Qx2
+    %FROBENIUS_GAMMA131 => A
+    %FROBENIUS_GAMMA132 => B
+    $ => C      :MLOAD(halfPairingBN254_Q_y1),CALL(mulFp2BN254)
+    E           :MSTORE(halfPairingBN254_psi_y1)
+    C           :MSTORE(halfPairingBN254_psi_y2)
+
+    ; 2] Compute [6x²]Q
+    $ => A      :MLOAD(halfPairingBN254_Q_x1)
+    $ => B      :MLOAD(halfPairingBN254_Q_x2)
+    $ => C      :MLOAD(halfPairingBN254_Q_y1)
+    $ => D      :MLOAD(halfPairingBN254_Q_y2)
+    A           :MSTORE(escalarMulBN254_P_x1)
+    B           :MSTORE(escalarMulBN254_P_x2)
+    C           :MSTORE(escalarMulBN254_P_y1)
+    D           :MSTORE(escalarMulBN254_P_y2)
+    147946756881789318990833708069417712966n :MSTORE(escalarMulBN254_k) ; 6x²
+                :CALL(escalarMulBN254)
+
+
+    ; 3] Check if psi(Q) == [6x²]Q
+    $ => A      :MLOAD(halfPairingBN254_psi_x1)
+    $ => B      :MLOAD(escalarMulBN254_Q_x1)
+    $           :EQ,JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(halfPairingBN254_psi_x2)
+    $ => B      :MLOAD(escalarMulBN254_Q_x2)
+    $           :EQ,JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(halfPairingBN254_psi_y1)
+    $ => B      :MLOAD(escalarMulBN254_Q_y1)
+    $           :EQ,JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(halfPairingBN254_psi_y2)
+    $ => B      :MLOAD(escalarMulBN254_Q_y2)
+    $           :EQ,JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+
+    1n      :MSTORE(halfPairingBN254_f11_x)
+    0n      :MSTORE(halfPairingBN254_f11_y)
+    0n      :MSTORE(halfPairingBN254_f12_x)
+    0n      :MSTORE(halfPairingBN254_f12_y)
+    0n      :MSTORE(halfPairingBN254_f13_x)
+    0n      :MSTORE(halfPairingBN254_f13_y)
+    0n      :MSTORE(halfPairingBN254_f21_x)
+    0n      :MSTORE(halfPairingBN254_f21_y)
+    0n      :MSTORE(halfPairingBN254_f22_x)
+    0n      :MSTORE(halfPairingBN254_f22_y)
+    0n      :MSTORE(halfPairingBN254_f23_x)
+    0n      :MSTORE(halfPairingBN254_f23_y)
+
+    0 => B     :JMP(halfPairingBN254_end)
+
+halfPairingBN254_Q_is_zero:
+    ; Check that Q is zero
+    0n => B
+    $ => A  :MLOAD(halfPairingBN254_Q_x1)
+    1       :EQ
+    $ => A  :MLOAD(halfPairingBN254_Q_x2)
+    1       :EQ
+    $ => A  :MLOAD(halfPairingBN254_Q_y1)
+    1       :EQ
+    $ => A  :MLOAD(halfPairingBN254_Q_y2)
+    1       :EQ
+
+    ; Check that P is in G1
+    ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
+    ; 1] Compute LHS and RHS
+    $ => A,B    :MLOAD(halfPairingBN254_P_x),CALL(mulFpBN254); C = (Px)²
+    C => A                                         ; A = (Px)²
+    $ => B      :MLOAD(halfPairingBN254_P_x),CALL(mulFpBN254); C = (Px)³
+
+    3n => A     :CALL(addFpBN254)                  ; C = (Px)³ + 3
+    C           :MSTORE(halfPairingBN254_P_x3)               ; halfPairingBN254_P_x3 = (Px)³ + 3
+
+    $ => A,B    :MLOAD(halfPairingBN254_P_y),CALL(mulFpBN254); C = (Py)²
+
+    ; 2] Check if LHS == RHS
+    C => A
+    $ => B      :MLOAD(halfPairingBN254_P_x3) 
+    $           :EQ,JMPNC(halfPairingBN254_P_is_not_in_G1)
+
+    1n      :MSTORE(halfPairingBN254_f11_x)
+    0n      :MSTORE(halfPairingBN254_f11_y)
+    0n      :MSTORE(halfPairingBN254_f12_x)
+    0n      :MSTORE(halfPairingBN254_f12_y)
+    0n      :MSTORE(halfPairingBN254_f13_x)
+    0n      :MSTORE(halfPairingBN254_f13_y)
+    0n      :MSTORE(halfPairingBN254_f21_x)
+    0n      :MSTORE(halfPairingBN254_f21_y)
+    0n      :MSTORE(halfPairingBN254_f22_x)
+    0n      :MSTORE(halfPairingBN254_f22_y)
+    0n      :MSTORE(halfPairingBN254_f23_x)
+    0n      :MSTORE(halfPairingBN254_f23_y)
+
+    0 => B     :JMP(halfPairingBN254_end)
+
+halfPairingBN254_P_subgroup_check:
+    ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
+    ; 1] Compute LHS and RHS
+    $ => A,B    :MLOAD(halfPairingBN254_P_x),CALL(mulFpBN254); C = (Px)²
+    C => A                                         ; A = (Px)²
+    $ => B      :MLOAD(halfPairingBN254_P_x),CALL(mulFpBN254); C = (Px)³
+
+    3n => A     :CALL(addFpBN254)                  ; C = (Px)³ + 3
+    C           :MSTORE(halfPairingBN254_P_x3)               ; halfPairingBN254_P_x3 = (Px)³ + 3
+
+    $ => A,B    :MLOAD(halfPairingBN254_P_y),CALL(mulFpBN254); C = (Py)²
+
+    ; 2] Check if LHS == RHS
+    C => A
+    $ => B      :MLOAD(halfPairingBN254_P_x3) 
+    $           :EQ,JMPNC(halfPairingBN254_P_is_not_in_G1)
+
+halfPairingBN254_Q_subgroup_check:
+    ; Q in G2 iff psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
+    ; 1] Compute psi(Q)                   
+    %BN254_P => A
+    $ => B      :MLOAD(halfPairingBN254_Q_x2)             
+    $ => D      :SUB                                ; D = -Qx2
+    %FROBENIUS_GAMMA121 => A
+    %FROBENIUS_GAMMA122 => B
+    $ => C      :MLOAD(halfPairingBN254_Q_x1),CALL(mulFp2BN254)
+    E           :MSTORE(halfPairingBN254_psi_x1)
+    C           :MSTORE(halfPairingBN254_psi_x2)
+
+    %BN254_P => A
+    $ => B      :MLOAD(halfPairingBN254_Q_y2)             
+    $ => D      :SUB                                ; D = -Qx2
+    %FROBENIUS_GAMMA131 => A
+    %FROBENIUS_GAMMA132 => B
+    $ => C      :MLOAD(halfPairingBN254_Q_y1),CALL(mulFp2BN254)
+    E           :MSTORE(halfPairingBN254_psi_y1)
+    C           :MSTORE(halfPairingBN254_psi_y2)
+
+    ; 2] Compute [6x²]Q
+    $ => A      :MLOAD(halfPairingBN254_Q_x1)
+    $ => B      :MLOAD(halfPairingBN254_Q_x2)
+    $ => C      :MLOAD(halfPairingBN254_Q_y1)
+    $ => D      :MLOAD(halfPairingBN254_Q_y2)
+    A           :MSTORE(escalarMulBN254_P_x1)
+    B           :MSTORE(escalarMulBN254_P_x2)
+    C           :MSTORE(escalarMulBN254_P_y1)
+    D           :MSTORE(escalarMulBN254_P_y2)
+    147946756881789318990833708069417712966n :MSTORE(escalarMulBN254_k) ; 6x²
+                :CALL(escalarMulBN254)
+
+
+    ; 3] Check if psi(Q) == [6x²]Q
+    $ => A      :MLOAD(halfPairingBN254_psi_x1)
+    $ => B      :MLOAD(escalarMulBN254_Q_x1)
+    $           :EQ,JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(halfPairingBN254_psi_x2)
+    $ => B      :MLOAD(escalarMulBN254_Q_x2)
+    $           :EQ,JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(halfPairingBN254_psi_y1)
+    $ => B      :MLOAD(escalarMulBN254_Q_y1)
+    $           :EQ,JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(halfPairingBN254_psi_y2)
+    $ => B      :MLOAD(escalarMulBN254_Q_y2)
+    $           :EQ,JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+halfPairingBN254_Miller_loop:
+    $ => A      :MLOAD(halfPairingBN254_P_x)
+    $ => B      :MLOAD(halfPairingBN254_P_y)
+    A           :MSTORE(millerLoopBN254_P_x)
+    B           :MSTORE(millerLoopBN254_P_y)
+    $ => A      :MLOAD(halfPairingBN254_Q_x1)
+    $ => B      :MLOAD(halfPairingBN254_Q_x2)
+    $ => C      :MLOAD(halfPairingBN254_Q_y1)
+    $ => D      :MLOAD(halfPairingBN254_Q_y2)
+    A           :MSTORE(millerLoopBN254_Q_x1)
+    B           :MSTORE(millerLoopBN254_Q_x2)
+    C           :MSTORE(millerLoopBN254_Q_y1)
+    D           :MSTORE(millerLoopBN254_Q_y2)
+                :CALL(millerLoopBN254)
+    $ => A      :MLOAD(millerLoopBN254_f11_x)
+    $ => B      :MLOAD(millerLoopBN254_f11_y)
+    A           :MSTORE(halfPairingBN254_f11_x)
+    B           :MSTORE(halfPairingBN254_f11_y)
+    $ => A      :MLOAD(millerLoopBN254_f12_x)
+    $ => B      :MLOAD(millerLoopBN254_f12_y)
+    A           :MSTORE(halfPairingBN254_f12_x)
+    B           :MSTORE(halfPairingBN254_f12_y)
+    $ => A      :MLOAD(millerLoopBN254_f13_x)
+    $ => B      :MLOAD(millerLoopBN254_f13_y)
+    A           :MSTORE(halfPairingBN254_f13_x)
+    B           :MSTORE(halfPairingBN254_f13_y)
+    $ => A      :MLOAD(millerLoopBN254_f21_x)
+    $ => B      :MLOAD(millerLoopBN254_f21_y)
+    A           :MSTORE(halfPairingBN254_f21_x)
+    B           :MSTORE(halfPairingBN254_f21_y)
+    $ => A      :MLOAD(millerLoopBN254_f22_x)
+    $ => B      :MLOAD(millerLoopBN254_f22_y)
+    A           :MSTORE(halfPairingBN254_f22_x)
+    B           :MSTORE(halfPairingBN254_f22_y)
+    $ => A      :MLOAD(millerLoopBN254_f23_x)
+    $ => B      :MLOAD(millerLoopBN254_f23_y)
+    A           :MSTORE(halfPairingBN254_f23_x)
+    B           :MSTORE(halfPairingBN254_f23_y)
+
+    0 => B     :JMP(halfPairingBN254_end)
+
+; ERRORS
+halfPairingBN254_P_is_not_in_G1:
+    1 => B      :JMP(halfPairingBN254_error)
+
+halfPairingBN254_Q_is_not_in_G2:
+    2 => B      :JMP(halfPairingBN254_error)
+
+halfPairingBN254_error:
+        0 => A
+
+halfPairingBN254_end:
+        $ => RR     :MLOAD(halfPairingBN254_RR)
+        :RETURN
+
+INCLUDE "./FPBN254/addFpBN254.zkasm"
+INCLUDE "./FPBN254/subFpBN254.zkasm"
+INCLUDE "./FPBN254/mulFpBN254.zkasm"
+INCLUDE "./FPBN254/squareFpBN254.zkasm"
+INCLUDE "./FPBN254/invFpBN254.zkasm"
+
+INCLUDE "./FP2BN254/addFp2BN254.zkasm"
+INCLUDE "./FP2BN254/subFp2BN254.zkasm"
+INCLUDE "./FP2BN254/mulFp2BN254.zkasm"
+INCLUDE "./FP2BN254/squareFp2BN254.zkasm"
+INCLUDE "./FP2BN254/escalarMulFp2BN254.zkasm"
+INCLUDE "./FP2BN254/invFp2BN254.zkasm"
+
+INCLUDE "./FP6BN254/addFp6BN254.zkasm"
+INCLUDE "./FP6BN254/subFp6BN254.zkasm"
+INCLUDE "./FP6BN254/mulFp6BN254.zkasm"
+INCLUDE "./FP6BN254/squareFp6BN254.zkasm"
+INCLUDE "./FP6BN254/inverseFp6BN254.zkasm"
+
+INCLUDE "./FP12BN254/mulFp12BN254.zkasm"
+INCLUDE "./FP12BN254/squareFp12BN254.zkasm"
+INCLUDE "./FP12BN254/inverseFp12BN254.zkasm"
+INCLUDE "./FP12BN254/expFp12BN254.zkasm"
+INCLUDE "./FP12BN254/frobFp12BN254.zkasm"
+INCLUDE "./FP12BN254/frob2Fp12BN254.zkasm"
+INCLUDE "./FP12BN254/frob3Fp12BN254.zkasm"
+
+INCLUDE "./BN254/addPointBN254.zkasm"
+INCLUDE "./BN254/escalarMulBN254.zkasm"
+INCLUDE "./BN254/lineSamePointsBN254.zkasm"
+INCLUDE "./BN254/lineDiffPointsBN254.zkasm"
+
+INCLUDE "millerLoopBN254.zkasm"
+INCLUDE "loopLengthBN254.zkasm"

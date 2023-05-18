@@ -1,0 +1,146 @@
+; constants needed by executor C++
+CONST %N = 2**19
+CONST %MAX_CNT_STEPS_LIMIT = %N
+CONST %MAX_CNT_ARITH_LIMIT = %N
+CONST %MAX_CNT_BINARY_LIMIT = %N
+CONST %MAX_CNT_MEM_ALIGN_LIMIT = %N
+CONST %MAX_CNT_KECCAK_F_LIMIT = %N
+CONST %MAX_CNT_PADDING_PG_LIMIT = %N
+CONST %MAX_CNT_POSEIDON_G_LIMIT = %N
+
+VAR GLOBAL lastHashKId
+VAR GLOBAL lastHashPId
+
+VAR GLOBAL initial_A
+VAR GLOBAL initial_B
+VAR GLOBAL initial_C
+VAR GLOBAL initial_D
+VAR GLOBAL initial_E
+VAR GLOBAL initial_CTX
+VAR GLOBAL initial_SP
+VAR GLOBAL initial_PC
+VAR GLOBAL initial_GAS
+VAR GLOBAL initial_SR
+VAR GLOBAL initial_RR
+VAR GLOBAL initial_HASHPOS
+VAR GLOBAL initial_RCX
+
+start:
+
+        STEP => A
+        0 :ASSERT
+
+
+        A           :MSTORE(initial_A)
+        B           :MSTORE(initial_B)
+        C           :MSTORE(initial_C)
+        D           :MSTORE(initial_D)
+        E           :MSTORE(initial_E)
+        CTX         :MSTORE(initial_CTX)
+        SP          :MSTORE(initial_SP)
+        PC          :MSTORE(initial_PC)
+        GAS         :MSTORE(initial_GAS)
+        SR          :MSTORE(initial_SR)
+        RR          :MSTORE(initial_RR)
+        HASHPOS     :MSTORE(initial_HASHPOS)
+        RCX         :MSTORE(initial_RCX)
+        0 => A,B,C,D,E,CTX, SP, PC, GAS, SR, RR, HASHPOS, RCX
+
+        -1          :MSTORE(lastHashKId)
+        -1          :MSTORE(lastHashPId)
+
+        ; 1] Fails and returns nothing if the input is invalid
+        0n                                                                                      :MSTORE(ecPairing_P1_x)
+        1n                                                                                      :MSTORE(ecPairing_P1_y)
+        4351401811647638138392695977895401859084096897123577305203754529537814663109n           :MSTORE(ecPairing_Q1_x1)
+        2046729899889901964437012741252570163462327955511008570480857952505584629957n           :MSTORE(ecPairing_Q1_x2)
+        322506915963699862059245473966830598387691259163658767351233132602858049743n            :MSTORE(ecPairing_Q1_y1)
+        14316075702276096164483565793667862351398527813470041574939773541551376891710n          :MSTORE(ecPairing_Q1_y2)
+                                                                                                :CALL(ecPairing)
+        1 => A   
+        1               :EQ
+
+        0n                                                                                      :MSTORE(ecPairing_P1_x)
+        0n                                                                                      :MSTORE(ecPairing_P1_y)
+        4351401811647638138392695977895401859084096897123577305203754529537814663108n           :MSTORE(ecPairing_Q1_x1)
+        2046729899889901964437012741252570163462327955511008570480857952505584629957n           :MSTORE(ecPairing_Q1_x2)
+        322506915963699862059245473966830598387691259163658767351233132602858049743n            :MSTORE(ecPairing_Q1_y1)
+        14316075702276096164483565793667862351398527813470041574939773541551376891710n          :MSTORE(ecPairing_Q1_y2)
+                                                                                                :CALL(ecPairing)
+        1 => A   
+        1               :EQ
+
+        1n                                                                                      :MSTORE(ecPairing_P1_x)
+        2n                                                                                      :MSTORE(ecPairing_P1_y)
+        4351401811647638138392695977895401859084096897123577305203754529537814663108n           :MSTORE(ecPairing_Q1_x1)
+        2046729899889901964437012741252570163462327955511008570480857952505584629957n           :MSTORE(ecPairing_Q1_x2)
+        322506915963699862059245473966830598387691259163658767351233132602858049743n            :MSTORE(ecPairing_Q1_y1)
+        14316075702276096164483565793667862351398527813470041574939773541551376891710n          :MSTORE(ecPairing_Q1_y2)
+                                                                                                :CALL(ecPairing)
+        1 => A   
+        1               :EQ
+
+        1n                                                                                      :MSTORE(ecPairing_P1_x)
+        1n                                                                                      :MSTORE(ecPairing_P1_y)
+        0n                                                                                      :MSTORE(ecPairing_Q1_x1)
+        0n                                                                                      :MSTORE(ecPairing_Q1_x2)
+        0n                                                                                      :MSTORE(ecPairing_Q1_y1)
+        0n                                                                                      :MSTORE(ecPairing_Q1_y2)
+                                                                                                :CALL(ecPairing)
+        1 => A   
+        1               :EQ
+
+        ; 2] Degenerate tests: e(0,Q) = 1 and e(P,0) = 1 therefore the pairing equation is trivally satisfied
+        ;    and in fact this is the only possibility for the pairing equation to be satisfied with one pair of P,Q
+        0n                                                                                      :MSTORE(ecPairing_P1_x)
+        0n                                                                                      :MSTORE(ecPairing_P1_y)
+        4351401811647638138392695977895401859084096897123577305203754529537814663109n           :MSTORE(ecPairing_Q1_x1)
+        2046729899889901964437012741252570163462327955511008570480857952505584629957n           :MSTORE(ecPairing_Q1_x2)
+        322506915963699862059245473966830598387691259163658767351233132602858049743n            :MSTORE(ecPairing_Q1_y1)
+        14316075702276096164483565793667862351398527813470041574939773541551376891710n          :MSTORE(ecPairing_Q1_y2)
+                                                                                                :CALL(ecPairing)
+        $ => A          :MLOAD(ecPairing_result)
+        1 => B    
+        1               :EQ
+
+        1n                                                                                      :MSTORE(ecPairing_P1_x)
+        2n                                                                                      :MSTORE(ecPairing_P1_y)
+        0n                                                                                      :MSTORE(ecPairing_Q1_x1)
+        0n                                                                                      :MSTORE(ecPairing_Q1_x2)
+        0n                                                                                      :MSTORE(ecPairing_Q1_y1)
+        0n                                                                                      :MSTORE(ecPairing_Q1_y2)
+                                                                                                :CALL(ecPairing)
+        $ => A          :MLOAD(ecPairing_result)
+        1 => B    
+        1               :EQ
+
+        ; 2] Tests with 2 inputs
+
+
+end:
+
+        $ => A           :MLOAD(initial_A)
+        $ => B           :MLOAD(initial_B)
+        $ => C           :MLOAD(initial_C)
+        $ => D           :MLOAD(initial_D)
+        $ => E           :MLOAD(initial_E)
+        $ => CTX         :MLOAD(initial_CTX)
+        $ => SP          :MLOAD(initial_SP)
+        $ => PC          :MLOAD(initial_PC)
+        $ => GAS         :MLOAD(initial_GAS)
+        $ => SR          :MLOAD(initial_SR)
+        $ => RR          :MLOAD(initial_RR)
+        $ => HASHPOS     :MLOAD(initial_HASHPOS)
+        $ => RCX         :MLOAD(initial_RCX)
+
+; label finalizeExecution needed by executor C++
+finalizeExecution:
+        ${beforeLast()}  : JMPN(finalizeExecution)
+
+                         : JMP(start)
+opINVALID:
+; label checkAndSaveFrom needed by executor C++
+checkAndSaveFrom:
+                         :JMP(opINVALID)
+
+INCLUDE "ecPairing.zkasm"
