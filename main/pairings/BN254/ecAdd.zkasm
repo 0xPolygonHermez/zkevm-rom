@@ -1,0 +1,317 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; ecAdd:
+;;             in: P1 = (P1.x, P1.y), P2 = (P2.x, P2.y) ∈ E(Fp), where P1.x, P1.y, P2.x, P2.y ∈ Fp
+;;             out: P3 = (P3.x, P3.y) = P1 + P2 ∈ E(Fp), where P3.x, P3.y ∈ Fp
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Since the curve is E/Fp: y² = x³ + 3, there is no issue in representing the point at infinity as (0, 0).
+
+VAR GLOBAL ecAdd_P1_x
+VAR GLOBAL ecAdd_P1_y
+VAR GLOBAL ecAdd_P1_y_inv
+VAR GLOBAL ecAdd_P2_x
+VAR GLOBAL ecAdd_P2_y
+VAR GLOBAL ecAdd_P3_x
+VAR GLOBAL ecAdd_P3_y
+VAR GLOBAL ecAdd_lambda
+
+VAR GLOBAL ecAdd_RR
+
+; ERROR CODES (B)
+; 0 - no error
+; 1 - P1 is not in E(Fp)
+; 2 - P2 is not in E(Fp)
+
+ecAdd:
+        RR      :MSTORE(ecAdd_RR)
+
+        ; Check if P1 = 0
+        ${Fp2BN254neq0(mem.ecAdd_P1_x) || Fp2BN254neq0(mem.ecAdd_P1_y)}   :JMPZ(ecAdd_P1_is_zero)
+        
+        ; Check if P2 = 0
+        ${Fp2BN254neq0(mem.ecAdd_P2_x) || Fp2BN254neq0(mem.ecAdd_P2_y)}   :JMPZ(ecAdd_P2_is_zero)
+
+        ; 1] Check if P1 is in E(Fp)
+        ; P1 in E iff (P1.y)² == (P1.x)³ + 3 (mod p)
+        ; 1.1] Compute LHS and RHS
+        $ => A    :MLOAD(ecAdd_P1_x),CALL(squareFpBN254)
+        ; B = (P1.x)²
+
+        $ => A      :MLOAD(ecAdd_P1_x),CALL(mulFpBN254)
+        ; C = (P1.x)³
+
+        3n => A     :CALL(addFpBN254)
+        ; C = (P1.x)³ + 3
+        C           :MSTORE(ecAdd_P3_x)
+
+        $ => A    :MLOAD(ecAdd_P1_y),CALL(squareFpBN254)
+        ; B = (Py)²
+
+        ; 1.2] Check if LHS == RHS
+        B => A
+        $ => B      :MLOAD(ecAdd_P3_x) 
+        $           :EQ,JMPNC(ecAdd_P1_is_not_in_E)
+
+        ; 2] check if P2 is in E(Fp)
+        ; P2 in E iff (P2.y)² == (P2.x)³ + 3 (mod p)
+        ; 2.1] Compute LHS and RHS
+        $ => A    :MLOAD(ecAdd_P2_x),CALL(squareFpBN254)
+        ; B = (P2.x)²
+
+        $ => A      :MLOAD(ecAdd_P2_x),CALL(mulFpBN254)
+        ; C = (P2.x)³
+
+        3n => A     :CALL(addFpBN254)
+        ; C = (P2.x)³ + 3
+        C           :MSTORE(ecAdd_P3_x)
+
+        $ => A    :MLOAD(ecAdd_P2_y),CALL(squareFpBN254)
+        ; B = (Py)²
+
+        ; 2.2] Check if LHS == RHS
+        B => A
+        $ => B      :MLOAD(ecAdd_P3_x) 
+        $           :EQ,JMPNC(ecAdd_P2_is_not_in_E)
+
+        ; P1 and P2 are not 0, let's check whether they are different points, the same point or inverses of each other
+        $ => A          :MLOAD(ecAdd_P1_x)
+        $ => B          :MLOAD(ecAdd_P2_x)
+
+        ; check P1.x == P2.x
+        ${A == B}       :JMPZ(ecAdd_different)
+        B               :ASSERT
+
+        $ => A          :MLOAD(ecAdd_P1_y)
+        $ => B          :MLOAD(ecAdd_P2_y)
+
+        ; check P1.y == P2.y
+        ${A == B}       :JMPZ(ecAdd_P1_and_P2_are_inverted)
+        B               :ASSERT
+
+        ; P1 == P2
+                        :JMP(ecAdd_same)
+
+ecAdd_P1_is_zero:
+        ; Check that P1 is zero
+        0n => B
+        $ => A  :MLOAD(ecAdd_P1_x)
+        1       :EQ
+        $ => A  :MLOAD(ecAdd_P1_y)
+        1       :EQ
+
+        ; Check if P2 = 0
+        ${Fp2BN254neq0(mem.ecAdd_P2_x) || Fp2BN254neq0(mem.ecAdd_P2_y)}   :JMPZ(ecAdd_P1_and_P2_are_zero)
+
+        ; P2 in E iff (P2.y)² == (P2.x)³ + 3 (mod p)
+        ; 1] Compute LHS and RHS
+        $ => A    :MLOAD(ecAdd_P2_x),CALL(squareFpBN254)
+        ; B = (P2.x)²
+
+        $ => A      :MLOAD(ecAdd_P2_x),CALL(mulFpBN254)
+        ; C = (P2.x)³
+
+        3n => A     :CALL(addFpBN254)
+        ; C = (P2.x)³ + 3
+        C           :MSTORE(ecAdd_P3_x)
+
+        $ => A    :MLOAD(ecAdd_P2_y),CALL(squareFpBN254)
+        ; B = (Py)²
+
+        ; 2] Check if LHS == RHS
+        B => A
+        $ => B      :MLOAD(ecAdd_P3_x) 
+        $           :EQ,JMPNC(ecAdd_P2_is_not_in_E)
+
+        ; P3 = P2
+        $ => A  :MLOAD(ecAdd_P2_x)
+        $ => B  :MLOAD(ecAdd_P2_y)
+        A       :MSTORE(ecAdd_P3_x)
+        B       :MSTORE(ecAdd_P3_y)
+
+        0 => B     :JMP(ecAdd_end)
+
+ecAdd_P2_is_zero:
+        ; Check that P2 is zero
+        0n => B
+        $ => A  :MLOAD(ecAdd_P2_x)
+        1       :EQ
+        $ => A  :MLOAD(ecAdd_P2_y)
+        1       :EQ
+
+        ; P1 in E iff (P1.y)² == (P1.x)³ + 3 (mod p)
+        ; 1] Compute LHS and RHS
+        $ => A    :MLOAD(ecAdd_P1_x),CALL(squareFpBN254)
+        ; B = (P1.x)²
+
+        $ => A      :MLOAD(ecAdd_P1_x),CALL(mulFpBN254)
+        ; C = (P1.x)³
+
+        3n => A     :CALL(addFpBN254)
+        ; C = (P1.x)³ + 3
+        C           :MSTORE(ecAdd_P3_x)
+
+        $ => A    :MLOAD(ecAdd_P1_y),CALL(squareFpBN254)
+        ; B = (Py)²
+
+        ; 2] Check if LHS == RHS
+        B => A
+        $ => B      :MLOAD(ecAdd_P3_x) 
+        $           :EQ,JMPNC(ecAdd_P1_is_not_in_E)
+
+        ; P3 = P1
+        $ => A  :MLOAD(ecAdd_P1_x)
+        $ => B  :MLOAD(ecAdd_P1_y)
+        A       :MSTORE(ecAdd_P3_x)
+        B       :MSTORE(ecAdd_P3_y)
+
+        0 => B     :JMP(ecAdd_end) 
+
+ecAdd_P1_and_P2_are_zero:
+        ; Check that P2 is zero
+        0n => B
+        $ => A  :MLOAD(ecAdd_P2_x)
+        1       :EQ
+        $ => A  :MLOAD(ecAdd_P2_y)
+        1       :EQ
+
+        ; P3 = 0
+        0n       :MSTORE(ecAdd_P3_x)
+        0n       :MSTORE(ecAdd_P3_y)
+
+        0 => B     :JMP(ecAdd_end) 
+
+ecAdd_P1_and_P2_are_inverted:
+        ; check P2.y == -P1.y
+        A => C
+        ${const.BN254_P - A} => A
+        1n => B
+        0n => D
+        %BN254_P        :ARITH
+        B               :ASSERT
+
+        ; P3 = 0
+        0n              :MSTORE(ecAdd_P3_x)
+        0n              :MSTORE(ecAdd_P3_y)
+
+        0 => B          :JMP(ecAdd_end) 
+
+ecAdd_same:
+        $ => A  :MLOAD(ecAdd_P1_y)
+        $ => C  :MLOAD(ecAdd_P1_y)
+                :CALL(addFpBN254)
+        ; C = 2y
+
+        C => A
+                :CALL(invFpBN254)
+        ; B = 1 / 2y
+        B       :MSTORE(ecAdd_P1_y_inv)
+
+        B => A,C 
+                :CALL(addFpBN254)
+        C => A
+        $ => C  :MLOAD(ecAdd_P1_y_inv)
+                :CALL(addFpBN254)
+        ; C = 3/2y
+
+        C => A
+        $ => B  :MLOAD(ecAdd_P1_x)
+                :CALL(mulFpBN254)
+        ; C = 3x/2y
+
+        C => A
+        $ => B  :MLOAD(ecAdd_P1_x)
+                :CALL(mulFpBN254)
+        ; C = lambda = 3x²/2y
+
+        C       :MSTORE(ecAdd_lambda)
+        ; C = lambda
+
+        C => A
+                :CALL(squareFpBN254)
+        ; B = lambda²
+
+        B => A  
+        $ => C  :MLOAD(ecAdd_P1_x)
+                :CALL(subFpBN254)
+        ; C = lambda² - x
+
+        C => A  
+        $ => C  :MLOAD(ecAdd_P1_x)
+                :CALL(subFpBN254)
+        ; C = lambda² - x - x
+
+                :JMP(ecAdd_common_calculate)
+
+ecAdd_different:
+        $ => A  :MLOAD(ecAdd_P2_x)
+        $ => C  :MLOAD(ecAdd_P1_x)
+                :CALL(subFpBN254)
+        ; C = P2.x - P1.x
+
+        C => A
+                :CALL(invFpBN254)
+        ; B = 1 / (P2.x - P1.x)
+        B       :MSTORE(ecAdd_lambda)
+
+        $ => A  :MLOAD(ecAdd_P2_y)
+        $ => C  :MLOAD(ecAdd_P1_y)
+                :CALL(subFpBN254)
+        ; C = P2.y - P1.y
+
+        C => A
+        $ => B  :MLOAD(ecAdd_lambda)
+                :CALL(mulFpBN254)
+        ; C = lambda = (P2.y - P1.y) / (P2.x - P1.x)
+        C       :MSTORE(ecAdd_lambda)
+
+        C => A
+                :CALL(squareFpBN254)
+        ; B = lambda² 
+
+        B => A
+        $ => C  :MLOAD(ecAdd_P1_x)
+                :CALL(subFpBN254)
+        ; C = lambda² - P1.x
+
+        C => A
+        $ => C  :MLOAD(ecAdd_P2_x)
+                :CALL(subFpBN254)
+        ; C = lambda² - P1.x - P2.x
+
+ecAdd_common_calculate:
+        C           :MSTORE(ecAdd_P3_x)  
+        ; P3.x = lambda² - P1.x - P2.x   
+ 
+        $ => A  :MLOAD(ecAdd_P1_x)
+                :CALL(subFpBN254)
+        ; C = P1.x - P3.x
+
+        $ => A  :MLOAD(ecAdd_lambda)
+        C => B
+                :CALL(mulFpBN254)
+        ; C = lambda·(P1.x - P3.x) 
+
+        C => A 
+        $ => C  :MLOAD(ecAdd_P1_y)
+                :CALL(subFpBN254)
+        ; C = lambda·(P1.x - P3.x) - P1.y
+
+        C           :MSTORE(ecAdd_P3_y)
+
+        0 => B      :JMP(ecAdd_end)
+
+; ERRORS
+ecAdd_P1_is_not_in_E:
+    1 => B      :JMP(ecAdd_error)
+
+ecAdd_P2_is_not_in_E:
+    2 => B      :JMP(ecAdd_error)
+
+ecAdd_error:
+        0 => A
+
+ecAdd_end:
+        $ => RR         :MLOAD(ecAdd_RR)
+                        :RETURN
