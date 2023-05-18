@@ -46,18 +46,18 @@ VAR GLOBAL expCycloFp12BN254_Ca5_y
 VAR GLOBAL expCycloFp12BN254_RR
 
 ; TODO: Should I also check the (improbable) case where a = 0
-; TODO: This is not sound, but correct
 ; TODO: In our case, we can speed it up by using pseudobinary encoding instead of binary encoding
 expCycloFp12BN254:
         RR              :MSTORE(expCycloFp12BN254_RR)
-
-        ${log2(mem.expCycloFp12BN254_e)} => RCX
 
         ; Check if a = 1
         ${Fp2BN254neq1(mem.expCycloFp12BN254_a0_x) || Fp2BN254neq0(mem.expCycloFp12BN254_a0_y) || Fp2BN254neq0(mem.expCycloFp12BN254_a2_x) || Fp2BN254neq0(mem.expCycloFp12BN254_a2_y || Fp2BN254neq0(mem.expCycloFp12BN254_a4_x) || Fp2BN254neq0(mem.expCycloFp12BN254_a4_y) || Fp2BN254neq0(mem.expCycloFp12BN254_a1_x) || Fp2BN254neq0(mem.expCycloFp12BN254_a1_y) || mem.expCycloFp12BN254_a3_x) || Fp2BN254neq0(mem.expCycloFp12BN254_a3_y) || Fp2BN254neq0(mem.expCycloFp12BN254_a5_x) || Fp2BN254neq0(mem.expCycloFp12BN254_a5_y)}   :JMPZ(expCycloFp12BN254_a_is_one)
 
         ; Check if e = 0
         ${Fp2BN254neq0(mem.expCycloFp12BN254_e)}   :JMPZ(expCycloFp12BN254_e_is_zero)
+
+        ; ${log2(mem.expCycloFp12BN254_e)} => RCX
+        257 => RCX
 
         ; Compress the input
         $ => A          :MLOAD(expCycloFp12BN254_a0_x)
@@ -195,6 +195,7 @@ expCycloFp12BN254_e_is_zero:
 
 ; Assumes e is well-formed
 expCycloFp12BN254_find_MSB_e:
+        RCX - 1 => RCX
         $ => A,B        :MLOAD(expCycloFp12BN254_e)
         ; E = 2A
         $ => E          :ADD,MSTORE(expCycloFp12BN254_e),JMPNC(expCycloFp12BN254_find_MSB_e)

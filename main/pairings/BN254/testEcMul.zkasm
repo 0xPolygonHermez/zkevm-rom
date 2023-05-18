@@ -1,0 +1,192 @@
+; constants needed by executor C++
+CONST %N = 2**19
+CONST %MAX_CNT_STEPS_LIMIT = %N
+CONST %MAX_CNT_ARITH_LIMIT = %N
+CONST %MAX_CNT_BINARY_LIMIT = %N
+CONST %MAX_CNT_MEM_ALIGN_LIMIT = %N
+CONST %MAX_CNT_KECCAK_F_LIMIT = %N
+CONST %MAX_CNT_PADDING_PG_LIMIT = %N
+CONST %MAX_CNT_POSEIDON_G_LIMIT = %N
+
+CONSTL %BN254_P = 21888242871839275222246405745257275088696311157297823662689037894645226208583n
+
+VAR GLOBAL lastHashKId
+VAR GLOBAL lastHashPId
+
+VAR GLOBAL initial_A
+VAR GLOBAL initial_B
+VAR GLOBAL initial_C
+VAR GLOBAL initial_D
+VAR GLOBAL initial_E
+VAR GLOBAL initial_CTX
+VAR GLOBAL initial_SP
+VAR GLOBAL initial_PC
+VAR GLOBAL initial_GAS
+VAR GLOBAL initial_SR
+VAR GLOBAL initial_RR
+VAR GLOBAL initial_HASHPOS
+VAR GLOBAL initial_RCX
+
+start:
+
+        STEP => A
+        0 :ASSERT
+
+
+        A           :MSTORE(initial_A)
+        B           :MSTORE(initial_B)
+        C           :MSTORE(initial_C)
+        D           :MSTORE(initial_D)
+        E           :MSTORE(initial_E)
+        CTX         :MSTORE(initial_CTX)
+        SP          :MSTORE(initial_SP)
+        PC          :MSTORE(initial_PC)
+        GAS         :MSTORE(initial_GAS)
+        SR          :MSTORE(initial_SR)
+        RR          :MSTORE(initial_RR)
+        HASHPOS     :MSTORE(initial_HASHPOS)
+        RCX         :MSTORE(initial_RCX)
+        0 => A,B,C,D,E,CTX, SP, PC, GAS, SR, RR, HASHPOS, RCX
+
+        -1          :MSTORE(lastHashKId)
+        -1          :MSTORE(lastHashPId)
+
+        ; 1] k·0 = 0
+        0n              :MSTORE(ecMul_k)
+        1n              :MSTORE(ecMul_P_x)
+        2n              :MSTORE(ecMul_P_y)
+                        :CALL(ecMul)
+        $ => A          :MLOAD(ecMul_Q_x)
+        0n => B         
+        1               :EQ
+        $ => A          :MLOAD(ecMul_Q_y)
+        0n => B         
+        1               :EQ
+
+        0n              :MSTORE(ecMul_k)
+        0n              :MSTORE(ecMul_P_x)
+        0n              :MSTORE(ecMul_P_y)
+                        :CALL(ecMul)
+        $ => A          :MLOAD(ecMul_Q_x)
+        0n => B         
+        1               :EQ
+        $ => A          :MLOAD(ecMul_Q_y)
+        0n => B         
+        1               :EQ
+
+        ; 2] P not in E
+        0n              :MSTORE(ecMul_k)
+        1n              :MSTORE(ecMul_P_x)
+        0n              :MSTORE(ecMul_P_y)
+                        :CALL(ecMul)
+        1 => A
+        1               :EQ
+
+        65n             :MSTORE(ecMul_k)
+        1n              :MSTORE(ecMul_P_x)
+        0n              :MSTORE(ecMul_P_y)
+                        :CALL(ecMul)
+        1 => A
+        1               :EQ
+
+        ; 5] k·P when k != 0
+        1n                                                                                     :MSTORE(ecMul_k)
+        1n                                                                                      :MSTORE(ecMul_P_x)
+        2n                                                                                      :MSTORE(ecMul_P_y)
+                                                                                                :CALL(ecMul)
+        $ => A          :MLOAD(ecMul_Q_x)
+        1n => B         
+        1               :EQ
+        $ => A          :MLOAD(ecMul_Q_y)
+        2n => B         
+        1               :EQ
+
+        2n                                                                                     :MSTORE(ecMul_k)
+        1n                                                                                      :MSTORE(ecMul_P_x)
+        2n                                                                                      :MSTORE(ecMul_P_y)
+                                                                                                :CALL(ecMul)
+        $ => A          :MLOAD(ecMul_Q_x)
+        1368015179489954701390400359078579693043519447331113978918064868415326638035n => B         
+        1               :EQ
+        $ => A          :MLOAD(ecMul_Q_y)
+        9918110051302171585080402603319702774565515993150576347155970296011118125764n => B         
+        1               :EQ
+
+        65n                                                                                     :MSTORE(ecMul_k)
+        1n                                                                                      :MSTORE(ecMul_P_x)
+        2n                                                                                      :MSTORE(ecMul_P_y)
+                                                                                                :CALL(ecMul)
+        $ => A          :MLOAD(ecMul_Q_x)
+        21184532036463169063041779836861514142873086093180850953095098556309204188255n => B         
+        1               :EQ
+        $ => A          :MLOAD(ecMul_Q_y)
+        16870949628445799017882714788639508275834535486794531840392367353784571921174n => B         
+        1               :EQ
+
+        10000000089n                                                                            :MSTORE(ecMul_k)
+        1n                                                                                      :MSTORE(ecMul_P_x)
+        2n                                                                                      :MSTORE(ecMul_P_y)
+                                                                                                :CALL(ecMul)
+        $ => A          :MLOAD(ecMul_Q_x)
+        4768044760451824005417871472283223457728569810854115125480649095031772328870n => B         
+        1               :EQ
+        $ => A          :MLOAD(ecMul_Q_y)
+        21389337952468851259287213083493638952853622949895525580347877121675081015727n => B         
+        1               :EQ
+
+        57n                                                                                     :MSTORE(ecMul_k)
+        1745860766704548035074878643814414425056208216948549237180537806484993001172n           :MSTORE(ecMul_P_x)
+        10428992577810537311515619307712828512800028181521723820412159824785899508051n          :MSTORE(ecMul_P_y)
+                                                                                                :CALL(ecMul)
+        $ => A          :MLOAD(ecMul_Q_x)
+        21092868577100313210583214784627729175513062432513303686654820611840644382013n => B         
+        1               :EQ
+        $ => A          :MLOAD(ecMul_Q_y)
+        10293123368529248350591404721829100625076077203595282162629899903703630633665n => B         
+        1               :EQ
+
+        123456789n                                                                              :MSTORE(ecMul_k)
+        1745860766704548035074878643814414425056208216948549237180537806484993001172n           :MSTORE(ecMul_P_x)
+        10428992577810537311515619307712828512800028181521723820412159824785899508051n          :MSTORE(ecMul_P_y)
+                                                                                                :CALL(ecMul)
+        $ => A          :MLOAD(ecMul_Q_x)
+        9551410454255481932113938269904288675272239827491596157984458647610565008967n => B         
+        1               :EQ
+        $ => A          :MLOAD(ecMul_Q_y)
+        17781856861347070862134441477208204792978952663354273425763774350233183876915n => B         
+        1               :EQ
+
+end:
+
+        $ => A           :MLOAD(initial_A)
+        $ => B           :MLOAD(initial_B)
+        $ => C           :MLOAD(initial_C)
+        $ => D           :MLOAD(initial_D)
+        $ => E           :MLOAD(initial_E)
+        $ => CTX         :MLOAD(initial_CTX)
+        $ => SP          :MLOAD(initial_SP)
+        $ => PC          :MLOAD(initial_PC)
+        $ => GAS         :MLOAD(initial_GAS)
+        $ => SR          :MLOAD(initial_SR)
+        $ => RR          :MLOAD(initial_RR)
+        $ => HASHPOS     :MLOAD(initial_HASHPOS)
+        $ => RCX         :MLOAD(initial_RCX)
+
+; label finalizeExecution needed by executor C++
+finalizeExecution:
+        ${beforeLast()}  : JMPN(finalizeExecution)
+
+                         : JMP(start)
+opINVALID:
+; label checkAndSaveFrom needed by executor C++
+checkAndSaveFrom:
+                         :JMP(opINVALID)
+
+
+INCLUDE "ecMul.zkasm"
+INCLUDE "ecAdd.zkasm"
+INCLUDE "../FPBN254/addFpBN254.zkasm"
+INCLUDE "../FPBN254/subFpBN254.zkasm"
+INCLUDE "../FPBN254/mulFpBN254.zkasm"
+INCLUDE "../FPBN254/squareFpBN254.zkasm"
+INCLUDE "../FPBN254/invFpBN254.zkasm"
