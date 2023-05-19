@@ -1,8 +1,6 @@
-- [ ] $\mathbb{F}_p$ arithmetic fails if the input is a negative big integer, should we fix this? It's working properly otherwise
-- [ ] Implement cyclotomic exponentiation.
 - [ ] Unify inverse Fp2 and Fp2 arithmetic in general
 - [ ] Implement fast square and fast exponentiation in the 12-th cyclotomic subgroup as per https://eprint.iacr.org/2010/542.pdf
-- [ ] Rename `Fp2BN254neq0` in `helper.js` to `FpBN254neq0`
-- [ ] Why is `${const.BN254_P - C} => C` correct and `%BN254_P - C => C` is not?
-- [ ] Fix all Check if 0!!!! I should use EQ rather than ARITH
 - [ ] Sums are for free, I do not need to normalize.
+
+- Why is `${const.BN254_P - C} => C` correct and `%BN254_P - C => C` is not?
+- $\mathbb{F}_p$ arithmetic fails if the input is a negative big integer, should we fix this? It's working properly otherwise
