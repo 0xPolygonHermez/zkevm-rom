@@ -1,0 +1,81 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; squareFp4BN254:
+;;             in: (a1 + a2·V) ∈ Fp4, where ai ∈ Fp2
+;;             out: (c1 + c2·V) ∈ Fp4, where:
+;;                  - c1 = a2²·(9 + u) + a1²
+;;                  - c2 = (a1 + a2)² - a1² - a2²
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL squareFp4BN254_a1_x
+VAR GLOBAL squareFp4BN254_a1_y
+VAR GLOBAL squareFp4BN254_a2_x
+VAR GLOBAL squareFp4BN254_a2_y
+VAR GLOBAL squareFp4BN254_c1_x
+VAR GLOBAL squareFp4BN254_c1_y
+VAR GLOBAL squareFp4BN254_c2_x
+VAR GLOBAL squareFp4BN254_c2_y
+
+VAR GLOBAL squareFp4BN254_a1square_x
+VAR GLOBAL squareFp4BN254_a1square_y
+VAR GLOBAL squareFp4BN254_a2square_x
+VAR GLOBAL squareFp4BN254_a2square_y
+
+VAR GLOBAL squareFp4BN254_RR
+
+squareFp4BN254:
+        RR              :MSTORE(squareFp4BN254_RR)
+
+        ; 1] a1²
+        $ => A          :MLOAD(squareFp4BN254_a1_x)
+        $ => B          :MLOAD(squareFp4BN254_a1_y)
+                        :CALL(squareFp2BN254)
+        E               :MSTORE(squareFp4BN254_a1square_x)
+        C               :MSTORE(squareFp4BN254_a1square_y)
+
+        ; 2] a2²
+        $ => A          :MLOAD(squareFp4BN254_a2_x)
+        $ => B          :MLOAD(squareFp4BN254_a2_y)
+                        :CALL(squareFp2BN254)
+        E               :MSTORE(squareFp4BN254_a2square_x)
+        C               :MSTORE(squareFp4BN254_a2square_y)
+
+        ; 3] c1 = a2²·(9 + u) + a1²
+        $ => A          :MLOAD(squareFp4BN254_a2square_x)
+        $ => B          :MLOAD(squareFp4BN254_a2square_y)
+        9n => C        
+        1n => D
+                        :CALL(mulFp2BN254)
+        E => A 
+        C => B
+        $ => C          :MLOAD(squareFp4BN254_a1square_x)
+        $ => D          :MLOAD(squareFp4BN254_a1square_y)
+                        :CALL(addFp2BN254)
+        E               :MSTORE(squareFp4BN254_c1_x)
+        C               :MSTORE(squareFp4BN254_c1_y)
+
+        ; 4] c2 = (a1 + a2)² - a1² - a2²
+        $ => A          :MLOAD(squareFp4BN254_a1_x)
+        $ => B          :MLOAD(squareFp4BN254_a1_y)
+        $ => C          :MLOAD(squareFp4BN254_a2_x)
+        $ => D          :MLOAD(squareFp4BN254_a2_y)
+                        :CALL(addFp2BN254)
+        E => A
+        C => B
+                        :CALL(squareFp2BN254)
+        E => A
+        C => B
+        $ => C          :MLOAD(squareFp4BN254_a1square_x)
+        $ => D          :MLOAD(squareFp4BN254_a1square_y)
+                        :CALL(subFp2BN254)
+        E => A
+        C => B
+        $ => C          :MLOAD(squareFp4BN254_a2square_x)
+        $ => D          :MLOAD(squareFp4BN254_a2square_y)
+                        :CALL(subFp2BN254)
+        E               :MSTORE(squareFp4BN254_c2_x)
+        C               :MSTORE(squareFp4BN254_c2_y)
+
+        $ => RR         :MLOAD(squareFp4BN254_RR)
+                        :RETURN
