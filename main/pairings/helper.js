@@ -85,7 +85,7 @@ module.exports = class myHelper {
         return r;
     }
 
-    eval_Fp2BN254eq(ctx, tag) {
+    eval_FpBN254eq(ctx, tag) {
         const ctxFullFe = { ...ctx, fullFe: true };
         let a = this.evalCommand(ctxFullFe, tag.params[0]);
         let b = this.evalCommand(ctxFullFe, tag.params[1]);
@@ -95,7 +95,7 @@ module.exports = class myHelper {
         return ctx.FpBN254.eq(a, b);
     }
 
-    eval_Fp2BN254eq0(ctx, tag) {
+    eval_FpBN254eq0(ctx, tag) {
         const ctxFullFe = { ...ctx, fullFe: true };
         let a = this.evalCommand(ctxFullFe, tag.params[0]);
         a = ctx.FpBN254.normalize(a, ctx.FpBN254.p);
@@ -103,7 +103,7 @@ module.exports = class myHelper {
         return ctx.FpBN254.isZero(a);
     }
 
-    eval_Fp2BN254eq1(ctx, tag) {
+    eval_FpBN254eq1(ctx, tag) {
         const ctxFullFe = { ...ctx, fullFe: true };
         let a = this.evalCommand(ctxFullFe, tag.params[0]);
         a = ctx.FpBN254.normalize(a, ctx.FpBN254.p);
@@ -111,12 +111,12 @@ module.exports = class myHelper {
         return ctx.FpBN254.eq(a, 1n);
     }
 
-    eval_Fp2BN254neq0(ctx, tag) {
-        return !this.eval_Fp2BN254eq0(ctx, tag);
+    eval_FpBN254neq0(ctx, tag) {
+        return !this.eval_FpBN254eq0(ctx, tag);
     }
 
-    eval_Fp2BN254neq1(ctx, tag) {
-        return !this.eval_Fp2BN254eq1(ctx, tag);
+    eval_FpBN254neq1(ctx, tag) {
+        return !this.eval_FpBN254eq1(ctx, tag);
     }
 
     eval_fp2BN254sub(ctx, tag) {
