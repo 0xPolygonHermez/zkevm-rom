@@ -5,44 +5,46 @@
 
 module.exports = class myHelper {
     setup(props) {
-        for(const name in props) {
+        for (const name in props) {
             this[name] = props[name];
         }
     }
-    eval_hello(ctx, tag) {
-        const p1 = this.evalCommand(ctx, tag.params[0]);
-        const p2 = this.evalCommand(ctx, tag.params[1]);
-        // return p1 + 10n * p2;
-        return [p1 + 10n*p2, 2n**32n, 0n, 0n, 0n, 0n, 0n, 0n];
-    }
+    // eval_hello(ctx, tag) {
+    //     const p1 = this.evalCommand(ctx, tag.params[0]);
+    //     const p2 = this.evalCommand(ctx, tag.params[1]);
+    //     // return p1 + 10n * p2;
+    //     return [p1 + 10n*p2, 2n**32n, 0n, 0n, 0n, 0n, 0n, 0n];
+    // }
 
-    eval_helloFe(ctx, tag) {
-        const p1 = this.evalCommand(ctx, tag.params[0]);
-        const p2 = this.evalCommand(ctx, tag.params[1]);
-        return [a + 10n*b, 2n**32n, 0n, 0n, 0n, 0n, 0n, 0n];
-    }
-    eval_dumpFe(ctx, tag) {
-        for (let index = 0; index < tag.params.length; ++index) {
-            const param = tag.params[index];
-            if (param.op !== 'getReg') {
-                console.log(`Ignore invalid operation ${param.op} on param #${index}`);
-                continue;
-            }
-            console.log(`${param.regName}: [${ctx[param.regName].join(',')}]`);
-        }
-        return 0n;
-    }
-    eval_dumpHexFe(ctx, tag) {
-        for (let index = 0; index < tag.params.length; ++index) {
-            const param = tag.params[index];
-            if (param.op !== 'getReg') {
-                console.log(`Ignore invalid operation ${param.op} on param #${index}`);
-                continue;
-            }
-            console.log(`${param.regName}: [${ctx[param.regName].map(x => "0x"+x.toString(16).padStart(16, '0')).join(',')}]`);
-        }
-        return 0n;
-    }
+    // eval_helloFe(ctx, tag) {
+    //     const p1 = this.evalCommand(ctx, tag.params[0]);
+    //     const p2 = this.evalCommand(ctx, tag.params[1]);
+    //     return [a + 10n*b, 2n**32n, 0n, 0n, 0n, 0n, 0n, 0n];
+    // }
+    
+    // eval_dumpFe(ctx, tag) {
+    //     for (let index = 0; index < tag.params.length; ++index) {
+    //         const param = tag.params[index];
+    //         if (param.op !== 'getReg') {
+    //             console.log(`Ignore invalid operation ${param.op} on param #${index}`);
+    //             continue;
+    //         }
+    //         console.log(`${param.regName}: [${ctx[param.regName].join(',')}]`);
+    //     }
+    //     return 0n;
+    // }
+
+    // eval_dumpHexFe(ctx, tag) {
+    //     for (let index = 0; index < tag.params.length; ++index) {
+    //         const param = tag.params[index];
+    //         if (param.op !== 'getReg') {
+    //             console.log(`Ignore invalid operation ${param.op} on param #${index}`);
+    //             continue;
+    //         }
+    //         console.log(`${param.regName}: [${ctx[param.regName].map(x => "0x"+x.toString(16).padStart(16, '0')).join(',')}]`);
+    //     }
+    //     return 0n;
+    // }
 
     // export function log2(x: bigint): number {
     //     if (x == 0n) return 0;
@@ -55,13 +57,13 @@ module.exports = class myHelper {
     //     return r;
     // }
 
-    eval_fpBN254mul(ctx, tag) {
-        const ctxFullFe = { ...ctx, fullFe: true };
-        const a = this.evalCommand(ctxFullFe, tag.params[0]);
-        const b = this.evalCommand(ctxFullFe, tag.params[1]);
+    // eval_fpBN254mul(ctx, tag) {
+    //     const ctxFullFe = { ...ctx, fullFe: true };
+    //     const a = this.evalCommand(ctxFullFe, tag.params[0]);
+    //     const b = this.evalCommand(ctxFullFe, tag.params[1]);
 
-        return ctx.FpBN254.mul(a, b);
-    }
+    //     return ctx.FpBN254.mul(a, b);
+    // }
 
     eval_fpBN254inv(ctx, tag) {
         const ctxFullFe = { ...ctx, fullFe: true };
@@ -85,15 +87,15 @@ module.exports = class myHelper {
         return r;
     }
 
-    eval_FpBN254eq(ctx, tag) {
-        const ctxFullFe = { ...ctx, fullFe: true };
-        let a = this.evalCommand(ctxFullFe, tag.params[0]);
-        let b = this.evalCommand(ctxFullFe, tag.params[1]);
-        a = ctx.FpBN254.normalize(a, ctx.FpBN254.p);
-        b = ctx.FpBN254.normalize(b, ctx.FpBN254.p);
+    // eval_FpBN254eq(ctx, tag) {
+    //     const ctxFullFe = { ...ctx, fullFe: true };
+    //     let a = this.evalCommand(ctxFullFe, tag.params[0]);
+    //     let b = this.evalCommand(ctxFullFe, tag.params[1]);
+    //     a = ctx.FpBN254.normalize(a, ctx.FpBN254.p);
+    //     b = ctx.FpBN254.normalize(b, ctx.FpBN254.p);
 
-        return ctx.FpBN254.eq(a, b);
-    }
+    //     return ctx.FpBN254.eq(a, b);
+    // }
 
     eval_FpBN254eq0(ctx, tag) {
         const ctxFullFe = { ...ctx, fullFe: true };
@@ -119,33 +121,33 @@ module.exports = class myHelper {
         return !this.eval_FpBN254eq1(ctx, tag);
     }
 
-    eval_fp2BN254sub(ctx, tag) {
-        const ctxFullFe = { ...ctx, fullFe: true };
-        const a = this.evalCommand(ctxFullFe, tag.params[0]);
-        const b = this.evalCommand(ctxFullFe, tag.params[1]);
+    // eval_fp2BN254sub(ctx, tag) {
+    //     const ctxFullFe = { ...ctx, fullFe: true };
+    //     const a = this.evalCommand(ctxFullFe, tag.params[0]);
+    //     const b = this.evalCommand(ctxFullFe, tag.params[1]);
 
-        return ctx.FpBN254.sub(a, b);
-    }
+    //     return ctx.FpBN254.sub(a, b);
+    // }
 
-    eval_fp2SquareBN254_x(ctx, tag) {
-        const ctxFullFe = { ...ctx, fullFe: true };
-        const a = this.evalCommand(ctxFullFe, tag.params[0]);
-        const b = this.evalCommand(ctxFullFe, tag.params[1]);
-        const a1a2sub = ctx.FpBN254.sub(a, b);
-        const a1a2sum = ctx.FpBN254.add(a, b);
+    // eval_fp2SquareBN254_x(ctx, tag) {
+    //     const ctxFullFe = { ...ctx, fullFe: true };
+    //     const a = this.evalCommand(ctxFullFe, tag.params[0]);
+    //     const b = this.evalCommand(ctxFullFe, tag.params[1]);
+    //     const a1a2sub = ctx.FpBN254.sub(a, b);
+    //     const a1a2sum = ctx.FpBN254.add(a, b);
 
-        return ctx.FpBN254.mul(a1a2sub, a1a2sum);
-    }
+    //     return ctx.FpBN254.mul(a1a2sub, a1a2sum);
+    // }
 
-    eval_fp2SquareBN254_y(ctx, tag) {
-        const ctxFullFe = { ...ctx, fullFe: true };
-        const a = this.evalCommand(ctxFullFe, tag.params[0]);
-        const b = this.evalCommand(ctxFullFe, tag.params[1]);
-        const a1a2 = ctx.FpBN254.mul(a, b);
-        const two = 2n;
+    // eval_fp2SquareBN254_y(ctx, tag) {
+    //     const ctxFullFe = { ...ctx, fullFe: true };
+    //     const a = this.evalCommand(ctxFullFe, tag.params[0]);
+    //     const b = this.evalCommand(ctxFullFe, tag.params[1]);
+    //     const a1a2 = ctx.FpBN254.mul(a, b);
+    //     const two = 2n;
 
-        return ctx.FpBN254.mul(two, a1a2);
-    }
+    //     return ctx.FpBN254.mul(two, a1a2);
+    // }
 
     eval_fp2InvBN254_x(ctx, tag) {
         const ctxFullFe = { ...ctx, fullFe: true };
@@ -165,23 +167,23 @@ module.exports = class myHelper {
         return ctx.FpBN254.div(ctx.FpBN254.neg(b), den);
     }
 
-    eval_fp6MulBN254_x(ctx, tag) {
-        const ctxFullFe = { ...ctx, fullFe: true };
-        const a1 = this.evalCommand(ctxFullFe, tag.params[0]);
-        const a2 = this.evalCommand(ctxFullFe, tag.params[1]);
-        const a3 = this.evalCommand(ctxFullFe, tag.params[2]);
-        const a4 = this.evalCommand(ctxFullFe, tag.params[3]);
-        const a5 = this.evalCommand(ctxFullFe, tag.params[4]);
-        const a6 = this.evalCommand(ctxFullFe, tag.params[5]);
-        const b1 = this.evalCommand(ctxFullFe, tag.params[6]);
-        const b2 = this.evalCommand(ctxFullFe, tag.params[7]);
-        const b3 = this.evalCommand(ctxFullFe, tag.params[8]);
-        const b4 = this.evalCommand(ctxFullFe, tag.params[9]);
-        const b5 = this.evalCommand(ctxFullFe, tag.params[10]);
-        const b6 = this.evalCommand(ctxFullFe, tag.params[11]);
+    // eval_fp6MulBN254_x(ctx, tag) {
+    //     const ctxFullFe = { ...ctx, fullFe: true };
+    //     const a1 = this.evalCommand(ctxFullFe, tag.params[0]);
+    //     const a2 = this.evalCommand(ctxFullFe, tag.params[1]);
+    //     const a3 = this.evalCommand(ctxFullFe, tag.params[2]);
+    //     const a4 = this.evalCommand(ctxFullFe, tag.params[3]);
+    //     const a5 = this.evalCommand(ctxFullFe, tag.params[4]);
+    //     const a6 = this.evalCommand(ctxFullFe, tag.params[5]);
+    //     const b1 = this.evalCommand(ctxFullFe, tag.params[6]);
+    //     const b2 = this.evalCommand(ctxFullFe, tag.params[7]);
+    //     const b3 = this.evalCommand(ctxFullFe, tag.params[8]);
+    //     const b4 = this.evalCommand(ctxFullFe, tag.params[9]);
+    //     const b5 = this.evalCommand(ctxFullFe, tag.params[10]);
+    //     const b6 = this.evalCommand(ctxFullFe, tag.params[11]);
 
-        const den = ctx.FpBN254.add(ctx.FpBN254.mul(a, a), ctx.FpBN254.mul(b, b));
+    //     const den = ctx.FpBN254.add(ctx.FpBN254.mul(a, a), ctx.FpBN254.mul(b, b));
 
-        return ctx.FpBN254.div(a, den);
-    }
+    //     return ctx.FpBN254.div(a, den);
+    // }
 }
