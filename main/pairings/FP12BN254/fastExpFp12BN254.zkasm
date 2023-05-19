@@ -1,0 +1,291 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; fastExpFp12BN254:
+;;             in: e, (a1 + a2·w) ∈ GΦ6(p²), where e ∈ [0,p¹²-2] ai ∈ Fp6
+;;             out: (c1 + c2·w) = (c1 + c2·w)^e ∈ GΦ6(p²)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL fastExpFp12BN254_e
+VAR GLOBAL fastExpFp12BN254_a11_x
+VAR GLOBAL fastExpFp12BN254_a11_y
+VAR GLOBAL fastExpFp12BN254_a12_x
+VAR GLOBAL fastExpFp12BN254_a12_y
+VAR GLOBAL fastExpFp12BN254_a13_x
+VAR GLOBAL fastExpFp12BN254_a13_y
+VAR GLOBAL fastExpFp12BN254_a21_x
+VAR GLOBAL fastExpFp12BN254_a21_y
+VAR GLOBAL fastExpFp12BN254_a22_x
+VAR GLOBAL fastExpFp12BN254_a22_y
+VAR GLOBAL fastExpFp12BN254_a23_x
+VAR GLOBAL fastExpFp12BN254_a23_y
+VAR GLOBAL fastExpFp12BN254_c11_x
+VAR GLOBAL fastExpFp12BN254_c11_y
+VAR GLOBAL fastExpFp12BN254_c12_x
+VAR GLOBAL fastExpFp12BN254_c12_y
+VAR GLOBAL fastExpFp12BN254_c13_x
+VAR GLOBAL fastExpFp12BN254_c13_y
+VAR GLOBAL fastExpFp12BN254_c21_x
+VAR GLOBAL fastExpFp12BN254_c21_y
+VAR GLOBAL fastExpFp12BN254_c22_x
+VAR GLOBAL fastExpFp12BN254_c22_y
+VAR GLOBAL fastExpFp12BN254_c23_x
+VAR GLOBAL fastExpFp12BN254_c23_y
+
+VAR GLOBAL fastExpFp12BN254_RR
+
+fastExpFp12BN254:
+        RR              :MSTORE(fastExpFp12BN254_RR)
+
+        ; Check if a = 1
+        ${FpBN254neq1(mem.fastExpFp12BN254_a11_x) || FpBN254neq0(mem.fastExpFp12BN254_a11_y) || FpBN254neq0(mem.fastExpFp12BN254_a12_x) || FpBN254neq0(mem.fastExpFp12BN254_a12_y || FpBN254neq0(mem.fastExpFp12BN254_a13_x) || FpBN254neq0(mem.fastExpFp12BN254_a13_y) || FpBN254neq0(mem.fastExpFp12BN254_a21_x) || FpBN254neq0(mem.fastExpFp12BN254_a21_y) || mem.fastExpFp12BN254_a22_x) || FpBN254neq0(mem.fastExpFp12BN254_a22_y) || FpBN254neq0(mem.fastExpFp12BN254_a23_x) || FpBN254neq0(mem.fastExpFp12BN254_a23_y)}   :JMPZ(fastExpFp12BN254_a_is_one)
+
+        ; Check if e = 0
+        ${FpBN254neq0(mem.fastExpFp12BN254_e)}   :JMPZ(fastExpFp12BN254_e_is_zero)
+
+        ; ${log2(mem.fastExpFp12BN254_e)} => RCX
+        257 => RCX
+
+        $ => A  :MLOAD(fastExpFp12BN254_a11_x)
+        $ => B  :MLOAD(fastExpFp12BN254_a11_y)
+        A       :MSTORE(fastExpFp12BN254_c11_x)
+        B       :MSTORE(fastExpFp12BN254_c11_y)
+        $ => A  :MLOAD(fastExpFp12BN254_a12_x)
+        $ => B  :MLOAD(fastExpFp12BN254_a12_y)
+        A       :MSTORE(fastExpFp12BN254_c12_x)
+        B       :MSTORE(fastExpFp12BN254_c12_y)
+        $ => A  :MLOAD(fastExpFp12BN254_a13_x)
+        $ => B  :MLOAD(fastExpFp12BN254_a13_y)
+        A       :MSTORE(fastExpFp12BN254_c13_x)
+        B       :MSTORE(fastExpFp12BN254_c13_y)
+        $ => A  :MLOAD(fastExpFp12BN254_a21_x)
+        $ => B  :MLOAD(fastExpFp12BN254_a21_y)
+        A       :MSTORE(fastExpFp12BN254_c21_x)
+        B       :MSTORE(fastExpFp12BN254_c21_y)
+        $ => A  :MLOAD(fastExpFp12BN254_a22_x)
+        $ => B  :MLOAD(fastExpFp12BN254_a22_y)
+        A       :MSTORE(fastExpFp12BN254_c22_x)
+        B       :MSTORE(fastExpFp12BN254_c22_y)
+        $ => A  :MLOAD(fastExpFp12BN254_a23_x)
+        $ => B  :MLOAD(fastExpFp12BN254_a23_y)
+        A       :MSTORE(fastExpFp12BN254_c23_x)
+        B       :MSTORE(fastExpFp12BN254_c23_y)
+
+                :JMP(fastExpFp12BN254_find_MSB_e)
+
+fastExpFp12BN254_a_is_one:
+        ; Check that a = 1
+        $ => A  :MLOAD(fastExpFp12BN254_a11_x)
+        1n => B
+        1       :EQ
+        0n => B
+        $ => A  :MLOAD(fastExpFp12BN254_a11_y)
+        1       :EQ
+        $ => A  :MLOAD(fastExpFp12BN254_a12_x)
+        1       :EQ
+        $ => A  :MLOAD(fastExpFp12BN254_a12_y)
+        1       :EQ
+        $ => A  :MLOAD(fastExpFp12BN254_a13_x)
+        1       :EQ
+        $ => A  :MLOAD(fastExpFp12BN254_a13_y)
+        1       :EQ
+        $ => A  :MLOAD(fastExpFp12BN254_a21_x)
+        1       :EQ
+        $ => A  :MLOAD(fastExpFp12BN254_a21_y)
+        1       :EQ
+        $ => A  :MLOAD(fastExpFp12BN254_a22_x)
+        1       :EQ
+        $ => A  :MLOAD(fastExpFp12BN254_a22_y)
+        1       :EQ
+        $ => A  :MLOAD(fastExpFp12BN254_a23_x)
+        1       :EQ
+        $ => A  :MLOAD(fastExpFp12BN254_a23_y)
+        1       :EQ
+
+        1n      :MSTORE(fastExpFp12BN254_c11_x)
+        0n      :MSTORE(fastExpFp12BN254_c11_y)
+        0n      :MSTORE(fastExpFp12BN254_c12_x)
+        0n      :MSTORE(fastExpFp12BN254_c12_y)
+        0n      :MSTORE(fastExpFp12BN254_c13_x)
+        0n      :MSTORE(fastExpFp12BN254_c13_y)
+        0n      :MSTORE(fastExpFp12BN254_c21_x)
+        0n      :MSTORE(fastExpFp12BN254_c21_y)
+        0n      :MSTORE(fastExpFp12BN254_c22_x)
+        0n      :MSTORE(fastExpFp12BN254_c22_y)
+        0n      :MSTORE(fastExpFp12BN254_c23_x)
+        0n      :MSTORE(fastExpFp12BN254_c23_y)
+
+                :JMP(fastExpFp12BN254_end)
+
+fastExpFp12BN254_e_is_zero:
+        ; Check that e is zero
+        0n => B
+        $ => A  :MLOAD(fastExpFp12BN254_e)
+        1       :EQ
+
+        1n      :MSTORE(fastExpFp12BN254_c11_x)
+        0n      :MSTORE(fastExpFp12BN254_c11_y)
+        0n      :MSTORE(fastExpFp12BN254_c12_x)
+        0n      :MSTORE(fastExpFp12BN254_c12_y)
+        0n      :MSTORE(fastExpFp12BN254_c13_x)
+        0n      :MSTORE(fastExpFp12BN254_c13_y)
+        0n      :MSTORE(fastExpFp12BN254_c21_x)
+        0n      :MSTORE(fastExpFp12BN254_c21_y)
+        0n      :MSTORE(fastExpFp12BN254_c22_x)
+        0n      :MSTORE(fastExpFp12BN254_c22_y)
+        0n      :MSTORE(fastExpFp12BN254_c23_x)
+        0n      :MSTORE(fastExpFp12BN254_c23_y)
+
+                :JMP(fastExpFp12BN254_end)
+
+; Assumes e is well-formed
+fastExpFp12BN254_find_MSB_e:
+        RCX - 1 => RCX
+        $ => A,B        :MLOAD(fastExpFp12BN254_e)
+        ; E = 2A
+        $ => E          :ADD,MSTORE(fastExpFp12BN254_e),JMPNC(fastExpFp12BN254_find_MSB_e)
+
+
+fastExpFp12BN254_loop:
+        RCX - 1 => RCX         :JMPZ(fastExpFp12BN254_end)        
+
+        ; We always square: c = c^2
+        $ => A  :MLOAD(fastExpFp12BN254_c11_x)
+        $ => B  :MLOAD(fastExpFp12BN254_c11_y)
+        A       :MSTORE(fastSquareFp12BN254_a11_x)
+        B       :MSTORE(fastSquareFp12BN254_a11_y)
+        $ => A  :MLOAD(fastExpFp12BN254_c12_x)
+        $ => B  :MLOAD(fastExpFp12BN254_c12_y)
+        A       :MSTORE(fastSquareFp12BN254_a12_x)
+        B       :MSTORE(fastSquareFp12BN254_a12_y)
+        $ => A  :MLOAD(fastExpFp12BN254_c13_x)
+        $ => B  :MLOAD(fastExpFp12BN254_c13_y)
+        A       :MSTORE(fastSquareFp12BN254_a13_x)
+        B       :MSTORE(fastSquareFp12BN254_a13_y)
+        $ => A  :MLOAD(fastExpFp12BN254_c21_x)
+        $ => B  :MLOAD(fastExpFp12BN254_c21_y)
+        A       :MSTORE(fastSquareFp12BN254_a21_x)
+        B       :MSTORE(fastSquareFp12BN254_a21_y)
+        $ => A  :MLOAD(fastExpFp12BN254_c22_x)
+        $ => B  :MLOAD(fastExpFp12BN254_c22_y)
+        A       :MSTORE(fastSquareFp12BN254_a22_x)
+        B       :MSTORE(fastSquareFp12BN254_a22_y)
+        $ => A  :MLOAD(fastExpFp12BN254_c23_x)
+        $ => B  :MLOAD(fastExpFp12BN254_c23_y)
+        A       :MSTORE(fastSquareFp12BN254_a23_x)
+        B       :MSTORE(fastSquareFp12BN254_a23_y)
+                :CALL(fastSquareFp12BN254)
+
+        ; c = c^2
+        $ => A  :MLOAD(fastSquareFp12BN254_c11_x)
+        $ => B  :MLOAD(fastSquareFp12BN254_c11_y)
+        A       :MSTORE(fastExpFp12BN254_c11_x)
+        B       :MSTORE(fastExpFp12BN254_c11_y)
+        $ => A  :MLOAD(fastSquareFp12BN254_c12_x)
+        $ => B  :MLOAD(fastSquareFp12BN254_c12_y)
+        A       :MSTORE(fastExpFp12BN254_c12_x)
+        B       :MSTORE(fastExpFp12BN254_c12_y)
+        $ => A  :MLOAD(fastSquareFp12BN254_c13_x)
+        $ => B  :MLOAD(fastSquareFp12BN254_c13_y)
+        A       :MSTORE(fastExpFp12BN254_c13_x)
+        B       :MSTORE(fastExpFp12BN254_c13_y)
+        $ => A  :MLOAD(fastSquareFp12BN254_c21_x)
+        $ => B  :MLOAD(fastSquareFp12BN254_c21_y)
+        A       :MSTORE(fastExpFp12BN254_c21_x)
+        B       :MSTORE(fastExpFp12BN254_c21_y)
+        $ => A  :MLOAD(fastSquareFp12BN254_c22_x)
+        $ => B  :MLOAD(fastSquareFp12BN254_c22_y)
+        A       :MSTORE(fastExpFp12BN254_c22_x)
+        B       :MSTORE(fastExpFp12BN254_c22_y)
+        $ => A  :MLOAD(fastSquareFp12BN254_c23_x)
+        $ => B  :MLOAD(fastSquareFp12BN254_c23_y)
+        A       :MSTORE(fastExpFp12BN254_c23_x)
+        B       :MSTORE(fastExpFp12BN254_c23_y)
+
+        ; 2] We check if the MSB b of e is either 1 or 0. If b==1, we should multiply a to c.
+        ;    Then, update the value of e.
+        $ => A,B        :MLOAD(fastExpFp12BN254_e)
+        ; E = 2A
+        $ => E          :ADD,MSTORE(fastExpFp12BN254_e),JMPNC(fastExpFp12BN254_loop)
+
+fastExpFp12BN254_multiply:
+        $ => A  :MLOAD(fastExpFp12BN254_a11_x)
+        $ => B  :MLOAD(fastExpFp12BN254_a11_y)
+        A       :MSTORE(mulFp12BN254_a11_x)
+        B       :MSTORE(mulFp12BN254_a11_y)
+        $ => A  :MLOAD(fastExpFp12BN254_a12_x)
+        $ => B  :MLOAD(fastExpFp12BN254_a12_y)
+        A       :MSTORE(mulFp12BN254_a12_x)
+        B       :MSTORE(mulFp12BN254_a12_y)
+        $ => A  :MLOAD(fastExpFp12BN254_a13_x)
+        $ => B  :MLOAD(fastExpFp12BN254_a13_y)
+        A       :MSTORE(mulFp12BN254_a13_x)
+        B       :MSTORE(mulFp12BN254_a13_y)
+        $ => A  :MLOAD(fastExpFp12BN254_a21_x)
+        $ => B  :MLOAD(fastExpFp12BN254_a21_y)
+        A       :MSTORE(mulFp12BN254_a21_x)
+        B       :MSTORE(mulFp12BN254_a21_y)
+        $ => A  :MLOAD(fastExpFp12BN254_a22_x)
+        $ => B  :MLOAD(fastExpFp12BN254_a22_y)
+        A       :MSTORE(mulFp12BN254_a22_x)
+        B       :MSTORE(mulFp12BN254_a22_y)
+        $ => A  :MLOAD(fastExpFp12BN254_a23_x)
+        $ => B  :MLOAD(fastExpFp12BN254_a23_y)
+        A       :MSTORE(mulFp12BN254_a23_x)
+        B       :MSTORE(mulFp12BN254_a23_y)
+        $ => A  :MLOAD(fastExpFp12BN254_c11_x)
+        $ => B  :MLOAD(fastExpFp12BN254_c11_y)
+        A       :MSTORE(mulFp12BN254_b11_x)
+        B       :MSTORE(mulFp12BN254_b11_y)
+        $ => A  :MLOAD(fastExpFp12BN254_c12_x)
+        $ => B  :MLOAD(fastExpFp12BN254_c12_y)
+        A       :MSTORE(mulFp12BN254_b12_x)
+        B       :MSTORE(mulFp12BN254_b12_y)
+        $ => A  :MLOAD(fastExpFp12BN254_c13_x)
+        $ => B  :MLOAD(fastExpFp12BN254_c13_y)
+        A       :MSTORE(mulFp12BN254_b13_x)
+        B       :MSTORE(mulFp12BN254_b13_y)
+        $ => A  :MLOAD(fastExpFp12BN254_c21_x)
+        $ => B  :MLOAD(fastExpFp12BN254_c21_y)
+        A       :MSTORE(mulFp12BN254_b21_x)
+        B       :MSTORE(mulFp12BN254_b21_y)
+        $ => A  :MLOAD(fastExpFp12BN254_c22_x)
+        $ => B  :MLOAD(fastExpFp12BN254_c22_y)
+        A       :MSTORE(mulFp12BN254_b22_x)
+        B       :MSTORE(mulFp12BN254_b22_y)
+        $ => A  :MLOAD(fastExpFp12BN254_c23_x)
+        $ => B  :MLOAD(fastExpFp12BN254_c23_y)
+        A       :MSTORE(mulFp12BN254_b23_x)
+        B       :MSTORE(mulFp12BN254_b23_y)
+                :CALL(mulFp12BN254)
+
+        ; c = c·a
+        $ => A  :MLOAD(mulFp12BN254_c11_x)
+        $ => B  :MLOAD(mulFp12BN254_c11_y)
+        A       :MSTORE(fastExpFp12BN254_c11_x)
+        B       :MSTORE(fastExpFp12BN254_c11_y)
+        $ => A  :MLOAD(mulFp12BN254_c12_x)
+        $ => B  :MLOAD(mulFp12BN254_c12_y)
+        A       :MSTORE(fastExpFp12BN254_c12_x)
+        B       :MSTORE(fastExpFp12BN254_c12_y)
+        $ => A  :MLOAD(mulFp12BN254_c13_x)
+        $ => B  :MLOAD(mulFp12BN254_c13_y)
+        A       :MSTORE(fastExpFp12BN254_c13_x)
+        B       :MSTORE(fastExpFp12BN254_c13_y)
+        $ => A  :MLOAD(mulFp12BN254_c21_x)
+        $ => B  :MLOAD(mulFp12BN254_c21_y)
+        A       :MSTORE(fastExpFp12BN254_c21_x)
+        B       :MSTORE(fastExpFp12BN254_c21_y)
+        $ => A  :MLOAD(mulFp12BN254_c22_x)
+        $ => B  :MLOAD(mulFp12BN254_c22_y)
+        A       :MSTORE(fastExpFp12BN254_c22_x)
+        B       :MSTORE(fastExpFp12BN254_c22_y)
+        $ => A  :MLOAD(mulFp12BN254_c23_x)
+        $ => B  :MLOAD(mulFp12BN254_c23_y)
+        A       :MSTORE(fastExpFp12BN254_c23_x)
+        B       :MSTORE(fastExpFp12BN254_c23_y)
+                :JMP(fastExpFp12BN254_loop)
+
+fastExpFp12BN254_end:
+        $ => RR :MLOAD(fastExpFp12BN254_RR)
+                :RETURN
