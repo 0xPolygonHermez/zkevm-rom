@@ -375,16 +375,13 @@ millerLoopBN254_sub:
     $ => B      :MLOAD(millerLoopBN254_Q_x2)
     A           :MSTORE(lineDiffPointsBN254_P2_x1)
     B           :MSTORE(lineDiffPointsBN254_P2_x2)
-    $ => C      :MLOAD(millerLoopBN254_Q_y1)
-    ${const.BN254_P - C} => A      :MSTORE(lineDiffPointsBN254_P2_y1)
-    1n => B
-    0n => D
-    %BN254_P    :ARITH
-    $ => C,D      :MLOAD(millerLoopBN254_Q_y2)
-    ${const.BN254_P - D} => A      :MSTORE(lineDiffPointsBN254_P2_y2)
-    1n => B
-    0n => D
-    %BN254_P    :ARITH
+
+    %BN254_P => A
+    $ => B      :MLOAD(millerLoopBN254_Q_y1)
+    $           :SUB, MSTORE(lineDiffPointsBN254_P2_y1)
+    %BN254_P => A
+    $ => B      :MLOAD(millerLoopBN254_Q_y2)
+    $           :SUB, MSTORE(lineDiffPointsBN254_P2_y2)
 
     $ => A      :MLOAD(millerLoopBN254_P_x)
     $ => B      :MLOAD(millerLoopBN254_P_y)
@@ -465,21 +462,14 @@ millerLoopBN254_sub:
     D           :MSTORE(addPointBN254_P1_y2)
     $ => A      :MLOAD(millerLoopBN254_Q_x1)
     $ => B      :MLOAD(millerLoopBN254_Q_x2)
-    $ => C      :MLOAD(millerLoopBN254_Q_y1)
-    $ => D      :MLOAD(millerLoopBN254_Q_y2)
     A           :MSTORE(addPointBN254_P2_x1)
     B           :MSTORE(addPointBN254_P2_x2)
-    D => E
-    ${const.BN254_P - C}  => A      :MSTORE(addPointBN254_P2_y1)
-    1n => B
-    0n => D
-    %BN254_P    :ARITH
-
-    E => C
-    ${const.BN254_P - C}  => A      :MSTORE(addPointBN254_P2_y2)
-    1n => B
-    0n => D
-    %BN254_P    :ARITH
+    %BN254_P => A
+    $ => B      :MLOAD(millerLoopBN254_Q_y1)
+    $           :SUB, MSTORE(addPointBN254_P2_y1)
+    %BN254_P => A
+    $ => B      :MLOAD(millerLoopBN254_Q_y2)
+    $           :SUB, MSTORE(addPointBN254_P2_y2)
 
                 :CALL(addPointBN254)
     $ => A      :MLOAD(addPointBN254_P3_x1)
@@ -495,31 +485,22 @@ millerLoopBN254_sub:
 
 millerLoopBN254_last_two_lines:
     ; 1] Given Q = (x,y) with x,y ∈ Fp2, compute Frobenius1(Q) = (\gamma12·x̄, \gamma13·ȳ)
-    $ => D      :MLOAD(millerLoopBN254_Q_x2)
-    ${const.BN254_P - D} => A 
-    1n => B
-    D => C
-    0n => D
-    %BN254_P    :ARITH
-    A => D
-    %FROBENIUS_GAMMA121 => A
-    %FROBENIUS_GAMMA122 => B
-    $ => C      :MLOAD(millerLoopBN254_Q_x1)
+    %BN254_P => A
+    $ => B      :MLOAD(millerLoopBN254_Q_x2)
+    $ => B      :SUB
+    $ => A      :MLOAD(millerLoopBN254_Q_x1)
+    %FROBENIUS_GAMMA121 => C
+    %FROBENIUS_GAMMA122 => D
                 :CALL(mulFp2BN254)
     E           :MSTORE(millerLoopBN254_Frobenius1_Q_x1)
     C           :MSTORE(millerLoopBN254_Frobenius1_Q_x2)
 
-
-    $ => D      :MLOAD(millerLoopBN254_Q_y2)
-    ${const.BN254_P - D} => A
-    1n => B
-    D => C
-    0n => D
-    %BN254_P    :ARITH
-    A => D
-    %FROBENIUS_GAMMA131 => A
-    %FROBENIUS_GAMMA132 => B
-    $ => C      :MLOAD(millerLoopBN254_Q_y1)
+    %BN254_P => A
+    $ => B      :MLOAD(millerLoopBN254_Q_y2)
+    $ => B      :SUB
+    $ => A      :MLOAD(millerLoopBN254_Q_y1)
+    %FROBENIUS_GAMMA131 => C
+    %FROBENIUS_GAMMA132 => D
                 :CALL(mulFp2BN254)
     E           :MSTORE(millerLoopBN254_Frobenius1_Q_y1)
     C           :MSTORE(millerLoopBN254_Frobenius1_Q_y2)
@@ -640,30 +621,23 @@ millerLoopBN254_last_two_lines:
 
     ; 4] Given Frobenius1(Q) = (x,y) with x,y ∈ Fp2, compute -Frobenius2(Q) = (\gamma12·x̄, -\gamma13·ȳ)
 
-    $ => D      :MLOAD(millerLoopBN254_Frobenius1_Q_x2)
-    ${const.BN254_P - D} => A
-    1n => B
-    D => C
-    0n => D
-    %BN254_P    :ARITH
-    A => D
-    %FROBENIUS_GAMMA121 => A
-    %FROBENIUS_GAMMA122 => B
-    $ => C      :MLOAD(millerLoopBN254_Frobenius1_Q_x1)
+    %BN254_P => A
+    $ => B      :MLOAD(millerLoopBN254_Frobenius1_Q_x2)
+    $ => B      :SUB
+    $ => A      :MLOAD(millerLoopBN254_Frobenius1_Q_x1)
+    %FROBENIUS_GAMMA121 => C
+    %FROBENIUS_GAMMA122 => D
                 :CALL(mulFp2BN254)
     E           :MSTORE(millerLoopBN254_nFrobenius2_Q_x1)
     C           :MSTORE(millerLoopBN254_nFrobenius2_Q_x2)
 
-    $ => D      :MLOAD(millerLoopBN254_Frobenius1_Q_y2)
-    ${const.BN254_P - D} => A
-    1n => B
-    D => C
-    0n => D
-    %BN254_P    :ARITH
-    A => D
-    %FROBENIUS_GAMMA131_NEGATED => A
-    %FROBENIUS_GAMMA132_NEGATED => B
-    $ => C      :MLOAD(millerLoopBN254_Frobenius1_Q_y1)
+
+    %BN254_P => A
+    $ => B      :MLOAD(millerLoopBN254_Frobenius1_Q_y2)
+    $ => B      :SUB
+    $ => A      :MLOAD(millerLoopBN254_Frobenius1_Q_y1)
+    %FROBENIUS_GAMMA131_NEGATED => C
+    %FROBENIUS_GAMMA132_NEGATED => D
                 :CALL(mulFp2BN254)
 
     ; 5] f = f · line_{twist(R),twist(-Frobenius2(Q))}(P)
