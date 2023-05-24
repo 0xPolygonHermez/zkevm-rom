@@ -68,9 +68,34 @@ endCheckChainId:
                                         :CALL(isColdAddress) ; add tx.origin to touched addresses
         0                               :MSTORE(depth) ; Initial depth is 0
 
-;; Set gasPrice global var
+;; Set gasPrice global var depending on effectivePercentage [0-255] -> txGasPrice = Floor((gasPrice * (effectivePercentage + 1)) / 256)
+        ; _effGasPriceShifted = gasPrice * (effectivePercentage + 1)
+        ; A => gasPrice
         $ => A                          :MLOAD(txGasPriceRLP)
-        A                               :MSTORE(txGasPrice)
+        ; B => effectivePercentage
+        $ => B                          :MLOAD(effectivePercentageRLP)
+        ; B => [0, 256]
+        B + 1 => B
+        ; A*B + C = D * 2**256 + op(E)
+        0 => C
+        ; _effGasPriceShifted = gasPrice * (effectivePercentage + 1)
+        $${var _effGasPriceShifted = A * B}
+        ; get value above 256 bits
+        ${_effGasPriceShifted >> 256} => D
+        ; compute ARITH
+        ${_effGasPriceShifted} => E              :ARITH
+
+        ; txGasPrice = _effGasPriceShifted / 256
+        256 => B
+        ; (_effGasPriceShifted / 256)(A) * 256(B) + (_effGasPriceShifted % 256)(C) = D * 2**256 + op(E)
+        ${_effGasPriceShifted / 256} => A        :MSTORE(txGasPrice)
+        ${_effGasPriceShifted % 256} => C
+        ; compute ARITH
+        E                                       :ARITH
+        ; check divisor > remainder
+        C => A
+        1                                       :LT
+
 ;;;;;;;;;;;;;;;;;;
 ;; D - Verify and increase nonce
 ;;;;;;;;;;;;;;;;;;
