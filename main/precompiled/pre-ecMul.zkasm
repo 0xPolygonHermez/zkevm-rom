@@ -1,0 +1,62 @@
+funcEcMul:
+    ; Move balances if value > 0 just before executing the contract CALL
+    $ => B                              :MLOAD(txValue)
+    0 => A
+    zkPC+2 => RR
+    $                                   :LT, JMPC(moveBalances)
+
+    GAS - %ECMUL_GAS => GAS             :JMPN(outOfGas) ; gas static = 6000
+
+    ; read data stored in SP + %CALLDATA_OFFSET
+    ; x1 [32 bytes], y1 [32 bytes], k [32 bytes]
+    %CALLDATA_OFFSET => SP
+    $ => A                              :MLOAD(SP++) ; x1
+    A                                   :MSTORE(ecMul_P_x)
+    $ => A                              :MLOAD(SP++) ; y1
+    A                                   :MSTORE(ecMul_P_y)
+    $ => A                              :MLOAD(SP++) ; k
+    A                                   :MSTORE(ecMul_k),CALL(ecMul)
+
+    ; check error
+    B                                   :JMPNZ(endECMULFail)
+
+    ; write ecAdd data into memory
+    0 => E
+    $ => A                              :MLOAD(ecMul_Q_x)
+    A                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    $ => A                              :MLOAD(ecMul_Q_y)
+    A                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+
+    ; prepare return data
+    0                                   :MSTORE(retDataOffset)
+    64                                  :MSTORE(retDataLength)
+    $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
+    ; set retDataCTX
+    $ => B                              :MLOAD(currentCTX)
+    A => CTX
+    B                                   :MSTORE(retDataCTX)
+    B => CTX
+
+    ; write result ecAdd into previous context memory
+    $ => C                              :MLOAD(retCallLength), JMPZ(preEndECMUL)
+    $ => E                              :MLOAD(retCallOffset)
+
+    $ => CTX                            :MLOAD(originCTX)
+    $ => A                              :MLOAD(ecMul_Q_x)
+    A                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    $ => A                              :MLOAD(ecMul_Q_y)
+    A                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+                                        :JMP(endECMUL)
+
+endECMULFail:
+    $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
+    0 => GAS
+    A => CTX
+    0                                   :MSTORE(retDataCTX)
+    CTX                                 :MSTORE(currentCTX), JMP(preEndFail)
+
+preEndECMUL:
+    $ => CTX                            :MLOAD(originCTX)
+
+endECMUL:
+    CTX                                 :MSTORE(currentCTX), JMP(preEnd)
