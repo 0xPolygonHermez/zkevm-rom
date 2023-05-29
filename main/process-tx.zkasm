@@ -32,6 +32,8 @@ processTx:
         ; Minimum of 100000 steps left to process a tx
         %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCountersStep)
         %MAX_CNT_BINARY - CNT_BINARY - 100   :JMPN(outOfCountersBinary)
+        %MAX_CNT_ARITH - CNT_ARITH - 2  :JMPN(outOfCountersArith)
+
         $ => A                          :MLOAD(txHash)
         ; Check the signature
         $ => B                          :MLOAD(txR)
@@ -69,12 +71,11 @@ endCheckChainId:
         0                               :MSTORE(depth) ; Initial depth is 0
 
 ;; Set gasPrice global var depending on effectivePercentage [0-255] -> txGasPrice = Floor((gasPrice * (effectivePercentage + 1)) / 256)
-        ; _effGasPriceShifted = gasPrice * (effectivePercentage + 1)
-        ; A => gasPrice
+        ; gasPrice => A
         $ => A                          :MLOAD(txGasPriceRLP)
-        ; B => effectivePercentage
+        ; effectivePercentage => B
         $ => B                          :MLOAD(effectivePercentageRLP)
-        ; B => [0, 255]
+        ; B -> [1, 256]
         B + 1 => B
         ; A*B + C = D * 2**256 + op(E)
         0 => C
