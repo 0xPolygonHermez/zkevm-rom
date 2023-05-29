@@ -1,4 +1,23 @@
 /**
+ * @link [https://www.evm.codes/#5f?fork=shanghai]
+ * @zk-counters
+ *  - 100 steps
+ * @process-opcode
+ *  - stack input: none
+ *  - stack output: [0]
+ */
+opPUSH0:
+    ; checks zk-counters
+    %MAX_CNT_STEPS - STEP - 100     :JMPN(outOfCountersStep)
+
+    ; check out-of-gas
+    GAS - %GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
+    ; store stack output
+    0                               :MSTORE(SP++); [0 => SP]
+    ; check stack overflow
+    %CALLDATA_OFFSET - SP           :JMPN(stackOverflow, readCode)
+
+/**
  * @link [https://www.evm.codes/#60?fork=berlin]
  * @zk-counters
  *  - 100 steps (stack) || 400 steps (calldata)
@@ -7,15 +26,6 @@
  *  - stack input: none
  *  - stack output: [pushed_value]
  */
-
-opPUSH0:
-    ; check out-of-gas
-    GAS - %GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
-    ; store stack output
-    0                               :MSTORE(SP++); [0 => SP]
-    ; check stack overflow
-    %CALLDATA_OFFSET - SP           :JMPN(stackOverflow, readCode)
-
 opPUSH1:
     ; number of bytes to push to D
     1 => D
