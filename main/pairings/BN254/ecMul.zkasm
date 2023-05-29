@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; ecMul:
-;;             in: k, P = (P.x, P.y) ∈ E(Fp), where k ∈ [0,ord(E)-1]
+;;             in: k, P = (P.x, P.y) ∈ E(Fp), where k ∈ [0,r-1]
 ;;             out: Q = (Q.x, Q.y) = k·P ∈ E(Fp)
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -47,8 +47,12 @@ ecMul:
         $ => B      :MLOAD(ecMul_Q_x) 
         $           :EQ,JMPNC(ecMul_P_is_not_in_E)
 
-        ; Check if k = 0
-        ${FpBN254neq0(mem.ecMul_k)}   :JMPZ(ecMul_k_is_zero)
+        ; Check if k ∈ [1,r-1]
+        $ => B      :MLOAD(ecMul_k)
+        0n => A
+        $           :EQ,JMPC(ecMul_k_is_zero)
+        %BN254_R => A
+        $           :LT,JMPC(ecMul_k_reduce)
 
         ; ${log2(mem.ecMul_k)} => RCX
         257 => RCX
@@ -83,6 +87,18 @@ ecMul_k_is_zero:
         0n      :MSTORE(ecMul_Q_y)
 
         0 => B  :JMP(ecMul_end)
+
+ecMul_k_reduce:
+        ; We reduce k mod R and continue as normal
+                :CALL(reduceFrBN254)
+        C       :MSTORE(ecMul_k)
+
+        257 => RCX
+
+        $ => A  :MLOAD(ecMul_P_x)
+        $ => C  :MLOAD(ecMul_P_y)
+        A       :MSTORE(ecMul_Q_x)
+        C       :MSTORE(ecMul_Q_y)
 
 ; Assumes k is well-formed
 ecMul_find_MSB_k:
