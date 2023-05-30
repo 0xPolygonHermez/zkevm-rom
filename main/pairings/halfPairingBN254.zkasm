@@ -6,8 +6,7 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-VAR GLOBAL halfPairingBN254_P_x
-VAR GLOBAL halfPairingBN254_P_x3 
+VAR GLOBAL halfPairingBN254_P_x 
 VAR GLOBAL halfPairingBN254_P_y
 VAR GLOBAL halfPairingBN254_Q_x1
 VAR GLOBAL halfPairingBN254_Q_x2
@@ -29,6 +28,9 @@ VAR GLOBAL halfPairingBN254_f23_y
 
 VAR GLOBAL halfPairingBN254_RR
 
+VAR GLOBAL halfPairingBN254_P_x3
+VAR GLOBAL halfPairingBN254_Q_RHS_x
+VAR GLOBAL halfPairingBN254_Q_RHS_y
 VAR GLOBAL halfPairingBN254_psi_x1
 VAR GLOBAL halfPairingBN254_psi_x2
 VAR GLOBAL halfPairingBN254_psi_y1
@@ -65,6 +67,7 @@ halfPairingBN254_P_is_zero:
 
     ; Check that Q is in G2
     ; Q in G2 iff Q in E' and psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
+
     ; 1] Check if Q is in E'(Fp2)
     ; Q in E' iff (Q.y1 + Q.y2·u)² == (Q.x1 + Q.x2·u)³ + 3/(9+u)
     ; 1.1] Compute LHS and RHS
@@ -86,24 +89,24 @@ halfPairingBN254_P_is_zero:
     %BN254_ETWISTED_B_Y => D
             :CALL(addFp2BN254)
     ; E + C·u = (Q.x1 + Q.x2·u)³ + 3/(9+u)
-    E           :MSTORE(escalarMulBN254_Q_x1)
-    C           :MSTORE(escalarMulBN254_Q_x2)
+    E           :MSTORE(halfPairingBN254_Q_RHS_x)
+    C           :MSTORE(halfPairingBN254_Q_RHS_y)
 
-    $ => A  :MLOAD(escalarMulBN254_Q_y1)
-    $ => B  :MLOAD(escalarMulBN254_Q_y2)
+    $ => A  :MLOAD(halfPairingBN254_Q_y1)
+    $ => B  :MLOAD(halfPairingBN254_Q_y2)
             :CALL(squareFp2BN254)
     ; E + C·u = (Q.y1 + Q.y2·u)²
 
     ; 1.2] Check if LHS == RHS
     E => A
-    $ => B  :MLOAD(escalarMulBN254_Q_x1)
+    $ => B  :MLOAD(halfPairingBN254_Q_RHS_x)
     B       :ASSERT
 
     C => A
-    $ => B  :MLOAD(escalarMulBN254_Q_x2)
+    $ => B  :MLOAD(halfPairingBN254_Q_RHS_y)
     B       :ASSERT
 
-    ; 1] Compute psi(Q)                   
+    ; 2] Compute psi(Q)                   
     %BN254_P => A
     $ => B      :MLOAD(halfPairingBN254_Q_x2)             
     $ => D      :SUB                                ; D = -Qx2
@@ -122,7 +125,7 @@ halfPairingBN254_P_is_zero:
     E           :MSTORE(halfPairingBN254_psi_y1)
     C           :MSTORE(halfPairingBN254_psi_y2)
 
-    ; 2] Compute [6x²]Q (here, we check that Q is in E')
+    ; 3] Compute [6x²]Q (here, we check that Q is in E')
     $ => A      :MLOAD(halfPairingBN254_Q_x1)
     $ => B      :MLOAD(halfPairingBN254_Q_x2)
     $ => C      :MLOAD(halfPairingBN254_Q_y1)
@@ -135,7 +138,7 @@ halfPairingBN254_P_is_zero:
                 :CALL(escalarMulBN254)
 
 
-    ; 3] Check if psi(Q) == [6x²]Q
+    ; 4] Check if psi(Q) == [6x²]Q
     $ => A      :MLOAD(halfPairingBN254_psi_x1)
     $ => B      :MLOAD(escalarMulBN254_Q_x1)
     $           :EQ,JMPNC(halfPairingBN254_Q_is_not_in_G2)
@@ -213,6 +216,7 @@ halfPairingBN254_Q_is_zero:
     0 => B     :JMP(halfPairingBN254_end)
 
 halfPairingBN254_P_subgroup_check:
+    ; Check that P is in G1
     ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
     ; 1] Compute LHS and RHS
     $ => A,B    :MLOAD(halfPairingBN254_P_x),CALL(mulFpBN254); C = (Px)²
@@ -230,8 +234,48 @@ halfPairingBN254_P_subgroup_check:
     $           :EQ,JMPNC(halfPairingBN254_P_is_not_in_G1)
 
 halfPairingBN254_Q_subgroup_check:
-    ; Q in G2 iff psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
-    ; 1] Compute psi(Q)                   
+    ; Check that Q is in G2
+    ; Q in G2 iff Q in E' and psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
+
+    ; 1] Check if Q is in E'(Fp2)
+    ; Q in E' iff (Q.y1 + Q.y2·u)² == (Q.x1 + Q.x2·u)³ + 3/(9+u)
+    ; 1.1] Compute LHS and RHS
+    $ => A  :MLOAD(halfPairingBN254_Q_x1)
+    $ => B  :MLOAD(halfPairingBN254_Q_x2)
+            :CALL(squareFp2BN254)
+    ; E + C·u = (Q.x1 + Q.x2·u)²
+
+    E => A
+    C => B
+    $ => C  :MLOAD(halfPairingBN254_Q_x1)
+    $ => D  :MLOAD(halfPairingBN254_Q_x2)
+            :CALL(mulFp2BN254)
+    ; E + C·u = (Q.x1 + Q.x2·u)³
+
+    E => A
+    C => B
+    %BN254_ETWISTED_B_X => C
+    %BN254_ETWISTED_B_Y => D
+            :CALL(addFp2BN254)
+    ; E + C·u = (Q.x1 + Q.x2·u)³ + 3/(9+u)
+    E           :MSTORE(halfPairingBN254_Q_RHS_x)
+    C           :MSTORE(halfPairingBN254_Q_RHS_y)
+
+    $ => A  :MLOAD(halfPairingBN254_Q_y1)
+    $ => B  :MLOAD(halfPairingBN254_Q_y2)
+            :CALL(squareFp2BN254)
+    ; E + C·u = (Q.y1 + Q.y2·u)²
+
+    ; 1.2] Check if LHS == RHS
+    E => A
+    $ => B  :MLOAD(halfPairingBN254_Q_RHS_x)
+    B       :ASSERT
+
+    C => A
+    $ => B  :MLOAD(halfPairingBN254_Q_RHS_y)
+    B       :ASSERT
+
+    ; 2] Compute psi(Q)                   
     %BN254_P => A
     $ => B      :MLOAD(halfPairingBN254_Q_x2)             
     $ => D      :SUB                                ; D = -Qx2
@@ -250,7 +294,7 @@ halfPairingBN254_Q_subgroup_check:
     E           :MSTORE(halfPairingBN254_psi_y1)
     C           :MSTORE(halfPairingBN254_psi_y2)
 
-    ; 2] Compute [6x²]Q
+    ; 3] Compute [6x²]Q (here, we check that Q is in E')
     $ => A      :MLOAD(halfPairingBN254_Q_x1)
     $ => B      :MLOAD(halfPairingBN254_Q_x2)
     $ => C      :MLOAD(halfPairingBN254_Q_y1)
@@ -263,7 +307,7 @@ halfPairingBN254_Q_subgroup_check:
                 :CALL(escalarMulBN254)
 
 
-    ; 3] Check if psi(Q) == [6x²]Q
+    ; 4] Check if psi(Q) == [6x²]Q
     $ => A      :MLOAD(halfPairingBN254_psi_x1)
     $ => B      :MLOAD(escalarMulBN254_Q_x1)
     $           :EQ,JMPNC(halfPairingBN254_Q_is_not_in_G2)
@@ -334,6 +378,8 @@ halfPairingBN254_error:
 halfPairingBN254_end:
         $ => RR     :MLOAD(halfPairingBN254_RR)
         :RETURN
+
+INCLUDE "./FRBN254/reduceFrBN254.zkasm"
 
 INCLUDE "./FPBN254/addFpBN254.zkasm"
 INCLUDE "./FPBN254/subFpBN254.zkasm"
