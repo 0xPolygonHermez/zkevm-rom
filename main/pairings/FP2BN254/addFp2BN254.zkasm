@@ -6,55 +6,40 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-VAR GLOBAL addFp2BN254_B
-VAR GLOBAL addFp2BN254_C
-VAR GLOBAL addFp2BN254_D
-
-VAR GLOBAL addFp2BN254_RR
+VAR GLOBAL addFp2BN254_i
 
 addFp2BN254:
-        RR      :MSTORE(addFp2BN254_RR)
+        ; Compute and check the mul
+        ; A + C = [E] + (q0·BN254_P)
+        ; B + D = [OP] + (q1·BN254_P)
+        ${ARITH_BN254_ADDFP2_X(A,B,C,D)} => E
+        ${ARITH_BN254_ADDFP2_Y(A,B,C,D)}      :MSTORE(addFp2BN254_i),ARITH_BN254_ADDFP2
 
-        B       :MSTORE(addFp2BN254_B)
-        D       :MSTORE(addFp2BN254_D)
+        $ => C  :MLOAD(addFp2BN254_i),RETURN
 
-        ; 1] Compute A + C
-                :CALL(addFpBN254)
-        C       :MSTORE(addFp2BN254_C)
-
-        ; 2] Compute B + D
-        $ => A  :MLOAD(addFp2BN254_B)
-        $ => C  :MLOAD(addFp2BN254_D)
-                :CALL(addFpBN254)
-
-        $ => E  :MLOAD(addFp2BN254_C)
-        
-        $ => RR         :MLOAD(addFp2BN254_RR)
-                        :RETURN
-
-
-; ; Trusted version, for testing purposes only
-; VAR GLOBAL addFp2BN254_A
+; Below, hand-crafted addition
 ; VAR GLOBAL addFp2BN254_B
 ; VAR GLOBAL addFp2BN254_C
 ; VAR GLOBAL addFp2BN254_D
 
+; VAR GLOBAL addFp2BN254_RR
+
 ; addFp2BN254:
-;         A       :MSTORE(addFp2BN254_A)
+;         RR      :MSTORE(addFp2BN254_RR)
+
 ;         B       :MSTORE(addFp2BN254_B)
-;         C       :MSTORE(addFp2BN254_C)
 ;         D       :MSTORE(addFp2BN254_D)
 
-;         ; A·B + C = [D]·2²⁵⁶ + [E]
-;         0n => A,B,C,D
-;         0n => E         :ARITH
+;         ; 1] Compute A + C
+;                 :CALL(addFpBN254)
+;         C       :MSTORE(addFp2BN254_C)
 
-;         $ => A       :MLOAD(addFp2BN254_A)
-;         $ => B       :MLOAD(addFp2BN254_B)
-;         $ => C       :MLOAD(addFp2BN254_C)
-;         $ => D       :MLOAD(addFp2BN254_D)
+;         ; 2] Compute B + D
+;         $ => A  :MLOAD(addFp2BN254_B)
+;         $ => C  :MLOAD(addFp2BN254_D)
+;                 :CALL(addFpBN254)
 
-;         ${fpBN254add(A,C)} => E
-;         ${fpBN254add(B,D)} => C
-
+;         $ => E  :MLOAD(addFp2BN254_C)
+        
+;         $ => RR         :MLOAD(addFp2BN254_RR)
 ;                         :RETURN
