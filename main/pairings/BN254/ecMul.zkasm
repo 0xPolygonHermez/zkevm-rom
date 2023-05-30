@@ -51,7 +51,7 @@ ecMul:
         $ => B      :MLOAD(ecMul_k)
         0n => A
         $           :EQ,JMPC(ecMul_k_is_zero)
-        %BN254_R => A
+        %BN254_R_MINUS_ONE => A
         $           :LT,JMPC(ecMul_k_reduce)
 
         ; ${log2(mem.ecMul_k)} => RCX
@@ -91,7 +91,11 @@ ecMul_k_is_zero:
 ecMul_k_reduce:
         ; We reduce k mod R and continue as normal
                 :CALL(reduceFrBN254)
-        C       :MSTORE(ecMul_k)
+
+        ; We check that is not 0
+        C => B  :MSTORE(ecMul_k)
+        0n => A
+        $           :EQ,JMPC(ecMul_k_is_zero)
 
         257 => RCX
 
