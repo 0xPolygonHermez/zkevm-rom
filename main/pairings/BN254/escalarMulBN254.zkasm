@@ -1,7 +1,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Recall that the elliptic curve is E'/Fp2: y² = x³ + 3/(9+u)
 ;;
 ;; escalarMulBN254:
-;;             in: k, P = (P.x1 + P.x2·u, P.y1 + P.y2·u) ∈ E'(Fp2), where k ∈ [0,ord(E')-1]
+;;             in: k, P = (P.x1 + P.x2·u, P.y1 + P.y2·u) ∈ E'(Fp2), where k ∈ [0,r-1]
 ;;             out: Q = (Q.x1 + Q.x2·u, Q.y1 + Q.y2·u) = k·P ∈ E'(Fp2)
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -25,8 +26,52 @@ escalarMulBN254:
         ; Check if P = 0
         ${FpBN254neq0(mem.escalarMulBN254_P_x1) || FpBN254neq0(mem.escalarMulBN254_P_x2) || FpBN254neq0(mem.escalarMulBN254_P_y1) || FpBN254neq0(mem.escalarMulBN254_P_y2)}   :JMPZ(escalarMulBN254_P_is_zero)
 
-        ; Check if k = 0
-        ${FpBN254neq0(mem.escalarMulBN254_k)}   :JMPZ(escalarMulBN254_k_is_zero)
+        ; The following is a redundant check in the pairing context
+        ; ; 1] Check if P is in E'(Fp2)
+        ; ; P in E' iff (P.y1 + P.y2·u)² == (P.x1 + P.x2·u)³ + 3/(9+u)
+        ; ; 1.1] Compute LHS and RHS
+        ; $ => A  :MLOAD(escalarMulBN254_P_x1)
+        ; $ => B  :MLOAD(escalarMulBN254_P_x2)
+        ;         :CALL(squareFp2BN254)
+        ; ; E + C·u = (P.x1 + P.x2·u)²
+
+        ; E => A
+        ; C => B
+        ; $ => C  :MLOAD(escalarMulBN254_P_x1)
+        ; $ => D  :MLOAD(escalarMulBN254_P_x2)
+        ;         :CALL(mulFp2BN254)
+        ; ; E + C·u = (P.x1 + P.x2·u)³
+
+        ; E => A
+        ; C => B
+        ; %BN254_ETWISTED_B_X => C
+        ; %BN254_ETWISTED_B_Y => D
+        ;         :CALL(addFp2BN254)
+        ; ; E + C·u = (P.x1 + P.x2·u)³ + 3/(9+u)
+        ; E           :MSTORE(escalarMulBN254_Q_x1)
+        ; C           :MSTORE(escalarMulBN254_Q_x2)
+
+        ; $ => A  :MLOAD(escalarMulBN254_P_y1)
+        ; $ => B  :MLOAD(escalarMulBN254_P_y2)
+        ;         :CALL(squareFp2BN254)
+        ; ; E + C·u = (P.y1 + P.y2·u)²
+
+        ; ; 1.2] Check if LHS == RHS
+        ; E => A
+        ; $ => B  :MLOAD(escalarMulBN254_Q_x1)
+        ; B       :ASSERT
+
+        ; C => A
+        ; $ => B  :MLOAD(escalarMulBN254_Q_x2)
+        ; B       :ASSERT
+
+        ; Check if k ∈ [1,r-1]
+        $ => B      :MLOAD(escalarMulBN254_k)
+        0n => A
+        $           :EQ,JMPC(escalarMulBN254_k_is_zero)
+        %BN254_R_MINUS_ONE => A
+        $           :LT,JMPC(escalarMulBN254_k_reduce)
+
 
         ; ${log2(mem.escalarMulBN254_k)} => RCX
         257 => RCX
@@ -73,6 +118,27 @@ escalarMulBN254_k_is_zero:
         0n      :MSTORE(escalarMulBN254_Q_y2)
 
                 :JMP(escalarMulBN254_end)
+
+escalarMulBN254_k_reduce:
+        ${dump(B)}
+        ; We reduce k mod R and continue as normal
+                :CALL(reduceFrBN254)
+
+        ; We check that is not 0
+        C => B  :MSTORE(escalarMulBN254_k)
+        0n => A
+        $           :EQ,JMPC(escalarMulBN254_k_is_zero)
+
+        257 => RCX
+
+        $ => A  :MLOAD(escalarMulBN254_P_x1)
+        $ => B  :MLOAD(escalarMulBN254_P_x2)
+        $ => C  :MLOAD(escalarMulBN254_P_y1)
+        $ => D  :MLOAD(escalarMulBN254_P_y2)
+        A       :MSTORE(escalarMulBN254_Q_x1)
+        B       :MSTORE(escalarMulBN254_Q_x2)
+        C       :MSTORE(escalarMulBN254_Q_y1)
+        D       :MSTORE(escalarMulBN254_Q_y2)
 
 ; Assumes k is well-formed
 escalarMulBN254_find_MSB_k:
