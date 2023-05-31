@@ -1,0 +1,422 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; ecPairing18:
+;;          input: P1,...,Pn ∈ G1 and Q1,...,Qn ∈ G2, where G1 = E(Fp)[r] = E(Fp), G2 = E'(Fp2)[r] and
+;;                 the curves are E/Fp: y² = x³ + 3 and E'/Fp2: y² = x³ + 3/(9+u)
+;;          output: 1 if e(P1,Q1)·...·e(Pn,Qn) = 1, 0 otherwise; where e: G1 x G2 -> GT is 
+;;                      the optimal Ate pairing over the BN254 curve and GT = mu_r (the r-th roots of unity over (Fp12)^*)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; The point at infinity is represented by (0,0).
+
+VAR GLOBAL ecPairing18_P1_x
+VAR GLOBAL ecPairing18_P1_y
+VAR GLOBAL ecPairing18_Q1_x1
+VAR GLOBAL ecPairing18_Q1_x2
+VAR GLOBAL ecPairing18_Q1_y1
+VAR GLOBAL ecPairing18_Q1_y2
+VAR GLOBAL ecPairing18_P2_x
+VAR GLOBAL ecPairing18_P2_y
+VAR GLOBAL ecPairing18_Q2_x1
+VAR GLOBAL ecPairing18_Q2_x2
+VAR GLOBAL ecPairing18_Q2_y1
+VAR GLOBAL ecPairing18_Q2_y2
+VAR GLOBAL ecPairing18_P3_x
+VAR GLOBAL ecPairing18_P3_y
+VAR GLOBAL ecPairing18_Q3_x1
+VAR GLOBAL ecPairing18_Q3_x2
+VAR GLOBAL ecPairing18_Q3_y1
+VAR GLOBAL ecPairing18_Q3_y2
+
+VAR GLOBAL ecPairing18_P1Q1_f11_x
+VAR GLOBAL ecPairing18_P1Q1_f11_y
+VAR GLOBAL ecPairing18_P1Q1_f12_x
+VAR GLOBAL ecPairing18_P1Q1_f12_y
+VAR GLOBAL ecPairing18_P1Q1_f13_x
+VAR GLOBAL ecPairing18_P1Q1_f13_y
+VAR GLOBAL ecPairing18_P1Q1_f21_x
+VAR GLOBAL ecPairing18_P1Q1_f21_y
+VAR GLOBAL ecPairing18_P1Q1_f22_x
+VAR GLOBAL ecPairing18_P1Q1_f22_y
+VAR GLOBAL ecPairing18_P1Q1_f23_x
+VAR GLOBAL ecPairing18_P1Q1_f23_y
+VAR GLOBAL ecPairing18_P2Q2_f11_x
+VAR GLOBAL ecPairing18_P2Q2_f11_y
+VAR GLOBAL ecPairing18_P2Q2_f12_x
+VAR GLOBAL ecPairing18_P2Q2_f12_y
+VAR GLOBAL ecPairing18_P2Q2_f13_x
+VAR GLOBAL ecPairing18_P2Q2_f13_y
+VAR GLOBAL ecPairing18_P2Q2_f21_x
+VAR GLOBAL ecPairing18_P2Q2_f21_y
+VAR GLOBAL ecPairing18_P2Q2_f22_x
+VAR GLOBAL ecPairing18_P2Q2_f22_y
+VAR GLOBAL ecPairing18_P2Q2_f23_x
+VAR GLOBAL ecPairing18_P2Q2_f23_y
+VAR GLOBAL ecPairing18_P3Q3_f11_x
+VAR GLOBAL ecPairing18_P3Q3_f11_y
+VAR GLOBAL ecPairing18_P3Q3_f12_x
+VAR GLOBAL ecPairing18_P3Q3_f12_y
+VAR GLOBAL ecPairing18_P3Q3_f13_x
+VAR GLOBAL ecPairing18_P3Q3_f13_y
+VAR GLOBAL ecPairing18_P3Q3_f21_x
+VAR GLOBAL ecPairing18_P3Q3_f21_y
+VAR GLOBAL ecPairing18_P3Q3_f22_x
+VAR GLOBAL ecPairing18_P3Q3_f22_y
+VAR GLOBAL ecPairing18_P3Q3_f23_x
+VAR GLOBAL ecPairing18_P3Q3_f23_y
+
+VAR GLOBAL ecPairing18_mul_f11_x
+VAR GLOBAL ecPairing18_mul_f11_y
+VAR GLOBAL ecPairing18_mul_f12_x
+VAR GLOBAL ecPairing18_mul_f12_y
+VAR GLOBAL ecPairing18_mul_f13_x
+VAR GLOBAL ecPairing18_mul_f13_y
+VAR GLOBAL ecPairing18_mul_f21_x
+VAR GLOBAL ecPairing18_mul_f21_y
+VAR GLOBAL ecPairing18_mul_f22_x
+VAR GLOBAL ecPairing18_mul_f22_y
+VAR GLOBAL ecPairing18_mul_f23_x
+VAR GLOBAL ecPairing18_mul_f23_y
+
+VAR GLOBAL ecPairing18_result
+
+VAR GLOBAL ecPairing18_RR
+
+; ERROR CODES (B)
+; 0 - no error
+; 1 - Error found in some input
+
+ecPairing18:
+        RR              :MSTORE(ecPairing18_RR)
+
+ecPairing18_P1Q1:
+        $ => A          :MLOAD(ecPairing18_P1_x)
+        $ => B          :MLOAD(ecPairing18_P1_y)
+        A               :MSTORE(halfPairingBN254_P_x)
+        B               :MSTORE(halfPairingBN254_P_y)
+        $ => A          :MLOAD(ecPairing18_Q1_x1)
+        $ => B          :MLOAD(ecPairing18_Q1_x2)
+        $ => C          :MLOAD(ecPairing18_Q1_y1)
+        $ => D          :MLOAD(ecPairing18_Q1_y2)
+        A               :MSTORE(halfPairingBN254_Q_x1)
+        B               :MSTORE(halfPairingBN254_Q_x2)
+        C               :MSTORE(halfPairingBN254_Q_y1)
+        D               :MSTORE(halfPairingBN254_Q_y2)
+                        :CALL(halfPairingBN254)
+
+        ; Check if the error code (B) of halfPairingBN254 is not 0, meaning there is an error in some of the inputs
+        B   :JMPNZ(ecPairing18_input_error)
+
+        $ => A          :MLOAD(halfPairingBN254_f11_x)
+        $ => B          :MLOAD(halfPairingBN254_f11_y)
+        $ => C          :MLOAD(halfPairingBN254_f12_x)
+        $ => D          :MLOAD(halfPairingBN254_f12_y)
+        A               :MSTORE(ecPairing18_P1Q1_f11_x)
+        B               :MSTORE(ecPairing18_P1Q1_f11_y)
+        C               :MSTORE(ecPairing18_P1Q1_f12_x)
+        D               :MSTORE(ecPairing18_P1Q1_f12_y)
+        $ => A          :MLOAD(halfPairingBN254_f13_x)
+        $ => B          :MLOAD(halfPairingBN254_f13_y)
+        $ => C          :MLOAD(halfPairingBN254_f21_x)
+        $ => D          :MLOAD(halfPairingBN254_f21_y)
+        A               :MSTORE(ecPairing18_P1Q1_f13_x)
+        B               :MSTORE(ecPairing18_P1Q1_f13_y)
+        C               :MSTORE(ecPairing18_P1Q1_f21_x)
+        D               :MSTORE(ecPairing18_P1Q1_f21_y)
+        $ => A          :MLOAD(halfPairingBN254_f22_x)
+        $ => B          :MLOAD(halfPairingBN254_f22_y)
+        $ => C          :MLOAD(halfPairingBN254_f23_x)
+        $ => D          :MLOAD(halfPairingBN254_f23_y)
+        A               :MSTORE(ecPairing18_P1Q1_f22_x)
+        B               :MSTORE(ecPairing18_P1Q1_f22_y)
+        C               :MSTORE(ecPairing18_P1Q1_f23_x)
+        D               :MSTORE(ecPairing18_P1Q1_f23_y)
+
+ecPairing18_P2Q2:
+        $ => A          :MLOAD(ecPairing18_P2_x)
+        $ => B          :MLOAD(ecPairing18_P2_y)
+        A               :MSTORE(halfPairingBN254_P_x)
+        B               :MSTORE(halfPairingBN254_P_y)
+        $ => A          :MLOAD(ecPairing18_Q2_x1)
+        $ => B          :MLOAD(ecPairing18_Q2_x2)
+        $ => C          :MLOAD(ecPairing18_Q2_y1)
+        $ => D          :MLOAD(ecPairing18_Q2_y2)
+        A               :MSTORE(halfPairingBN254_Q_x1)
+        B               :MSTORE(halfPairingBN254_Q_x2)
+        C               :MSTORE(halfPairingBN254_Q_y1)
+        D               :MSTORE(halfPairingBN254_Q_y2)
+                        :CALL(halfPairingBN254)
+
+        ; Check if the error code (B) of halfPairingBN254 is not 0, meaning there is an error in some of the inputs
+        B   :JMPNZ(ecPairing18_input_error)
+
+        $ => A          :MLOAD(halfPairingBN254_f11_x)
+        $ => B          :MLOAD(halfPairingBN254_f11_y)
+        $ => C          :MLOAD(halfPairingBN254_f12_x)
+        $ => D          :MLOAD(halfPairingBN254_f12_y)
+        A               :MSTORE(ecPairing18_P2Q2_f11_x)
+        B               :MSTORE(ecPairing18_P2Q2_f11_y)
+        C               :MSTORE(ecPairing18_P2Q2_f12_x)
+        D               :MSTORE(ecPairing18_P2Q2_f12_y)
+        $ => A          :MLOAD(halfPairingBN254_f13_x)
+        $ => B          :MLOAD(halfPairingBN254_f13_y)
+        $ => C          :MLOAD(halfPairingBN254_f21_x)
+        $ => D          :MLOAD(halfPairingBN254_f21_y)
+        A               :MSTORE(ecPairing18_P2Q2_f13_x)
+        B               :MSTORE(ecPairing18_P2Q2_f13_y)
+        C               :MSTORE(ecPairing18_P2Q2_f21_x)
+        D               :MSTORE(ecPairing18_P2Q2_f21_y)
+        $ => A          :MLOAD(halfPairingBN254_f22_x)
+        $ => B          :MLOAD(halfPairingBN254_f22_y)
+        $ => C          :MLOAD(halfPairingBN254_f23_x)
+        $ => D          :MLOAD(halfPairingBN254_f23_y)
+        A               :MSTORE(ecPairing18_P2Q2_f22_x)
+        B               :MSTORE(ecPairing18_P2Q2_f22_y)
+        C               :MSTORE(ecPairing18_P2Q2_f23_x)
+        D               :MSTORE(ecPairing18_P2Q2_f23_y)
+
+ecPairing18_P3Q3:
+        $ => A          :MLOAD(ecPairing18_P3_x)
+        $ => B          :MLOAD(ecPairing18_P3_y)
+        A               :MSTORE(halfPairingBN254_P_x)
+        B               :MSTORE(halfPairingBN254_P_y)
+        $ => A          :MLOAD(ecPairing18_Q3_x1)
+        $ => B          :MLOAD(ecPairing18_Q3_x2)
+        $ => C          :MLOAD(ecPairing18_Q3_y1)
+        $ => D          :MLOAD(ecPairing18_Q3_y2)
+        A               :MSTORE(halfPairingBN254_Q_x1)
+        B               :MSTORE(halfPairingBN254_Q_x2)
+        C               :MSTORE(halfPairingBN254_Q_y1)
+        D               :MSTORE(halfPairingBN254_Q_y2)
+                        :CALL(halfPairingBN254)
+
+        ; Check if the error code (B) of halfPairingBN254 is not 0, meaning there is an error in some of the inputs
+        B   :JMPNZ(ecPairing18_input_error)
+
+        $ => A          :MLOAD(halfPairingBN254_f11_x)
+        $ => B          :MLOAD(halfPairingBN254_f11_y)
+        $ => C          :MLOAD(halfPairingBN254_f12_x)
+        $ => D          :MLOAD(halfPairingBN254_f12_y)
+        A               :MSTORE(ecPairing18_P3Q3_f11_x)
+        B               :MSTORE(ecPairing18_P3Q3_f11_y)
+        C               :MSTORE(ecPairing18_P3Q3_f12_x)
+        D               :MSTORE(ecPairing18_P3Q3_f12_y)
+        $ => A          :MLOAD(halfPairingBN254_f13_x)
+        $ => B          :MLOAD(halfPairingBN254_f13_y)
+        $ => C          :MLOAD(halfPairingBN254_f21_x)
+        $ => D          :MLOAD(halfPairingBN254_f21_y)
+        A               :MSTORE(ecPairing18_P3Q3_f13_x)
+        B               :MSTORE(ecPairing18_P3Q3_f13_y)
+        C               :MSTORE(ecPairing18_P3Q3_f21_x)
+        D               :MSTORE(ecPairing18_P3Q3_f21_y)
+        $ => A          :MLOAD(halfPairingBN254_f22_x)
+        $ => B          :MLOAD(halfPairingBN254_f22_y)
+        $ => C          :MLOAD(halfPairingBN254_f23_x)
+        $ => D          :MLOAD(halfPairingBN254_f23_y)
+        A               :MSTORE(ecPairing18_P3Q3_f22_x)
+        B               :MSTORE(ecPairing18_P3Q3_f22_y)
+        C               :MSTORE(ecPairing18_P3Q3_f23_x)
+        D               :MSTORE(ecPairing18_P3Q3_f23_y)
+
+ecPairing18_mul:
+        $ => A          :MLOAD(ecPairing18_P1Q1_f11_x)
+        $ => B          :MLOAD(ecPairing18_P1Q1_f11_y)
+        $ => C          :MLOAD(ecPairing18_P1Q1_f12_x)
+        $ => D          :MLOAD(ecPairing18_P1Q1_f12_y)
+        A               :MSTORE(mulFp12BN254_a11_x)
+        B               :MSTORE(mulFp12BN254_a11_y)
+        C               :MSTORE(mulFp12BN254_a12_x)
+        D               :MSTORE(mulFp12BN254_a12_y)
+        $ => A          :MLOAD(ecPairing18_P1Q1_f13_x)
+        $ => B          :MLOAD(ecPairing18_P1Q1_f13_y)
+        $ => C          :MLOAD(ecPairing18_P1Q1_f21_x)
+        $ => D          :MLOAD(ecPairing18_P1Q1_f21_y)
+        A               :MSTORE(mulFp12BN254_a13_x)
+        B               :MSTORE(mulFp12BN254_a13_y)
+        C               :MSTORE(mulFp12BN254_a21_x)
+        D               :MSTORE(mulFp12BN254_a21_y)
+        $ => A          :MLOAD(ecPairing18_P1Q1_f22_x)
+        $ => B          :MLOAD(ecPairing18_P1Q1_f22_y)
+        $ => C          :MLOAD(ecPairing18_P1Q1_f23_x)
+        $ => D          :MLOAD(ecPairing18_P1Q1_f23_y)
+        A               :MSTORE(mulFp12BN254_a22_x)
+        B               :MSTORE(mulFp12BN254_a22_y)
+        C               :MSTORE(mulFp12BN254_a23_x)
+        D               :MSTORE(mulFp12BN254_a23_y)
+        $ => A          :MLOAD(ecPairing18_P2Q2_f11_x)
+        $ => B          :MLOAD(ecPairing18_P2Q2_f11_y)
+        $ => C          :MLOAD(ecPairing18_P2Q2_f12_x)
+        $ => D          :MLOAD(ecPairing18_P2Q2_f12_y)
+        A               :MSTORE(mulFp12BN254_b11_x)
+        B               :MSTORE(mulFp12BN254_b11_y)
+        C               :MSTORE(mulFp12BN254_b12_x)
+        D               :MSTORE(mulFp12BN254_b12_y)
+        $ => A          :MLOAD(ecPairing18_P2Q2_f13_x)
+        $ => B          :MLOAD(ecPairing18_P2Q2_f13_y)
+        $ => C          :MLOAD(ecPairing18_P2Q2_f21_x)
+        $ => D          :MLOAD(ecPairing18_P2Q2_f21_y)
+        A               :MSTORE(mulFp12BN254_b13_x)
+        B               :MSTORE(mulFp12BN254_b13_y)
+        C               :MSTORE(mulFp12BN254_b21_x)
+        D               :MSTORE(mulFp12BN254_b21_y)
+        $ => A          :MLOAD(ecPairing18_P2Q2_f22_x)
+        $ => B          :MLOAD(ecPairing18_P2Q2_f22_y)
+        $ => C          :MLOAD(ecPairing18_P2Q2_f23_x)
+        $ => D          :MLOAD(ecPairing18_P2Q2_f23_y)
+        A               :MSTORE(mulFp12BN254_b22_x)
+        B               :MSTORE(mulFp12BN254_b22_y)
+        C               :MSTORE(mulFp12BN254_b23_x)
+        D               :MSTORE(mulFp12BN254_b23_y)
+                        :CALL(mulFp12BN254)
+        $ => A          :MLOAD(mulFp12BN254_c11_x)
+        $ => B          :MLOAD(mulFp12BN254_c11_y)
+        $ => C          :MLOAD(mulFp12BN254_c12_x)
+        $ => D          :MLOAD(mulFp12BN254_c12_y)
+        A               :MSTORE(mulFp12BN254_a11_x)
+        B               :MSTORE(mulFp12BN254_a11_y)
+        C               :MSTORE(mulFp12BN254_a12_x)
+        D               :MSTORE(mulFp12BN254_a12_y)
+        $ => A          :MLOAD(mulFp12BN254_c13_x)
+        $ => B          :MLOAD(mulFp12BN254_c13_y)
+        $ => C          :MLOAD(mulFp12BN254_c21_x)
+        $ => D          :MLOAD(mulFp12BN254_c21_y)
+        A               :MSTORE(mulFp12BN254_a13_x)
+        B               :MSTORE(mulFp12BN254_a13_y)
+        C               :MSTORE(mulFp12BN254_a21_x)
+        D               :MSTORE(mulFp12BN254_a21_y)
+        $ => A          :MLOAD(mulFp12BN254_c22_x)
+        $ => B          :MLOAD(mulFp12BN254_c22_y)
+        $ => C          :MLOAD(mulFp12BN254_c23_x)
+        $ => D          :MLOAD(mulFp12BN254_c23_y)
+        A               :MSTORE(mulFp12BN254_a22_x)
+        B               :MSTORE(mulFp12BN254_a22_y)
+        C               :MSTORE(mulFp12BN254_a23_x)
+        D               :MSTORE(mulFp12BN254_a23_y)
+        $ => A          :MLOAD(ecPairing18_P3Q3_f11_x)
+        $ => B          :MLOAD(ecPairing18_P3Q3_f11_y)
+        $ => C          :MLOAD(ecPairing18_P3Q3_f12_x)
+        $ => D          :MLOAD(ecPairing18_P3Q3_f12_y)
+        A               :MSTORE(mulFp12BN254_b11_x)
+        B               :MSTORE(mulFp12BN254_b11_y)
+        C               :MSTORE(mulFp12BN254_b12_x)
+        D               :MSTORE(mulFp12BN254_b12_y)
+        $ => A          :MLOAD(ecPairing18_P3Q3_f13_x)
+        $ => B          :MLOAD(ecPairing18_P3Q3_f13_y)
+        $ => C          :MLOAD(ecPairing18_P3Q3_f21_x)
+        $ => D          :MLOAD(ecPairing18_P3Q3_f21_y)
+        A               :MSTORE(mulFp12BN254_b13_x)
+        B               :MSTORE(mulFp12BN254_b13_y)
+        C               :MSTORE(mulFp12BN254_b21_x)
+        D               :MSTORE(mulFp12BN254_b21_y)
+        $ => A          :MLOAD(ecPairing18_P3Q3_f22_x)
+        $ => B          :MLOAD(ecPairing18_P3Q3_f22_y)
+        $ => C          :MLOAD(ecPairing18_P3Q3_f23_x)
+        $ => D          :MLOAD(ecPairing18_P3Q3_f23_y)
+        A               :MSTORE(mulFp12BN254_b22_x)
+        B               :MSTORE(mulFp12BN254_b22_y)
+        C               :MSTORE(mulFp12BN254_b23_x)
+        D               :MSTORE(mulFp12BN254_b23_y)
+                        :CALL(mulFp12BN254)
+        $ => A          :MLOAD(mulFp12BN254_c11_x)
+        $ => B          :MLOAD(mulFp12BN254_c11_y)
+        $ => C          :MLOAD(mulFp12BN254_c12_x)
+        $ => D          :MLOAD(mulFp12BN254_c12_y)
+        A               :MSTORE(ecPairing18_mul_f11_x)
+        B               :MSTORE(ecPairing18_mul_f11_y)
+        C               :MSTORE(ecPairing18_mul_f12_x)
+        D               :MSTORE(ecPairing18_mul_f12_y)
+        $ => A          :MLOAD(mulFp12BN254_c13_x)
+        $ => B          :MLOAD(mulFp12BN254_c13_y)
+        $ => C          :MLOAD(mulFp12BN254_c21_x)
+        $ => D          :MLOAD(mulFp12BN254_c21_y)
+        A               :MSTORE(ecPairing18_mul_f13_x)
+        B               :MSTORE(ecPairing18_mul_f13_y)
+        C               :MSTORE(ecPairing18_mul_f21_x)
+        D               :MSTORE(ecPairing18_mul_f21_y)
+        $ => A          :MLOAD(mulFp12BN254_c22_x)
+        $ => B          :MLOAD(mulFp12BN254_c22_y)
+        $ => C          :MLOAD(mulFp12BN254_c23_x)
+        $ => D          :MLOAD(mulFp12BN254_c23_y)
+        A               :MSTORE(ecPairing18_mul_f22_x)
+        B               :MSTORE(ecPairing18_mul_f22_y)
+        C               :MSTORE(ecPairing18_mul_f23_x)
+        D               :MSTORE(ecPairing18_mul_f23_y)
+
+ecPairing18_final_exponentiation:
+        $ => A          :MLOAD(ecPairing18_mul_f11_x)
+        $ => B          :MLOAD(ecPairing18_mul_f11_y)
+        $ => C          :MLOAD(ecPairing18_mul_f12_x)
+        $ => D          :MLOAD(ecPairing18_mul_f12_y)
+        A               :MSTORE(finalExpBN254_f11_x)
+        B               :MSTORE(finalExpBN254_f11_y)
+        C               :MSTORE(finalExpBN254_f12_x)
+        D               :MSTORE(finalExpBN254_f12_y)
+        $ => A          :MLOAD(ecPairing18_mul_f13_x)
+        $ => B          :MLOAD(ecPairing18_mul_f13_y)
+        $ => C          :MLOAD(ecPairing18_mul_f21_x)
+        $ => D          :MLOAD(ecPairing18_mul_f21_y)
+        A               :MSTORE(finalExpBN254_f13_x)
+        B               :MSTORE(finalExpBN254_f13_y)
+        C               :MSTORE(finalExpBN254_f21_x)
+        D               :MSTORE(finalExpBN254_f21_y)
+        $ => A          :MLOAD(ecPairing18_mul_f22_x)
+        $ => B          :MLOAD(ecPairing18_mul_f22_y)
+        $ => C          :MLOAD(ecPairing18_mul_f23_x)
+        $ => D          :MLOAD(ecPairing18_mul_f23_y)
+        A               :MSTORE(finalExpBN254_f22_x)
+        B               :MSTORE(finalExpBN254_f22_y)
+        C               :MSTORE(finalExpBN254_f23_x)
+        D               :MSTORE(finalExpBN254_f23_y)
+                        :CALL(finalExpBN254)
+
+        ; Check whether the result is 1 or not
+        ${FpBN254neq1(mem.finalExpBN254_f11_x) || FpBN254neq0(mem.finalExpBN254_f11_y) || FpBN254neq0(mem.finalExpBN254_f12_x) || FpBN254neq0(mem.finalExpBN254_f12_y || FpBN254neq0(mem.finalExpBN254_f13_x) || FpBN254neq0(mem.finalExpBN254_f13_y) || FpBN254neq0(mem.finalExpBN254_f21_x) || FpBN254neq0(mem.finalExpBN254_f21_y) || mem.finalExpBN254_f22_x) || FpBN254neq0(mem.finalExpBN254_f22_y) || FpBN254neq0(mem.finalExpBN254_f23_x) || FpBN254neq0(mem.finalExpBN254_f23_y)}   :JMPZ(ecPairing18_equation_is_satisfied)
+
+
+        0               :MSTORE(ecPairing18_result)
+        0 => B          :JMP(ecPairing18_end)
+
+ecPairing18_equation_is_satisfied:
+        ; Check that e(P1,Q1)·...·e(Pn,Qn) = 1
+        $ => A          :MLOAD(finalExpBN254_f11_x)
+        1n => B
+        1               :EQ
+        0n => B
+        $ => A          :MLOAD(finalExpBN254_f11_y)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f12_x)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f12_y)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f13_x)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f13_y)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f21_x)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f21_y)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f22_x)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f22_y)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f23_x)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f23_y)
+        1               :EQ
+
+        1               :MSTORE(ecPairing18_result)
+
+        0 => B          :JMP(ecPairing18_end)
+
+; ERRORS
+ecPairing18_input_error:
+    1 => B              :JMP(ecPairing18_error)
+
+ecPairing18_error:
+        0 => A
+
+ecPairing18_end:
+        $ => RR         :MLOAD(ecPairing18_RR)
+                        :RETURN
