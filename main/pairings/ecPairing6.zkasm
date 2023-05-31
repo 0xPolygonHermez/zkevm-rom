@@ -1,0 +1,125 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; ecPairing6:
+;;          input: P1,...,Pn ∈ G1 and Q1,...,Qn ∈ G2, where G1 = E(Fp)[r] = E(Fp), G2 = E'(Fp2)[r] and
+;;                 the curves are E/Fp: y² = x³ + 3 and E'/Fp2: y² = x³ + 3/(9+u)
+;;          output: 1 if e(P1,Q1)·...·e(Pn,Qn) = 1, 0 otherwise; where e: G1 x G2 -> GT is 
+;;                      the optimal Ate pairing over the BN254 curve and GT = mu_r (the r-th roots of unity over (Fp12)^*)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; The point at infinity is represented by (0,0).
+
+VAR GLOBAL ecPairing6_P_x
+VAR GLOBAL ecPairing6_P_y
+VAR GLOBAL ecPairing6_Q_x1
+VAR GLOBAL ecPairing6_Q_x2
+VAR GLOBAL ecPairing6_Q_y1
+VAR GLOBAL ecPairing6_Q_y2
+
+VAR GLOBAL ecPairing6_result
+
+VAR GLOBAL ecPairing6_RR
+
+; ERROR CODES (B)
+; 0 - no error
+; 1 - Error found in some input
+
+ecPairing6:
+        RR              :MSTORE(ecPairing6_RR)
+
+ecPairing6_PQ:
+        $ => A          :MLOAD(ecPairing6_P_x)
+        $ => B          :MLOAD(ecPairing6_P_y)
+        A               :MSTORE(halfPairingBN254_P_x)
+        B               :MSTORE(halfPairingBN254_P_y)
+        $ => A          :MLOAD(ecPairing6_Q_x1)
+        $ => B          :MLOAD(ecPairing6_Q_x2)
+        $ => C          :MLOAD(ecPairing6_Q_y1)
+        $ => D          :MLOAD(ecPairing6_Q_y2)
+        A               :MSTORE(halfPairingBN254_Q_x1)
+        B               :MSTORE(halfPairingBN254_Q_x2)
+        C               :MSTORE(halfPairingBN254_Q_y1)
+        D               :MSTORE(halfPairingBN254_Q_y2)
+                        :CALL(halfPairingBN254)
+
+        ; Check if the error code (B) of halfPairingBN254 is not 0, meaning there is an error in some of the inputs
+        B   :JMPNZ(ecPairing6_input_error)
+
+ecPairing6_final_exponentiation:
+        $ => A          :MLOAD(halfPairingBN254_f11_x)
+        $ => B          :MLOAD(halfPairingBN254_f11_y)
+        $ => C          :MLOAD(halfPairingBN254_f12_x)
+        $ => D          :MLOAD(halfPairingBN254_f12_y)
+        A               :MSTORE(finalExpBN254_f11_x)
+        B               :MSTORE(finalExpBN254_f11_y)
+        C               :MSTORE(finalExpBN254_f12_x)
+        D               :MSTORE(finalExpBN254_f12_y)
+        $ => A          :MLOAD(halfPairingBN254_f13_x)
+        $ => B          :MLOAD(halfPairingBN254_f13_y)
+        $ => C          :MLOAD(halfPairingBN254_f21_x)
+        $ => D          :MLOAD(halfPairingBN254_f21_y)
+        A               :MSTORE(finalExpBN254_f13_x)
+        B               :MSTORE(finalExpBN254_f13_y)
+        C               :MSTORE(finalExpBN254_f21_x)
+        D               :MSTORE(finalExpBN254_f21_y)
+        $ => A          :MLOAD(halfPairingBN254_f22_x)
+        $ => B          :MLOAD(halfPairingBN254_f22_y)
+        $ => C          :MLOAD(halfPairingBN254_f23_x)
+        $ => D          :MLOAD(halfPairingBN254_f23_y)
+        A               :MSTORE(finalExpBN254_f22_x)
+        B               :MSTORE(finalExpBN254_f22_y)
+        C               :MSTORE(finalExpBN254_f23_x)
+        D               :MSTORE(finalExpBN254_f23_y)
+                        :CALL(finalExpBN254)
+
+        ; Check whether the result is 1 or not
+        ${FpBN254neq1(mem.finalExpBN254_f11_x) || FpBN254neq0(mem.finalExpBN254_f11_y) || FpBN254neq0(mem.finalExpBN254_f12_x) || FpBN254neq0(mem.finalExpBN254_f12_y || FpBN254neq0(mem.finalExpBN254_f13_x) || FpBN254neq0(mem.finalExpBN254_f13_y) || FpBN254neq0(mem.finalExpBN254_f21_x) || FpBN254neq0(mem.finalExpBN254_f21_y) || mem.finalExpBN254_f22_x) || FpBN254neq0(mem.finalExpBN254_f22_y) || FpBN254neq0(mem.finalExpBN254_f23_x) || FpBN254neq0(mem.finalExpBN254_f23_y)}   :JMPZ(ecPairing6_equation_is_satisfied)
+
+
+        0               :MSTORE(ecPairing6_result)
+        0 => B          :JMP(ecPairing6_end)
+
+ecPairing6_equation_is_satisfied:
+        ; Check that e(P1,Q1)·...·e(Pn,Qn) = 1
+        $ => A          :MLOAD(finalExpBN254_f11_x)
+        1n => B
+        1               :EQ
+        0n => B
+        $ => A          :MLOAD(finalExpBN254_f11_y)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f12_x)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f12_y)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f13_x)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f13_y)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f21_x)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f21_y)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f22_x)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f22_y)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f23_x)
+        1               :EQ
+        $ => A          :MLOAD(finalExpBN254_f23_y)
+        1               :EQ
+
+        1               :MSTORE(ecPairing6_result)
+
+        0 => B          :JMP(ecPairing6_end)
+
+; ERRORS
+ecPairing6_input_error:
+    1 => B              :JMP(ecPairing6_error)
+
+ecPairing6_error:
+        0 => A
+
+ecPairing6_end:
+        $ => RR         :MLOAD(ecPairing6_RR)
+                        :RETURN
