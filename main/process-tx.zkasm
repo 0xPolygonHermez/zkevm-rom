@@ -32,6 +32,8 @@ processTx:
         ; Minimum of 100000 steps left to process a tx
         %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCountersStep)
         %MAX_CNT_BINARY - CNT_BINARY - 100   :JMPN(outOfCountersBinary)
+        %MAX_CNT_ARITH - CNT_ARITH - 2  :JMPN(outOfCountersArith)
+
         $ => A                          :MLOAD(txHash)
         ; Check the signature
         $ => B                          :MLOAD(txR)
@@ -68,9 +70,33 @@ endCheckChainId:
                                         :CALL(isColdAddress) ; add tx.origin to touched addresses
         0                               :MSTORE(depth) ; Initial depth is 0
 
-;; Set gasPrice global var
+;; Set gasPrice global var depending on effectivePercentage [0-255] -> txGasPrice = Floor((gasPrice * (effectivePercentage + 1)) / 256)
+        ; gasPrice => A
         $ => A                          :MLOAD(txGasPriceRLP)
-        A                               :MSTORE(txGasPrice)
+        ; effectivePercentage => B
+        $ => B                          :MLOAD(effectivePercentageRLP)
+        ; B -> [1, 256]
+        B + 1 => B
+        ; A*B + C = D * 2**256 + op(E)
+        0 => C
+        ; _effGasPriceShifted = gasPrice * (effectivePercentage + 1)
+        $${var _effGasPriceShifted = A * B}
+        ; get value above 256 bits
+        ${_effGasPriceShifted >> 256} => D
+        ; compute ARITH
+        ${_effGasPriceShifted} => E              :ARITH
+
+        ; txGasPrice = _effGasPriceShifted / 256
+        256 => B
+        ; (_effGasPriceShifted / 256)(A) * 256(B) + (_effGasPriceShifted % 256)(C) = D * 2**256 + op(E)
+        ${_effGasPriceShifted / 256} => A        :MSTORE(txGasPrice)
+        ${_effGasPriceShifted % 256} => C
+        ; compute ARITH
+        E                                       :ARITH
+        ; check divisor > remainder
+        C => A
+        1                                       :LT
+
 ;;;;;;;;;;;;;;;;;;
 ;; D - Verify and increase nonce
 ;;;;;;;;;;;;;;;;;;
