@@ -1,0 +1,387 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; expCycloByXFp12BN254:
+;;             in: e, a = a0 + a2·w + a4·w² + a1·w³ + a3·w⁴ + a5·w⁵ ∈ GΦ6(p²), where e ∈ [0,p¹²-2] and ai ∈ Fp2
+;;             out: a^e = c0 + c2·w + c4·w² + c1·w³ + c3·w⁴ + c5·w⁵ ∈ ∈ GΦ6(p²)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL expCycloByXFp12BN254_a0_x
+VAR GLOBAL expCycloByXFp12BN254_a0_y
+VAR GLOBAL expCycloByXFp12BN254_a2_x
+VAR GLOBAL expCycloByXFp12BN254_a2_y
+VAR GLOBAL expCycloByXFp12BN254_a4_x
+VAR GLOBAL expCycloByXFp12BN254_a4_y
+VAR GLOBAL expCycloByXFp12BN254_a1_x
+VAR GLOBAL expCycloByXFp12BN254_a1_y
+VAR GLOBAL expCycloByXFp12BN254_a3_x
+VAR GLOBAL expCycloByXFp12BN254_a3_y
+VAR GLOBAL expCycloByXFp12BN254_a5_x
+VAR GLOBAL expCycloByXFp12BN254_a5_y
+VAR GLOBAL expCycloByXFp12BN254_c0_x
+VAR GLOBAL expCycloByXFp12BN254_c0_y
+VAR GLOBAL expCycloByXFp12BN254_c2_x
+VAR GLOBAL expCycloByXFp12BN254_c2_y
+VAR GLOBAL expCycloByXFp12BN254_c4_x
+VAR GLOBAL expCycloByXFp12BN254_c4_y
+VAR GLOBAL expCycloByXFp12BN254_c1_x
+VAR GLOBAL expCycloByXFp12BN254_c1_y
+VAR GLOBAL expCycloByXFp12BN254_c3_x
+VAR GLOBAL expCycloByXFp12BN254_c3_y
+VAR GLOBAL expCycloByXFp12BN254_c5_x
+VAR GLOBAL expCycloByXFp12BN254_c5_y
+
+VAR GLOBAL expCycloByXFp12BN254_RR
+
+expCycloByXFp12BN254:
+        RR              :MSTORE(expCycloByXFp12BN254_RR)
+
+        ; Check if a = 1
+        ${FpBN254neq1(mem.expCycloByXFp12BN254_a0_x) || FpBN254neq0(mem.expCycloByXFp12BN254_a0_y) || FpBN254neq0(mem.expCycloByXFp12BN254_a2_x) || FpBN254neq0(mem.expCycloByXFp12BN254_a2_y || FpBN254neq0(mem.expCycloByXFp12BN254_a4_x) || FpBN254neq0(mem.expCycloByXFp12BN254_a4_y) || FpBN254neq0(mem.expCycloByXFp12BN254_a1_x) || FpBN254neq0(mem.expCycloByXFp12BN254_a1_y) || mem.expCycloByXFp12BN254_a3_x) || FpBN254neq0(mem.expCycloByXFp12BN254_a3_y) || FpBN254neq0(mem.expCycloByXFp12BN254_a5_x) || FpBN254neq0(mem.expCycloByXFp12BN254_a5_y)}   :JMPZ(expCycloByXFp12BN254_a_is_one)
+
+        59 => RCX
+
+        ; We manually compute the first iterations to avoid branching: 10001
+
+        ; 1] First bit is 1 and second bit is 0, so set c = a,
+        ;    compress the input and compute the compressed square C(a²)
+        $ => A          :MLOAD(expCycloByXFp12BN254_a0_x)
+        $ => B          :MLOAD(expCycloByXFp12BN254_a0_y)
+        A               :MSTORE(expCycloByXFp12BN254_c0_x)
+        B               :MSTORE(expCycloByXFp12BN254_c0_y)
+        A               :MSTORE(compressFp12BN254_a0_x)
+        B               :MSTORE(compressFp12BN254_a0_y)
+        $ => A          :MLOAD(expCycloByXFp12BN254_a2_x)
+        $ => B          :MLOAD(expCycloByXFp12BN254_a2_y)
+        A               :MSTORE(expCycloByXFp12BN254_c2_x)
+        B               :MSTORE(expCycloByXFp12BN254_c2_y)
+        A               :MSTORE(compressFp12BN254_a2_x)
+        B               :MSTORE(compressFp12BN254_a2_y)
+        $ => A          :MLOAD(expCycloByXFp12BN254_a4_x)
+        $ => B          :MLOAD(expCycloByXFp12BN254_a4_y)
+        A               :MSTORE(expCycloByXFp12BN254_c4_x)
+        B               :MSTORE(expCycloByXFp12BN254_c4_y)
+        A               :MSTORE(compressFp12BN254_a4_x)
+        B               :MSTORE(compressFp12BN254_a4_y)
+        $ => A          :MLOAD(expCycloByXFp12BN254_a1_x)
+        $ => B          :MLOAD(expCycloByXFp12BN254_a1_y)
+        A               :MSTORE(expCycloByXFp12BN254_c1_x)
+        B               :MSTORE(expCycloByXFp12BN254_c1_y)
+        A               :MSTORE(compressFp12BN254_a1_x)
+        B               :MSTORE(compressFp12BN254_a1_y)
+        $ => A          :MLOAD(expCycloByXFp12BN254_a3_x)
+        $ => B          :MLOAD(expCycloByXFp12BN254_a3_y)
+        A               :MSTORE(expCycloByXFp12BN254_c3_x)
+        B               :MSTORE(expCycloByXFp12BN254_c3_y)
+        A               :MSTORE(compressFp12BN254_a3_x)
+        B               :MSTORE(compressFp12BN254_a3_y)
+        $ => A          :MLOAD(expCycloByXFp12BN254_a5_x)
+        $ => B          :MLOAD(expCycloByXFp12BN254_a5_y)
+        A               :MSTORE(expCycloByXFp12BN254_c5_x)
+        B               :MSTORE(expCycloByXFp12BN254_c5_y)
+        A               :MSTORE(compressFp12BN254_a5_x)
+        B               :MSTORE(compressFp12BN254_a5_y), CALL(compressFp12BN254)
+
+        $ => A          :MLOAD(compressFp12BN254_Ca2_x)
+        $ => B          :MLOAD(compressFp12BN254_Ca2_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca2_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca2_y)
+        $ => A          :MLOAD(compressFp12BN254_Ca3_x)
+        $ => B          :MLOAD(compressFp12BN254_Ca3_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca3_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca3_y)
+        $ => A          :MLOAD(compressFp12BN254_Ca4_x)
+        $ => B          :MLOAD(compressFp12BN254_Ca4_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca4_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca4_y)
+        $ => A          :MLOAD(compressFp12BN254_Ca5_x)
+        $ => B          :MLOAD(compressFp12BN254_Ca5_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca5_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca5_y), CALL(squareCycloFp12BN254)
+
+        ; 2] Third bit is 0, so compute C(c⁴)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb2_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb2_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca2_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca2_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb3_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb3_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca3_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca3_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb4_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb4_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca4_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca4_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb5_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb5_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca5_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca5_y), CALL(squareCycloFp12BN254)
+
+        ; 3] Fourth bit is 0, so compute C(c⁸)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb2_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb2_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca2_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca2_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb3_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb3_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca3_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca3_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb4_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb4_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca4_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca4_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb5_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb5_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca5_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca5_y), CALL(squareCycloFp12BN254)
+
+        ; 4] Fifth bit is 1, so compute C(c¹⁶), decompress to obtain c¹⁶ and multiply by a
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb2_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb2_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca2_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca2_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb3_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb3_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca3_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca3_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb4_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb4_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca4_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca4_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb5_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb5_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca5_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca5_y), CALL(squareCycloFp12BN254)
+
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb2_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb2_y)
+        A               :MSTORE(decompressFp12BN254_Ca2_x)
+        B               :MSTORE(decompressFp12BN254_Ca2_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb3_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb3_y)
+        A               :MSTORE(decompressFp12BN254_Ca3_x)
+        B               :MSTORE(decompressFp12BN254_Ca3_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb4_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb4_y)
+        A               :MSTORE(decompressFp12BN254_Ca4_x)
+        B               :MSTORE(decompressFp12BN254_Ca4_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb5_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb5_y)
+        A               :MSTORE(decompressFp12BN254_Ca5_x)
+        B               :MSTORE(decompressFp12BN254_Ca5_y), CALL(decompressFp12BN254)
+
+        $ => A          :MLOAD(expCycloByXFp12BN254_c0_x)
+        $ => B          :MLOAD(expCycloByXFp12BN254_c0_y)
+        A               :MSTORE(mulFp12BN254_a11_x)
+        B               :MSTORE(mulFp12BN254_a11_y)
+        $ => A          :MLOAD(expCycloByXFp12BN254_c2_x)
+        $ => B          :MLOAD(expCycloByXFp12BN254_c2_y)
+        A               :MSTORE(mulFp12BN254_a21_x)
+        B               :MSTORE(mulFp12BN254_a21_y)
+        $ => A          :MLOAD(expCycloByXFp12BN254_c4_x)
+        $ => B          :MLOAD(expCycloByXFp12BN254_c4_y)
+        A               :MSTORE(mulFp12BN254_a12_x)
+        B               :MSTORE(mulFp12BN254_a12_y)
+        $ => A          :MLOAD(expCycloByXFp12BN254_c1_x)
+        $ => B          :MLOAD(expCycloByXFp12BN254_c1_y)
+        A               :MSTORE(mulFp12BN254_a22_x)
+        B               :MSTORE(mulFp12BN254_a22_y)
+        $ => A          :MLOAD(expCycloByXFp12BN254_c3_x)
+        $ => B          :MLOAD(expCycloByXFp12BN254_a3_y)
+        A               :MSTORE(mulFp12BN254_a13_x)
+        B               :MSTORE(mulFp12BN254_a13_y)
+        $ => A          :MLOAD(expCycloByXFp12BN254_c5_x)
+        $ => B          :MLOAD(expCycloByXFp12BN254_c5_y)
+        A               :MSTORE(mulFp12BN254_a23_x)
+        B               :MSTORE(mulFp12BN254_a23_y)
+        $ => A          :MLOAD(decompressFp12BN254_a0_x)
+        $ => B          :MLOAD(decompressFp12BN254_a0_y)
+        A               :MSTORE(mulFp12BN254_b11_x)
+        B               :MSTORE(mulFp12BN254_b11_y)
+        $ => A          :MLOAD(decompressFp12BN254_a2_x)
+        $ => B          :MLOAD(decompressFp12BN254_a2_y)
+        A               :MSTORE(mulFp12BN254_b21_x)
+        B               :MSTORE(mulFp12BN254_b21_y)
+        $ => A          :MLOAD(decompressFp12BN254_a4_x)
+        $ => B          :MLOAD(decompressFp12BN254_a4_y)
+        A               :MSTORE(mulFp12BN254_b12_x)
+        B               :MSTORE(mulFp12BN254_b12_y)
+        $ => A          :MLOAD(decompressFp12BN254_a1_x)
+        $ => B          :MLOAD(decompressFp12BN254_a1_y)
+        A               :MSTORE(mulFp12BN254_b22_x)
+        B               :MSTORE(mulFp12BN254_b22_y)
+        $ => A          :MLOAD(decompressFp12BN254_a3_x)
+        $ => B          :MLOAD(decompressFp12BN254_a3_y)
+        A               :MSTORE(mulFp12BN254_b13_x)
+        B               :MSTORE(mulFp12BN254_b13_y)
+        $ => A          :MLOAD(decompressFp12BN254_a5_x)
+        $ => B          :MLOAD(decompressFp12BN254_a5_y)
+        A               :MSTORE(mulFp12BN254_b23_x)
+        B               :MSTORE(mulFp12BN254_b23_y)
+                        :CALL(mulFp12BN254)
+
+                        :JMP(expCycloByXFp12BN254_loop)
+
+expCycloByXFp12BN254_a_is_one:
+        ; Check that a = 1
+        1n              :MLOAD(expCycloByXFp12BN254_a0_x)
+        0n              :MLOAD(expCycloByXFp12BN254_a0_y)
+        0n              :MLOAD(expCycloByXFp12BN254_a2_x)
+        0n              :MLOAD(expCycloByXFp12BN254_a2_y)
+        0n              :MLOAD(expCycloByXFp12BN254_a4_x)
+        0n              :MLOAD(expCycloByXFp12BN254_a4_y)
+        0n              :MLOAD(expCycloByXFp12BN254_a1_x)
+        0n              :MLOAD(expCycloByXFp12BN254_a1_y)
+        0n              :MLOAD(expCycloByXFp12BN254_a3_x)
+        0n              :MLOAD(expCycloByXFp12BN254_a3_y)
+        0n              :MLOAD(expCycloByXFp12BN254_a5_x)
+        0n              :MLOAD(expCycloByXFp12BN254_a5_y)
+
+        ; c = 1
+        1n              :MSTORE(expCycloByXFp12BN254_c0_x)
+        0n              :MSTORE(expCycloByXFp12BN254_c0_y)
+        0n              :MSTORE(expCycloByXFp12BN254_c2_x)
+        0n              :MSTORE(expCycloByXFp12BN254_c2_y)
+        0n              :MSTORE(expCycloByXFp12BN254_c4_x)
+        0n              :MSTORE(expCycloByXFp12BN254_c4_y)
+        0n              :MSTORE(expCycloByXFp12BN254_c1_x)
+        0n              :MSTORE(expCycloByXFp12BN254_c1_y)
+        0n              :MSTORE(expCycloByXFp12BN254_c3_x)
+        0n              :MSTORE(expCycloByXFp12BN254_c3_y)
+        0n              :MSTORE(expCycloByXFp12BN254_c5_x)
+        0n              :MSTORE(expCycloByXFp12BN254_c5_y)
+
+                        :JMP(expCycloByXFp12BN254_end)
+
+expCycloByXFp12BN254_loop:
+        RCX - 1 => RCX         :JMPZ(expCycloByXFp12BN254_end)      
+
+        ; We always square (in compressed form): C(c²)
+        ; We square C(c²) and store the result
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb2_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb2_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca2_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca2_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb3_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb3_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca3_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca3_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb4_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb4_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca4_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca4_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb5_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb5_y)
+        A               :MSTORE(squareCycloFp12BN254_Ca5_x)
+        B               :MSTORE(squareCycloFp12BN254_Ca5_y), CALL(squareCycloFp12BN254)
+
+        ; We check if the MSB b of x is either 1 or 0
+        RCX-1 => RR
+                        :CALL(@xShortDecompBN254 + RR)
+
+        ; if bit = 0, then repeat
+        B               :JMPZ(expCycloByXFp12BN254_loop)
+
+        ; else, multiply by the last result
+
+expCycloByXFp12BN254_multiply:
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb2_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb2_y)
+        A               :MSTORE(decompressFp12BN254_Ca2_x)
+        B               :MSTORE(decompressFp12BN254_Ca2_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb3_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb3_y)
+        A               :MSTORE(decompressFp12BN254_Ca3_x)
+        B               :MSTORE(decompressFp12BN254_Ca3_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb4_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb4_y)
+        A               :MSTORE(decompressFp12BN254_Ca4_x)
+        B               :MSTORE(decompressFp12BN254_Ca4_y)
+        $ => A          :MLOAD(squareCycloFp12BN254_Cb5_x)
+        $ => B          :MLOAD(squareCycloFp12BN254_Cb5_y)
+        A               :MSTORE(decompressFp12BN254_Ca5_x)
+        B               :MSTORE(decompressFp12BN254_Ca5_y), CALL(decompressFp12BN254)
+
+        $ => A          :MLOAD(mulFp12BN254_c11_x)
+        $ => B          :MLOAD(mulFp12BN254_c11_y)
+        A               :MSTORE(mulFp12BN254_a11_x)
+        B               :MSTORE(mulFp12BN254_a11_y)
+        $ => A          :MLOAD(mulFp12BN254_c12_x)
+        $ => B          :MLOAD(mulFp12BN254_c12_y)
+        A               :MSTORE(mulFp12BN254_a12_x)
+        B               :MSTORE(mulFp12BN254_a12_y)
+        $ => A          :MLOAD(mulFp12BN254_c13_x)
+        $ => B          :MLOAD(mulFp12BN254_c13_y)
+        A               :MSTORE(mulFp12BN254_a13_x)
+        B               :MSTORE(mulFp12BN254_a13_y)
+        $ => A          :MLOAD(mulFp12BN254_c21_x)
+        $ => B          :MLOAD(mulFp12BN254_c21_y)
+        A               :MSTORE(mulFp12BN254_a21_x)
+        B               :MSTORE(mulFp12BN254_a21_y)
+        $ => A          :MLOAD(mulFp12BN254_c22_x)
+        $ => B          :MLOAD(mulFp12BN254_c22_y)
+        A               :MSTORE(mulFp12BN254_a22_x)
+        B               :MSTORE(mulFp12BN254_a22_y)
+        $ => A          :MLOAD(mulFp12BN254_c23_x)
+        $ => B          :MLOAD(mulFp12BN254_c23_y)
+        A               :MSTORE(mulFp12BN254_a23_x)
+        B               :MSTORE(mulFp12BN254_a23_y)
+        $ => A          :MLOAD(decompressFp12BN254_a0_x)
+        $ => B          :MLOAD(decompressFp12BN254_a0_y)
+        A               :MSTORE(mulFp12BN254_b11_x)
+        B               :MSTORE(mulFp12BN254_b11_y)
+        $ => A          :MLOAD(decompressFp12BN254_a2_x)
+        $ => B          :MLOAD(decompressFp12BN254_a2_y)
+        A               :MSTORE(mulFp12BN254_b21_x)
+        B               :MSTORE(mulFp12BN254_b21_y)
+        $ => A          :MLOAD(decompressFp12BN254_a4_x)
+        $ => B          :MLOAD(decompressFp12BN254_a4_y)
+        A               :MSTORE(mulFp12BN254_b12_x)
+        B               :MSTORE(mulFp12BN254_b12_y)
+        $ => A          :MLOAD(decompressFp12BN254_a1_x)
+        $ => B          :MLOAD(decompressFp12BN254_a1_y)
+        A               :MSTORE(mulFp12BN254_b22_x)
+        B               :MSTORE(mulFp12BN254_b22_y)
+        $ => A          :MLOAD(decompressFp12BN254_a3_x)
+        $ => B          :MLOAD(decompressFp12BN254_a3_y)
+        A               :MSTORE(mulFp12BN254_b13_x)
+        B               :MSTORE(mulFp12BN254_b13_y)
+        $ => A          :MLOAD(decompressFp12BN254_a5_x)
+        $ => B          :MLOAD(decompressFp12BN254_a5_y)
+        A               :MSTORE(mulFp12BN254_b23_x)
+        B               :MSTORE(mulFp12BN254_b23_y)
+                        :CALL(mulFp12BN254)
+
+                        :JMP(expCycloByXFp12BN254_loop)
+
+expCycloByXFp12BN254_end:
+        ; Last asignments
+        $ => A          :MLOAD(mulFp12BN254_c11_x)
+        $ => B          :MLOAD(mulFp12BN254_c11_y)
+        A               :MSTORE(expCycloByXFp12BN254_c0_x)
+        B               :MSTORE(expCycloByXFp12BN254_c0_y)
+        $ => A          :MLOAD(mulFp12BN254_c12_x)
+        $ => B          :MLOAD(mulFp12BN254_c12_y)
+        A               :MSTORE(expCycloByXFp12BN254_c4_x)
+        B               :MSTORE(expCycloByXFp12BN254_c4_y)
+        $ => A          :MLOAD(mulFp12BN254_c13_x)
+        $ => B          :MLOAD(mulFp12BN254_c13_y)
+        A               :MSTORE(expCycloByXFp12BN254_c3_x)
+        B               :MSTORE(expCycloByXFp12BN254_c3_y)
+        $ => A          :MLOAD(mulFp12BN254_c21_x)
+        $ => B          :MLOAD(mulFp12BN254_c21_y)
+        A               :MSTORE(expCycloByXFp12BN254_c2_x)
+        B               :MSTORE(expCycloByXFp12BN254_c2_y)
+        $ => A          :MLOAD(mulFp12BN254_c22_x)
+        $ => B          :MLOAD(mulFp12BN254_c22_y)
+        A               :MSTORE(expCycloByXFp12BN254_c1_x)
+        B               :MSTORE(expCycloByXFp12BN254_c1_y)
+        $ => A          :MLOAD(mulFp12BN254_c23_x)
+        $ => B          :MLOAD(mulFp12BN254_c23_y)
+        A               :MSTORE(expCycloByXFp12BN254_c5_x)
+        B               :MSTORE(expCycloByXFp12BN254_c5_y)
+
+        $ => RR         :MLOAD(expCycloByXFp12BN254_RR)
+                        :RETURN
+
+                        
