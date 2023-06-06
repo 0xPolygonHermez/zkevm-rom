@@ -1,3 +1,13 @@
+/**
+ * @link [https://www.evm.codes/precompiled#0x06?fork=shanghai]
+ * @zk-counters
+ *  - dynamic steps:
+ *  - dynamic keccaks:
+ *  - dynamic binaris
+ * @process-precompiled
+ *  - stack input: [x1, y1, x2, y2]
+ *  - stack output: [x, y]
+ */
 funcEcAdd:
     ; Move balances if value > 0 just before executing the contract CALL
     $ => B                              :MLOAD(txValue)
@@ -45,9 +55,18 @@ funcEcAdd:
 
     $ => CTX                            :MLOAD(originCTX)
     $ => A                              :MLOAD(ecAdd_P3_x)
-    A                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    A                                   :MSTORE(bytesToStore)
+    C - 32                              :JMPN(continueEcAdd)
+    C - 32 => C
+                                        :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     $ => A                              :MLOAD(ecAdd_P3_y)
-    A                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    A                                   :MSTORE(bytesToStore)
+    C - 32                              :JMPN(continueEcAdd)
+                                        :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+                                        :JMP(endECADD)
+
+continueEcAdd:
+                                        :CALL(MSTOREX); in: [bytesToStore, E: offset] out: [E: new offset]
                                         :JMP(endECADD)
 
 endECADDFail:

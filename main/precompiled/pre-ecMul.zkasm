@@ -1,3 +1,13 @@
+/**
+ * @link [https://www.evm.codes/precompiled#0x07?fork=shanghai]
+ * @zk-counters
+ *  - dynamic steps:
+ *  - dynamic keccaks:
+ *  - dynamic binaris
+ * @process-precompiled
+ *  - stack input: [x1, y1, s]
+ *  - stack output: [x, y]
+ */
 funcEcMul:
     ; Move balances if value > 0 just before executing the contract CALL
     $ => B                              :MLOAD(txValue)
@@ -20,7 +30,7 @@ funcEcMul:
     ; check error
     B                                   :JMPNZ(endECMULFail)
 
-    ; write ecAdd data into memory
+    ; write ecMul data into memory
     0 => E
     $ => A                              :MLOAD(ecMul_Q_x)
     A                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
@@ -37,15 +47,24 @@ funcEcMul:
     B                                   :MSTORE(retDataCTX)
     B => CTX
 
-    ; write result ecAdd into previous context memory
+    ; write result ecMul into previous context memory
     $ => C                              :MLOAD(retCallLength), JMPZ(preEndECMUL)
     $ => E                              :MLOAD(retCallOffset)
 
     $ => CTX                            :MLOAD(originCTX)
     $ => A                              :MLOAD(ecMul_Q_x)
-    A                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    A                                   :MSTORE(bytesToStore)
+    C - 32                              :JMPN(continueEcMul)
+    C - 32 => C
+                                        :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     $ => A                              :MLOAD(ecMul_Q_y)
-    A                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    A                                   :MSTORE(bytesToStore)
+    C - 32                              :JMPN(continueEcMul)
+                                        :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+                                        :JMP(endECMUL)
+
+continueEcMul:
+                                        :CALL(MSTOREX); in: [bytesToStore, E: offset] out: [E: new offset]
                                         :JMP(endECMUL)
 
 endECMULFail:
