@@ -23,6 +23,11 @@ VAR GLOBAL ecMul_RR
 ecMul:
         RR      :MSTORE(ecMul_RR)
 
+        $ => B      :MLOAD(ecMul_P_x), CALL(reduceFpBN254)
+        A           :MSTORE(ecMul_P_x)
+        $ => B      :MLOAD(ecMul_P_y), CALL(reduceFpBN254)
+        A           :MSTORE(ecMul_P_y)
+
         ; Check if P = 0
         ${FpBN254neq0(mem.ecMul_P_x) || FpBN254neq0(mem.ecMul_P_y)}   :JMPZ(ecMul_P_is_zero)
 
@@ -48,11 +53,10 @@ ecMul:
         $           :EQ,JMPNC(ecMul_P_is_not_in_E)
 
         ; Check if k ∈ [1,r-1]
-        $ => B      :MLOAD(ecMul_k)
-        0n => A
+        $ => B      :MLOAD(ecMul_k), CALL(reduceFrBN254)
+        A           :MSTORE(ecMul_k)
+        0n => B
         $           :EQ,JMPC(ecMul_k_is_zero)
-        %BN254_R_MINUS_ONE => A
-        $           :LT,JMPC(ecMul_k_reduce)
 
         ; ${log2(mem.ecMul_k)} => RCX
         257 => RCX
@@ -78,31 +82,10 @@ ecMul_P_is_zero:
                 :JMP(ecMul_correct)
 
 ecMul_k_is_zero:
-        ; Check that k is zero
-        0n => B
-        $ => A  :MLOAD(ecMul_k)
-        1       :EQ
-
         0n      :MSTORE(ecMul_Q_x)
         0n      :MSTORE(ecMul_Q_y)
 
                 :JMP(ecMul_correct)
-
-ecMul_k_reduce:
-        ; We reduce k mod R and continue as normal
-                :CALL(reduceFrBN254)
-
-        ; We check that is not 0
-        C => B  :MSTORE(ecMul_k)
-        0n => A
-        $           :EQ,JMPC(ecMul_k_is_zero)
-
-        257 => RCX
-
-        $ => A  :MLOAD(ecMul_P_x)
-        $ => C  :MLOAD(ecMul_P_y)
-        A       :MSTORE(ecMul_Q_x)
-        C       :MSTORE(ecMul_Q_y)
 
 ; Assumes k is well-formed
 ecMul_find_MSB_k:

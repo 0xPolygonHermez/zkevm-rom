@@ -46,6 +46,20 @@ INCLUDE "constants.zkasm"
 halfPairingBN254:
     RR          :MSTORE(halfPairingBN254_RR)
 
+    ; Reduce inputs mod p
+    $ => B      :MLOAD(halfPairingBN254_P_x), CALL(reduceFpBN254)
+    A           :MSTORE(halfPairingBN254_P_x)
+    $ => B      :MLOAD(halfPairingBN254_P_y), CALL(reduceFpBN254)
+    A           :MSTORE(halfPairingBN254_P_y)
+    $ => B      :MLOAD(halfPairingBN254_Q_x1), CALL(reduceFpBN254)
+    A           :MSTORE(halfPairingBN254_Q_x1)
+    $ => B      :MLOAD(halfPairingBN254_Q_x2), CALL(reduceFpBN254)
+    A           :MSTORE(halfPairingBN254_Q_x2)
+    $ => B      :MLOAD(halfPairingBN254_Q_y1), CALL(reduceFpBN254)
+    A           :MSTORE(halfPairingBN254_Q_y1)
+    $ => B      :MLOAD(halfPairingBN254_Q_y2), CALL(reduceFpBN254)
+    A           :MSTORE(halfPairingBN254_Q_y2)
+
     ; Check if P = 0
     ${FpBN254neq0(mem.halfPairingBN254_P_x) || FpBN254neq0(mem.halfPairingBN254_P_y)}   :JMPZ(halfPairingBN254_P_is_zero)
 
@@ -53,7 +67,6 @@ halfPairingBN254:
     ${FpBN254neq0(mem.halfPairingBN254_Q_x1) || FpBN254neq0(mem.halfPairingBN254_Q_x2) || FpBN254neq0(mem.halfPairingBN254_Q_y1) || FpBN254neq0(mem.halfPairingBN254_Q_y2)}   :JMPZ(halfPairingBN254_Q_is_zero)
 
                 :JMP(halfPairingBN254_P_subgroup_check)
-
 
 halfPairingBN254_P_is_zero:
     ; Check that P is zero
@@ -67,15 +80,13 @@ halfPairingBN254_P_is_zero:
     ; Q in E' iff (Q.y1 + Q.y2·u)² == (Q.x1 + Q.x2·u)³ + 3/(9+u)
     ; 1.1] Compute LHS and RHS
     $ => A  :MLOAD(halfPairingBN254_Q_x1)
-    $ => B  :MLOAD(halfPairingBN254_Q_x2)
-            :CALL(squareFp2BN254)
+    $ => B  :MLOAD(halfPairingBN254_Q_x2), CALL(squareFp2BN254)
     ; E + C·u = (Q.x1 + Q.x2·u)²
 
     E => A
     C => B
     $ => C  :MLOAD(halfPairingBN254_Q_x1)
-    $ => D  :MLOAD(halfPairingBN254_Q_x2)
-            :CALL(mulFp2BN254)
+    $ => D  :MLOAD(halfPairingBN254_Q_x2), CALL(mulFp2BN254)
     ; E + C·u = (Q.x1 + Q.x2·u)³
 
     E => A
@@ -88,8 +99,7 @@ halfPairingBN254_P_is_zero:
     C           :MSTORE(halfPairingBN254_Q_RHS_y)
 
     $ => A  :MLOAD(halfPairingBN254_Q_y1)
-    $ => B  :MLOAD(halfPairingBN254_Q_y2)
-            :CALL(squareFp2BN254)
+    $ => B  :MLOAD(halfPairingBN254_Q_y2), CALL(squareFp2BN254)
     ; E + C·u = (Q.y1 + Q.y2·u)²
 
     ; 1.2] Check if LHS == RHS
@@ -231,15 +241,13 @@ halfPairingBN254_Q_subgroup_check:
     ; Q in E' iff (Q.y1 + Q.y2·u)² == (Q.x1 + Q.x2·u)³ + 3/(9+u)
     ; 1.1] Compute LHS and RHS
     $ => A  :MLOAD(halfPairingBN254_Q_x1)
-    $ => B  :MLOAD(halfPairingBN254_Q_x2)
-            :CALL(squareFp2BN254)
+    $ => B  :MLOAD(halfPairingBN254_Q_x2), CALL(squareFp2BN254)
     ; E + C·u = (Q.x1 + Q.x2·u)²
 
     E => A
     C => B
     $ => C  :MLOAD(halfPairingBN254_Q_x1)
-    $ => D  :MLOAD(halfPairingBN254_Q_x2)
-            :CALL(mulFp2BN254)
+    $ => D  :MLOAD(halfPairingBN254_Q_x2), CALL(mulFp2BN254)
     ; E + C·u = (Q.x1 + Q.x2·u)³
 
     E => A
@@ -252,8 +260,7 @@ halfPairingBN254_Q_subgroup_check:
     C           :MSTORE(halfPairingBN254_Q_RHS_y)
 
     $ => A  :MLOAD(halfPairingBN254_Q_y1)
-    $ => B  :MLOAD(halfPairingBN254_Q_y2)
-            :CALL(squareFp2BN254)
+    $ => B  :MLOAD(halfPairingBN254_Q_y2), CALL(squareFp2BN254)
     ; E + C·u = (Q.y1 + Q.y2·u)²
 
     ; 1.2] Check if LHS == RHS
@@ -376,6 +383,7 @@ INCLUDE "./FPBN254/subFpBN254.zkasm"
 INCLUDE "./FPBN254/mulFpBN254.zkasm"
 INCLUDE "./FPBN254/squareFpBN254.zkasm"
 INCLUDE "./FPBN254/invFpBN254.zkasm"
+INCLUDE "./FPBN254/reduceFpBN254.zkasm"
 
 INCLUDE "./FP2BN254/addFp2BN254.zkasm"
 INCLUDE "./FP2BN254/subFp2BN254.zkasm"
