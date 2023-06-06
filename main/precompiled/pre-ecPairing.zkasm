@@ -1,0 +1,171 @@
+/**
+ * @link [https://www.evm.codes/precompiled#0x08?fork=shanghai]
+ * @zk-counters
+ *  - dynamic steps:
+ *  - dynamic keccaks:
+ *  - dynamic binaris
+ * @process-precompiled
+ *  - stack input: [x1, y1, x2, y2, ..., xk, yk]
+ *  - stack output: [success]
+ */
+VAR GLOBAL inputLength
+VAR GLOBAL inputOffset
+
+funcEcPairing:
+    ; Move balances if value > 0 just before executing the contract CALL
+    $ => B                              :MLOAD(txValue)
+    0 => A
+    zkPC+2 => RR
+    $                                   :LT, JMPC(moveBalances)
+
+    GAS - %ECPAIRING_GAS => GAS         :JMPN(outOfGas) ; gas static = 45000
+
+    $ => A                              :MLOAD(argsOffsetCall)
+    A                                   :MSTORE(inputOffset)
+    $ => B                              :MLOAD(argsLengthCall),JMPZ(continueInput0)
+    B                                   :MSTORE(arithA)
+    192                                 :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => A                              :MLOAD(arithRes2),JMPNZ(endECPAIRINGFail)
+    $ => A                              :MLOAD(arithRes1)
+    A                                   :MSTORE(inputLength)
+    GAS - 34000*A => GAS                :JMPN(outOfGas) ; gas = 34000 * inputsLength
+
+    ; read data stored in SP + %CALLDATA_OFFSET
+    %CALLDATA_OFFSET => SP
+    A - 1                               :JMPZ(funcEcPairing6)
+    A - 2                               :JMPZ(funcEcPairing12)
+    A - 3                               :JMPZ(funcEcPairing18)
+                                        :JMP(endECPAIRINGFail)
+
+funcEcPairing18:
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_P1_x)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_P1_y)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_Q1_x2)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_Q1_x1)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_Q1_y2)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_Q1_y1)
+
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_P2_x)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_P2_y)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_Q2_x2)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_Q2_x1)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_Q2_y2)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_Q2_y1)
+
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_P3_x)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_P3_y)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_Q3_x2)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_Q3_x1)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_Q3_y2)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing18_Q3_y1)
+                                        :CALL(ecPairing18)
+    B                                   :JMPNZ(endECPAIRINGFail)
+    $ => C                              :MLOAD(ecPairing18_result),JMP(continueECPAIRING)
+
+funcEcPairing12:
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing12_P1_x)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing12_P1_y)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing12_Q1_x2)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing12_Q1_x1)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing12_Q1_y2)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing12_Q1_y1)
+
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing12_P2_x)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing12_P2_y)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing12_Q2_x2)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing12_Q2_x1)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing12_Q2_y2)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing12_Q2_y1)
+                                        :CALL(ecPairing12)
+    B                                   :JMPNZ(endECPAIRINGFail)
+    $ => C                              :MLOAD(ecPairing12_result),JMP(continueECPAIRING)
+
+
+funcEcPairing6:
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing6_P_x)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing6_P_y)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing6_Q_x2)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing6_Q_x1)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing6_Q_y2)
+    $ => A                              :MLOAD(SP++)
+    A                                   :MSTORE(ecPairing6_Q_y1)
+                                        :CALL(ecPairing6)
+    B                                   :JMPNZ(endECPAIRINGFail)
+    $ => C                              :MLOAD(ecPairing6_result),JMP(continueECPAIRING)
+
+continueInput0:
+    1 => C
+
+continueECPAIRING:
+    ; write ecAdd data into memory
+    0 => E
+    C                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+
+    ; prepare return data
+    0                                   :MSTORE(retDataOffset)
+    32                                  :MSTORE(retDataLength)
+    $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
+    ; set retDataCTX
+    $ => B                              :MLOAD(currentCTX)
+    A => CTX
+    B                                   :MSTORE(retDataCTX)
+    B => CTX
+
+    ; write result ecpairing into previous context memory
+    $ => C                              :MLOAD(retCallLength), JMPZ(preEndECPAIRING)
+    $ => E                              :MLOAD(retCallOffset)
+
+    ; ecpairing result is in bytesToStore
+    C - 32                              :JMPN(continue2ECPAIRING)
+    32 => C
+
+continue2ECPAIRING:
+    $ => CTX                            :MLOAD(originCTX), CALL(MSTOREX)  ; in: [bytesToStore, E: offset, C: length] out: [E: new offset]
+                                        :JMP(endECPAIRING)
+
+endECPAIRINGFail:
+    $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
+    A => CTX
+    0                                   :MSTORE(retDataCTX)
+    CTX                                 :MSTORE(currentCTX), JMP(preEndFail)
+
+preEndECPAIRING:
+    $ => CTX                            :MLOAD(originCTX)
+
+endECPAIRING:
+    CTX                                 :MSTORE(currentCTX), JMP(preEnd)
