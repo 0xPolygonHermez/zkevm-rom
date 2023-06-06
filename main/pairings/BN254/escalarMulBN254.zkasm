@@ -66,11 +66,10 @@ escalarMulBN254:
         ; B       :ASSERT
 
         ; Check if k ∈ [1,r-1]
-        $ => B      :MLOAD(escalarMulBN254_k)
-        0n => A
+        $ => B      :MLOAD(escalarMulBN254_k), CALL(reduceFrBN254)
+        A           :MSTORE(escalarMulBN254_k)
+        0n => B
         $           :EQ,JMPC(escalarMulBN254_k_is_zero)
-        %BN254_R_MINUS_ONE => A
-        $           :LT,JMPC(escalarMulBN254_k_reduce)
 
 
         ; ${log2(mem.escalarMulBN254_k)} => RCX
@@ -118,26 +117,6 @@ escalarMulBN254_k_is_zero:
         0n      :MSTORE(escalarMulBN254_Q_y2)
 
                 :JMP(escalarMulBN254_end)
-
-escalarMulBN254_k_reduce:
-        ; We reduce k mod R and continue as normal
-                :CALL(reduceFrBN254)
-
-        ; We check that is not 0
-        C => B  :MSTORE(escalarMulBN254_k)
-        0n => A
-        $           :EQ,JMPC(escalarMulBN254_k_is_zero)
-
-        257 => RCX
-
-        $ => A  :MLOAD(escalarMulBN254_P_x1)
-        $ => B  :MLOAD(escalarMulBN254_P_x2)
-        $ => C  :MLOAD(escalarMulBN254_P_y1)
-        $ => D  :MLOAD(escalarMulBN254_P_y2)
-        A       :MSTORE(escalarMulBN254_Q_x1)
-        B       :MSTORE(escalarMulBN254_Q_x2)
-        C       :MSTORE(escalarMulBN254_Q_y1)
-        D       :MSTORE(escalarMulBN254_Q_y2)
 
 ; Assumes k is well-formed
 escalarMulBN254_find_MSB_k:
