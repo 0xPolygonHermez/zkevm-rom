@@ -49,6 +49,20 @@ INCLUDE "constants.zkasm"
 pairingBN254:
     RR          :MSTORE(pairingBN254_RR)
 
+    ; Reduce inputs mod p
+    $ => B      :MLOAD(pairingBN254_P_x), CALL(reduceFpBN254)
+    A           :MSTORE(pairingBN254_P_x)
+    $ => B      :MLOAD(pairingBN254_P_y), CALL(reduceFpBN254)
+    A           :MSTORE(pairingBN254_P_y)
+    $ => B      :MLOAD(pairingBN254_Q_x1), CALL(reduceFpBN254)
+    A           :MSTORE(pairingBN254_Q_x1)
+    $ => B      :MLOAD(pairingBN254_Q_x2), CALL(reduceFpBN254)
+    A           :MSTORE(pairingBN254_Q_x2)
+    $ => B      :MLOAD(pairingBN254_Q_y1), CALL(reduceFpBN254)
+    A           :MSTORE(pairingBN254_Q_y1)
+    $ => B      :MLOAD(pairingBN254_Q_y2), CALL(reduceFpBN254)
+    A           :MSTORE(pairingBN254_Q_y2)
+
     ; Check if P = (0,0)
     ${FpBN254neq0(mem.pairingBN254_P_x) || FpBN254neq0(mem.pairingBN254_P_y)}   :JMPZ(pairingBN254_P_is_zero)
 
@@ -70,29 +84,25 @@ pairingBN254_P_is_zero:
     ; Q in E' iff (Q.y1 + Q.y2·u)² == (Q.x1 + Q.x2·u)³ + 3/(9+u)
     ; 1.1] Compute LHS and RHS
     $ => A  :MLOAD(pairingBN254_Q_x1)
-    $ => B  :MLOAD(pairingBN254_Q_x2)
-            :CALL(squareFp2BN254)
+    $ => B  :MLOAD(pairingBN254_Q_x2), CALL(squareFp2BN254)
     ; E + C·u = (Q.x1 + Q.x2·u)²
 
     E => A
     C => B
     $ => C  :MLOAD(pairingBN254_Q_x1)
-    $ => D  :MLOAD(pairingBN254_Q_x2)
-            :CALL(mulFp2BN254)
+    $ => D  :MLOAD(pairingBN254_Q_x2), CALL(mulFp2BN254)
     ; E + C·u = (Q.x1 + Q.x2·u)³
 
     E => A
     C => B
     %BN254_ETWISTED_B_X => C
-    %BN254_ETWISTED_B_Y => D
-            :CALL(addFp2BN254)
+    %BN254_ETWISTED_B_Y => D    :CALL(addFp2BN254)
     ; E + C·u = (Q.x1 + Q.x2·u)³ + 3/(9+u)
     E           :MSTORE(pairingBN254_Q_RHS_x)
     C           :MSTORE(pairingBN254_Q_RHS_y)
 
     $ => A  :MLOAD(pairingBN254_Q_y1)
-    $ => B  :MLOAD(pairingBN254_Q_y2)
-            :CALL(squareFp2BN254)
+    $ => B  :MLOAD(pairingBN254_Q_y2), CALL(squareFp2BN254)
     ; E + C·u = (Q.y1 + Q.y2·u)²
 
     ; 1.2] Check if LHS == RHS
@@ -234,15 +244,13 @@ pairingBN254_Q_subgroup_check:
     ; Q in E' iff (Q.y1 + Q.y2·u)² == (Q.x1 + Q.x2·u)³ + 3/(9+u)
     ; 1.1] Compute LHS and RHS
     $ => A  :MLOAD(pairingBN254_Q_x1)
-    $ => B  :MLOAD(pairingBN254_Q_x2)
-            :CALL(squareFp2BN254)
+    $ => B  :MLOAD(pairingBN254_Q_x2), CALL(squareFp2BN254)
     ; E + C·u = (Q.x1 + Q.x2·u)²
 
     E => A
     C => B
     $ => C  :MLOAD(pairingBN254_Q_x1)
-    $ => D  :MLOAD(pairingBN254_Q_x2)
-            :CALL(mulFp2BN254)
+    $ => D  :MLOAD(pairingBN254_Q_x2), CALL(mulFp2BN254)
     ; E + C·u = (Q.x1 + Q.x2·u)³
 
     E => A
@@ -255,8 +263,7 @@ pairingBN254_Q_subgroup_check:
     C           :MSTORE(pairingBN254_Q_RHS_y)
 
     $ => A  :MLOAD(pairingBN254_Q_y1)
-    $ => B  :MLOAD(pairingBN254_Q_y2)
-            :CALL(squareFp2BN254)
+    $ => B  :MLOAD(pairingBN254_Q_y2), CALL(squareFp2BN254)
     ; E + C·u = (Q.y1 + Q.y2·u)²
 
     ; 1.2] Check if LHS == RHS
@@ -431,6 +438,7 @@ INCLUDE "./FPBN254/subFpBN254.zkasm"
 INCLUDE "./FPBN254/mulFpBN254.zkasm"
 INCLUDE "./FPBN254/squareFpBN254.zkasm"
 INCLUDE "./FPBN254/invFpBN254.zkasm"
+INCLUDE "./FPBN254/reduceFpBN254.zkasm"
 
 INCLUDE "./FP2BN254/addFp2BN254.zkasm"
 INCLUDE "./FP2BN254/subFp2BN254.zkasm"
