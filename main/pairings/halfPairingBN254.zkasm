@@ -40,25 +40,31 @@ INCLUDE "constants.zkasm"
 
 ; ERROR CODES (B)
 ; 0 - no error
-; 1 - P is not in G1
-; 2 - Q is not in G2
+; 1 - P_x is too big
+; 2 - P_y is too big
+; 3 - Q_x1 is too big
+; 4 - Q_x2 is too big
+; 5 - Q_y1 is too big
+; 6 - Q_y2 is too big
+; 7 - P is not in G1
+; 8 - Q is not in G2
 
 halfPairingBN254:
     RR          :MSTORE(halfPairingBN254_RR)
 
-    ; Reduce inputs mod p
-    $ => B      :MLOAD(halfPairingBN254_P_x), CALL(reduceFpBN254)
-    A           :MSTORE(halfPairingBN254_P_x)
-    $ => B      :MLOAD(halfPairingBN254_P_y), CALL(reduceFpBN254)
-    A           :MSTORE(halfPairingBN254_P_y)
-    $ => B      :MLOAD(halfPairingBN254_Q_x1), CALL(reduceFpBN254)
-    A           :MSTORE(halfPairingBN254_Q_x1)
-    $ => B      :MLOAD(halfPairingBN254_Q_x2), CALL(reduceFpBN254)
-    A           :MSTORE(halfPairingBN254_Q_x2)
-    $ => B      :MLOAD(halfPairingBN254_Q_y1), CALL(reduceFpBN254)
-    A           :MSTORE(halfPairingBN254_Q_y1)
-    $ => B      :MLOAD(halfPairingBN254_Q_y2), CALL(reduceFpBN254)
-    A           :MSTORE(halfPairingBN254_Q_y2)
+    %BN254_P_MINUS_ONE => A
+    $ => B      :MLOAD(halfPairingBN254_P_x)
+    $           :LT,JMPC(halfPairingBN254_Px_too_big)
+    $ => B      :MLOAD(halfPairingBN254_P_y)
+    $           :LT,JMPC(halfPairingBN254_Py_too_big)
+    $ => B      :MLOAD(halfPairingBN254_Q_x1)
+    $           :LT,JMPC(halfPairingBN254_Qx1_too_big)
+    $ => B      :MLOAD(halfPairingBN254_Q_x2)
+    $           :LT,JMPC(halfPairingBN254_Qx2_too_big)
+    $ => B      :MLOAD(halfPairingBN254_Q_y1)
+    $           :LT,JMPC(halfPairingBN254_Qy1_too_big)
+    $ => B      :MLOAD(halfPairingBN254_Q_y2)
+    $           :LT,JMPC(halfPairingBN254_Qy2_too_big)
 
     ; Check if P = 0
     ${FpBN254neq0(mem.halfPairingBN254_P_x) || FpBN254neq0(mem.halfPairingBN254_P_y)}   :JMPZ(halfPairingBN254_P_is_zero)
@@ -363,18 +369,36 @@ halfPairingBN254_Miller_loop:
     0 => B     :JMP(halfPairingBN254_end)
 
 ; ERRORS
-halfPairingBN254_P_is_not_in_G1:
+halfPairingBN254_Px_too_big:
     1 => B      :JMP(halfPairingBN254_error)
 
-halfPairingBN254_Q_is_not_in_G2:
+halfPairingBN254_Py_too_big:
     2 => B      :JMP(halfPairingBN254_error)
 
+halfPairingBN254_Qx1_too_big:
+    3 => B      :JMP(halfPairingBN254_error)
+
+halfPairingBN254_Qx2_too_big:
+    4 => B      :JMP(halfPairingBN254_error)
+
+halfPairingBN254_Qy1_too_big:
+    5 => B      :JMP(halfPairingBN254_error)
+
+halfPairingBN254_Qy2_too_big:
+    6 => B      :JMP(halfPairingBN254_error)
+
+halfPairingBN254_P_is_not_in_G1:
+    7 => B      :JMP(halfPairingBN254_error)
+
+halfPairingBN254_Q_is_not_in_G2:
+    8 => B      :JMP(halfPairingBN254_error)
+
 halfPairingBN254_error:
-        0 => A
+    0 => A
 
 halfPairingBN254_end:
-        $ => RR     :MLOAD(halfPairingBN254_RR)
-        :RETURN
+    $ => RR     :MLOAD(halfPairingBN254_RR)
+    :RETURN
 
 INCLUDE "./FRBN254/reduceFrBN254.zkasm"
 
@@ -383,7 +407,6 @@ INCLUDE "./FPBN254/subFpBN254.zkasm"
 INCLUDE "./FPBN254/mulFpBN254.zkasm"
 INCLUDE "./FPBN254/squareFpBN254.zkasm"
 INCLUDE "./FPBN254/invFpBN254.zkasm"
-INCLUDE "./FPBN254/reduceFpBN254.zkasm"
 
 INCLUDE "./FP2BN254/addFp2BN254.zkasm"
 INCLUDE "./FP2BN254/subFp2BN254.zkasm"

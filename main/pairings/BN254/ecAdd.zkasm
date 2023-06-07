@@ -21,20 +21,25 @@ VAR GLOBAL ecAdd_RR
 
 ; ERROR CODES (B)
 ; 0 - no error
-; 1 - P1 is not in E(Fp)
-; 2 - P2 is not in E(Fp)
+; 1 - P1_x is too big
+; 2 - P1_y is too big
+; 3 - P2_x is too big
+; 4 - P2_y is too big
+; 5 - P1 is not in E(Fp)
+; 6 - P2 is not in E(Fp)
 
 ecAdd:
         RR      :MSTORE(ecAdd_RR)
 
-        $ => B      :MLOAD(ecAdd_P1_x), CALL(reduceFpBN254)
-        A           :MSTORE(ecAdd_P1_x)
-        $ => B      :MLOAD(ecAdd_P1_y), CALL(reduceFpBN254)
-        A           :MSTORE(ecAdd_P1_y)
-        $ => B      :MLOAD(ecAdd_P2_x), CALL(reduceFpBN254)
-        A           :MSTORE(ecAdd_P2_x)
-        $ => B      :MLOAD(ecAdd_P2_y), CALL(reduceFpBN254)
-        A           :MSTORE(ecAdd_P2_y)
+        %BN254_P_MINUS_ONE => A
+        $ => B      :MLOAD(ecAdd_P1_x)
+        $           :LT,JMPC(ecAdd_P1x_too_big)
+        $ => B      :MLOAD(ecAdd_P1_y)
+        $           :LT,JMPC(ecAdd_P1y_too_big)
+        $ => B      :MLOAD(ecAdd_P2_x)
+        $           :LT,JMPC(ecAdd_P2x_too_big)
+        $ => B      :MLOAD(ecAdd_P2_y)
+        $           :LT,JMPC(ecAdd_P2y_too_big)
 
         ; Check if P1 = 0
         ${FpBN254neq0(mem.ecAdd_P1_x) || FpBN254neq0(mem.ecAdd_P1_y)}   :JMPZ(ecAdd_P1_is_zero)
@@ -311,11 +316,23 @@ ecAdd_common_calculate:
                 :JMP(ecAdd_correct)
 
 ; ERRORS
+ecAdd_P1x_too_big:
+        1 => B      :JMP(ecAdd_error)
+
+ecAdd_P1y_too_big:
+        2 => B      :JMP(ecAdd_error)
+
+ecAdd_P2x_too_big:
+        3 => B      :JMP(ecAdd_error)
+
+ecAdd_P2y_too_big:
+        4 => B      :JMP(ecAdd_error)
+
 ecAdd_P1_is_not_in_E:
-    1 => B      :JMP(ecAdd_error)
+        5 => B      :JMP(ecAdd_error)
 
 ecAdd_P2_is_not_in_E:
-    2 => B      :JMP(ecAdd_error)
+        6 => B      :JMP(ecAdd_error)
 
 ecAdd_correct:
         0 => B      :JMP(ecAdd_end)
