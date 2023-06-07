@@ -18,15 +18,18 @@ VAR GLOBAL ecMul_RR
 
 ; ERROR CODES (B)
 ; 0 - no error
-; 1 - P is not in E(Fp)
+; 1 - P_x is too big
+; 2 - P_y is too big
+; 3 - P is not in E(Fp)
 
 ecMul:
         RR      :MSTORE(ecMul_RR)
 
-        $ => B      :MLOAD(ecMul_P_x), CALL(reduceFpBN254)
-        A           :MSTORE(ecMul_P_x)
-        $ => B      :MLOAD(ecMul_P_y), CALL(reduceFpBN254)
-        A           :MSTORE(ecMul_P_y)
+        %BN254_P_MINUS_ONE => A
+        $ => B      :MLOAD(ecMul_P_x)
+        $           :LT,JMPC(ecMul_Px_too_big)
+        $ => B      :MLOAD(ecMul_P_y)
+        $           :LT,JMPC(ecMul_Py_too_big)
 
         ; Check if P = 0
         ${FpBN254neq0(mem.ecMul_P_x) || FpBN254neq0(mem.ecMul_P_y)}   :JMPZ(ecMul_P_is_zero)
@@ -137,8 +140,14 @@ ecMul_add:
 
 
 ; ERRORS
+ecMul_Px_too_big:
+        1 => B      :JMP(ecMul_error)
+
+ecMul_Py_too_big:
+        2 => B      :JMP(ecMul_error)
+
 ecMul_P_is_not_in_E:
-    1 => B      :JMP(ecMul_error)
+        3 => B      :JMP(ecMul_error)
 
 ecMul_correct:
         0 => B      :JMP(ecMul_end)
