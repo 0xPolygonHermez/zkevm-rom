@@ -18,10 +18,18 @@ VAR GLOBAL ecMul_RR
 
 ; ERROR CODES (B)
 ; 0 - no error
-; 1 - P is not in E(Fp)
+; 1 - P_x is too big
+; 2 - P_y is too big
+; 3 - P is not in E(Fp)
 
 ecMul:
         RR      :MSTORE(ecMul_RR)
+
+        %BN254_P_MINUS_ONE => A
+        $ => B      :MLOAD(ecMul_P_x)
+        $           :LT,JMPC(ecMul_Px_too_big)
+        $ => B      :MLOAD(ecMul_P_y)
+        $           :LT,JMPC(ecMul_Py_too_big)
 
         ; Check if P = 0
         ${FpBN254neq0(mem.ecMul_P_x) || FpBN254neq0(mem.ecMul_P_y)}   :JMPZ(ecMul_P_is_zero)
@@ -29,17 +37,17 @@ ecMul:
         ; 1] Check if P is in E(Fp)
         ; P in E iff (P.y)² == (P.x)³ + 3 (mod p)
         ; 1.1] Compute LHS and RHS
-        $ => A    :MLOAD(ecMul_P_x),CALL(squareFpBN254)
+        $ => A    :MLOAD(ecMul_P_x), CALL(squareFpBN254)
         ; B = (P.x)²
 
-        $ => A      :MLOAD(ecMul_P_x),CALL(mulFpBN254)
+        $ => A      :MLOAD(ecMul_P_x), CALL(mulFpBN254)
         ; C = (P.x)³
 
         3n => A     :CALL(addFpBN254)
         ; C = (P.x)³ + 3
         C           :MSTORE(ecMul_Q_x)
 
-        $ => A    :MLOAD(ecMul_P_y),CALL(squareFpBN254)
+        $ => A    :MLOAD(ecMul_P_y), CALL(squareFpBN254)
         ; B = (Py)²
 
         ; 1.2] Check if LHS == RHS
@@ -48,11 +56,10 @@ ecMul:
         $           :EQ,JMPNC(ecMul_P_is_not_in_E)
 
         ; Check if k ∈ [1,r-1]
-        $ => B      :MLOAD(ecMul_k)
-        0n => A
+        $ => B      :MLOAD(ecMul_k), CALL(reduceFrBN254)
+        A           :MSTORE(ecMul_k)
+        0n => B
         $           :EQ,JMPC(ecMul_k_is_zero)
-        %BN254_R_MINUS_ONE => A
-        $           :LT,JMPC(ecMul_k_reduce)
 
         ; ${log2(mem.ecMul_k)} => RCX
         257 => RCX
@@ -78,31 +85,10 @@ ecMul_P_is_zero:
                 :JMP(ecMul_correct)
 
 ecMul_k_is_zero:
-        ; Check that k is zero
-        0n => B
-        $ => A  :MLOAD(ecMul_k)
-        1       :EQ
-
         0n      :MSTORE(ecMul_Q_x)
         0n      :MSTORE(ecMul_Q_y)
 
                 :JMP(ecMul_correct)
-
-ecMul_k_reduce:
-        ; We reduce k mod R and continue as normal
-                :CALL(reduceFrBN254)
-
-        ; We check that is not 0
-        C => B  :MSTORE(ecMul_k)
-        0n => A
-        $           :EQ,JMPC(ecMul_k_is_zero)
-
-        257 => RCX
-
-        $ => A  :MLOAD(ecMul_P_x)
-        $ => C  :MLOAD(ecMul_P_y)
-        A       :MSTORE(ecMul_Q_x)
-        C       :MSTORE(ecMul_Q_y)
 
 ; Assumes k is well-formed
 ecMul_find_MSB_k:
@@ -154,8 +140,14 @@ ecMul_add:
 
 
 ; ERRORS
+ecMul_Px_too_big:
+        1 => B      :JMP(ecMul_error)
+
+ecMul_Py_too_big:
+        2 => B      :JMP(ecMul_error)
+
 ecMul_P_is_not_in_E:
-    1 => B      :JMP(ecMul_error)
+        3 => B      :JMP(ecMul_error)
 
 ecMul_correct:
         0 => B      :JMP(ecMul_end)
