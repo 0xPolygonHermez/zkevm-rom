@@ -198,8 +198,7 @@ ecAdd_P1_and_P2_are_zero:
 
 ecAdd_P1_and_P2_are_inverted:
         ; check P2.y == -P1.y iff P2.y + P1.y == 0
-        $ => C          :MLOAD(ecAdd_P2_y)
-                        :CALL(addFpBN254)
+        $ => C          :MLOAD(ecAdd_P2_y), CALL(addFpBN254)
         C => A
         0n => B
         1               :EQ
@@ -212,103 +211,84 @@ ecAdd_P1_and_P2_are_inverted:
 
 ecAdd_same:
         $ => A  :MLOAD(ecAdd_P1_y)
-        $ => C  :MLOAD(ecAdd_P1_y)
-                :CALL(addFpBN254)
+        $ => C  :MLOAD(ecAdd_P1_y), CALL(addFpBN254)
         ; C = 2y
 
-        C => A
-                :CALL(invFpBN254)
+        C => A  :CALL(invFpBN254)
         ; B = 1 / 2y
         B       :MSTORE(ecAdd_P1_y_inv)
 
-        B => A,C 
-                :CALL(addFpBN254)
+        B => A,C :CALL(addFpBN254)
         C => A
-        $ => C  :MLOAD(ecAdd_P1_y_inv)
-                :CALL(addFpBN254)
+        $ => C  :MLOAD(ecAdd_P1_y_inv), CALL(addFpBN254)
         ; C = 3/2y
 
         C => A
-        $ => B  :MLOAD(ecAdd_P1_x)
-                :CALL(mulFpBN254)
+        $ => B  :MLOAD(ecAdd_P1_x), CALL(mulFpBN254)
         ; C = 3x/2y
 
         C => A
-        $ => B  :MLOAD(ecAdd_P1_x)
-                :CALL(mulFpBN254)
+        $ => B  :MLOAD(ecAdd_P1_x), CALL(mulFpBN254)
         ; C = lambda = 3x²/2y
 
         C       :MSTORE(ecAdd_lambda)
         ; C = lambda
 
-        C => A
-                :CALL(squareFpBN254)
+        C => A  :CALL(squareFpBN254)
         ; B = lambda²
 
         B => A  
-        $ => C  :MLOAD(ecAdd_P1_x)
-                :CALL(subFpBN254)
+        $ => C  :MLOAD(ecAdd_P1_x), CALL(subFpBN254)
         ; C = lambda² - x
 
         C => A  
-        $ => C  :MLOAD(ecAdd_P1_x)
-                :CALL(subFpBN254)
+        $ => C  :MLOAD(ecAdd_P1_x), CALL(subFpBN254)
         ; C = lambda² - x - x
 
                 :JMP(ecAdd_common_calculate)
 
 ecAdd_different:
         $ => A  :MLOAD(ecAdd_P2_x)
-        $ => C  :MLOAD(ecAdd_P1_x)
-                :CALL(subFpBN254)
+        $ => C  :MLOAD(ecAdd_P1_x), CALL(subFpBN254)
         ; C = P2.x - P1.x
 
-        C => A
-                :CALL(invFpBN254)
+        C => A  :CALL(invFpBN254)
         ; B = 1 / (P2.x - P1.x)
         B       :MSTORE(ecAdd_lambda)
 
         $ => A  :MLOAD(ecAdd_P2_y)
-        $ => C  :MLOAD(ecAdd_P1_y)
-                :CALL(subFpBN254)
+        $ => C  :MLOAD(ecAdd_P1_y), CALL(subFpBN254)
         ; C = P2.y - P1.y
 
         C => A
-        $ => B  :MLOAD(ecAdd_lambda)
-                :CALL(mulFpBN254)
+        $ => B  :MLOAD(ecAdd_lambda), CALL(mulFpBN254)
         ; C = lambda = (P2.y - P1.y) / (P2.x - P1.x)
         C       :MSTORE(ecAdd_lambda)
 
-        C => A
-                :CALL(squareFpBN254)
+        C => A  :CALL(squareFpBN254)
         ; B = lambda² 
 
         B => A
-        $ => C  :MLOAD(ecAdd_P1_x)
-                :CALL(subFpBN254)
+        $ => C  :MLOAD(ecAdd_P1_x), CALL(subFpBN254)
         ; C = lambda² - P1.x
 
         C => A
-        $ => C  :MLOAD(ecAdd_P2_x)
-                :CALL(subFpBN254)
+        $ => C  :MLOAD(ecAdd_P2_x), CALL(subFpBN254)
         ; C = lambda² - P1.x - P2.x
 
 ecAdd_common_calculate:
         C           :MSTORE(ecAdd_P3_x)  
         ; P3.x = lambda² - P1.x - P2.x   
  
-        $ => A  :MLOAD(ecAdd_P1_x)
-                :CALL(subFpBN254)
+        $ => A  :MLOAD(ecAdd_P1_x), CALL(subFpBN254)
         ; C = P1.x - P3.x
 
         $ => A  :MLOAD(ecAdd_lambda)
-        C => B
-                :CALL(mulFpBN254)
+        C => B  :CALL(mulFpBN254)
         ; C = lambda·(P1.x - P3.x) 
 
         C => A 
-        $ => C  :MLOAD(ecAdd_P1_y)
-                :CALL(subFpBN254)
+        $ => C  :MLOAD(ecAdd_P1_y), CALL(subFpBN254)
         ; C = lambda·(P1.x - P3.x) - P1.y
 
         C           :MSTORE(ecAdd_P3_y)
