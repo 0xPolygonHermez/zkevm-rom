@@ -44,6 +44,12 @@ async function runTest(pathTest, cmPols) {
         stepsN: 8388608,
         assertOutputs: false,
     };
+    if (argv.helpers) {
+        // eslint-disable-next-line import/no-dynamic-require, global-require
+        const MyHelperClass = require(argv.helpers);
+        const helpers = new MyHelperClass();
+        config.helpers = helpers;
+    }
 
     // execute zkasm tests
     try {
