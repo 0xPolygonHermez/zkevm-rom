@@ -930,7 +930,7 @@ handleBatchError:
     $ => SR         :MLOAD(batchSR)
     ; if batch error is triggered while parsing the RLP, it jumps to 'invalidTxRLP'
     ; to fill the missing bytes to complete 'batchDataHash'
-    $               :MLOAD(isLoadingRLP),JMPNZ(invalidTxRLP)
+    $               :MLOAD(isLoadingDecode),JMPNZ(invalidTxDecode)
     $${eventLog(onFinishTx)}
     $${eventLog(onFinishBatch)} :JMP(processTxsEnd)
 
@@ -1314,41 +1314,6 @@ maskAddress:
     0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn => B
     $ => A          :AND
     $ => B          :MLOAD(tmpVarBmask), RETURN
-
-;@info: updates the address system storage with current batch and state root
-updateSystemData:
-    ; check keccak counters
-    $ => A                                          :MLOAD(cntKeccakPreProcess)
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1        :JMPN(outOfCountersKeccak)
-    ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 50 :JMPN(outOfCountersStep)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*2 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_BINARY - CNT_BINARY - 1                :JMPN(outOfCountersBinary)
-
-    ; Get last tx count
-    $ => A                              :MLOAD(txCount)
-    ;Update last tx Count at system storage
-    1 => B
-    $ => D                              :ADD, MSTORE(txCount)
-
-    %LAST_TX_STORAGE_POS => C
-    %ADDRESS_SYSTEM => A
-    %SMT_KEY_SC_STORAGE => B
-    $ => SR                             :SSTORE
-
-    ;Update state root mapping
-    D => A
-    32 => D
-    0 => HASHPOS ; A new hash with position 0 is started
-    $ => E                              :MLOAD(lastHashKIdUsed)
-    E + 1 => E                          :MSTORE(lastHashKIdUsed)
-    A                                   :HASHK(E)
-    %STATE_ROOT_STORAGE_POS             :HASHK(E)
-    HASHPOS                             :HASHKLEN(E)
-    $ => C                              :HASHKDIGEST(E)
-    %ADDRESS_SYSTEM => A
-    SR => D
-    $ => SR                             :SSTORE, RETURN
 
 VAR GLOBAL tmpVarAmulmod
 VAR GLOBAL tmpVarBmulmod

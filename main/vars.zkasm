@@ -1,16 +1,18 @@
 ; Input variables
 VAR GLOBAL oldStateRoot ; Previous state-tree root
-VAR GLOBAL oldAccInputHash ; Previous accumulated input hash
-VAR GLOBAL globalExitRoot ; Global exit-tree root
+VAR GLOBAL oldAccBatchHashData ; Previous accumulated batch data hash
+VAR GLOBAL historicGERRoot ; root of historic global exit roots tree
 VAR GLOBAL oldNumBatch ; Previous batch processed
 VAR GLOBAL sequencerAddr ; Coinbase address which will receive the fees
 VAR GLOBAL batchHashData ; batchHashData = H_keccak( transactions )
-VAR GLOBAL timestamp ; Current batch timestamp
+VAR GLOBAL timestampLimit ; timestampLimit of the batch
+VAR GLOBAL timestamp ; timestamp of the batch (oldTimestamp + deltaTimestamp)
+
 VAR GLOBAL chainID ; Current batch chain id
 VAR GLOBAL forkID ; Fork identifier
 
 ; Output variables
-VAR GLOBAL newAccInputHash ; Final accumulated input hash. newAccInputHash = H_keccak( oldAccInputHash | batchHashData | globalExitRoot | timestamp | sequencerAddr )
+VAR GLOBAL newAccBatchHashData ; Final accumulated input hash. newAccBatchHashData = H_keccak( oldAccBatchHashData | batchHashData | historicGERRoot | timestamp | sequencerAddr )
 VAR GLOBAL newLocalExitRoot ; Updated local exit tree root
 VAR GLOBAL newNumBatch ; Current batch processed
 
@@ -21,12 +23,14 @@ VAR GLOBAL ctxTxToUse ; First context to be used when processing transactions
 VAR GLOBAL lastHashKIdUsed ; Last hash address used
 VAR GLOBAL nextHashPId ; Next poseidon hash address available
 
-VAR GLOBAL batchL2DataLength ; Transactions bytes read from the input
+VAR GLOBAL batchDataLength ; Transactions bytes read from the input
 VAR GLOBAL batchHashDataId ; hash address used when adding bytes to batchHashData
 VAR GLOBAL batchHashPos ; hash batchHashData position
 VAR GLOBAL currentCTX ; keeps track of the context used
 VAR GLOBAL originAuxCTX ; keeps track of the previous context when a new one is created
 VAR GLOBAL gasCalldata ; gas spent by the calldata
+VAR GLOBAL zkGASLimit ; Max gas to spend in the zkVM
+VAR GLOBAL numBlob ; parent blob number of the batch
 
 VAR GLOBAL gasCall ; total gas forwarded when creating a new context
 VAR GLOBAL addrCall ; address parameter when creating a new context
@@ -48,15 +52,16 @@ VAR GLOBAL SPw ; aux variable to store Stack pointer 'SP'
 VAR GLOBAL auxSR ; auxiliary variable. Temporary state root
 VAR GLOBAL txRLPLength ; transaction RLP list length
 VAR GLOBAL txDataRead ; aux variable to check transaction 'data' left that needs to be read
-VAR GLOBAL isLoadingRLP ; flag to determine if the function is called from RLP loop
+VAR GLOBAL isLoadingDecode ; flag to determine if the function is called from RLP loop
 
 VAR CTX txGasLimit ; transaction parameter: 'gas limit'
 VAR CTX txDestAddr ; transaction parameter: 'to'
 VAR CTX storageAddr ; address which the storage will be modified
 VAR CTX txValue ; transaction parameter: 'value'
 VAR CTX txNonce ; transaction parameter: nonce
-VAR CTX txGasPriceRLP ; transaction parameter: 'gasPrice' decoded from the RLP
-VAR CTX effectivePercentageRLP ; transaction parameter: 'effectivePercentage' decoded from the RLP
+VAR CTX txGasPriceDecoded ; transaction parameter: 'gasPrice' decoded from the batch data
+VAR CTX isDeployment ; tx parameter: flag to determine if the tx is a deployment
+VAR CTX effectivePercentage ; transaction parameter: 'effectivePercentage'
 VAR CTX txChainId ; transaction parameter: 'chainId'
 VAR CTX txS ; transaction parameter: ecdsa signature S
 VAR CTX txR ; transaction parameter: ecdsa signature R
@@ -93,3 +98,8 @@ VAR CTX gasCTX ; remaining gas in the origin CTX when a new context is created
 VAR CTX dataStarts; hash position where de transaction 'data' starts in the batchHashData
 VAR CTX isPreEIP155 ; flag to check if the current tx is legacy, previous to Spurious Dragon (EIP-155)
 VAR CTX initTouchedSR ; touched root once a new context begins
+
+VAR CTX deltaTimestamp ; delta timestamp of the current change L2 block tx
+VAR CTX newGER ; new GER of the current change L2 block tx
+VAR CTX indexHistGERTree ; indexHistGERTree of the current change L2 block tx
+VAR CTX txType ; type of current tx

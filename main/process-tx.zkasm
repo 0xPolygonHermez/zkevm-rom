@@ -34,36 +34,13 @@ processTx:
         %MAX_CNT_BINARY - CNT_BINARY - 100   :JMPN(outOfCountersBinary)
         %MAX_CNT_ARITH - CNT_ARITH - 2  :JMPN(outOfCountersArith)
 
-        $ => A                          :MLOAD(txHash)
-        ; Check the signature
-        $ => B                          :MLOAD(txR)
-        $ => C                          :MLOAD(txS)
-        $ => D                          :MLOAD(txV), CALL(ecrecover_tx)
-        ; Check result is non-zero
-checkAndSaveFrom:
-        0 => B
-        A                               :MSTORE(txSrcAddr)
-        A                               :MSTORE(txSrcOriginAddr)
-        $                               :EQ,JMPC(invalidIntrinsicTxSignature)
-
 ;;;;;;;;;;;;;;;;;;
 ;; B - Verify tx.sender does not have any code deployed (EIP3607)
 ;;;;;;;;;;;;;;;;;;
-
+        $ => A                          :MLOAD(txSrcOriginAddr)
         %SMT_KEY_SC_LENGTH => B
         0 => C
         $ => B                          :SLOAD, JMPNZ(invalidIntrinsicTxSenderCode)
-
-;;;;;;;;;;;;;;;;;;
-;; C - Verify chainID
-;;;;;;;;;;;;;;;;;;
-
-        ; Don't check chainId for legacy transactions
-        $ => A                          :MLOAD(isPreEIP155), JMPNZ(endCheckChainId)
-        $ => A                          :MLOAD(txChainId)
-        $ => B                          :MLOAD(chainID)                                       ; A: chainId tx
-        $                               :EQ,JMPC(endCheckChainId, invalidIntrinsicTxChainId)  ; If A == B --> endCheckChainId
-endCheckChainId:
 
 ;; Reset warm/cold information
         $ => A                          :MLOAD(txSrcOriginAddr), CALL(initTouchedTree)
@@ -72,9 +49,9 @@ endCheckChainId:
 
 ;; Set gasPrice global var depending on effectivePercentage [0-255] -> txGasPrice = Floor((gasPrice * (effectivePercentage + 1)) / 256)
         ; gasPrice => A
-        $ => A                          :MLOAD(txGasPriceRLP)
+        $ => A                          :MLOAD(txGasPriceDecoded)
         ; effectivePercentage => B
-        $ => B                          :MLOAD(effectivePercentageRLP)
+        $ => B                          :MLOAD(effectivePercentage)
         ; B -> [1, 256]
         B + 1 => B
         ; A*B + C = D * 2**256 + op(E)
@@ -552,7 +529,7 @@ sendGasSeq:
         $ => D          :MLOAD(arithRes1)
         $ => A          :MLOAD(sequencerAddr)
         0 => B,C ; balance key smt
-        $ => SR         :SSTORE, JMP(processTxEnd)
+        $ => SR         :SSTORE, JMP(processTxFinished)
 
 ;; handle invalid transaction due to intrinsic checks
 invalidIntrinsicTxSignature:
@@ -578,7 +555,8 @@ invalidIntrinsicBatchGasLimit:
 
 invalidIntrinsicTxSenderCode:
         $${eventLog(onError, intrinsic_invalid_sender_code)} :JMP(handleIntrinsicError)
-
+invalidChangeL2Block:
+        $${eventLog(onError, intrinsic_change_l2_block)} :JMP(handleIntrinsicError)
 handleIntrinsicError:
         $ => SR                         :MLOAD(originSR), JMP(processTxFinished)
 

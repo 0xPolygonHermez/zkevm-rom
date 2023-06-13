@@ -1,0 +1,81 @@
+INCLUDE "decode-utils.zkasm"
+INCLUDE "decode-legacy.zkasm"
+INCLUDE "decode-change-l2-block.zkasm"
+decodeBatchData:
+        ; check one keccak is available to begin processing the RLP
+        $ => D                                          :MLOAD(cntKeccakPreProcess)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1 - D        :JMPN(outOfCountersKeccak)
+
+        ; A new hash with position 0 is started
+        0 => HASHPOS, C
+
+        ; Decode historicGERRoot / 32 bytes
+        32 => D                         :CALL(addBatchHashData)
+        A                               :MSTORE(historicGERRoot)
+        ; Decode timestampLimit / 8 bytes
+        8  => D                         :CALL(addBatchHashData)
+        A                               :MSTORE(timestampLimit)
+        ; Decode sequencerAddress / 20 bytes
+        20 => D                         :CALL(addBatchHashData)
+        A                               :MSTORE(sequencerAddr)
+        ; Decode zkGASLimit / 8 bytes
+        8 => D                          :CALL(addBatchHashData)
+        A                               :MSTORE(zkGASLimit)
+        ; Decode numBlob / 8 bytes
+        8 => D                          :CALL(addBatchHashData)
+        A                               :MSTORE(numBlob)
+
+decodeTxByTypeLoop:
+        $ => A          :MLOAD(lastCtxUsed)
+        A+1 => CTX      :MSTORE(lastCtxUsed)
+        ; Decode tx type / 1 bytes
+        1 => D                          :CALL(addBatchHashData)
+        A                               :MSTORE(txType)
+        A - %TX_TYPE_LEGACY             :JMPZ(decodeLegacyTx)
+        A - %TX_TYPE_CHANGE_L2_BLOCK    :JMPZ(decodeChangeL2BlockTx)
+
+finishDecodeTx:
+        ;; increase number of transaction to process
+        $ => A                          :MLOAD(pendingTxs)
+        A + 1                           :MSTORE(pendingTxs)
+        ;; update bytes parsed
+        $ => A                          :MLOAD(batchL2DataParsed)
+        A + C => A                      :MSTORE(batchL2DataParsed)
+        $ => B                          :MLOAD(batchDataLength)
+
+        A - B                           :JMPN(decodeTxByTypeLoop, finishDecode)
+
+                                        :JMP(invalidTxDecode)
+finishDecode:
+        ; set flag isLoadingDecode to 0
+        0               :MSTORE(isLoadingDecode)
+                        :JMP(txLoop)
+;;;;;;;;;
+;; Handler error decoding txs
+;;;;;;;;;
+invalidTxDecode:
+;; Append all missing 'batchL2Data' to 'batchDataHash' bytes
+        $ => B                          :MLOAD(batchDataLength)
+        $ => C                          :MLOAD(batchHashPos)
+        $${p = C}
+        $ => HASHPOS                    :MLOAD(batchHashPos)
+        $ => E                          :MLOAD(batchHashDataId)
+
+appendTxs:
+        B - C - 32                      :JMPN(finalAppendTxs)
+        32 => D
+        ${getTxs(p,D)} => A
+        $${p = p + D}
+        A                               :HASHK(E)
+        C + D => C                      :JMP(appendTxs)
+
+finalAppendTxs:
+        B - C => D
+        D - 1                           :JMPN(endAppendTxs)
+        ${getTxs(p,D)} => A
+        $${p = p + D}
+        A                               :HASHK(E)
+        C + D => C
+
+endAppendTxs:
+        HASHPOS                         :MSTORE(batchHashPos),JMP(processTxsEnd)
