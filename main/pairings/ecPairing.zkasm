@@ -34,21 +34,15 @@ VAR GLOBAL ecPairing_RR
 ; 0 - no error
 ; 1 - error found in some input
 
-; TODO: Minor optimization in the case of 6 inputs, because the equation is satisfied only if either P = O or Q = O
+; TODO: Minor optimization in the case of 6 inputs: e(P,Q)=1 is satisfied if and only if either P = O or Q = O
 
 ecPairing:
         RR              :MSTORE(ecPairing_RR)
+        $ => SP         :MLOAD(ecPairing_SP)
 
         $ => A          :MLOAD(ecPairing_ninputs), JMPZ(ecPairing_0_inputs)
-        ; B               :MSTORE(arithA)
-        ; 192             :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-        ; $ => A          :MLOAD(arithRes2),JMPNZ(ecPairing_ninputs_error)
-        ; $ => A          :MLOAD(arithRes1)
-        A => RCX
 
         ; A - 1           :JMPZ(ecPairing_6_inputs)
-
-        $ => SP         :MLOAD(ecPairing_SP)
 
         ; Initialize the multiplication with 1
         1n              :MSTORE(ecPairing_mul_f11_x)
@@ -71,6 +65,7 @@ ecPairing_0_inputs:
                         :JMP(ecPairing_correct)
 
 ; ecPairing_6_inputs:
+;         ; if neither P nor Q are O, then the pairing should fail
 ;         $ => A          :MLOAD(SP++)
 ;         A               :MSTORE(halfPairingBN254_P_x)
 ;         $ => A          :MLOAD(SP++)
@@ -82,41 +77,12 @@ ecPairing_0_inputs:
 ;         $ => A          :MLOAD(SP++)
 ;         A               :MSTORE(halfPairingBN254_Q_y2)
 ;         $ => A          :MLOAD(SP++)
-;         A               :MSTORE(halfPairingBN254_Q_y1), CALL(halfPairingBN254)
+;         A               :MSTORE(halfPairingBN254_Q_y1)
 
-;         ; Check if the error code (B) of halfPairingBN254 is not 0, meaning there is an error in some of the inputs
-;         B               :JMPNZ(ecPairing_input_error)
+;         ${FpBN254neq0(mem.halfPairingBN254_P_x) || FpBN254neq0(mem.halfPairingBN254_P_y) || FpBN254neq0(mem.halfPairingBN254_Q_x1) || FpBN254neq0(mem.halfPairingBN254_Q_x2 || FpBN254neq0(mem.halfPairingBN254_Q_y1) || FpBN254neq0(mem.halfPairingBN254_Q_y2)}   :JMPZ(ecPairing_equation_is_satisfied)
 
-;         $ => A          :MLOAD(halfPairingBN254_f11_x)
-;         $ => B          :MLOAD(halfPairingBN254_f11_y)
-;         $ => C          :MLOAD(halfPairingBN254_f12_x)
-;         $ => D          :MLOAD(halfPairingBN254_f12_y)
-;         A               :MSTORE(finalExpBN254_f11_x)
-;         B               :MSTORE(finalExpBN254_f11_y)
-;         C               :MSTORE(finalExpBN254_f12_x)
-;         D               :MSTORE(finalExpBN254_f12_y)
-;         $ => A          :MLOAD(halfPairingBN254_f13_x)
-;         $ => B          :MLOAD(halfPairingBN254_f13_y)
-;         $ => C          :MLOAD(halfPairingBN254_f21_x)
-;         $ => D          :MLOAD(halfPairingBN254_f21_y)
-;         A               :MSTORE(finalExpBN254_f13_x)
-;         B               :MSTORE(finalExpBN254_f13_y)
-;         C               :MSTORE(finalExpBN254_f21_x)
-;         D               :MSTORE(finalExpBN254_f21_y)
-;         $ => A          :MLOAD(halfPairingBN254_f22_x)
-;         $ => B          :MLOAD(halfPairingBN254_f22_y)
-;         $ => C          :MLOAD(halfPairingBN254_f23_x)
-;         $ => D          :MLOAD(halfPairingBN254_f23_y)
-;         A               :MSTORE(finalExpBN254_f22_x)
-;         B               :MSTORE(finalExpBN254_f22_y)
-;         C               :MSTORE(finalExpBN254_f23_x)
-;         D               :MSTORE(finalExpBN254_f23_y), CALL(finalExpBN254)
-
-;         ; Check whether the result is 1 or not
-;         ${FpBN254neq1(mem.finalExpBN254_f11_x) || FpBN254neq0(mem.finalExpBN254_f11_y) || FpBN254neq0(mem.finalExpBN254_f12_x) || FpBN254neq0(mem.finalExpBN254_f12_y || FpBN254neq0(mem.finalExpBN254_f13_x) || FpBN254neq0(mem.finalExpBN254_f13_y) || FpBN254neq0(mem.finalExpBN254_f21_x) || FpBN254neq0(mem.finalExpBN254_f21_y) || mem.finalExpBN254_f22_x) || FpBN254neq0(mem.finalExpBN254_f22_y) || FpBN254neq0(mem.finalExpBN254_f23_x) || FpBN254neq0(mem.finalExpBN254_f23_y)}   :JMPZ(ecPairing_equation_is_satisfied)
-
-;         0               :MSTORE(ecPairing_result)
-;         0 => B          :JMP(ecPairing_end)
+;         1               :MSTORE(ecPairing_result)
+;                         :JMP(ecPairing_correct)
 
 ecPairing_Miller_loop:
         $ => A          :MLOAD(SP++)
@@ -210,7 +176,9 @@ ecPairing_Miller_loop:
         C               :MSTORE(ecPairing_mul_f23_x)
         D               :MSTORE(ecPairing_mul_f23_y)
 
-        RCX - 1 => RCX  :JMPZ(ecPairing_final_exponentiation)
+        $ => A          :MLOAD(ecPairing_ninputs)
+        A - 1 => A      :JMPZ(ecPairing_final_exponentiation)
+        A               :MSTORE(ecPairing_ninputs)
                         :JMP(ecPairing_Miller_loop)
 
 ecPairing_final_exponentiation:
@@ -242,7 +210,6 @@ ecPairing_final_exponentiation:
         ; Check whether the result is 1 or not
         ${FpBN254neq1(mem.finalExpBN254_f11_x) || FpBN254neq0(mem.finalExpBN254_f11_y) || FpBN254neq0(mem.finalExpBN254_f12_x) || FpBN254neq0(mem.finalExpBN254_f12_y || FpBN254neq0(mem.finalExpBN254_f13_x) || FpBN254neq0(mem.finalExpBN254_f13_y) || FpBN254neq0(mem.finalExpBN254_f21_x) || FpBN254neq0(mem.finalExpBN254_f21_y) || mem.finalExpBN254_f22_x) || FpBN254neq0(mem.finalExpBN254_f22_y) || FpBN254neq0(mem.finalExpBN254_f23_x) || FpBN254neq0(mem.finalExpBN254_f23_y)}   :JMPZ(ecPairing_equation_is_satisfied)
 
-
         0               :MSTORE(ecPairing_result)
                         :JMP(ecPairing_correct)
 
@@ -265,9 +232,6 @@ ecPairing_equation_is_satisfied:
                         :JMP(ecPairing_correct)
 
 ; ERRORS
-; ecPairing_ninputs_error:
-;         1 => B          :JMP(ecPairing_error)
-
 ecPairing_input_error:
         1 => B          :JMP(ecPairing_error)
 
