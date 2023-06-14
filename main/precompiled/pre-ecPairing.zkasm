@@ -1,19 +1,15 @@
 /**
  * @link [https://www.evm.codes/precompiled#0x08?fork=shanghai]
  * @zk-counters
- *  - dynamic steps: 600000
- *  - dynamic airth: 50000
- *  - dynamic binary: 1000
+ *  - dynamic steps: 50000, 550000, 700000,...
+ *  - dynamic airth: 4000, 43000, 56000,...
+ *  - dynamic binary: 400, 700, 1100,...
  * @process-precompiled
  *  - stack input: [x1, y1, x2, y2, ..., xk, yk]
  *  - stack output: [success]
  */
 
 funcEcPairing:
-
-    ; %MAX_CNT_BINARY - CNT_BINARY - 1000     :JMPN(outOfCountersBinary)
-    ; %MAX_CNT_ARITH - CNT_ARITH - 50000      :JMPN(outOfCountersArith)
-    ; %MAX_CNT_STEPS - STEP - 600000          :JMPN(outOfCountersStep)
 
     ; Move balances if value > 0 just before executing the contract CALL
     $ => B                              :MLOAD(txValue)
@@ -23,20 +19,37 @@ funcEcPairing:
 
     GAS - %ECPAIRING_GAS => GAS         :JMPN(outOfGas) ; gas static = 45000
 
-    $ => B                              :MLOAD(argsLengthCall)
+    1 => C
+    $ => B                              :MLOAD(argsLengthCall),JMPZ(continueInput0)
     B                                   :MSTORE(arithA)
     192                                 :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => A                              :MLOAD(arithRes2),JMPNZ(endECPAIRINGFail)
     $ => A                              :MLOAD(arithRes1)
     A                                   :MSTORE(ecPairing_ninputs)
-    GAS - 34000*A => GAS                :JMPN(outOfGas) ; gas = 34000 * inputsLength
-    $ => A                              :MLOAD(argsOffsetCall)
 
+    GAS - 34000*A => GAS                :JMPN(outOfGas) ; gas = 34000 * inputsLength
+    A - 1                               :JMPZ(counters6)
+    A - 2 => A
+
+    %MAX_CNT_BINARY - CNT_BINARY - 700 - 400*A      :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 45000 - 14000*A    :JMPN(outOfCountersArith)
+    %MAX_CNT_STEPS - STEP - 550000 - 200000*A       :JMPN(outOfCountersStep)
+                                                    :JMP(afterCounts)
+
+counters6:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 400     :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 4000      :JMPN(outOfCountersArith)
+    %MAX_CNT_STEPS - STEP - 50000          :JMPN(outOfCountersStep)
+
+afterCounts:
     ; read data stored in SP + %CALLDATA_OFFSET
-    %CALLDATA_OFFSET + A                :MSTORE(ecPairing_SP),CALL(ecPairing)
+    %CALLDATA_OFFSET                    :MSTORE(ecPairing_SP),CALL(ecPairing)
 
     B                                   :JMPNZ(endECPAIRINGFail)
     $ => C                              :MLOAD(ecPairing_result)
+
+continueInput0:
 
     ; write ecAdd data into memory
     0 => E
