@@ -930,7 +930,7 @@ handleBatchError:
     $ => SR         :MLOAD(batchSR)
     ; if batch error is triggered while parsing the RLP, it jumps to 'invalidTxRLP'
     ; to fill the missing bytes to complete 'batchDataHash'
-    $               :MLOAD(isLoadingDecode),JMPNZ(invalidTxDecode)
+    $               :MLOAD(isDecoding),JMPNZ(invalidTxDecode)
     $${eventLog(onFinishTx)}
     $${eventLog(onFinishBatch)} :JMP(processTxsEnd)
 
@@ -1524,3 +1524,44 @@ expADend:
 failAssert:
     1 => A
     2               :ASSERT
+
+VAR GLOBAL tmpZkPCVerifyMerkleProof
+;@info verifies GER with sibilings
+verifyMerkleProof:
+    RR                            :MSTORE(tmpZkPCVerifyMerkleProof)
+    $ => C                        :MLOAD(newGER)
+    $ => B                        :MLOAD(indexHistGERTree)
+    B                             :MSTORE(arithA)
+    0 => D
+
+verifyMerkleProofLoop:
+    %GER_TREE_LEVELS - D          :JMPZ(verifyMerkleProofEnd)
+    $ => B                        :MLOAD(indexHistGERTree)
+    ${getSmtProof(B, D)} => A
+    D => RR
+                                  :CALL(@exp_num + RR); out:[B: 2**RR]
+    B                             :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => E                        :MLOAD(lastHashKIdAvailable)
+    E + 1                         :MSTORE(lastHashKIdAvailable)
+    D => B
+    32 => D
+    0 => HASHPOS
+    $                             :MLOAD(arithRes2), JMPZ(reverseHashValue)
+    $ => C                        :MLOAD(newGER)
+    A                             :HASHK(E)
+    C                             :HASHK(E), JMP(reverseHashValueEnd)
+reverseHashValue:
+    C                             :HASHK(E)
+    A                             :HASHK(E)
+reverseHashValueEnd:
+    HASHPOS                       :HASHKLEN(E)
+    $ => C                        :HASHKDIGEST(E)
+    B => D
+    D + 1 => D                    :JMP(verifyMerkleProofLoop)
+
+verifyMerkleProofEnd:
+    $ => A                        :MLOAD(historicGER)
+    C => B
+    $                             :EQ, JMPNC(invalidChangeL2Block)
+    $ => RR                       :MLOAD(tmpZkPCVerifyMerkleProof)
+                                  :RETURN

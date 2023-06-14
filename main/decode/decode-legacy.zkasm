@@ -25,14 +25,15 @@ isNotDeployment:
     ; Data length / 3 bytes
     3 => D                          :CALL(addBatchHashData)
     ; Data / A bytes
-    A => D, B                          :MSTORE(txCalldataLen)
+    A => D, B                       :MSTORE(txCalldataLen)
     %CALLDATA_OFFSET => SP
     32 => D
-
+    ; Read data in chunks of 32 bytes
 readData:
     B - D                           :JMPN(readDataFinal), MSTORE(txDataRead)
     A                               :MSTORE(SP++), CALL(addBatchHashByteByByte)
     $ => B                          :MLOAD(txDataRead), JMP(readData)
+    ; Read remaining data bytes
 readDataFinal:
     B - 1                           :JMPN(endData)
     32 - D => D                     :CALL(SHLarith)

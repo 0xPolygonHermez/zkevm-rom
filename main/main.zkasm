@@ -4,7 +4,7 @@ INCLUDE "vars.zkasm"
 ; Blocks zkROM
 ;       A - Load initial registers into memory: oldStateRoot (B), oldAccBatchHashData (C), oldNumBatch (SP) & chainID (GAS)
 ;       B - Set batch global variables
-;       C - Loop parsing RLP transactions
+;       C - Loop decoding transactions
 ;       D - Loop processing transactions
 ;       E - Batch computations: get newLocalExitRoot, assert transactions size, compute batchHashData & compute newAccBatchHashData
 ;       F - Finalize execution
@@ -24,7 +24,7 @@ start: ; main zkROM entry point
         SP                                  :MSTORE(oldNumBatch)
         GAS                                 :MSTORE(chainID) ; assumed to be less than 32 bits
 
-        ${getHistoricGERRoot()}             :MSTORE(historicGERRoot)
+        ${getHistoricGERRoot()}             :MSTORE(historicGER)
         ${getSequencerAddr()}               :MSTORE(sequencerAddr)
         ${getTimestampLimit()}              :MSTORE(timestampLimit)
         ${getTxsLen()}                      :MSTORE(batchDataLength) ; less than 300.000 bytes. Enforced by the smart contract
@@ -34,7 +34,6 @@ start: ; main zkROM entry point
 
 ;;;;;;;;;;;;;;;;;;
 ;; B - Set batch global variables
-;;     - set historicGERRoot in Bridge contract
 ;;     - load transaction count from system smart contract
 ;;     - compute keccaks needed to finish the batch
 ;;;;;;;;;;;;;;;;;;
@@ -43,8 +42,7 @@ start: ; main zkROM entry point
         %LAST_TX_STORAGE_POS => C
         %ADDRESS_SYSTEM => A
         %SMT_KEY_SC_STORAGE => B
-        $ => D          :SLOAD
-        D               :MSTORE(txCount)
+        $ => D          :SLOAD, MSTORE(txCount)
 
         ; Compute necessary keccak counters to finish batch
         $ => A          :MLOAD(batchDataLength)
@@ -58,8 +56,8 @@ start: ; main zkROM entry point
         %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B    :JMPN(outOfCountersKeccak)
 
 ;;;;;;;;;;;;;;;;;;
-;; C - Loop parsing RLP transactions
-;;      - Load transaction RLP data and ensure it has correct RLP encoding
+;; C - Loop decoding transactions
+;;      - Decode batchData and transactions by type
 ;;      - If an error is found in any transaction, the batch will not process any transaction
 ;;;;;;;;;;;;;;;;;;
 
@@ -69,8 +67,8 @@ start: ; main zkROM entry point
         A                                   :MSTORE(ctxTxToUse) ; Points at first context to be used when processing transactions
 
         $${var p = 0}
-        ; set flag isLoadingDecode to 1 and start decoding
-        1               :MSTORE(isLoadingDecode), JMP(decodeBatchData)
+        ; set flag isDecoding to 1 and start decoding
+        1               :MSTORE(isDecoding), JMP(decodeBatchData)
 
 ;;;;;;;;;;;;;;;;;;
 ;; D - Loop processing transactions
@@ -119,35 +117,15 @@ processTxsEnd:
         $ => E                          :MLOAD(batchHashDataId)
 
         HASHPOS                         :HASHPLEN(E)
-        $ => A                          :HASHPDIGEST(E)
+        $ => B                          :HASHPDIGEST(E)
 
-        A                               :MSTORE(batchHashData)
+        B                               :MSTORE(batchHashData)
 
 ;; Compute 'newAccBatchHashData'
-        0 => HASHPOS
-
-        32 => D
+; poseidon(input, capacity). Capacity = 0, Input = [oldAccBatchHashData(A), batchHashData(B)]
         $ => A                          :MLOAD(oldAccBatchHashData)
-        A                               :HASHK(0)
-
-        $ => A                          :MLOAD(batchHashData)
-        A                               :HASHK(0)
-
-        $ => A                          :MLOAD(historicGERRoot)
-        A                               :HASHK(0)
-
-        8 => D
-        $ => A                          :MLOAD(timestampLimit)
-        A                               :HASHK(0)
-
-        20 => D
-        $ => A                          :MLOAD(sequencerAddr)
-        A                               :HASHK(0)
-
-        HASHPOS                         :HASHKLEN(0)
-
-        $ => C                          :HASHKDIGEST(0)
-        C                               :MSTORE(newAccBatchHashData)
+        0 => C
+        $                               :POSEIDON, MSTORE(newAccBatchHashData)
         $${eventLog(onFinishBatch)}
 
 ;;;;;;;;;;;;;;;;;;

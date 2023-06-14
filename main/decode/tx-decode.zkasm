@@ -9,9 +9,9 @@ decodeBatchData:
         ; A new hash with position 0 is started
         0 => HASHPOS, C
 
-        ; Decode historicGERRoot / 32 bytes
+        ; Decode historicGER / 32 bytes
         32 => D                         :CALL(addBatchHashData)
-        A                               :MSTORE(historicGERRoot)
+        A                               :MSTORE(historicGER)
         ; Decode timestampLimit / 8 bytes
         8  => D                         :CALL(addBatchHashData)
         A                               :MSTORE(timestampLimit)
@@ -26,6 +26,7 @@ decodeBatchData:
         A                               :MSTORE(numBlob)
 
 decodeTxByTypeLoop:
+        ; Assign a different context for each transaction
         $ => A          :MLOAD(lastCtxUsed)
         A+1 => CTX      :MSTORE(lastCtxUsed)
         ; Decode tx type / 1 bytes
@@ -35,26 +36,23 @@ decodeTxByTypeLoop:
         A - %TX_TYPE_CHANGE_L2_BLOCK    :JMPZ(decodeChangeL2BlockTx)
 
 finishDecodeTx:
-        ;; increase number of transaction to process
+        ; Increase number of transaction to process
         $ => A                          :MLOAD(pendingTxs)
         A + 1                           :MSTORE(pendingTxs)
-        ;; update bytes parsed
-        $ => A                          :MLOAD(batchL2DataParsed)
-        A + C => A                      :MSTORE(batchL2DataParsed)
+        ; Check bytes parsed
         $ => B                          :MLOAD(batchDataLength)
-
+        C => A
         A - B                           :JMPN(decodeTxByTypeLoop, finishDecode)
 
-                                        :JMP(invalidTxDecode)
 finishDecode:
-        ; set flag isLoadingDecode to 0
-        0               :MSTORE(isLoadingDecode)
+        ; Set flag isDecoding to 0
+        0               :MSTORE(isDecoding)
                         :JMP(txLoop)
 ;;;;;;;;;
 ;; Handler error decoding txs
 ;;;;;;;;;
 invalidTxDecode:
-;; Append all missing 'batchL2Data' to 'batchDataHash' bytes
+; Append all missing 'batchData' to 'batchDataHash' bytes
         $ => B                          :MLOAD(batchDataLength)
         $ => C                          :MLOAD(batchHashPos)
         $${p = C}

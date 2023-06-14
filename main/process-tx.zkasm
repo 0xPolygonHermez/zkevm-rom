@@ -5,23 +5,17 @@ INCLUDE "touched.zkasm"
 INCLUDE "2-exp.zkasm"
 
 ; Blocks process txs
-;       A - Verify ecdsa signature
-;       B - Verify tx.sender does not have any code deployed (EIP3607)
-;       C - Verify chainID
-;       D - Verify and increase nonce
-;       E - Verify upfront cost
-;       F - Check transaction type
-;         F.1 - call contract
-;         F.2 - deploy contract
-;       G - Handle Gas
+;       A - Verify tx.sender does not have any code deployed (EIP3607)
+;       B - Verify and increase nonce
+;       C - Verify upfront cost
+;       D - Check transaction type
+;         D.1 - call contract
+;         D.2 - deploy contract
+;       E - Handle Gas
 
 processTx:
-;;;;;;;;;;;;;;;;;;
-;; A - Verify ecdsa signature
-;;;;;;;;;;;;;;;;;;
 
         $${eventLog(onProcessTx)}
-
 ;;;;;;;;;
 ;; Store init state
 ;;;;;;;;;
@@ -29,13 +23,13 @@ processTx:
         ; Store initial state at the beginning of the transaction
         SR                              :MSTORE(originSR)
         SR                              :MSTORE(initSR)
-        ; Minimum of 100000 steps left to process a tx
+        ; Minimum of 100000 steps and 100 binaries left to process a tx
         %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCountersStep)
         %MAX_CNT_BINARY - CNT_BINARY - 100   :JMPN(outOfCountersBinary)
         %MAX_CNT_ARITH - CNT_ARITH - 2  :JMPN(outOfCountersArith)
 
 ;;;;;;;;;;;;;;;;;;
-;; B - Verify tx.sender does not have any code deployed (EIP3607)
+;; A - Verify tx.sender does not have any code deployed (EIP3607)
 ;;;;;;;;;;;;;;;;;;
         $ => A                          :MLOAD(txSrcOriginAddr)
         %SMT_KEY_SC_LENGTH => B
@@ -75,7 +69,7 @@ processTx:
         1                                       :LT
 
 ;;;;;;;;;;;;;;;;;;
-;; D - Verify and increase nonce
+;; B - Verify and increase nonce
 ;;;;;;;;;;;;;;;;;;
 
         $ => A, E                       :MLOAD(txSrcOriginAddr) ; Address of the origin to A and E
@@ -83,17 +77,16 @@ processTx:
         0 => C
         $ => A                          :SLOAD
         $ => B                          :MLOAD(txNonce)
-        $ => C                          :EQ, JMPNC(invalidIntrinsicTxNonce) ; Compare nonce state tree with nonce transaction
+        $                               :EQ, JMPNC(invalidIntrinsicTxNonce) ; Compare nonce state tree with nonce transaction
         ; increase nonce by 1
         1 => B
         $ => D                          :ADD ; compute [nonce + 1 => D]
         E => A
         %SMT_KEY_NONCE => B
-        0 => C
         $ => SR                         :SSTORE ; Store the nonce plus one
 
 ;;;;;;;;;;;;;;;;;;
-;; E - Verify upfront cost
+;; C - Verify upfront cost
 ;;;;;;;;;;;;;;;;;;
 
         ; Verify batch gas limit
@@ -119,7 +112,7 @@ addGas:
         0 => C                          :JMP(loopBytes)
 
 loopBytes:
-        %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 10      :JMPN(outOfCountersStep)
         A - C - 1                       :JMPN(endCalldataIntrinsicGas)
         E => B
         $ => E                          :MLOAD(batchHashDataId)
@@ -208,8 +201,8 @@ getContractAddress:
         ; A new hash with position 0 is started
         0 => HASHPOS
         ; We get a new hashId
-        $ => E                          :MLOAD(lastHashKIdUsed)
-        E+1 => E                        :MSTORE(lastHashKIdUsed)
+        $ => E                          :MLOAD(lastHashKIdAvailable)
+        E+1                             :MSTORE(lastHashKIdAvailable)
         ; Check if create is with CREATE2 opcode
         $ => A                          :MLOAD(isCreate2), JMPNZ(create2)
         ; Check keccak counters
@@ -270,7 +263,8 @@ loopCreate2:
         B => E                          :CALL(MLOAD32)
         E => B
         32 => D
-        $ => E                          :MLOAD(lastHashKIdUsed)
+        $ => E                          :MLOAD(lastHashKIdAvailable)
+        E - 1 => E
         A                               :HASHK(E)
         C - 32 => C                     :JMP(loopCreate2)
 
@@ -278,7 +272,8 @@ endloopCreate2:
         B => E                          :CALL(MLOADX)
         32 - C => D                     :CALL(SHRarith)
         C => D
-        $ => E                          :MLOAD(lastHashKIdUsed)
+        $ => E                          :MLOAD(lastHashKIdAvailable)
+        E - 1 => E
         A                               :HASHK(E)
 
 create2end:
@@ -288,8 +283,8 @@ create2end:
 
         ; new hash with position 0 is started
         0 => HASHPOS
-        $ => E                          :MLOAD(lastHashKIdUsed)
-        E+1 => E                        :MSTORE(lastHashKIdUsed)
+        $ => E                          :MLOAD(lastHashKIdAvailable)
+        E+1                             :MSTORE(lastHashKIdAvailable)
         0xff                            :HASHK1(E)
         20 => D
         $ => A                          :MLOAD(txSrcAddr)
