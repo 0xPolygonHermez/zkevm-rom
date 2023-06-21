@@ -1,0 +1,138 @@
+/**
+ * @link [https://www.evm.codes/precompiled#0x05?fork=shanghai]
+ * @zk-counters
+ *  - dynamic steps:
+ *  - dynamic arith:
+ *  - dynamic binary:
+ * @process-precompiled
+ *  - stack input: [x1, y1, x2, y2]
+ *  - stack output: [x, y]
+ */
+INCLUDE "../modexp/modexp.zkasm"
+INCLUDE "../modexp/modexp_A2C.zkasm"
+INCLUDE "../modexp/modexp_mulmod.zkasm"
+
+funcModexp:
+
+    ;%MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
+    ;%MAX_CNT_ARITH - CNT_ARITH - 50     :JMPN(outOfCountersArith)
+    ;%MAX_CNT_STEPS - STEP - 500         :JMPN(outOfCountersStep)
+
+    ; Move balances if value > 0 just before executing the contract CALL
+    $ => B                              :MLOAD(txValue)
+    0 => A
+    zkPC+2 => RR
+    $                                   :LT, JMPC(moveBalances)
+
+    ; read data stored in SP + %CALLDATA_OFFSET
+    ; x1 [32 bytes], y1 [32 bytes], x2 [32 bytes], y2 [32 bytes]
+    $ => A                              :MLOAD(argsOffsetCall)
+    %CALLDATA_OFFSET + A => SP
+
+    $ => A                              :MLOAD(SP++) ; Bsize
+    A                                   :MSTORE(modexp_Bsize)
+    $ => A                              :MLOAD(SP++) ; Esize
+    A                                   :MSTORE(modexp_Esize)
+    $ => A                              :MLOAD(SP++) ; Msize
+    A                                   :MSTORE(modexp_Msize)
+    ; TODO: MLOAD FROM SP > 32 bytes
+    $ => A                              :MLOAD(SP++) ; B
+    A                                   :MSTORE(modexp_B)
+
+    $ => A                              :MLOAD(SP++) ; E
+    A                                   :MSTORE(modexp_E)
+    $ => A                              :MLOAD(SP++) ; M
+    A                                   :MSTORE(modexp_M)
+
+    $ => A                              :MLOAD(modexp_Bsize)
+    $ => B                              :MLOAD(modexp_Msize)
+    $                                   :LT, JMPC(calculateGas)
+    A => B
+
+; E = iteration_count
+calculateGas:
+    0 => E
+    ; B = max(Bsize, Msize)
+    B + 7                               :MSTORE(arithA)
+    8                                   :MSTORE(arithB),CALL(divARITH)
+    $ => C                              :MLOAD(arithRes1)
+    C                                   :MSTORE(arithA)
+    C                                   :MSTORE(arithB),CALL(mulARITH)
+
+
+continueGas:
+    $ => A                              :MLOAD(modexp_Esize)
+    33 => B
+    $ => B                              :LT,JMPC(modexp_expLT32)
+    A - 32                              :MSTORE(arithA)
+    8                                   :MSTORE(arithB),CALL(mulARITH)
+    $ => B                              :MLOAD(modexp_E),CALL(getLenBits)
+    $ => B                              :MLOAD(arithRes1)
+    B + A - 1 => E                      :JMP(finalGas)
+
+modexp_expLT32:
+    $ => B                              :MLOAD(modexp_E),JMPZ(finalGas)
+                                        :CALL(getLenBits)
+    A - 1 => E
+
+finalGas:
+    1 => A
+    E => B
+    $                                   :LT,JMPC(dinamicGas)
+    1 => E
+
+dinamicGas:
+    $ => A                              :MLOAD(arithRes1)
+    A                                   :MSTORE(arithA)
+    E                                   :MSTORE(arithB),CALL(mulARITH)
+    $ => A                              :MLOAD(arithRes1)
+    A                                   :MSTORE(arithA)
+    3                                   :MSTORE(arithB),CALL(divARITH)
+    $ => A                              :MLOAD(arithRes1)
+    200 => B
+    $                                   :LT,JMPC(callMODEXP)
+    A => B
+
+callMODEXP:
+    GAS - B => GAS
+                                        :CALL(modexp)
+
+finalMODEXP:
+    ; write ecrecover data into memory
+    0 => E
+    $ => C                              :MLOAD(modexp_Msize)
+    A                                   :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset] out: [E: new offset]
+
+    ; prepare return data
+    0                                   :MSTORE(retDataOffset)
+    C                                   :MSTORE(retDataLength)
+    $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
+    ; set retDataCTX
+    $ => B                              :MLOAD(currentCTX)
+    A => CTX
+    B                                   :MSTORE(retDataCTX)
+    B => CTX
+
+    ; write result ecrecover into previous context memory
+    $ => C                              :MLOAD(retCallLength), JMPZ(preEndMODEXP)
+    $ => E                              :MLOAD(retCallOffset)
+
+    ; ecrecover result is in bytesToStore
+    C - 32                              :JMPN(continueMODEXP)
+    32 => C
+
+continueMODEXP:
+    $ => CTX                            :MLOAD(originCTX), CALL(MSTOREX) ; in: [bytesToStore, E: offset] out: [E: new offset]
+                                        :JMP(endMODEXP)
+
+endMODEXPFail:
+    $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
+    A => CTX
+    0                                   :MSTORE(retDataCTX)
+    CTX                                 :MSTORE(currentCTX), JMP(preEndFail)
+
+preEndMODEXP:
+    $ => CTX                            :MLOAD(originCTX)
+
+endMODEXP:
+    CTX                                 :MSTORE(currentCTX), JMP(preEnd)

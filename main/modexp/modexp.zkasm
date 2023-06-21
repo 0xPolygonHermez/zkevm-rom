@@ -1,0 +1,98 @@
+VAR GLOBAL modexp_Bsize
+VAR GLOBAL modexp_Esize
+VAR GLOBAL modexp_Msize
+VAR GLOBAL modexp_B
+VAR GLOBAL modexp_E
+VAR GLOBAL modexp_M
+
+VAR GLOBAL modexp_result
+VAR GLOBAL modexp_base
+VAR GLOBAL modexp_newexp
+
+VAR GLOBAL modexp_RR
+
+/**
+function modExp(B, E, M){
+    if (M == 1) {
+        return 0
+    }
+
+    const arrayBitsE = convertToBits(E);
+    let result = 1;
+    let base = B % M;
+    for (let i = 0; i < arrayBitsE.length; i++){
+        const bit = arrayBitsE[i];
+        if (bit == 1) {
+            result = (result * base) % M --> mulFpBN254
+        }
+        base = (base * base) % M --> squareFpBN254
+    }
+    return result;
+}
+
+function modExp(B, E, M){
+    if (M == 1) {
+        return 0
+    }
+
+    const arrayBitsE = convertToBits(E);
+    let result = 1;
+    B = B % M;
+    for (let i = 0; i < arrayBitsE.length; i++){
+        const bit = arrayBitsE[i];
+        if (bit == 1) {
+            A = A * B % C
+        }
+        B = B * B % C
+    }
+    return A;
+}
+ */
+
+modexp:
+    RR                  :MSTORE(modexp_RR)
+
+    $ => C              :MLOAD(modexp_M)
+    C                   :JMPZ(modexp_0)
+    C - 1               :JMPZ(modexp_0)
+
+    $ => A              :MLOAD(modexp_E)
+    A                   :JMPZ(modexp_1)
+    A                   :MSTORE(modexp_newexp)
+
+    $ => B              :MLOAD(modexp_B)
+
+    B                   :MSTORE(arithA)
+    C                   :MSTORE(arithB),CALL(divARITH)
+    $ => B              :MLOAD(arithRes2)
+    B                   :MSTORE(modexp_base)
+
+    1                   :MSTORE(modexp_result)
+
+modexp_loop:
+    $ => A              :MLOAD(modexp_newexp)
+    A                   :MSTORE(arithA),JMPZ(modexp_end)
+    2                   :MSTORE(arithB),CALL(divARITH)
+    $ => A              :MLOAD(arithRes1)
+    A                   :MSTORE(modexp_newexp)
+    $                   :MLOAD(arithRes2),JMPZ(modexp_loop0)
+    $ => A              :MLOAD(modexp_result)
+    $ => B              :MLOAD(modexp_base)
+    $ => C              :MLOAD(modexp_M),CALL(modexp_mulmod)
+    C                   :MSTORE(modexp_result)
+
+modexp_loop0:
+    $ => A              :MLOAD(modexp_base)
+    $ => C              :MLOAD(modexp_M),CALL(modexp_A2C)
+    B                   :MSTORE(modexp_base),JMP(modexp_loop)
+
+modexp_1:
+    1                   :MSTORE(modexp_result),JMP(modexp_end)
+
+modexp_0:
+    0                   :MSTORE(modexp_result)
+
+modexp_end:
+    $ => A              :MLOAD(modexp_result)
+    $ => RR             :MLOAD(modexp_RR)
+                        :RETURN

@@ -1,0 +1,26 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; squareFpBN254:
+;;             in: A ∈ Fp
+;;             out: B = A² (mod modexp_M) ∈ Fp
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+modexp_A2C:
+        ; 1] Compute and check the inverse over Z
+        ; A·A + [0] = [D]·2²⁵⁶ + [E]
+        A => B
+        0 => C
+        $${var _squareFpBN254_AA = A * A}
+        ${_squareFpBN254_AA >> 256} => D
+        ${_squareFpBN254_AA} => E       :ARITH
+
+        ; 2] Check it over Fp, that is, it must be satisfied that:
+        ; [BN254_P]·[A²] + [C] = D·2²⁵⁶ + E
+        $ => A                          :MLOAD(modexp_M)
+        $ => C                          :MLOAD(modexp_M)
+        ${_squareFpBN254_AA / C} => B        ; residue  (256 bits)
+        ${_squareFpBN254_AA % C} => C        ; residue  (256 bits)
+
+        E                               :ARITH
+        C => B                          :RETURN
