@@ -12,6 +12,8 @@ INCLUDE "../modexp/modexp.zkasm"
 INCLUDE "../modexp/modexp_A2C.zkasm"
 INCLUDE "../modexp/modexp_mulmod.zkasm"
 
+VAR GLOBAL multiplication_complexity
+
 funcModexp:
 
     ;%MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
@@ -26,27 +28,37 @@ funcModexp:
 
     ; read data stored in SP + %CALLDATA_OFFSET
     ; x1 [32 bytes], y1 [32 bytes], x2 [32 bytes], y2 [32 bytes]
-    $ => A                              :MLOAD(argsOffsetCall)
-    %CALLDATA_OFFSET + A => SP
+    $ => CTX        :MLOAD(originCTX)
+    $ => E          :MLOAD(argsOffsetCall)
+    E               :MSTORE(modexp_Binit)
+                    :CALL(MLOAD32)
+    A               :MSTORE(modexp_Bsize)          ;Bsize = base size
+                    :CALL(MLOAD32)
+    A               :MSTORE(modexp_Esize)          ;Esize = exp size
+                    :CALL(MLOAD32)
+    A               :MSTORE(modexp_Msize)          ;Msize = mod size
 
-    $ => A                              :MLOAD(SP++) ; Bsize
-    A                                   :MSTORE(modexp_Bsize)
-    $ => A                              :MLOAD(SP++) ; Esize
-    A                                   :MSTORE(modexp_Esize)
-    $ => A                              :MLOAD(SP++) ; Msize
-    A                                   :MSTORE(modexp_Msize)
-    ; TODO: MLOAD FROM SP > 32 bytes
-    $ => A                              :MLOAD(SP++) ; B
-    A                                   :MSTORE(modexp_B)
+    $ => C          :MLOAD(modexp_Bsize)
+                    :CALL(MLOADX)
+    32 - C => D
+                    :CALL(SHRarith)
+    A               :MSTORE(modexp_B)
+    $ => C          :MLOAD(modexp_Esize)
+                    :CALL(MLOADX)
+    32 - C => D
+                    :CALL(SHRarith)
+    A               :MSTORE(modexp_E)
+    $ => C          :MLOAD(modexp_Msize)
+                    :CALL(MLOADX)
+    32 - C => D
+                    :CALL(SHRarith)
+    A               :MSTORE(modexp_M)
 
-    $ => A                              :MLOAD(SP++) ; E
-    A                                   :MSTORE(modexp_E)
-    $ => A                              :MLOAD(SP++) ; M
-    A                                   :MSTORE(modexp_M)
+    $ => CTX        :MLOAD(currentCTX)
 
-    $ => A                              :MLOAD(modexp_Bsize)
-    $ => B                              :MLOAD(modexp_Msize)
-    $                                   :LT, JMPC(calculateGas)
+    $ => A          :MLOAD(modexp_Bsize)
+    $ => B          :MLOAD(modexp_Msize)
+    $               :LT, JMPC(calculateGas)
     A => B
 
 ; E = iteration_count
@@ -58,7 +70,8 @@ calculateGas:
     $ => C                              :MLOAD(arithRes1)
     C                                   :MSTORE(arithA)
     C                                   :MSTORE(arithB),CALL(mulARITH)
-
+    $ => A                              :MLOAD(arithRes1)
+    A                                   :MSTORE(multiplication_complexity)
 
 continueGas:
     $ => A                              :MLOAD(modexp_Esize)
@@ -82,7 +95,7 @@ finalGas:
     1 => E
 
 dinamicGas:
-    $ => A                              :MLOAD(arithRes1)
+    $ => A                              :MLOAD(multiplication_complexity)
     A                                   :MSTORE(arithA)
     E                                   :MSTORE(arithB),CALL(mulARITH)
     $ => A                              :MLOAD(arithRes1)
@@ -114,7 +127,7 @@ finalMODEXP:
     B => CTX
 
     ; write result ecrecover into previous context memory
-    $ => C                              :MLOAD(retCallLength), JMPZ(preEndMODEXP)
+    $ => C                              :MLOAD(modexp_Msize), JMPZ(preEndMODEXP)
     $ => E                              :MLOAD(retCallOffset)
 
     ; ecrecover result is in bytesToStore
@@ -122,6 +135,9 @@ finalMODEXP:
     32 => C
 
 continueMODEXP:
+    $ => A                              :MLOAD(modexp_result)
+    32 - C => D                         :CALL(SHLarith)
+    A                                   :MSTORE(bytesToStore)
     $ => CTX                            :MLOAD(originCTX), CALL(MSTOREX) ; in: [bytesToStore, E: offset] out: [E: new offset]
                                         :JMP(endMODEXP)
 
