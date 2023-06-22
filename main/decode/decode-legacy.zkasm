@@ -24,26 +24,30 @@ isNotDeployment:
     ; Decode data
     ; Data length / 3 bytes
     3 => D                          :CALL(addBatchHashData)
+    C                               :MSTORE(dataStarts)
     ; Data / A bytes
-    A => D, B                       :MSTORE(txCalldataLen)
+    A => B                          :MSTORE(txCalldataLen)
     %CALLDATA_OFFSET => SP
     32 => D
     ; Read data in chunks of 32 bytes
 readData:
     B - D                           :JMPN(readDataFinal), MSTORE(txDataRead)
+    ${getTxs(p,D)} => A
     A                               :MSTORE(SP++), CALL(addBatchHashByteByByte)
     $ => B                          :MLOAD(txDataRead), JMP(readData)
     ; Read remaining data bytes
 readDataFinal:
     B - 1                           :JMPN(endData)
-    32 - D => D                     :CALL(SHLarith)
+    32 - B => D
+    ${getTxs(p,B)} => A, E          :CALL(SHLarith)
     A                               :MSTORE(SP)
-    32 - D => D                     :CALL(addBatchHashByteByByte)
+    E => A
+    B => D                          :CALL(addBatchHashByteByByte)
+
 endData:
     ; Decode effectivePercentage / 1 byte
     1 => D                          :CALL(addBatchHashData)
     A                               :MSTORE(effectivePercentage)
-
     ; Decode from / 20 bytes
     20 => D                         :CALL(addBatchHashData)
     A                               :MSTORE(txSrcAddr)

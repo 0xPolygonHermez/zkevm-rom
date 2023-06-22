@@ -1,6 +1,7 @@
 INCLUDE "map-opcodes.zkasm"
 INCLUDE "precompiled/selector.zkasm"
 INCLUDE "ecrecover/ecrecover.zkasm"
+INCLUDE "smt.zkasm"
 INCLUDE "touched.zkasm"
 INCLUDE "2-exp.zkasm"
 
@@ -37,9 +38,11 @@ processTx:
         $ => B                          :SLOAD, JMPNZ(invalidIntrinsicTxSenderCode)
 
 ;; Reset warm/cold information
-        $ => A                          :MLOAD(txSrcOriginAddr), CALL(initTouchedTree)
+        $ => A                          :MLOAD(txSrcOriginAddr), CALL(initSmtTree)
                                         :CALL(isColdAddress) ; add tx.origin to touched addresses
         0                               :MSTORE(depth) ; Initial depth is 0
+        0                               :MSTORE(currentLogIndex) ; Initial log index is 0
+        1                               :MSTORE(txStatus) ; Inital tx status is 1 (success), set to 0 on failure
 
 ;; Set gasPrice global var depending on effectivePercentage [0-255] -> txGasPrice = Floor((gasPrice * (effectivePercentage + 1)) / 256)
         ; gasPrice => A
@@ -116,7 +119,7 @@ loopBytes:
         A - C - 1                       :JMPN(endCalldataIntrinsicGas)
         E => B
         $ => E                          :MLOAD(batchHashDataId)
-        $ => D                          :HASHK1(E)
+        $ => D                          :HASHP1(E)
         B => E
         C + 1 => C
         D - 1                           :JMPN(add4Gas, add16Gas)
@@ -348,7 +351,7 @@ readDeployBytecode:
         $ => HASHPOS                    :MLOAD(dataStarts)
         HASHPOS + PC => HASHPOS
         $ => E                          :MLOAD(batchHashDataId)
-        $ => RR                         :HASHK1(E)
+        $ => RR                         :HASHP1(E)
         $${eventLog(onOpcode(RR))}
         PC + 1 => PC                    :JMP(@mapping_opcodes + RR)
 
@@ -410,9 +413,9 @@ callContract:
         $ => A                          :SLOAD
 
         ; get a new hashPId
-        $ => E                          :MLOAD(nextHashPId)
+        $ => E                          :MLOAD(lastHashPIdAvailable)
+        E + 1                           :MSTORE(lastHashPIdAvailable)
         E                               :MSTORE(contractHashId)
-        E+1                             :MSTORE(nextHashPId)
 
         ; load contract bytecode
         A                               :HASHPDIGEST(E)
@@ -524,7 +527,7 @@ sendGasSeq:
         $ => D          :MLOAD(arithRes1)
         $ => A          :MLOAD(sequencerAddr)
         0 => B,C ; balance key smt
-        $ => SR         :SSTORE, JMP(processTxFinished)
+        $ => SR         :SSTORE, JMP(createTxReceipt)
 
 ;; handle invalid transaction due to intrinsic checks
 invalidIntrinsicTxSignature:

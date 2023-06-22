@@ -908,7 +908,7 @@ handleError:
     %MAX_CNT_STEPS - STEP - 500       :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
     ;revert all state changes
-    $ => SR         :MLOAD(initSR), CALL(revertTouched)
+    $ => SR         :MLOAD(initSR), CALL(revertSmt)
     ;remaining gas = 0
     $ => A          :MLOAD(originCTX)
     0 => B
@@ -937,6 +937,7 @@ handleBatchError:
 firstContextInvalid:
     ;save Root and jump to send gas to sequencer
     0               :MSTORE(gasRefund)
+    0               :MSTORE(txStatus)
     0 => GAS        :JMP(sendGasSeq)
 
 VAR GLOBAL tmpVarAoffsetUtil
@@ -1265,9 +1266,9 @@ hashPoseidonLinearFromMemory:
     %MAX_CNT_PADDING_PG_LIMIT - CNT_PADDING_PG - 1 - B      :JMPN(outOfCountersPadding)
 
     ; get a new hashPId
-    $ => B                          :MLOAD(nextHashPId)
+    $ => B                          :MLOAD(lastHashPIdAvailable)
+    B + 1                           :MSTORE(lastHashPIdAvailable)
     B                               :MSTORE(tmpContractHashId)
-    B + 1                           :MSTORE(nextHashPId)
     32 => D
     0 => HASHPOS
 
@@ -1564,4 +1565,27 @@ verifyMerkleProofEnd:
     C => B
     $                             :EQ, JMPNC(invalidChangeL2Block)
     $ => RR                       :MLOAD(tmpZkPCVerifyMerkleProof)
+                                  :RETURN
+
+consolidateReceiptTree:
+    $                             :MLOAD(receiptSR), JMPZ(finishConsolidateReceiptTree)
+    ; Store receipt tree root at address system storage
+    $ => E                        :MLOAD(lastHashKIdAvailable)
+    E+1                           :MSTORE(lastHashKIdAvailable)
+    ; Get block number to generate storage key keccak256(blockNumber, RECEIPT_STORAGE_POS)
+    $ => A                        :MLOAD(blockNum)
+    32 => D
+    A                             :HASHK(E)
+    %RECEIPT_STORAGE_POS          :HASHK(E)
+    HASHPOS                       :HASHKLEN(E)
+    $ => C                        :HASHKDIGEST(E)
+    %ADDRESS_SYSTEM => A
+    %SMT_KEY_SC_STORAGE => B
+    $ => D                        :MLOAD(receiptSR)
+    $ => SR                       :SSTORE
+    ; Reset values
+    0                             :MSTORE(txIndex)
+    0                             :MSTORE(receiptSR), RETURN
+
+finishConsolidateReceiptTree:
                                   :RETURN

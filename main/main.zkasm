@@ -38,11 +38,11 @@ start: ; main zkROM entry point
 ;;     - compute keccaks needed to finish the batch
 ;;;;;;;;;;;;;;;;;;
         $${eventLog(onStartBatch, C)}
-        ; Load current tx count
-        %LAST_TX_STORAGE_POS => C
+        ; Load current block number from system smart contract
+        %LAST_BLOCK_STORAGE_POS => C
         %ADDRESS_SYSTEM => A
         %SMT_KEY_SC_STORAGE => B
-        $ => D          :SLOAD, MSTORE(txCount)
+        $ => D          :SLOAD, MSTORE(blockNum)
 
         ; Compute necessary keccak counters to finish batch
         $ => A          :MLOAD(batchDataLength)
@@ -62,6 +62,8 @@ start: ; main zkROM entry point
 ;;;;;;;;;;;;;;;;;;
 
         0                                   :MSTORE(batchHashPos)
+        $ => E                              :MLOAD(lastHashPIdAvailable)
+        E + 1                               :MSTORE(lastHashPIdAvailable)
         E                                   :MSTORE(batchHashDataId)
         $ => A                              :MLOAD(lastCtxUsed)
         A                                   :MSTORE(ctxTxToUse) ; Points at first context to be used when processing transactions
@@ -77,18 +79,50 @@ start: ; main zkROM entry point
 
 txLoop:
         $ => A                         :MLOAD(pendingTxs)
-        A-1                            :MSTORE(pendingTxs), JMPN(processTxsEnd)
-
+        A - 1                          :MSTORE(pendingTxs), JMPN(processTxsEnd)
+        $ => A                         :MLOAD(txIndex)
+        A + 1                          :MSTORE(txIndex)
         $ => A                         :MLOAD(ctxTxToUse) ; Load first context used by transaction
-        A+1 => CTX                     :MSTORE(ctxTxToUse)
+        A + 1 => CTX                   :MSTORE(ctxTxToUse)
         $ => A                         :MLOAD(txType)
         A - %TX_TYPE_CHANGE_L2_BLOCK   :JMPZ(processChangeL2Block)
                                        :JMP(processTx)
+createTxReceipt:
+        ; Set txReceipt
+        $ => E                         :MLOAD(lastHashPIdAvailable)
+        E + 1                          :MSTORE(lastHashPIdAvailable)
+        ; generate receipt leaf value linearPoseidon(status + gasUsed + logsRoot)
+        ; Hash transaction status (1 byte)
+        $ => A                         :MLOAD(txStatus)
+        1 => D
+        A                              :HASHP(E)
+        ; Hash gas used (8 bytes)
+        8 => D
+        $ => B                         :MLOAD(txGasLimit)
+        ; Both txGasLimit and GAS are 32 bits. txGasLimit is capped by %TX_GAS_LIMIT (25 bits)
+        B - GAS => A                   :HASHP(E)
+        ; Hash logsSR (32 bytes)
+        32 => D
+        $ => A                         :MLOAD(logsSR)
+        A                              :HASHP(E)
+        HASHPOS                        :HASHPLEN(E)
+        $ => D                         :HASHPDIGEST(E)
+        ; Swap to txReceipt SR
+        SR => E
+        $ => SR                        :MLOAD(receiptSR)
+        ; Store hash of the log in the tree, key => logIndex
+        %ADDRESS_SYSTEM => A
+        %SMT_KEY_RECEIPT => B
+        $ => C                         :MLOAD(txIndex)
+        $ => SR                        :SSTORE
+        ; Swap back to main SR
+        SR                             :MSTORE(logsSR)
 
 processTxFinished:
-        $${eventLog(onFinishTx)}   :JMP(txLoop)
+        $${eventLog(onFinishTx)}       :JMP(txLoop)
 
 processTxsEnd:
+                                       :CALL(consolidateReceiptTree)
 
 ;;;;;;;;;;;;;;;;;;
 ;; E - Batch asserts & computations:

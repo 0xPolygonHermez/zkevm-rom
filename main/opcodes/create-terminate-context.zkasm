@@ -150,7 +150,7 @@ opCREATE:
     A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
     ; Save touched root when a new context is created
-    A                   :MSTORE(txValue), CALL(checkpointTouched)
+    A                   :MSTORE(txValue), CALL(checkpointSmt)
                         :JMP(txType)
 
 opCreateFail:
@@ -280,7 +280,7 @@ opCALLend:
     ; copy calldata from origin CTX to current CTX
     A                   :MSTORE(txCalldataLen), CALL(copySP)
     ; save touched root when a new context is created
-                        :CALL(checkpointTouched)
+                        :CALL(checkpointSmt)
                         :JMP(txType)
 
 /**
@@ -388,7 +388,7 @@ opCALLCODEend:
     ; copy calldata from origin CTX to current CTX
     A               :MSTORE(txCalldataLen), CALL(copySP)
     ; Save touched root when a new context is created
-                    :CALL(checkpointTouched)
+                    :CALL(checkpointSmt)
                     :JMP(txType)
 /**
  * @link [https://www.evm.codes/#f3?fork=berlin]
@@ -635,7 +635,7 @@ opDELEGATECALLend:
     ; copy calldata from origin CTX to current CTX
     A               :MSTORE(txCalldataLen), CALL(copySP)
     ; Save touched root when a new context is created
-                    :CALL(checkpointTouched)
+                    :CALL(checkpointSmt)
                     :JMP(txType)
 
 /**
@@ -758,7 +758,7 @@ opCREATE2:
     A                   :MSTORE(txCalldataLen)
     $ => A              :MLOAD(valueCall)
     ; Save touched root when a new context is created
-    A                   :MSTORE(txValue), CALL(checkpointTouched)
+    A                   :MSTORE(txValue), CALL(checkpointSmt)
                         :JMP(txType)
 
 /**
@@ -840,7 +840,7 @@ opSTATICCALL:
     ; copy calldata from origin CTX to current CTX
     A               :MSTORE(txCalldataLen), CALL(copySP)
     ; save touched root when a new context is created
-                    :CALL(checkpointTouched)
+                    :CALL(checkpointSmt)
                     :JMP(txType)
 /**
  * @link [https://www.evm.codes/#fd?fork=berlin]
@@ -857,7 +857,7 @@ opREVERT:
     SP - 2 => SP          :JMPN(stackUnderflow)
     ; load initSR to revert all state changes
     ; revert touched accounts
-    $ => SR         :MLOAD(initSR), CALL(revertTouched)
+    $ => SR         :MLOAD(initSR), CALL(revertSmt)
 
     $ => E          :MLOAD(SP+1); [offset => E]
     $ => C          :MLOAD(SP); [size => C]
@@ -873,7 +873,7 @@ opREVERT:
     $${eventLog(onError, revert)}
     0               :MSTORE(gasRefund)
     ; if origin ctx is 0, end tx
-    B               :JMPZ(handleGas)
+    B               :JMPZ(opRevertDepthOne)
     ; decrease CTX
     $ => A          :MLOAD(currentCTX)
     B => CTX
@@ -931,6 +931,9 @@ opREVERTend:
     ; decrease depth
     $ => A          :MLOAD(depth)
     A - 1           :MSTORE(depth), JMP(readCode)
+
+opRevertDepthOne:
+    0               :MSTORE(txStatus), JMP(handleGas)
 
 VAR GLOBAL sendAllAddress
 ; SELFDESTRUCT is deprecated and EIP-4758 is implemented: https://eips.ethereum.org/EIPS/eip-4758

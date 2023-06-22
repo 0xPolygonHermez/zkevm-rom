@@ -7,6 +7,7 @@
  *  - stack input: [offset, size, topic]
  *  - stack output: none
  */
+VAR GLOBAL opLogAux
 opLOG0:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
@@ -39,7 +40,7 @@ opLOG0:
     $                   :LT,JMPC(outOfGas)
     GAS - B => GAS
     $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
-    B + 1               :MSTORE(nextFreeLogIndex), JMP(opLOGLoop) ; store next free log index
+    B + 1               :MSTORE(nextFreeLogIndex), JMP(initLOGLoop) ; store next free log index
 
 opLOG1:
 
@@ -62,7 +63,7 @@ opLOG1:
     $                   :LT,JMPC(outOfGas)
     GAS - B => GAS
     $ => B              :MLOAD(nextFreeLogIndex)
-    B + 1               :MSTORE(nextFreeLogIndex), JMP(opLOGLoop)
+    B + 1               :MSTORE(nextFreeLogIndex), JMP(initLOGLoop)
 
 opLOG2:
 
@@ -85,7 +86,7 @@ opLOG2:
     $                   :LT,JMPC(outOfGas)
     GAS - B => GAS
     $ => B              :MLOAD(nextFreeLogIndex)
-    B + 1               :MSTORE(nextFreeLogIndex), JMP(opLOGLoop)
+    B + 1               :MSTORE(nextFreeLogIndex), JMP(initLOGLoop)
 
 opLOG3:
 
@@ -108,7 +109,7 @@ opLOG3:
     $                   :LT,JMPC(outOfGas)
     GAS - B => GAS
     $ => B              :MLOAD(nextFreeLogIndex)
-    B + 1               :MSTORE(nextFreeLogIndex), JMP(opLOGLoop)
+    B + 1               :MSTORE(nextFreeLogIndex), JMP(initLOGLoop)
 
 opLOG4:
 
@@ -130,38 +131,71 @@ opLOG4:
     ; check out-of-gas
     $                   :LT,JMPC(outOfGas)
     GAS - B => GAS
+    32 => D
     $ => B              :MLOAD(nextFreeLogIndex)
-    B + 1               :MSTORE(nextFreeLogIndex), JMP(opLOGLoop)
+    B + 1               :MSTORE(nextFreeLogIndex), JMP(initLOGLoop)
 
-opLOGLoop:
+initLOGLoop:
+    0 => HASHPOS
+logLoop:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     C               :JMPZ(opSaveTopicsInit)
     ; load next 32 bytes
     C - 32          :JMPN(opLOGFinal)
-                    :CALL(MLOAD32); in: [E: offset] out: [A: value]
+                    :CALL(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
+    E               :MSTORE(opLogAux)
+    $ => E          :MLOAD(lastHashPIdAvailable)
+    32 => D
+    A               :HASHP(E)
+    $ => E          :MLOAD(opLogAux)
     $${storeLog(B, 0, A)} ; storeLog(indexLog, isTopic, bytesToStore)
-    C - 32 => C     :JMP(opLOGLoop)
+    C - 32 => C     :JMP(logLoop)
 
 opLOGFinal:
     ; load last C bytes
                     :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
+    C => D
+    $ => E          :MLOAD(lastHashPIdAvailable)
+    A               :HASHP(E)
     $${storeLog(B, 0, A)}; storeLog(indexLog, isTopic, bytesToStore)
                     :JMP(opSaveTopicsInit) ; instruction added to allow executing $$ function
 
 opSaveTopicsInit:
     ; save topics
     $ => A          :MLOAD(numTopics)
+    $ => E          :MLOAD(lastHashPIdAvailable)
 
 opSaveTopicsLoop:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
-    A                   :JMPZ(readCode)
+    A                   :JMPZ(finishSaveTopics)
     ; check stack underflow
     SP - 1 => SP
     ; check out-of-gas
     GAS - %LOG_TOPIC_GAS => GAS    :JMPN(outOfGas)
     $ => C              :MLOAD(SP)   ; [topic => C]
+    C                   :HASHP(E)
     $${storeLog(B, 1, C)}     ; storeLog(indexLog, isTopic, bytesToStore)
     A - 1 =>  A         :JMP(opSaveTopicsLoop)
+
+finishSaveTopics:
+    ; Compute hash of the log
+    HASHPOS             :HASHPLEN(E)
+    $ => D              :HASHPDIGEST(E)
+    ; Update lastHashPIdAvailable
+    E + 1               :MSTORE(lastHashPIdAvailable)
+    ; Retrieve and update curentLogIndex
+    $ => C              :MLOAD(currentLogIndex)
+    C + 1               :MSTORE(currentLogIndex)
+    ; Swap to logs SR
+    SR => E
+    $ => SR             :MLOAD(logsSR)
+    ; Store hash of the log in the tree, key => logIndex
+    %ADDRESS_SYSTEM => A
+    %SMT_KEY_LOGS => B
+    $ => SR             :SSTORE
+    ; Swap back to main SR
+    SR                  :MSTORE(logsSR)
+    E => SR             :JMP(readCode)
