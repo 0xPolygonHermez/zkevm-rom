@@ -5,12 +5,14 @@ VAR GLOBAL modexp_B
 VAR GLOBAL modexp_Binit
 VAR GLOBAL modexp_E
 VAR GLOBAL modexp_Einit
+VAR GLOBAL modexp_Epos
 VAR GLOBAL modexp_M
 VAR GLOBAL modexp_Minit
 
 VAR GLOBAL modexp_result
 VAR GLOBAL modexp_base
 VAR GLOBAL modexp_newexp
+VAR GLOBAL modexp_numBits
 
 VAR GLOBAL modexp_RR
 
@@ -52,6 +54,26 @@ function modExp(B, E, M){
 }
  */
 
+/**
+    function modExp(B, E, M){
+    if (M == 1) {
+        return 0
+    }
+
+    const arrayBitsE = convertToBits(E);
+    let i = len(arrayBitsE) - 2
+    let result = B;
+    while (i >= 0){
+        result = (result * result) % M
+        const bit = arrayBitsE[i];
+        if (bit == 1) {
+            result = (result * base) % M
+        }
+        i = i - 1
+    return result;
+}
+ */
+
 modexp:
     RR                  :MSTORE(modexp_RR)
 
@@ -66,16 +88,116 @@ modexp:
     $ => B              :MLOAD(modexp_B)
     B - 1               :JMPZ(modexp_1)
 
+;TODO: ja se que pasa, si es 0 tambe hem de multiplicar la base!!!!!
+; en el primer cas ho faig fins que no hi ha mes numeros al a eserra, en el segon ho he d'anar fent igual fins que no quedin numeros a la esquerra, pero 0s si!
+
+;    B                   :MSTORE(arithA)
+;    C                   :MSTORE(arithB),CALL(divARITH)
+;    $ => B              :MLOAD(arithRes2)
+;    B                   :MSTORE(modexp_base)
+;
+;    1                   :MSTORE(modexp_result)
+;
+;modexp_loop:
+;    $ => A              :MLOAD(modexp_newexp),JMPZ(modexp_end)
+;    A                   :MSTORE(arithA)
+;    2                   :MSTORE(arithB),CALL(divARITH)
+;    $ => A              :MLOAD(arithRes1)
+;    A                   :MSTORE(modexp_newexp)
+;    $                   :MLOAD(arithRes2),JMPZ(modexp_loop0)
+;    $ => A              :MLOAD(modexp_result)
+;    $ => B              :MLOAD(modexp_base)
+;    $ => C              :MLOAD(modexp_M),CALL(modexp_mulmod)
+;    C                   :MSTORE(modexp_result)
+;    ${log(C,result2)}
+;
+;modexp_loop0:
+;    $ => A              :MLOAD(modexp_base)
+;    $ => C              :MLOAD(modexp_M),CALL(modexp_A2C)
+;    ${log(B,result0)}
+;    B                   :MSTORE(modexp_base),JMP(modexp_loop)
+
+;;    $ => CTX            :MLOAD(originCTX)
+;;
+;;    1 => C
+;;    $ => E              :MLOAD(modexp_Einit)
+;;    E                   :MSTORE(modexp_Epos)
+;;
+;;modexp_initloop:
+;;    1 => C
+;;    $ => E              :MLOAD(modexp_Epos)
+;;    ${log(E, Epos)}
+;;    ; TODO comprovar Einit + Esize = Epos --> JMP(end)
+;;    ; TODO suma E + 1 amb arith?
+;;    E + 1               :MSTORE(modexp_Epos)
+;;                        :CALL(MLOADX)
+;;    31 => D             :CALL(SHRarith)
+;;    A                   :JMPZ(modexp_initloop)
+;;    $ => B              :MLOAD(modexp_B)
+;;    B                   :MSTORE(modexp_result)
+;;
+;;modexp_byteloop:
+;;    1 => C
+;;    $ => E              :MLOAD(modexp_Epos)
+;;    $ => B              :MLOAD(modexp_Minit)
+;;    B - E               :JMPZ(modexp_end)
+;;    E + 1               :MSTORE(modexp_Epos)
+;;                        :CALL(MLOADX)
+;;    31 => D             :CALL(SHRarith)
+;;    ${log(A, byte)}
+;;    A                   :MSTORE(modexp_newexp)
+;;
+;;modexp_loop:
+;;    $ => A              :MLOAD(modexp_newexp),JMPZ(modexp_byteloop)
+;;    A                   :MSTORE(arithA),JMPZ(modexp_end)
+;;    2                   :MSTORE(arithB),CALL(divARITH)
+;;    $ => A              :MLOAD(arithRes1)
+;;    A                   :MSTORE(modexp_newexp)
+;;    $ => A              :MLOAD(modexp_result)
+;;    $ => C              :MLOAD(modexp_M),CALL(modexp_A2C)
+;;    B                   :MSTORE(modexp_result)
+;;    $                   :MLOAD(arithRes2),JMPZ(modexp_loop)
+;;    $ => A              :MLOAD(modexp_result)
+;;    $ => B              :MLOAD(modexp_B)
+;;    $ => C              :MLOAD(modexp_M),CALL(modexp_mulmod)
+;;    C                   :MSTORE(modexp_result),JMP(modexp_loop)
+
     B                   :MSTORE(arithA)
     C                   :MSTORE(arithB),CALL(divARITH)
     $ => B              :MLOAD(arithRes2)
     B                   :MSTORE(modexp_base)
 
+    $ => CTX            :MLOAD(originCTX)
+
+    $ => E              :MLOAD(modexp_Einit)
+    $ => B              :MLOAD(modexp_Esize)
+    E + B - 1           :MSTORE(modexp_Epos)
     1                   :MSTORE(modexp_result)
+    1 => C
+
+modexp_initloop:
+    $ => E              :MLOAD(modexp_Einit)
+    E + 1               :MSTORE(modexp_Einit)
+                        :CALL(MLOADX)
+    31 => D             :CALL(SHRarith)
+    A                   :JMPZ(modexp_initloop)
+    E - 1               :MSTORE(modexp_Einit)
+
+
+modexp_byteloop:
+    1 => C
+    $ => E              :MLOAD(modexp_Epos)
+    $ => B              :MLOAD(modexp_Einit)
+    E - B + 1           :JMPZ(modexp_end)
+    E - 1               :MSTORE(modexp_Epos)
+                        :CALL(MLOADX)
+    31 => D             :CALL(SHRarith)
+    A                   :MSTORE(modexp_newexp)
+    8 => E              :MSTORE(modexp_numBits)
 
 modexp_loop:
     $ => A              :MLOAD(modexp_newexp)
-    A                   :MSTORE(arithA),JMPZ(modexp_end)
+    A                   :MSTORE(arithA)
     2                   :MSTORE(arithB),CALL(divARITH)
     $ => A              :MLOAD(arithRes1)
     A                   :MSTORE(modexp_newexp)
@@ -84,11 +206,15 @@ modexp_loop:
     $ => B              :MLOAD(modexp_base)
     $ => C              :MLOAD(modexp_M),CALL(modexp_mulmod)
     C                   :MSTORE(modexp_result)
+    ${log(C,result2)}
 
 modexp_loop0:
     $ => A              :MLOAD(modexp_base)
     $ => C              :MLOAD(modexp_M),CALL(modexp_A2C)
-    B                   :MSTORE(modexp_base),JMP(modexp_loop)
+    B                   :MSTORE(modexp_base)
+    ${log(B,result0)}
+    $ => E              :MLOAD(modexp_numBits)
+    E - 1               :MSTORE(modexp_numBits),JMPZ(modexp_byteloop,modexp_loop)
 
 modexp_1:
     1                   :MSTORE(modexp_result),JMP(modexp_end)
@@ -97,6 +223,8 @@ modexp_0:
     0                   :MSTORE(modexp_result)
 
 modexp_end:
+    $ => CTX            :MLOAD(currentCTX)
     $ => A              :MLOAD(modexp_result)
+    ${log(A, result)}
     $ => RR             :MLOAD(modexp_RR)
                         :RETURN
