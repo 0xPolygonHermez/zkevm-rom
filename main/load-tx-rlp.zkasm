@@ -1,4 +1,6 @@
 INCLUDE "load-tx-rlp-utils.zkasm"
+INCLUDE "load-change-l2-block.zkasm"
+
 ; Blocks RLP parsing
 ;       A - Initialization
 ;       B - Read and check RLP fields. Fill 'batchHashData' and Ethereum signed transaction bytes
@@ -22,11 +24,17 @@ loadTx_rlp:
         ; A new hash with position 0 is started
         0 => HASHPOS
 
+        ; Pointer to next RLP bytes to read
+        0 => C
+        ; Check its a change L2 block transaction
+        1 => D
+        ${getTxs(p,D)} => A
+        A - 0x0b                        :JMPZ(decodeChangeL2BlockTx)
+        ; First transactio must be a change L2 block transaction
+        $ => A                          :MLOAD(pendingTxs), JMPZ(invalidTxRLP)
         ; We get a new hashId
         $ => E                          :MLOAD(lastHashKIdUsed)
         E+1 => E                        :MSTORE(lastHashKIdUsed)
-        ; Pointer to next RLP bytes to read
-        0 => C
 
 ;;;;;;;;;;;;;;;;;;
 ;; B - Read and check RLP fields. Fill 'batchHashData' and Ethereum signed transaction bytes
@@ -293,6 +301,7 @@ effectivePercentageTx:
 ;;;;;;;;;
 ;; D - Finish RLP parsing
 ;;;;;;;;;
+finishLoadRLP:
 ;; update bytes parsed
         $ => A                          :MLOAD(batchL2DataParsed)
         A + C                           :MSTORE(batchL2DataParsed)

@@ -26,8 +26,6 @@ processTx:
 ;; Store init state
 ;;;;;;;;;
 
-        ; Store initial state at the beginning of the transaction
-        SR                              :MSTORE(originSR)
         SR                              :MSTORE(initSR)
         ; Minimum of 100000 steps left to process a tx
         %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCountersStep)
@@ -552,7 +550,7 @@ sendGasSeq:
         $ => D          :MLOAD(arithRes1)
         $ => A          :MLOAD(sequencerAddr)
         0 => B,C ; balance key smt
-        $ => SR         :SSTORE, JMP(processTxEnd)
+        $ => SR         :SSTORE, JMP(processTxFinished)
 
 ;; handle invalid transaction due to intrinsic checks
 invalidIntrinsicTxSignature:
@@ -578,7 +576,6 @@ invalidIntrinsicBatchGasLimit:
 
 invalidIntrinsicTxSenderCode:
         $${eventLog(onError, intrinsic_invalid_sender_code)} :JMP(handleIntrinsicError)
-
 handleIntrinsicError:
         $ => SR                         :MLOAD(originSR), JMP(processTxFinished)
 

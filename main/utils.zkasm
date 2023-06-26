@@ -885,6 +885,8 @@ outOfCountersPadding:
     $${eventLog(onError, OOCPA)} :JMP(handleBatchError)
 outOfCountersPoseidon:
     $${eventLog(onError, OOCPO)} :JMP(handleBatchError)
+invalidChangeL2Block:
+    $${eventLog(onError, invalid_change_l2_block)} :JMP(handleIntrinsicError) ; TODO: should be batch error (?)
 outOfGas:
     $${eventLog(onError, OOG)}   :JMP(handleError)
 invalidJump:
@@ -1315,41 +1317,6 @@ maskAddress:
     $ => A          :AND
     $ => B          :MLOAD(tmpVarBmask), RETURN
 
-;@info: updates the address system storage with current batch and state root
-updateSystemData:
-    ; check keccak counters
-    $ => A                                          :MLOAD(cntKeccakPreProcess)
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1        :JMPN(outOfCountersKeccak)
-    ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 50 :JMPN(outOfCountersStep)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*2 :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_BINARY - CNT_BINARY - 1                :JMPN(outOfCountersBinary)
-
-    ; Get last tx count
-    $ => A                              :MLOAD(txCount)
-    ;Update last tx Count at system storage
-    1 => B
-    $ => D                              :ADD, MSTORE(txCount)
-
-    %LAST_TX_STORAGE_POS => C
-    %ADDRESS_SYSTEM => A
-    %SMT_KEY_SC_STORAGE => B
-    $ => SR                             :SSTORE
-
-    ;Update state root mapping
-    D => A
-    32 => D
-    0 => HASHPOS ; A new hash with position 0 is started
-    $ => E                              :MLOAD(lastHashKIdUsed)
-    E + 1 => E                          :MSTORE(lastHashKIdUsed)
-    A                                   :HASHK(E)
-    %STATE_ROOT_STORAGE_POS             :HASHK(E)
-    HASHPOS                             :HASHKLEN(E)
-    $ => C                              :HASHKDIGEST(E)
-    %ADDRESS_SYSTEM => A
-    SR => D
-    $ => SR                             :SSTORE, RETURN
-
 VAR GLOBAL tmpVarAmulmod
 VAR GLOBAL tmpVarBmulmod
 VAR GLOBAL tmpVarDmulmod
@@ -1559,3 +1526,44 @@ expADend:
 failAssert:
     1 => A
     2               :ASSERT
+
+VAR GLOBAL tmpZkPCVerifyMerkleProof
+;@info verifies GER with sibilings
+verifyMerkleProof:
+    RR                            :MSTORE(tmpZkPCVerifyMerkleProof)
+    $ => C                        :MLOAD(newGER)
+    $ => B                        :MLOAD(indexHistGERTree)
+    B                             :MSTORE(arithA)
+    0 => D
+
+verifyMerkleProofLoop:
+    %GER_TREE_LEVELS - D          :JMPZ(verifyMerkleProofEnd)
+    $ => B                        :MLOAD(indexHistGERTree)
+    ${getSmtProof(B, D)} => A
+    D => RR
+                                  :CALL(@exp_num + RR); out:[B: 2**RR]
+    B                             :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => E                        :MLOAD(lastHashKIdUsed)
+    E + 1 => E                    :MSTORE(lastHashKIdUsed)
+    D => B
+    32 => D
+    0 => HASHPOS
+    $                             :MLOAD(arithRes2), JMPZ(reverseHashValue)
+    $ => C                        :MLOAD(newGER)
+    A                             :HASHK(E)
+    C                             :HASHK(E), JMP(reverseHashValueEnd)
+reverseHashValue:
+    C                             :HASHK(E)
+    A                             :HASHK(E)
+reverseHashValueEnd:
+    HASHPOS                       :HASHKLEN(E)
+    $ => C                        :HASHKDIGEST(E)
+    B => D
+    D + 1 => D                    :JMP(verifyMerkleProofLoop)
+
+verifyMerkleProofEnd:
+    $ => A                        :MLOAD(historicGER)
+    C => B
+    $                             :EQ, JMPNC(invalidChangeL2Block)
+    $ => RR                       :MLOAD(tmpZkPCVerifyMerkleProof)
+                                  :RETURN
