@@ -34,45 +34,7 @@ function modExp(B, E, M){
     }
     return result;
 }
-
-function modExp(B, E, M){
-    if (M == 1) {
-        return 0
-    }
-
-    const arrayBitsE = convertToBits(E);
-    let result = 1;
-    B = B % M;
-    for (let i = 0; i < arrayBitsE.length; i++){
-        const bit = arrayBitsE[i];
-        if (bit == 1) {
-            A = A * B % C
-        }
-        B = B * B % C
-    }
-    return A;
-}
- */
-
-/**
-    function modExp(B, E, M){
-    if (M == 1) {
-        return 0
-    }
-
-    const arrayBitsE = convertToBits(E);
-    let i = len(arrayBitsE) - 2
-    let result = B;
-    while (i >= 0){
-        result = (result * result) % M
-        const bit = arrayBitsE[i];
-        if (bit == 1) {
-            result = (result * base) % M
-        }
-        i = i - 1
-    return result;
-}
- */
+*/
 
 modexp:
     RR                  :MSTORE(modexp_RR)
@@ -81,10 +43,13 @@ modexp:
     C                   :JMPZ(modexp_0)
     C - 1               :JMPZ(modexp_0)
 
+    $ => A              :MLOAD(modexp_Esize)
+    32 - A              :JMPN(expGT322)
     $ => A              :MLOAD(modexp_E)
     A                   :JMPZ(modexp_1)
     A                   :MSTORE(modexp_newexp)
 
+expGT322:
     $ => B              :MLOAD(modexp_B)
     B - 1               :JMPZ(modexp_1)
 
@@ -95,20 +60,10 @@ modexp:
 
     $ => CTX            :MLOAD(originCTX)
 
-    $ => E              :MLOAD(modexp_Einit)
-    $ => B              :MLOAD(modexp_Esize)
-    E + B - 1           :MSTORE(modexp_Epos)
+    $ => E              :MLOAD(modexp_Minit)
+    E - 1               :MSTORE(modexp_Epos)
     1                   :MSTORE(modexp_result)
     1 => C
-
-modexp_initloop:
-    $ => E              :MLOAD(modexp_Einit)
-    E + 1               :MSTORE(modexp_Einit)
-                        :CALL(MLOADX)
-    31 => D             :CALL(SHRarith)
-    A                   :JMPZ(modexp_initloop)
-    E - 1               :MSTORE(modexp_Einit)
-
 
 modexp_byteloop:
     1 => C
