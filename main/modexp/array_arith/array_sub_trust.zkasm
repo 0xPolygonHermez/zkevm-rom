@@ -1,0 +1,99 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Assumes: inA >= inB
+;;
+;; array_sub_trust:
+;;             in: 
+;;                  · C ∈ [0, 2²⁵⁶ - 1], the len of inA
+;;                  · D ∈ [0, 2²⁵⁶ - 1], the len of inB
+;;
+;;          output: 
+;;                  · out = inA - inB
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+
+VAR GLOBAL array_sub_trust_len_inA
+VAR GLOBAL array_sub_trust_len_inB
+VAR GLOBAL array_sub_trust_carry
+VAR GLOBAL array_sub_trust_diff
+
+VAR GLOBAL array_sub_trust_RR
+
+array_sub_trust:
+        RR              :MSTORE(array_sub_trust_RR)
+        C               :MSTORE(array_sub_trust_len_inA)
+        D               :MSTORE(array_sub_trust_len_inB)
+        0n => E ; index in loops
+        0n              :MSTORE(array_sub_trust_carry)
+                        :JMP(array_sub_trust_loopZero2inB)
+
+array_sub_trust_set_carry1:
+        1n              :MSTORE(array_sub_trust_carry)
+                        :JMP(return_array_sub_trust_set_carry1)
+
+array_sub_trust_set_carry0:
+        0n              :MSTORE(array_sub_trust_carry)
+                        :JMP(return_array_sub_trust_set_carry0)
+
+array_sub_trust_loopZero2inB:
+        ; TODO: Check what happens if b[i] + carry = 2²⁵⁶
+        ; diff = a[i] - (b[i] + carry)
+        $ => A          :MLOAD(inB + E)
+        $ => B          :MLOAD(array_sub_trust_carry)
+        $ => C          :ADD
+
+        C => A
+        $ => C          :MLOAD(inA + E)
+        C + 1 => B
+        $               :LT, JMPC(array_sub_trust_set_carry0)
+                        return_array_sub_trust_set_carry0:
+        A => B
+        C => A
+        $ => C          :SUB, JMPC(array_sub_trust_set_carry1)
+                        return_array_sub_trust_set_carry1:
+
+        C               :MSTORE(out + E)
+
+        E + 1 => E
+        E => A
+        $ => B          :MLOAD(array_sub_trust_len_inB)
+        $               :EQ, JMPC(array_sub_trust_loop_index_check1)
+                        :JMP(array_sub_trust_loopZero2inB)
+
+array_sub_trust_loop_index_check1:
+        E => A
+        $ => B          :MLOAD(array_sub_trust_len_inA)
+        $               :EQ, JMPC(array_sub_trust_end)
+
+array_sub_trust_loopInB2InA:
+        ; diff = a[i] - carry
+        $ => A          :MLOAD(inA + E)
+        $ => B          :MLOAD(array_sub_trust_carry)
+        $ => C          :SUB, JMPC(array_sub_trust_loopInB2InA_cont)
+        C               :MSTORE(out + E)
+        E + 1 => E
+                        :JMP(array_sub_trust_loop_index_check2)
+
+array_sub_trust_loopInB2InA_cont:
+        C               :MSTORE(out + E)
+
+        E + 1 => E
+        D - 1 => D      :JMPZ(array_sub_trust_loop_final)
+                        :JMP(array_sub_trust_loopInB2InA)
+
+array_sub_trust_loop_index_check2:
+        E => A
+        $ => B          :MLOAD(array_sub_trust_len_inA)
+        $               :EQ, JMPC(array_sub_trust_end)
+
+array_sub_trust_loop_final:
+        $ => A          :MLOAD(inA + E)
+        A               :MSTORE(out + E)
+
+        E + 1 => E
+        E => A
+        $ => B          :MLOAD(array_sub_trust_len_inA)
+        $               :EQ, JMPC(array_sub_trust_end)
+                        :JMP(array_sub_trust_loop_final)
+
+array_sub_trust_end:
+        $ => RR     :MLOAD(array_sub_trust_RR)
+                        :RETURN
