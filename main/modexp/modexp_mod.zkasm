@@ -1,0 +1,95 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; modexp_mod:
+;;             in: modexp_Bsize, modexp_Msize, modexp_B, modexp_M
+;;             out: modexp_mod_R = modexp_B (mod modexp_M)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; VAR GLOBAL modexp_Bsize
+; VAR GLOBAL modexp_Bnchunks
+; VAR GLOBAL modexp_Msize
+; VAR GLOBAL modexp_Mnchunks
+; VAR GLOBAL modexp_B[20]
+; VAR GLOBAL modexp_M[20]
+
+; VAR GLOBAL modexp_mod_R[20]
+
+; export function divMod2(a: bigint[], b: bigint[], B: bigint): bigint[][] {
+;     let a_l = a.length
+;     const b_l = b.length
+;     const base = B
+;     let result: bigint[] = []
+;     let part: bigint[] = []
+;     let guess, xlen, highx, highy, check;
+;     while (a_l) {
+;         part.unshift(a[--a_l]);
+;         trim(part);
+;         if (compare(part, b) < 0n) {
+;             result.push(0n);
+;             continue;
+;         }
+;         xlen = part.length;
+;         highx = part[xlen - 1] * base + part[xlen - 2];
+;         highy = b[b_l - 1] * base + b[b_l - 2];
+;         if (xlen > b_l) {
+;             highx = (highx + 1n) * base;
+;         }
+;         guess = highx / highy;
+;         do {
+;             check = array_short_mul(b, guess, base);
+;             if (compare(check, part) <= 0) break;
+;             guess--;
+;         } while (guess);
+;         result.push(guess);
+;         part = array_sub(part, check, base);
+;     }
+;     result.reverse();
+;     return [result, part];
+; }
+
+VAR GLOBAL modexp_mod_RR
+
+modexp_mod:
+        RR              :MSTORE(modexp_mod_RR)
+
+        $ => E          :MLOAD(modexp_Bnchunks)
+        E - 1 => E
+        $ => RR          :MLOAD(modexp_Mnchunks)
+        RR - 1 => RR
+        ; A => RCX
+        ; B => HASHPOS
+
+        $${var _modexp_B = 0}
+        $${var _modexp_M = 0}
+
+; Assumes k is well-formed
+modexp_accumulate_B:
+        $ => C                  :MLOAD(modexp_B + E)
+        $${_modexp_B = _modexp_B + C * (1 << (256 * E))}
+        E - 1 => E              :JMPNZ(modexp_accumulate_B)
+
+modexp_accumulate_M:
+        $ => C                  :MLOAD(modexp_M + RR)
+        $${_modexp_M = _modexp_M + C * (1 << (256 * E))}
+        RR - 1 => RR              :JMPNZ(modexp_accumulate_M)
+
+modexp_end:
+        $ => RR         :MLOAD(modexp_mod_RR)
+                        :RETURN
+
+
+; end:
+;         ; 1] It must be satisfied that:
+;         ; [B]·[A / B] + [A % B] = [0]·2²⁵⁶ + E
+;         B => E
+;         %BN254_P => A
+;         ${E / const.BN254_P} => B        ; residue  (256 bits)
+;         ${E % const.BN254_P} => C        ; quotient (256 bits)
+;         0n => D          
+;         E       :ARITH
+
+;         ; 2] Check the the residue is less than p
+;         C => A
+;         %BN254_P => B
+;         1       :LT, RETURN
