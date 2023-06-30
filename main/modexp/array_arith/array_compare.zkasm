@@ -1,0 +1,51 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; array_compare:
+;;             in: 
+;;                  · C ∈ [0, 2²⁵⁶ - 1], the len of inA
+;;                  · D ∈ [0, 2²⁵⁶ - 1], the len of inB
+;;
+;;          output: 
+;;                  · 2, if inA > inB
+;;                  · 1, if inA = inB
+;;                  · 0, if inA < inB
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL array_compare_result
+
+array_compare:
+        C => A
+        D => B
+        $               :LT, JMPC(array_compare_ALTB)
+        C => B
+        D => A
+        $               :LT, JMPC(array_compare_AGTB)
+
+array_compare_same_len:
+        C - 1 => E
+        $ => A          :MLOAD(inA + E) ; inA[E]
+        $ => B          :MLOAD(inB + E) ; inB[E]
+
+        $               :LT, JMPC(array_compare_ALTB)
+        A => D
+        B => A
+        D => B
+        $               :LT, JMPC(array_compare_AGTB)
+
+        C - 1 => C      :JMPZ(array_compare_AEQB)
+                        :JMP(array_compare_same_len)
+
+array_compare_AGTB:
+        2               :MSTORE(array_compare_result)
+                        :JMP(array_compare_end)
+
+array_compare_AEQB:
+        1               :MSTORE(array_compare_result)
+                        :JMP(array_compare_end)
+
+array_compare_ALTB:
+        0               :MSTORE(array_compare_result)
+                        :JMP(array_compare_end)
+
+array_compare_end:
+                        :RETURN
