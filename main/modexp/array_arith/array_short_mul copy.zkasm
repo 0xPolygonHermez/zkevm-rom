@@ -1,0 +1,62 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; array_short_mul:
+;;             in: 
+;;                  · C ∈ [0, 2²⁵⁶ - 1], the len of inA
+;;
+;;          output: 
+;;                  · out = inA·inB[0], with len(out) = C + 1
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+
+VAR GLOBAL array_short_mul_len_inA
+VAR GLOBAL array_short_mul_carry
+
+VAR GLOBAL array_short_mul_RR
+
+array_short_mul:
+        RR              :MSTORE(array_short_mul_RR)
+        C               :MSTORE(array_short_mul_len_inA)
+        0n => RCX   ; index in loops
+        0n              :MSTORE(array_short_mul_carry)
+                        :JMP(array_short_mul_loopZero2inA)
+
+array_short_mul_carry:
+        D + 1n => D
+                        :JMP(return_array_short_mul_carry)
+
+array_short_mul_loopZero2inA:
+        RCX => E
+        ; product = a_i * b + carry
+        $ => A          :MLOAD(inA + E)
+        $ => B          :MLOAD(inB)
+        0n => C
+        $${var _arrayShortMul_AB = A*B}
+        ${_arrayShortMul_AB >> 256} => D
+        ${_arrayShortMul_AB} => E :ARITH
+
+        E => A
+        $ => B          :MLOAD(array_short_mul_carry)
+        $ => C          :ADD, JMPC(array_short_mul_carry)
+                        return_array_short_mul_carry:
+        D               :MSTORE(array_short_mul_carry)
+
+        ; out[i] = product - carry·2²⁵⁶
+        RCX => E
+        C               :MSTORE(out + E)
+
+        RCX + 1n => RCX
+        RCX => A
+        $ => B          :MLOAD(array_short_mul_len_inA)
+        $               :EQ, JMPC(array_short_mul_carry_check)
+                        :JMP(array_short_mul_loopZero2inA)
+
+array_short_mul_carry_check:
+        $ => A          :MLOAD(array_short_mul_carry)
+        0n              :EQ, JMPC(array_short_mul_end)
+
+        RCX => E
+        A              :MSTORE(out + E)
+
+array_short_mul_end:
+        $ => RR         :MLOAD(array_short_mul_RR)
+                        :RETURN
