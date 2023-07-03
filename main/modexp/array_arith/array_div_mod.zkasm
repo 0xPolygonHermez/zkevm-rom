@@ -1,0 +1,56 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; array_div_mod:
+;;             in: 
+;;                  · C ∈ [0, 2²⁵⁶ - 1], the len of inA
+;;                  · D ∈ [0, 2²⁵⁶ - 1], the len of inB
+;;
+;;          output: 
+;;                  · [quo,rem] = [inA / inB, inA % inB], with len(quo) <= C - D, len(rem) <= D
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+
+VAR GLOBAL array_div_mod_RR
+
+array_div_mod:
+        RR              :MSTORE(array_div_mod_RR)
+
+        $ => E          :MLOAD(modexp_Bnchunks)
+        E - 1 => E
+        $ => RR          :MLOAD(modexp_Mnchunks)
+        RR - 1 => RR
+        ; A => RCX
+        ; B => HASHPOS
+
+        $${var _modexp_B = 0}
+        $${var _modexp_M = 0}
+
+; Assumes k is well-formed
+modexp_accumulate_B:
+        $ => C                  :MLOAD(modexp_B + E)
+        $${_modexp_B = _modexp_B + C * (1 << (256 * E))}
+        E - 1 => E              :JMPNZ(modexp_accumulate_B)
+
+modexp_accumulate_M:
+        $ => C                  :MLOAD(modexp_M + RR)
+        $${_modexp_M = _modexp_M + C * (1 << (256 * E))}
+        RR - 1 => RR              :JMPNZ(modexp_accumulate_M)
+
+modexp_end:
+        $ => RR         :MLOAD(array_div_mod_RR)
+                        :RETURN
+
+
+; end:
+;         ; 1] It must be satisfied that:
+;         ; [B]·[A / B] + [A % B] = [0]·2²⁵⁶ + E
+;         B => E
+;         %BN254_P => A
+;         ${E / const.BN254_P} => B        ; residue  (256 bits)
+;         ${E % const.BN254_P} => C        ; quotient (256 bits)
+;         0n => D          
+;         E       :ARITH
+
+;         ; 2] Check the the residue is less than p
+;         C => A
+;         %BN254_P => B
+;         1       :LT, RETURN

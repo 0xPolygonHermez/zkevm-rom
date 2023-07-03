@@ -1,0 +1,126 @@
+; constants needed by executor C++
+CONST %N = 2**19
+CONST %MAX_CNT_STEPS_LIMIT = %N
+CONST %MAX_CNT_ARITH_LIMIT = %N
+CONST %MAX_CNT_BINARY_LIMIT = %N
+CONST %MAX_CNT_MEM_ALIGN_LIMIT = %N
+CONST %MAX_CNT_KECCAK_F_LIMIT = %N
+CONST %MAX_CNT_PADDING_PG_LIMIT = %N
+CONST %MAX_CNT_POSEIDON_G_LIMIT = %N
+
+VAR GLOBAL lastHashKId
+VAR GLOBAL lastHashPId
+
+VAR GLOBAL initial_A
+VAR GLOBAL initial_B
+VAR GLOBAL initial_C
+VAR GLOBAL initial_D
+VAR GLOBAL initial_E
+VAR GLOBAL initial_CTX
+VAR GLOBAL initial_SP
+VAR GLOBAL initial_PC
+VAR GLOBAL initial_GAS
+VAR GLOBAL initial_SR
+VAR GLOBAL initial_RR
+VAR GLOBAL initial_HASHPOS
+VAR GLOBAL initial_RCX
+
+VAR GLOBAL modexp_Bnchunks
+VAR GLOBAL modexp_Mnchunks
+VAR GLOBAL modexp_B[20]
+VAR GLOBAL modexp_M[20]
+
+VAR GLOBAL inA[3]
+VAR GLOBAL inB[3]
+VAR GLOBAL out[6]
+
+start:
+
+        STEP => A
+        0 :ASSERT
+
+        A           :MSTORE(initial_A)
+        B           :MSTORE(initial_B)
+        C           :MSTORE(initial_C)
+        D           :MSTORE(initial_D)
+        E           :MSTORE(initial_E)
+        CTX         :MSTORE(initial_CTX)
+        SP          :MSTORE(initial_SP)
+        PC          :MSTORE(initial_PC)
+        GAS         :MSTORE(initial_GAS)
+        SR          :MSTORE(initial_SR)
+        RR          :MSTORE(initial_RR)
+        HASHPOS     :MSTORE(initial_HASHPOS)
+        RCX         :MSTORE(initial_RCX)
+        0 => A,B,C,D,E,CTX, SP, PC, GAS, SR, RR, HASHPOS, RCX
+
+        -1          :MSTORE(lastHashKId)
+        -1          :MSTORE(lastHashPId)
+
+        ; 1] len(inB) = len(inA) and inB > inA
+        0n             :MSTORE(out)
+        1 => E
+        0n             :MSTORE(out + E)
+        2 => E
+        0n             :MSTORE(out + E)
+        3 => E
+        0n             :MSTORE(out + E)
+        4 => E
+        0n             :MSTORE(out + E)
+        5 => E
+        0n              :MSTORE(out + E)
+
+        3 => C
+        3 => D
+        5n              :MSTORE(inA)
+        1 => E
+        6n              :MSTORE(inA + E)
+        2 => E
+        7n              :MSTORE(inA + E)
+
+        2n              :MSTORE(inB)
+        1 => E
+        3n              :MSTORE(inB + E)
+        2 => E
+        4n              :MSTORE(inB + E)
+                        :CALL(array_mul_long)
+        10n             :MLOAD(out)
+        1 => E
+        27n             :MLOAD(out + E)
+        2 => E
+        52n             :MLOAD(out + E)
+        3 => E
+        45n             :MLOAD(out + E)
+        4 => E
+        28n             :MLOAD(out + E)
+        5 => E
+        0n              :MLOAD(out + E)
+
+
+end:
+
+        $ => A           :MLOAD(initial_A)
+        $ => B           :MLOAD(initial_B)
+        $ => C           :MLOAD(initial_C)
+        $ => D           :MLOAD(initial_D)
+        $ => E           :MLOAD(initial_E)
+        $ => CTX         :MLOAD(initial_CTX)
+        $ => SP          :MLOAD(initial_SP)
+        $ => PC          :MLOAD(initial_PC)
+        $ => GAS         :MLOAD(initial_GAS)
+        $ => SR          :MLOAD(initial_SR)
+        $ => RR          :MLOAD(initial_RR)
+        $ => HASHPOS     :MLOAD(initial_HASHPOS)
+        $ => RCX         :MLOAD(initial_RCX)
+
+; label finalizeExecution needed by executor C++
+finalizeExecution:
+        ${beforeLast()}  : JMPN(finalizeExecution)
+
+                         : JMP(start)
+opINVALID:
+; label checkAndSaveFrom needed by executor C++
+checkAndSaveFrom:
+                         :JMP(opINVALID)
+
+INCLUDE "array_div_mod.zkasm"
