@@ -1,0 +1,100 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Assumes: inB >= inA
+;;
+;; array_sub_BGTA:
+;;             in: 
+;;                  · C ∈ [0, 2²⁵⁶ - 1], the len of inA
+;;                  · D ∈ [0, 2²⁵⁶ - 1], the len of inB
+;;
+;;          output: 
+;;                  · out = inB - inA
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+
+VAR GLOBAL array_sub_BGTA_len_inA
+VAR GLOBAL array_sub_BGTA_len_inB
+VAR GLOBAL array_sub_BGTA_carry
+VAR GLOBAL array_sub_BGTA_diff
+
+VAR GLOBAL array_sub_BGTA_RR
+
+array_sub_BGTA:
+        RR              :MSTORE(array_sub_BGTA_RR)
+        C               :MSTORE(array_sub_BGTA_len_inA)
+        D               :MSTORE(array_sub_BGTA_len_inB)
+        0n => E ; index in loops
+        0n              :MSTORE(array_sub_BGTA_carry)
+                        :JMP(array_sub_BGTA_loopZero2inA)
+
+array_sub_BGTA_set_carry1:
+        1n              :MSTORE(array_sub_BGTA_carry)
+                        :JMP(return_array_sub_BGTA_set_carry1)
+
+array_sub_BGTA_set_carry0:
+        0n              :MSTORE(array_sub_BGTA_carry)
+                        :JMP(return_array_sub_BGTA_set_carry0)
+
+array_sub_BGTA_loopZero2inA:
+        ; TODO: Check what happens if a[i] + carry = 2²⁵⁶
+        ; diff = b[i] - (a[i] + carry)
+        $ => A          :MLOAD(inA + E)
+        $ => B          :MLOAD(array_sub_BGTA_carry)
+        $ => C          :ADD
+
+        C => A
+        $ => C          :MLOAD(inB + E)
+        C + 1 => B
+        $               :LT, JMPC(array_sub_BGTA_set_carry0)
+                        return_array_sub_BGTA_set_carry0:
+        A => B
+        C => A
+
+        $ => C          :SUB, JMPC(array_sub_BGTA_set_carry1)
+                        return_array_sub_BGTA_set_carry1:
+
+        C               :MSTORE(out + E)
+
+        E + 1 => E
+        E => A
+        $ => B          :MLOAD(array_sub_BGTA_len_inA)
+        $               :EQ, JMPC(array_sub_BGTA_loop_index_check1)
+                        :JMP(array_sub_BGTA_loopZero2inA)
+
+array_sub_BGTA_loop_index_check1:
+        E => A
+        $ => B          :MLOAD(array_sub_BGTA_len_inB)
+        $               :EQ, JMPC(array_sub_BGTA_end)
+
+array_sub_BGTA_loopInA2InB:
+        ; diff = b[i] - carry
+        $ => A          :MLOAD(inB + E)
+        $ => B          :MLOAD(array_sub_BGTA_carry)
+        $ => C          :SUB, JMPC(array_sub_BGTA_loopInA2InB_cont)
+        C               :MSTORE(out + E)
+        E + 1 => E
+                        :JMP(array_sub_BGTA_loop_index_check2)
+
+array_sub_BGTA_loopInA2InB_cont:
+        C               :MSTORE(out + E)
+
+        E + 1 => E
+        D - 1 => D      :JMPZ(array_sub_BGTA_loop_final)
+                        :JMP(array_sub_BGTA_loopInA2InB)
+
+array_sub_BGTA_loop_index_check2:
+        E => A
+        $ => B          :MLOAD(array_sub_BGTA_len_inB)
+        $               :EQ, JMPC(array_sub_BGTA_end)
+
+array_sub_BGTA_loop_final:
+        $ => A          :MLOAD(inB + E)
+        A               :MSTORE(out + E)
+
+        E + 1 => E
+        E => A
+        $ => B          :MLOAD(array_sub_BGTA_len_inB)
+        $               :EQ, JMPC(array_sub_BGTA_end)
+                        :JMP(array_sub_BGTA_loop_final)
+
+array_sub_BGTA_end:
+        $ => RR         :MLOAD(array_sub_BGTA_RR)
+                        :RETURN
