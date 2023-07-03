@@ -1530,6 +1530,11 @@ failAssert:
 VAR GLOBAL tmpZkPCVerifyMerkleProof
 ;@info verifies GER with sibilings
 verifyMerkleProof:
+    ; check zk-counters
+    $ => A                                  :MLOAD(cntKeccakPreProcess)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 :JMPN(outOfCountersKeccak)
+    %MAX_CNT_BINARY - CNT_BINARY - 1        :JMPN(outOfCountersBinary)
+
     RR                            :MSTORE(tmpZkPCVerifyMerkleProof)
     $ => C                        :MLOAD(newGER)
     $ => B                        :MLOAD(indexHistGERTree)
@@ -1537,6 +1542,7 @@ verifyMerkleProof:
     0 => D
 
 verifyMerkleProofLoop:
+    %MAX_CNT_STEPS - STEP - 100   :JMPN(outOfCountersStep)
     %GER_TREE_LEVELS - D          :JMPZ(verifyMerkleProofEnd)
     $ => B                        :MLOAD(indexHistGERTree)
     ${getSmtProof(B, D)} => A
