@@ -13,8 +13,10 @@
 VAR GLOBAL array_div_mod_long_len_inA
 VAR GLOBAL array_div_mod_long_len_inB
 
-VAR GLOBAL array_div_mod_long_highx[2]
-VAR GLOBAL array_div_mod_long_highy[2]
+VAR GLOBAL array_div_mod_long_bm
+VAR GLOBAL array_div_mod_long_n
+VAR GLOBAL array_div_mod_long_qn
+VAR GLOBAL array_div_mod_long_aguess[2]
 
 VAR GLOBAL array_div_mod_long_RR
 
@@ -27,7 +29,10 @@ array_div_mod_long:
         C               :MSTORE(array_div_mod_long_len_inA)
         D               :MSTORE(array_div_mod_long_len_inB)
 
-        C - 1 => RR   ; index in loops
+        C => RR   ; index in loops
+        RR + 1 => E
+        $ => A          :MLOAD(inB + E)
+        A               :MSTORE(array_div_mod_long_bm)
 
         ; Let's cover the edge cases
         ; 1] Check if inA = 0
@@ -43,10 +48,6 @@ array_div_mod_long:
         1               :EQ, JMPC(array_div_mod_long_same_input)
 
         ; From here, it is assumed that inA > inB
-        $ => A          :MLOAD(inA + RR)
-        A               :MSTORE(inAn) ; Initialize inAn
-        $ => A          :MLOAD(array_div_mod_long_len_inA)
-        A - 1           :MSTORE(array_div_mod_long_len_inA)
                         :JMP(array_div_mod_long_find_inAn)
 
 ; Begin of edge cases
@@ -71,75 +72,125 @@ array_div_mod_long_inALTinB_before_end:
         0 => B          :JMP(array_div_mod_long_end)
 ; End of edge cases
 
-array_div_mod_long_compare1:
-        0n              :MSTORE(quo + RR)
-                        :JMP(array_div_mod_long_loopZero2inA)
+; Begin of first if, else block
+array_div_mod_long_compute_big_aguess:
+        E - 1 => E
+        $ => B          :MLOAD(inAn + E)
+        B               :MSTORE(array_div_mod_long_aguess)
+        1 => E
+        A               :MSTORE(array_div_mod_long_aguess + E)
+                        :JMP(return_array_div_mod_long_compute_big_aguess)
+
+array_div_mod_long_compute_small_aguess:
+        A               :MSTORE(array_div_mod_long_aguess)
+        1 => E
+        0n              :MSTORE(array_div_mod_long_aguess + E)
+                        :JMP(return_array_div_mod_long_compute_small_aguess)
+; End of first if, else block
+
+; Begin of second if, else block
+array_div_mod_long_compute_qn_1:
+                        :CALL(array_div_mod_short) ; TODO: divide aguess by bm
+        quotient        :MSTORE(array_div_mod_qn)
+                        :JMP(return_array_div_mod_long_compute_qn_1)
+
+array_div_mod_long_compute_qn_2:
+        $ => A          :MLOAD(array_div_mod_long_len_inB)
+        $ => B          :MLOAD(array_div_mod_long_n)
+        $               :LT, JMPC(array_div_mod_long_compute_qn_2_1)
+                        
+        1n              :MSTORE(array_div_mod_qn)
+
+                        :JMP(return_array_div_mod_long_compute_qn_2)
+
+array_div_mod_long_compute_qn_2_1:
+        ; 2**256 - 1
+        115792089237316195423570985008687907853269984665640564039457584007913129639935n              :MSTORE(array_div_mod_qn)
+                        :JMP(return_array_div_mod_long_compute_qn_2)
+
+array_div_mod_long_compute_qn_3:
+        1n              :MSTORE(array_div_mod_qn)
+                        :JMP(return_array_div_mod_long_compute_qn_3)
+; End of second if, else block
+
+; Begin of inner while
+array_div_mod_long_obtain_correct_qn:
+        $ => A          :MLOAD(array_div_mod_qn)
+        A - 1n => A     :MSTORE(array_div_mod_qn)
+                        :CALL(array_sub) ; TODO: subtract test and b
+        out             :MSTORE(test + RR) ; TODO: store the result in test
+
+array_div_mod_long_check_correct_qn:
+                        :CALL(array_compare) ; TODO: compare test with inAn
+        $ => A          :MLOAD(array_compare_result)
+        2 => B         
+        $               :EQ, JMPC(array_div_mod_long_obtain_correct_qn)
+                        :JMP(return_array_div_mod_long_check_correct_qn)
+; End of inner while
 
 array_div_mod_long_find_inAn:
-        $ => A          :MLOAD(inA + RR)
-        $ => B          :MLOAD(inAn)
-        B               :MSTORE(inAn + 1)
-        A               :MSTORE(inAn) ; Initialize inAn
-        $ => A          :MLOAD(array_div_mod_long_len_inA)
-        A - 1           :MSTORE(array_div_mod_long_len_inA)
+        $ => D          :MLOAD(inA + RR)
+        $ => C          :MLOAD(array_div_mod_long_len_inA)
+                        :CALL(array_unshift) ; TODO: unshift inAn
+        RR - 1 => RR    :JMPZ(array_div_mod_long_compute_n)
                         :CALL(array_compare) ; TODO: compare inAn and inB
         $ => A          :MLOAD(array_compare_result), JMPZ(array_div_mod_long_find_inAn)
+        ; Here, in the best case, we will have that RR = 0, so we have to run the loop only once
 
+array_div_mod_long_compute_n:
+        $ => A          :MLOAD(array_div_mod_long_len_inA)
+        A - RR          :MSTORE(array_div_mod_long_n)
 
 array_div_mod_long_loopZero2inA:
-        RR + 1 => RR
-        RR => A
-        $ => B          :MLOAD(array_div_mod_long_len_inA)
-        B + 1n => B
-        $               :EQ, JMPC(array_div_mod_long_end)
+        ; 1] Compute aguess
+        $ => A          :MLOAD(array_div_mod_long_n)
+        A - 1 => E
+        $ => A          :MLOAD(inAn + E)
+        $ => B          :MLOAD(array_div_mod_long_bm)
+        $               :LT, JMPC(array_div_mod_long_compute_big_aguess,array_div_mod_long_compute_small_aguess)
+                        return_array_div_mod_long_compute_big_aguess:
+                        return_array_div_mod_long_compute_small_aguess:
 
-        $ => E          :MLOAD(array_div_mod_long_len_inA)
-        E - 1 => E
-        $ => A          :MLOAD(inA + E)
-        A               :MSTORE(rem + E)
-                        :CALL(array_compare) ; TODO: compare rem and b
-        $ => A          :MLOAD(array_compare_result), JMPZ(array_div_mod_long_compare1)
+        ; 2] Compute guess for qn
+        $ => A          :MLOAD(array_div_mod_long_n)
+        A - 1 => E
+        $ => A          :MLOAD(inAn + E)
+        $ => B          :MLOAD(array_div_mod_long_bm)
+        $               :LT, JMPC(array_div_mod_long_compute_qn_1)
+        $               :EQ, JMPC(array_div_mod_long_compute_qn_2)
+                        :JMP(array_div_mod_long_compute_qn_3)
+                        return_array_div_mod_long_compute_qn_1:
+                        return_array_div_mod_long_compute_qn_2:
+                        return_array_div_mod_long_compute_qn_3:
 
-        ; highx = rem_i·2²⁵⁶ + rem_{i-1}
-        $ => E          :MLOAD(array_div_mod_long_len_inA)
-        E - 1 => E
-        $ => A          :MLOAD(rem + E)
-        A               :MSTORE(array_div_mod_long_highx)
-        E - 1 => E
-        $ => A          :MLOAD(rem + E)
-        A               :MSTORE(array_div_mod_long_highx + 1)
+        ; 3] Compute the actual qn
+        $ => A          :MLOAD(array_div_mod_qn)
+                        :CALL(array_mul_short) ; TODO: multiply b by qn
+        out             :MSTORE(test + RR) ; test is an array!
+                        :JMP(array_div_mod_long_check_correct_qn)
+                        return_array_div_mod_long_check_correct_qn:
 
+        ; 4] Do the assignment
+        $ => A          :MLOAD(array_div_mod_qn)
+                        :CALL(array_unshift) ; TODO: unshift qn in quo
 
-        ; highy = inB_{len(inB)-1}·2²⁵⁶ + inB_{len(inB)-2}
-        $ => E          :MLOAD(array_div_mod_long_len_inB)
-        E - 1 => E
-        $ => A          :MLOAD(inB + E)
-        A               :MSTORE(array_div_mod_long_highy)
-        E - 1 => E
-        $ => A          :MLOAD(inB + E)
-        A               :MSTORE(array_div_mod_long_highy + 1)
+                        :CALL(array_sub); TODO: subtract an an test
+        out             :MSTORE(rem + RR) ; store the previous result in rem
+        out             :MSTORE(inAn + RR) ; store the previous result in inAn
 
-        ; TODO: Do the inner if
+        RR              :JMPZ(array_div_mod_long_correct)
 
-array_div_mod_long_guess_quo:
-        ${guessnextqi(mem.array_div_mod_long_highx[0],mem.array_div_mod_long_highx[1],mem.array_div_mod_long_highy[0],mem.array_div_mod_long_highy[1])} => A
-        1n => RCX ; guess
-                        :CALL(array_mul_short) ; TODO: multiply inB by RCX
-                        :CALL(array_compare) ; TODO: compare previous result with rem
-        $ => A          :MLOAD(array_compare_result), JMPNZ(array_div_mod_long_last_loop_step)
-        ; 1n => B     
-        ; 1               :EQ, JMPC(array_div_mod_long_same_input)
-
-array_div_mod_long_last_loop_step:
-        RCX             :MSTORE(quo + RR)
-                        :CALL(array_sub) ; TODO: sub rem with previous result
-                        :JMP(array_div_mod_long_loopZero2inA)
+                        :CALL(array_unshift); TODO: unshift another a digit into an
+                        :JMP(array_div_mod_long_loopZero2inA) ; I think I should jump to array_div_mod_long_compute_n
 
 ; Errors
 array_div_mod_long_inB_is_zero:
         1               :MLOAD(array_div_mod_long_len_inB)
         0n              :MLOAD(inB)
         1 => B          :JMP(array_div_mod_long_end)
+
+array_div_mod_long_correct:
+        0 => B          :JMP(array_div_mod_long_end)
 
 array_div_mod_long_end:
         $ => RR         :MLOAD(array_div_mod_long_RR)
