@@ -1,0 +1,41 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; array_div_mod_short:
+;;             in: 
+;;                  · C ∈ [0, 2²⁵⁶ - 1], the len of inA
+;;
+;;          output: 
+;;                  · [quo,rem] = [inA / inB[0], inA % inB[0]], with len(quo) <= C - 1, len(rem) = 1
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+
+VAR GLOBAL array_div_mod_short_RR
+
+array_div_mod_short:
+        RR             	:MSTORE(array_div_mod_short_RR)
+
+        C => RCX   ; index in loops
+        0n   		:MSTORE(rem)
+
+array_div_mod_short_loopZero2inA:
+        ; dividendi = remainder * base + a[i]
+        ; qi = dividendi / b
+        ; remainder = dividendi - qi * b
+        ; quotient[i] = qi
+	RCX - 1 => RR
+        $ => D          :MLOAD(rem)
+        $ => E          :MLOAD(inA + RR)
+        $${var _array_dividendi = (D << 256) + E}
+        ${_array_dividendi / mem.inB[0]} => A
+        $ => B          :MLOAD(inB)
+        ${_array_dividendi % mem.inB[0]} => C
+        $ => E :MLOAD(inA + RR), ARITH
+
+        A     		:MSTORE(quo + RR)
+        C               :MSTORE(rem)
+
+        RCX - 1 => RCX 	:JMPZ(array_div_mod_short_end)
+                        :JMP(array_div_mod_short_loopZero2inA)
+
+array_div_mod_short_end:
+        $ => RR         :MLOAD(array_div_mod_short_RR)
+                        :RETURN
