@@ -9,11 +9,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
 
 VAR GLOBAL array_square_len_inA
-VAR GLOBAL array_square_carry
 
-VAR GLOBAL array_square_im1
-VAR GLOBAL array_square_im2
-VAR GLOBAL array_square_im3
+VAR GLOBAL array_square_carry_high
+VAR GLOBAL array_square_carry_low
+VAR GLOBAL array_square_aiaj_high
 
 VAR GLOBAL array_square_RR
 
@@ -22,23 +21,35 @@ array_square:
         C               :MSTORE(array_square_len_inA)
         0n => RCX   ; first index in loops
         0n => RR ; second index in loops
+
+        ; 1] a_i·a_i: This number cannot be GT (base - 2)·base + 1, two chunks
+        $ => A          :MLOAD(inA)
+        A => B
+        0n => C
+        $${var _arraySquare_aiai = A*B}    
+        ${_arraySquare_aiai >> 256} => D
+        ${_arraySquare_aiai} => E :ARITH
+        D               :MSTORE(array_square_carry_high)
+        E               :MSTORE(array_square_carry_low)
+
                         :JMP(array_square_loopZero2inA)
 
 array_square_add_carry_1:
         D + 1n => D
                         :JMP(return_array_square_add_carry_1)
-
 array_square_add_carry_2:
-        1n => C
+        D + 1n => D
                         :JMP(return_array_square_add_carry_2)
 
-array_square_add_carry_3:
-        D + 1n => D
-                        :JMP(return_array_square_add_carry_3)
+array_square_sub_carry_1:
+        D => A
+        1n => B
+        $ => D          :SUB ; I don't need to care about the carry
+                        :JMP(return_array_square_sub_carry_1)
 
 array_square_loop_index_check:
         ; out[i + len] = carry;
-        $ => A          :MLOAD(array_square_carry)
+        $ => A          :MLOAD(array_square_carry_low)
         $ => B          :MLOAD(array_square_len_inA)
         RCX + B => E
         A                 :MSTORE(out + E)
@@ -48,59 +59,66 @@ array_square_loop_index_check:
         RCX => RR
 
         RCX => A
-        ; $ => B          :MLOAD(array_square_len_inA)
         $               :EQ, JMPC(array_square_end)
+
+        ; a_i·a_i: This number cannot be GT (base - 2)·base + 1, two chunks
+        $ => A          :MLOAD(inA + RR)
+        A => B
+        0n => C
+        $${var _arraySquare_aiai = A*B}    
+        ${_arraySquare_aiai >> 256} => D
+        ${_arraySquare_aiai} => E :ARITH
+        D               :MSTORE(array_square_carry_high)
+        E               :MSTORE(array_square_carry_low)
+
                         :JMP(return_array_square_loop_index_check)
 
 array_square_loopZero2inA:
         RCX => E
-        ; product = 2·(a_i·a_j) + out[i + j] - a_i·a_i = a_i·(2·a_j - a_i) + out[i + j]
+        ; carry = 0 - a_i·a_i
+        ; product = 2·(a_i·a_j) + out[i + j] + carry
         ; carry = product / B;
-
-        ; 1] 2·a_j: This number cannot be GT base + (base - 2), two chunks
-        $ => A,B        :MLOAD(inA + RR)
-
-        ; 1] a_i·a_j: This number cannot be GT (base - 2)·base + 1, so it can be represented in two chunks
+        
+        ; 1] a_i·a_j: This number cannot be GT (base - 2)·base + 1, two chunks
         $ => A          :MLOAD(inA + E)
         $ => B          :MLOAD(inA + RR)
         0n => C
-        $${var _arrayLongMul_AB = A*B}    
-        ${_arrayLongMul_AB >> 256} => D
-        ${_arrayLongMul_AB} => E :ARITH
+        $${var _arraySquare_aiaj = A*B}    
+        ${_arraySquare_aiaj >> 256} => D
+        ${_arraySquare_aiaj} => E :ARITH
+        D              :MSTORE(array_square_aiaj_high)
 
         ; 2] 2·a_i·a_j: This number cannot be GT base² + (base - 4)·base + 2, three chunks
         E => A,B
-        $ => E          :ADD, JMPC(array_square_add_carry_1)
+        $ => C          :ADD, JMPC(array_square_add_carry_1)
                         return_array_square_add_carry_1:
-        D => A,B 
-        $ => E          :ADD ; Here, we do not handle the carry because if it exists it will be erased in step 4
-        ; $ => E          :ADD, JMPC(array_square_add_carry_2)
-        ;                 return_array_square_add_carry_2:
+        $ => A          :MLOAD(array_square_aiaj_high)
+        D => B 
+        $ => D          :ADD ; I don't need to care about the highest carry
 
         ; 3] 2·a_i·a_j + out[i + j]: This number cannot be GT base² + (base - 3)·base + 1, three chunks
-        RR + RCX => RR
-        $ => A         :MLOAD(out + RR)
-        E => B
-        $ => E          :ADD, JMPC(array_square_add_carry_3)
-                        return_array_square_add_carry_3:
+        RR + RCX => E
+        $ => A         :MLOAD(out + E)
+        C => B
+        $ => C          :ADD, JMPC(array_square_add_carry_2)
+                        return_array_square_add_carry_2:
 
-        ; 4] 2·a_i·a_j + out[i + j] - a_i·a_i: This number cannot be GT (base - 2)·base + 1, three chunks
-        ; TODO: Do it before!
-        $ => A          :MLOAD(inA + E)
-        $ => B          :MLOAD(inA + RCX)
-        0n => C
-        $${var _arrayLongMul_AB = A*B}
-        ${_arrayLongMul_AB >> 256} => D
-        ${_arrayLongMul_AB} => E :ARITH
+        ; 4] 2·a_i·a_j + out[i + j] - carry: This number cannot be GT (base - 2)·base + 1, two chunks
+        C => A
+        $ => B          :MLOAD(array_square_carry_low)
+        $ => C          :SUB, JMPC(array_square_sub_carry_1)
+                        return_array_square_sub_carry_1:
+        D => A
+        $ => B          :MLOAD(array_square_carry_high)
+        $ => D          :SUB; I don't need to care about the highest carry either
+
+        ; carry
+        D               :MSTORE(array_square_carry_low)
+        0n              :MSTORE(array_square_carry_high)
 
         ; out[i + j] = product - carry·B;
-        E => A
         RCX + RR => E
-        $ => B          :MLOAD(out + E)
-        $ => C          :ADD, JMPC(array_square_add_carry)
-                        return_array_square_add_carry:
         C               :MSTORE(out + E)
-        D               :MSTORE(array_square_carry)
 
         RR + 1n => RR
         RR => A
