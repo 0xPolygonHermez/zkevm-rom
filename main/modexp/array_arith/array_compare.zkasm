@@ -11,9 +11,16 @@
 ;;                  · 0, if inA < inB
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+VAR GLOBAL array_compare_inA[300]
+VAR GLOBAL array_compare_inB[300]
+
 VAR GLOBAL array_compare_result
 
+VAR GLOBAL array_compare_RR
+
 array_compare:
+        RR              :MSTORE(array_compare_RR)
+
         C => A
         D => B
         $               :LT, JMPC(array_compare_ALTB)
@@ -23,8 +30,8 @@ array_compare:
 
 array_compare_same_len:
         C - 1 => E
-        $ => A          :MLOAD(inA + E) ; inA[E]
-        $ => B          :MLOAD(inB + E) ; inB[E]
+        $ => A          :MLOAD(array_compare_inA + E)
+        $ => B          :MLOAD(array_compare_inB + E)
 
         $               :LT, JMPC(array_compare_ALTB)
         A => D
@@ -48,4 +55,5 @@ array_compare_ALTB:
                         :JMP(array_compare_end)
 
 array_compare_end:
+        $ => RR         :MLOAD(array_compare_RR)
                         :RETURN

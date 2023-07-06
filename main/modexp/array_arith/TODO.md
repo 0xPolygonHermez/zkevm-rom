@@ -1,0 +1,2 @@
+- [ ] When max sizes are known, fix them all in each of the methods in this library
+- [ ] I can call MLOAD(in + E) and MLOAD(in + RR), but I would need to do it directly in MLOAD(in + RCX) to avoid overwriting the RR register.

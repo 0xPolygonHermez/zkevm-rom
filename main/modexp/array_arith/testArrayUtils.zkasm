@@ -25,13 +25,9 @@ VAR GLOBAL initial_RR
 VAR GLOBAL initial_HASHPOS
 VAR GLOBAL initial_RCX
 
-VAR GLOBAL modexp_Bnchunks
-VAR GLOBAL modexp_Mnchunks
-VAR GLOBAL modexp_B[20]
-VAR GLOBAL modexp_M[20]
-
-VAR GLOBAL inA[4]
-VAR GLOBAL inB[3]
+VAR GLOBAL inA[300]
+VAR GLOBAL inB[300]
+VAR GLOBAL out[300]
 
 start:
 
@@ -57,7 +53,9 @@ start:
         -1          :MSTORE(lastHashPId)
 
 ; array_compare
-        ; 1] len(inA) > len(inB) should return 2
+; ---------------------------------------------------------------
+; 1] len(inA) > len(inB) should return 2
+array_compare_test_1: 
         5n              :MSTORE(inA)
         1 => E
         6n              :MSTORE(inA + E)
@@ -67,12 +65,34 @@ start:
         2n              :MSTORE(inB)
         1 => E
         3n              :MSTORE(inB + E)
+
         3 => C
         2 => D
+        0 => E,RR
+array_compare_test_1_memory_copy_inA_loop:
+        $ => A          :MLOAD(inA + E)
+        A               :MSTORE(array_compare_inA + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_compare_test_1_memory_copy_inB_loop)
+                        :JMP(array_compare_test_1_memory_copy_inA_loop)
+
+array_compare_test_1_memory_copy_inB_loop:
+        $ => A          :MLOAD(inB + RR)
+        A               :MSTORE(array_compare_inB + RR)
+        RR + 1 => RR
+        RR => A
+        D => B
+        $               :EQ, JMPC(array_compare_test_1_compare)
+                        :JMP(array_compare_test_1_memory_copy_inB_loop)
+
+array_compare_test_1_compare:
                         :CALL(array_compare)
         2               :MLOAD(array_compare_result)
 
-        ; 2] len(inA) < len(inB) should return 0
+; 2] len(inA) < len(inB) should return 0
+array_compare_test_2: 
         5n              :MSTORE(inA)
         1 => E
         6n              :MSTORE(inA + E)
@@ -82,12 +102,36 @@ start:
         3n              :MSTORE(inB + E)
         2 => E
         4n              :MSTORE(inB + E)
+
         2 => C
         3 => D
+        0 => E,RR
+array_compare_test_2_memory_copy_inA_loop:
+        $ => A          :MLOAD(inA + E)
+        A               :MSTORE(array_compare_inA + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_compare_test_2_memory_copy_inB_loop)
+                        :JMP(array_compare_test_2_memory_copy_inA_loop)
+
+array_compare_test_2_memory_copy_inB_loop:
+        $ => A          :MLOAD(inB + RR)
+        A               :MSTORE(array_compare_inB + RR)
+        RR + 1 => RR
+        RR => A
+        D => B
+        $               :EQ, JMPC(array_compare_test_2_compare)
+                        :JMP(array_compare_test_2_memory_copy_inB_loop)
+
+array_compare_test_2_compare:
                         :CALL(array_compare)
         0               :MLOAD(array_compare_result)
 
-        ; 3] len(inA) = len(inB) but inA > inB should return 2
+
+
+; 3] len(inA) = len(inB) but inA > inB should return 2
+array_compare_test_3: 
         5n              :MSTORE(inA)
         1 => E
         6n              :MSTORE(inA + E)
@@ -99,28 +143,34 @@ start:
         6n              :MSTORE(inB + E)
         2 => E
         6n              :MSTORE(inB + E)
+
         3 => C
         3 => D
+        0 => E,RR
+array_compare_test_3_memory_copy_inA_loop:
+        $ => A          :MLOAD(inA + E)
+        A               :MSTORE(array_compare_inA + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_compare_test_3_memory_copy_inB_loop)
+                        :JMP(array_compare_test_3_memory_copy_inA_loop)
+
+array_compare_test_3_memory_copy_inB_loop:
+        $ => A          :MLOAD(inB + RR)
+        A               :MSTORE(array_compare_inB + RR)
+        RR + 1 => RR
+        RR => A
+        D => B
+        $               :EQ, JMPC(array_compare_test_3_compare)
+                        :JMP(array_compare_test_3_memory_copy_inB_loop)
+
+array_compare_test_3_compare:
                         :CALL(array_compare)
         2               :MLOAD(array_compare_result)
 
-        5n              :MSTORE(inA)
-        1 => E
-        7n              :MSTORE(inA + E)
-        2 => E
-        6n              :MSTORE(inA + E)
-
-        5n              :MSTORE(inB)
-        1 => E
-        6n              :MSTORE(inB + E)
-        2 => E
-        6n              :MSTORE(inB + E)
-        3 => C
-        3 => D
-                        :CALL(array_compare)
-        2               :MLOAD(array_compare_result)
-
-        ; 4] len(inA) = len(inB) but inA < inB should return 0
+; 4] len(inA) = len(inB) but inA < inB should return 0
+array_compare_test_4: 
         5n              :MSTORE(inA)
         1 => E
         6n              :MSTORE(inA + E)
@@ -132,11 +182,34 @@ start:
         6n              :MSTORE(inB + E)
         2 => E
         7n              :MSTORE(inB + E)
+
         3 => C
         3 => D
+        0 => E,RR
+array_compare_test_4_memory_copy_inA_loop:
+        $ => A          :MLOAD(inA + E)
+        A               :MSTORE(array_compare_inA + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_compare_test_4_memory_copy_inB_loop)
+                        :JMP(array_compare_test_4_memory_copy_inA_loop)
+
+array_compare_test_4_memory_copy_inB_loop:
+        $ => A          :MLOAD(inB + RR)
+        A               :MSTORE(array_compare_inB + RR)
+        RR + 1 => RR
+        RR => A
+        D => B
+        $               :EQ, JMPC(array_compare_test_4_compare)
+                        :JMP(array_compare_test_4_memory_copy_inB_loop)
+
+array_compare_test_4_compare:
                         :CALL(array_compare)
         0               :MLOAD(array_compare_result)
 
+; 5] inA = inB should return 1
+array_compare_test_5: 
         5n              :MSTORE(inA)
         1 => E
         6n              :MSTORE(inA + E)
@@ -145,59 +218,74 @@ start:
 
         5n              :MSTORE(inB)
         1 => E
-        7n              :MSTORE(inB + E)
+        6n              :MSTORE(inB + E)
         2 => E
         6n              :MSTORE(inB + E)
+
         3 => C
         3 => D
-                        :CALL(array_compare)
-        0               :MLOAD(array_compare_result)
+        0 => E,RR
+array_compare_test_5_memory_copy_inA_loop:
+        $ => A          :MLOAD(inA + E)
+        A               :MSTORE(array_compare_inA + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_compare_test_5_memory_copy_inB_loop)
+                        :JMP(array_compare_test_5_memory_copy_inA_loop)
 
-        ; 5] inA = inB should return 1
-        5n              :MSTORE(inA)
-        1 => E
-        6n              :MSTORE(inA + E)
-        2 => E
-        6n              :MSTORE(inA + E)
+array_compare_test_5_memory_copy_inB_loop:
+        $ => A          :MLOAD(inB + RR)
+        A               :MSTORE(array_compare_inB + RR)
+        RR + 1 => RR
+        RR => A
+        D => B
+        $               :EQ, JMPC(array_compare_test_5_compare)
+                        :JMP(array_compare_test_5_memory_copy_inB_loop)
 
-        5n              :MSTORE(inB)
-        1 => E
-        6n              :MSTORE(inB + E)
-        2 => E
-        6n              :MSTORE(inB + E)
-        3 => C
-        3 => D
-                        :CALL(array_compare)
-        1               :MLOAD(array_compare_result)
-
-        5n              :MSTORE(inA)
-        1 => E
-        6n              :MSTORE(inA + E)
-
-        5n              :MSTORE(inB)
-        1 => E
-        6n              :MSTORE(inB + E)
-        2 => C
-        2 => D
+array_compare_test_5_compare:
                         :CALL(array_compare)
         1               :MLOAD(array_compare_result)
+; --------------------------------------------------------------- 
 
-        ; array unshift
-        3 => C
+; array unshift
+; ---------------------------------------------------------------
+array_unshift_test_1: 
         2n              :MSTORE(inA)
         1 => E
         1n              :MSTORE(inA + E)
         2 => E
         1n              :MSTORE(inA + E)
         5n => D
+
+        3 => C
+        0 => E
+array_unshift_test_1_memory_copy_in_loop:
+        $ => A          :MLOAD(inA + E)
+        A               :MSTORE(array_unshift_in + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_unshift_test_1_unshift)
+                        :JMP(array_unshift_test_1_memory_copy_in_loop)
+
+array_unshift_test_1_unshift:
                         :CALL(array_unshift)
-        5n              :MLOAD(inA)
-        1 => E
-        2n              :MLOAD(inA + E)
-        2 => E
-        1n              :MLOAD(inA + E)
-        3 => E
-        1n              :MLOAD(inA + E)
+        3 => C ; reset the len back to 3
+        0 => E ; reset the loop counter
+
+array_unshift_test_1_memory_copy_out_loop:
+        $ => A          :MLOAD(array_unshift_in + E)
+        A               :MSTORE(out + E)
+        E + 1 => E
+        E => A
+        C + 1 => B
+        $               :EQ, JMPC(array_unshift_test_1_dump)
+                        :JMP(array_unshift_test_1_memory_copy_out_loop)
+
+array_unshift_test_1_dump:
+        ${dump(mem.out[0],mem.out[1],mem.out[2],mem.out[3])}
+; ---------------------------------------------------------------
 
 end:
 

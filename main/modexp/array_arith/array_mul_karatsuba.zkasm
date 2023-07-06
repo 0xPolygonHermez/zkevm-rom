@@ -1,6 +1,8 @@
+;TODO
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; array_long_mul:
+;; array_mul_karatsuba:
 ;;             in: 
 ;;                  · C ∈ [0, 2²⁵⁶ - 1], the len of inA
 ;;                  · D ∈ [0, 2²⁵⁶ - 1], the len of inB
@@ -9,33 +11,33 @@
 ;;                  · out = inA·inB, with len(out) = C + D
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
 
-VAR GLOBAL array_long_mul_len_inA
-VAR GLOBAL array_long_mul_len_inB
+VAR GLOBAL array_mul_karatsuba_len_inA
+VAR GLOBAL array_mul_karatsuba_len_inB
 
-VAR GLOBAL array_long_mul_RR
+VAR GLOBAL array_mul_karatsuba_RR
 
-array_long_mul:
-        RR              :MSTORE(array_long_mul_RR)
-        C               :MSTORE(array_long_mul_len_inA)
-        D               :MSTORE(array_long_mul_len_inB)
+array_mul_karatsuba:
+        RR              :MSTORE(array_mul_karatsuba_RR)
+        C               :MSTORE(array_mul_karatsuba_len_inA)
+        D               :MSTORE(array_mul_karatsuba_len_inB)
         0n => RCX   ; first index in loops
         0n => RR ; second index in loops
-                        :JMP(array_long_mul_loopZero2inB)
+                        :JMP(array_mul_karatsuba_loopZero2inB)
 
-array_long_mul_add_carry:
+array_mul_karatsuba_add_carry:
         D + 1n => D
-                        :JMP(return_array_long_mul_add_carry)
+                        :JMP(return_array_mul_karatsuba_add_carry)
 
-array_long_mul_loop_index_check:
+array_mul_karatsuba_loop_index_check:
         0n => RR
 
         RCX + 1n => RCX
         RCX => A
-        $ => B          :MLOAD(array_long_mul_len_inA)
-        $               :EQ, JMPC(array_long_mul_end)
-                        :JMP(return_array_long_mul_loop_index_check)
+        $ => B          :MLOAD(array_mul_karatsuba_len_inA)
+        $               :EQ, JMPC(array_mul_karatsuba_end)
+                        :JMP(return_array_mul_karatsuba_loop_index_check)
 
-array_long_mul_loopZero2inB:
+array_mul_karatsuba_loopZero2inB:
         RCX => E
         ; product = a_i * b_j + out[i + j]
         $ => A          :MLOAD(inA + E)
@@ -48,8 +50,8 @@ array_long_mul_loopZero2inB:
         E => A
         RCX + RR => E
         $ => B          :MLOAD(out + E)
-        $ => C          :ADD, JMPC(array_long_mul_add_carry)
-                        return_array_long_mul_add_carry:
+        $ => C          :ADD, JMPC(array_mul_karatsuba_add_carry)
+                        return_array_mul_karatsuba_add_carry:
 
         ; out[i + j] = product - carry·2²⁵⁶, out[i + j + 1] += carry
         C               :MSTORE(out + E)
@@ -61,11 +63,11 @@ array_long_mul_loopZero2inB:
 
         RR + 1n => RR
         RR => A
-        $ => B          :MLOAD(array_long_mul_len_inB)
-        $               :EQ, JMPC(array_long_mul_loop_index_check)
-                        return_array_long_mul_loop_index_check:
-                        :JMP(array_long_mul_loopZero2inB)
+        $ => B          :MLOAD(array_mul_karatsuba_len_inB)
+        $               :EQ, JMPC(array_mul_karatsuba_loop_index_check)
+                        return_array_mul_karatsuba_loop_index_check:
+                        :JMP(array_mul_karatsuba_loopZero2inB)
 
-array_long_mul_end:
-        $ => RR         :MLOAD(array_long_mul_RR)
+array_mul_karatsuba_end:
+        $ => RR         :MLOAD(array_mul_karatsuba_RR)
                         :RETURN
