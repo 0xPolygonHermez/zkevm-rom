@@ -5,10 +5,17 @@
 ;;             in: 
 ;;                  · C ∈ [0, 2²⁵⁶ - 1], the len of inA
 ;;                  · D ∈ [0, 2²⁵⁶ - 1], the len of inB
+;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
+;;                  · inB ∈ [0, 2²⁵⁶ - 1]^D, the second input array
 ;;
 ;;          output: 
 ;;                  · [quo,rem] = [inA / inB, inA % inB], with len(quo) <= C - D, len(rem) <= D
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+
+VAR GLOBAL array_div_mod_long_inA[300]
+VAR GLOBAL array_div_mod_long_inB[300]
+VAR GLOBAL array_div_mod_long_quo[299]
+VAR GLOBAL array_div_mod_long_rem[300]
 
 VAR GLOBAL array_div_mod_long_len_inA
 VAR GLOBAL array_div_mod_long_len_inB
@@ -31,15 +38,15 @@ array_div_mod_long:
 
         C => RR   ; index in loops
         RR + 1 => E
-        $ => A          :MLOAD(inB + E)
+        $ => A          :MLOAD(array_div_mod_long_inB + E)
         A               :MSTORE(array_div_mod_long_bm)
 
         ; Let's cover the edge cases
         ; 1] Check if inA = 0
-        ${(C != 1) || (mem.inA != 0)}   :JMPZ(array_div_mod_long_inA_is_zero)
+        ${(C != 1) || (mem.array_div_mod_long_inA != 0)}   :JMPZ(array_div_mod_long_inA_is_zero)
 
         ; 2] Check if inB = 0
-        ${(D != 1) || (mem.inB != 0)}   :JMPZ(array_div_mod_long_inB_is_zero)
+        ${(D != 1) || (mem.array_div_mod_long_inB != 0)}   :JMPZ(array_div_mod_long_inB_is_zero)
 
         ; 3] Check if inA = inB or inA < inB
                                         :CALL(array_compare)
@@ -52,23 +59,23 @@ array_div_mod_long:
 
 ; Begin of edge cases
 array_div_mod_long_inA_is_zero:
-        0n              :MSTORE(quo)
-        0n              :MSTORE(rem)
+        0n              :MSTORE(array_div_mod_long_quo)
+        0n              :MSTORE(array_div_mod_long_rem)
         0 => B          :JMP(array_div_mod_long_end)
 
 array_div_mod_long_same_input:
-        1n              :MSTORE(quo)
-        0n              :MSTORE(rem)
+        1n              :MSTORE(array_div_mod_long_quo)
+        0n              :MSTORE(array_div_mod_long_rem)
         0 => B          :JMP(array_div_mod_long_end)
 
 array_div_mod_long_inALTinB:
         C - 1n => C     :JMPZ(array_div_mod_long_inALTinB_before_end)
-        $ => A          :MLOAD(inA + RR)
-        A               :MSTORE(rem + RR)
+        $ => A          :MLOAD(array_div_mod_long_inA + RR)
+        A               :MSTORE(array_div_mod_long_rem + RR)
         RR + 1n => RR   :JMP(array_div_mod_long_inALTinB)
 
 array_div_mod_long_inALTinB_before_end:
-        0n              :MSTORE(quo)
+        0n              :MSTORE(array_div_mod_long_quo)
         0 => B          :JMP(array_div_mod_long_end)
 ; End of edge cases
 
@@ -129,7 +136,7 @@ array_div_mod_long_check_correct_qn:
 ; End of inner while
 
 array_div_mod_long_find_inAn:
-        $ => D          :MLOAD(inA + RR)
+        $ => D          :MLOAD(array_div_mod_long_inA + RR)
         $ => C          :MLOAD(array_div_mod_long_len_inA)
                         :CALL(array_unshift) ; TODO: unshift inAn
         RR - 1 => RR    :JMPZ(array_div_mod_long_compute_n)
@@ -175,7 +182,7 @@ array_div_mod_long_loopZero2inA:
                         :CALL(array_unshift) ; TODO: unshift qn in quo
 
                         :CALL(array_sub); TODO: subtract an an test
-        out             :MSTORE(rem + RR) ; store the previous result in rem
+        out             :MSTORE(array_div_mod_long_rem + RR) ; store the previous result in rem
         out             :MSTORE(inAn + RR) ; store the previous result in inAn
 
         RR              :JMPZ(array_div_mod_long_correct)
@@ -186,7 +193,7 @@ array_div_mod_long_loopZero2inA:
 ; Errors
 array_div_mod_long_inB_is_zero:
         1               :MLOAD(array_div_mod_long_len_inB)
-        0n              :MLOAD(inB)
+        0n              :MLOAD(array_div_mod_long_inB)
         1 => B          :JMP(array_div_mod_long_end)
 
 array_div_mod_long_correct:

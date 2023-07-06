@@ -5,15 +5,20 @@
 ;;             in: 
 ;;                  · C ∈ [0, 2²⁵⁶ - 1], the len of inA
 ;;                  · D ∈ [0, 2²⁵⁶ - 1], the len of inB
+;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
+;;                  · inB ∈ [0, 2²⁵⁶ - 1]^D, the second input array
 ;;
 ;;          output: 
-;;                  · out = inA - inB
+;;                  · out = inA - inB, with len(out) <= C
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
 
+VAR GLOBAL array_sub_AGTB_inA[300]
+VAR GLOBAL array_sub_AGTB_inB[300]
+VAR GLOBAL array_sub_AGTB_out[300]
 VAR GLOBAL array_sub_AGTB_len_inA
 VAR GLOBAL array_sub_AGTB_len_inB
+
 VAR GLOBAL array_sub_AGTB_carry
-VAR GLOBAL array_sub_AGTB_diff
 
 VAR GLOBAL array_sub_AGTB_RR
 
@@ -21,43 +26,49 @@ array_sub_AGTB:
         RR              :MSTORE(array_sub_AGTB_RR)
         C               :MSTORE(array_sub_AGTB_len_inA)
         D               :MSTORE(array_sub_AGTB_len_inB)
+
         0n => E ; index in loops
         0n              :MSTORE(array_sub_AGTB_carry)
                         :JMP(array_sub_AGTB_loopZero2inB)
 
-array_sub_AGTB_set_carry1:
-        1n              :MSTORE(array_sub_AGTB_carry)
-                        :JMP(return_array_sub_AGTB_set_carry1)
+array_sub_AGTB_add_carry:
+        1n => D
+                        :JMP(return_array_sub_AGTB_add_carry)
 
-array_sub_AGTB_set_carry0:
+array_sub_AGTB_sub_carry:
+        D => A
+        1n => B 
+        $               :SUB, JMPC(array_sub_AGTB_set_carry_to_1, array_sub_AGTB_set_carry_tp_0)
+
+array_sub_AGTB_set_carry_to_1:
+        1n              :MSTORE(array_sub_AGTB_carry)
+                        :JMP(return_array_sub_AGTB_sub_carry)
+
+array_sub_AGTB_set_carry_tp_0:
         0n              :MSTORE(array_sub_AGTB_carry)
-                        :JMP(return_array_sub_AGTB_set_carry0)
+                        :JMP(return_array_sub_AGTB_sub_carry)
 
 array_sub_AGTB_loopZero2inB:
-        ; TODO: Check what happens if b[i] + carry = 2²⁵⁶
+        0n => D ; cleanup
+
         ; diff = a[i] - (b[i] + carry)
-        $ => A          :MLOAD(inB + E)
+        $ => A          :MLOAD(array_sub_AGTB_inB + E)
         $ => B          :MLOAD(array_sub_AGTB_carry)
-        $ => C          :ADD
+        $ => C          :ADD, JMPC(array_sub_AGTB_add_carry)
+                        return_array_sub_AGTB_add_carry:
 
-        C => A
-        $ => C          :MLOAD(inA + E)
-        C + 1 => B
-        $               :LT, JMPC(array_sub_AGTB_set_carry0)
-                        return_array_sub_AGTB_set_carry0:
-        A => B
-        C => A
+        $ => A          :MLOAD(array_sub_AGTB_inA + E)
+        C => B
+        $ => C          :SUB, JMPC(array_sub_AGTB_sub_carry)
+        0n              :MSTORE(array_sub_AGTB_carry)
+                        return_array_sub_AGTB_sub_carry:
 
-        $ => C          :SUB, JMPC(array_sub_AGTB_set_carry1)
-                        return_array_sub_AGTB_set_carry1:
-
-        C               :MSTORE(out + E)
+        C               :MSTORE(array_sub_AGTB_out + E)
 
         E + 1 => E
         E => A
         $ => B          :MLOAD(array_sub_AGTB_len_inB)
-        $               :EQ, JMPC(array_sub_AGTB_loop_index_check1)
-                        :JMP(array_sub_AGTB_loopZero2inB)
+        $               :EQ, JMPC(array_sub_AGTB_loop_index_check1, array_sub_AGTB_loopZero2inB)
 
 array_sub_AGTB_loop_index_check1:
         E => A
@@ -66,19 +77,20 @@ array_sub_AGTB_loop_index_check1:
 
 array_sub_AGTB_loopInB2InA:
         ; diff = a[i] - carry
-        $ => A          :MLOAD(inA + E)
+        $ => A          :MLOAD(array_sub_AGTB_inA + E)
         $ => B          :MLOAD(array_sub_AGTB_carry)
         $ => C          :SUB, JMPC(array_sub_AGTB_loopInB2InA_cont)
-        C               :MSTORE(out + E)
+        C               :MSTORE(array_sub_AGTB_out + E)
         E + 1 => E
                         :JMP(array_sub_AGTB_loop_index_check2)
 
 array_sub_AGTB_loopInB2InA_cont:
-        C               :MSTORE(out + E)
+        C               :MSTORE(array_sub_AGTB_out + E)
 
         E + 1 => E
-        D - 1 => D      :JMPZ(array_sub_AGTB_loop_final)
-                        :JMP(array_sub_AGTB_loopInB2InA)
+        E => A
+        $ => B          :MLOAD(array_sub_AGTB_len_inA)
+        $               :EQ, JMPC(array_sub_AGTB_end, array_sub_AGTB_loopInB2InA)
 
 array_sub_AGTB_loop_index_check2:
         E => A
@@ -86,14 +98,13 @@ array_sub_AGTB_loop_index_check2:
         $               :EQ, JMPC(array_sub_AGTB_end)
 
 array_sub_AGTB_loop_final:
-        $ => A          :MLOAD(inA + E)
-        A               :MSTORE(out + E)
+        $ => A          :MLOAD(array_sub_AGTB_inA + E)
+        A               :MSTORE(array_sub_AGTB_out + E)
 
         E + 1 => E
         E => A
         $ => B          :MLOAD(array_sub_AGTB_len_inA)
-        $               :EQ, JMPC(array_sub_AGTB_end)
-                        :JMP(array_sub_AGTB_loop_final)
+        $               :EQ, JMPC(array_sub_AGTB_end, array_sub_AGTB_loop_final)
 
 array_sub_AGTB_end:
         $ => RR         :MLOAD(array_sub_AGTB_RR)

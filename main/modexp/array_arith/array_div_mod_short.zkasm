@@ -3,10 +3,17 @@
 ;; array_div_mod_short:
 ;;             in: 
 ;;                  · C ∈ [0, 2²⁵⁶ - 1], the len of inA
+;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
+;;                  · inB ∈ [0, 2²⁵⁶ - 1], the second input
 ;;
 ;;          output: 
 ;;                  · [quo,rem] = [inA / inB[0], inA % inB[0]], with len(quo) <= C - 1, len(rem) = 1
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+
+VAR GLOBAL array_div_mod_short_inA[300]
+VAR GLOBAL array_div_mod_short_inB
+VAR GLOBAL array_div_mod_short_quo[299]
+VAR GLOBAL array_div_mod_short_rem
 
 VAR GLOBAL array_div_mod_short_RR
 
@@ -14,7 +21,7 @@ array_div_mod_short:
         RR             	:MSTORE(array_div_mod_short_RR)
 
         C => RCX   ; index in loops
-        0n   		:MSTORE(rem)
+        0n   		:MSTORE(array_div_mod_short_rem)
 
 array_div_mod_short_loopZero2inA:
         ; dividendi = remainder * base + a[i]
@@ -22,16 +29,16 @@ array_div_mod_short_loopZero2inA:
         ; remainder = dividendi - qi * b
         ; quotient[i] = qi
 	RCX - 1 => RR
-        $ => D          :MLOAD(rem)
-        $ => E          :MLOAD(inA + RR)
+        $ => D          :MLOAD(array_div_mod_short_rem)
+        $ => E          :MLOAD(array_div_mod_short_inA + RR)
         $${var _array_dividendi = (D << 256) + E}
-        ${_array_dividendi / mem.inB[0]} => A
-        $ => B          :MLOAD(inB)
-        ${_array_dividendi % mem.inB[0]} => C
-        $ => E :MLOAD(inA + RR), ARITH
+        ${_array_dividendi / mem.array_div_mod_short_inB[0]} => A
+        $ => B          :MLOAD(array_div_mod_short_inB)
+        ${_array_dividendi % mem.array_div_mod_short_inB[0]} => C
+        $ => E :MLOAD(array_div_mod_short_inA + RR), ARITH
 
-        A     		:MSTORE(quo + RR)
-        C               :MSTORE(rem)
+        A     		:MSTORE(array_div_mod_short_quo + RR)
+        C               :MSTORE(array_div_mod_short_rem)
 
         RCX - 1 => RCX 	:JMPZ(array_div_mod_short_end)
                         :JMP(array_div_mod_short_loopZero2inA)

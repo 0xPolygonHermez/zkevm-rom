@@ -1,14 +1,20 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Assumes: len(inB) >= 2
 ;;
 ;; array_mul_long:
 ;;             in: 
 ;;                  · C ∈ [0, 2²⁵⁶ - 1], the len of inA
 ;;                  · D ∈ [0, 2²⁵⁶ - 1], the len of inB
+;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
+;;                  · inB ∈ [0, 2²⁵⁶ - 1]^D, the second input array
 ;;
 ;;          output: 
-;;                  · out = inA·inB, with len(out) = C + D
+;;                  · out = inA·inB, with len(out) <= C + D
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
 
+VAR GLOBAL array_mul_long_inA[300]
+VAR GLOBAL array_mul_long_inB[300]
+VAR GLOBAL array_mul_long_out[600]
 VAR GLOBAL array_mul_long_len_inA
 VAR GLOBAL array_mul_long_len_inB
 
@@ -18,6 +24,7 @@ array_mul_long:
         RR              :MSTORE(array_mul_long_RR)
         C               :MSTORE(array_mul_long_len_inA)
         D               :MSTORE(array_mul_long_len_inB)
+
         0n => RCX   ; first index in loops
         0n => RR ; second index in loops
                         :JMP(array_mul_long_loopZero2inB)
@@ -27,20 +34,22 @@ array_mul_long_add_carry:
                         :JMP(return_array_mul_long_add_carry)
 
 array_mul_long_loop_index_check:
-        0n => RR
-
         RCX + 1n => RCX
         RCX => A
         $ => B          :MLOAD(array_mul_long_len_inA)
         $               :EQ, JMPC(array_mul_long_end)
+
+        0n => RR
+
+
                         :JMP(return_array_mul_long_loop_index_check)
 
 array_mul_long_loopZero2inB:
         RCX => E
         ; product = a_i * b_j + out[i + j]
         ; carry = product / B;
-        $ => A          :MLOAD(inA + E)
-        $ => B          :MLOAD(inB + RR)
+        $ => A          :MLOAD(array_mul_long_inA + E)
+        $ => B          :MLOAD(array_mul_long_inB + RR)
         0n => C
         $${var _arrayLongMul_AB = A*B}
         ${_arrayLongMul_AB >> 256} => D
@@ -48,17 +57,17 @@ array_mul_long_loopZero2inB:
 
         E => A
         RCX + RR => E
-        $ => B          :MLOAD(out + E)
+        $ => B          :MLOAD(array_mul_long_out + E)
         $ => C          :ADD, JMPC(array_mul_long_add_carry)
                         return_array_mul_long_add_carry:
 
-        ; out[i + j] = product - carry·B, out[i + j + 1] += carry
-        C               :MSTORE(out + E)
+        ; out[i + j] = product - carry·B
+        ; out[i + j + 1] += carry
+        C               :MSTORE(array_mul_long_out + E)
         E + 1n => E
-        $ => A          :MLOAD(out + E)
+        $ => A          :MLOAD(array_mul_long_out + E)
         D => B
-        $               :ADD, MSTORE(out + E) ; I think I should take care of the carry here as well..
-
+        $               :ADD, MSTORE(array_mul_long_out + E)
 
         RR + 1n => RR
         RR => A

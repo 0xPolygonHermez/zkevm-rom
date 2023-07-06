@@ -2,13 +2,16 @@
 ;;
 ;; array_square:
 ;;             in: 
-;;                  · C ∈ [0, 2²⁵⁶ - 1], the len of inA
+;;                  · C ∈ [0, 2²⁵⁶ - 1], the len of in
+;;                  · in ∈ [0, 2²⁵⁶ - 1]^C, the input array
 ;;
 ;;          output: 
-;;                  · out = inA², with len(out) = 2·C
+;;                  · out = in², with len(out) <= 2·C
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
 
-VAR GLOBAL array_square_len_inA
+VAR GLOBAL array_square_in[300]
+VAR GLOBAL array_square_out[600]
+VAR GLOBAL array_square_len_in
 
 VAR GLOBAL array_square_carry_high
 VAR GLOBAL array_square_carry_low
@@ -18,12 +21,12 @@ VAR GLOBAL array_square_RR
 
 array_square:
         RR              :MSTORE(array_square_RR)
-        C               :MSTORE(array_square_len_inA)
+        C               :MSTORE(array_square_len_in)
         0n => RCX   ; first index in loops
         0n => RR ; second index in loops
 
         ; 1] a_i·a_i: This number cannot be GT (base - 2)·base + 1, two chunks
-        $ => A          :MLOAD(inA)
+        $ => A          :MLOAD(array_square_in)
         A => B
         0n => C
         $${var _arraySquare_aiai = A*B}    
@@ -50,9 +53,9 @@ array_square_sub_carry_1:
 array_square_loop_index_check:
         ; out[i + len] = carry;
         $ => A          :MLOAD(array_square_carry_low)
-        $ => B          :MLOAD(array_square_len_inA)
+        $ => B          :MLOAD(array_square_len_in)
         RCX + B => E
-        A                 :MSTORE(out + E)
+        A                 :MSTORE(array_square_out + E)
 
         ; update indices
         RCX + 1n => RCX
@@ -62,7 +65,7 @@ array_square_loop_index_check:
         $               :EQ, JMPC(array_square_end)
 
         ; a_i·a_i: This number cannot be GT (base - 2)·base + 1, two chunks
-        $ => A          :MLOAD(inA + RR)
+        $ => A          :MLOAD(array_square_in + RR)
         A => B
         0n => C
         $${var _arraySquare_aiai = A*B}    
@@ -80,8 +83,8 @@ array_square_loopZero2inA:
         ; carry = product / B;
         
         ; 1] a_i·a_j: This number cannot be GT (base - 2)·base + 1, two chunks
-        $ => A          :MLOAD(inA + E)
-        $ => B          :MLOAD(inA + RR)
+        $ => A          :MLOAD(array_square_in + E)
+        $ => B          :MLOAD(array_square_in + RR)
         0n => C
         $${var _arraySquare_aiaj = A*B}    
         ${_arraySquare_aiaj >> 256} => D
@@ -98,7 +101,7 @@ array_square_loopZero2inA:
 
         ; 3] 2·a_i·a_j + out[i + j]: This number cannot be GT base² + (base - 3)·base + 1, three chunks
         RR + RCX => E
-        $ => A         :MLOAD(out + E)
+        $ => A         :MLOAD(array_square_out + E)
         C => B
         $ => C          :ADD, JMPC(array_square_add_carry_2)
                         return_array_square_add_carry_2:
@@ -118,11 +121,11 @@ array_square_loopZero2inA:
 
         ; out[i + j] = product - carry·B;
         RCX + RR => E
-        C               :MSTORE(out + E)
+        C               :MSTORE(array_square_out + E)
 
         RR + 1n => RR
         RR => A
-        $ => B          :MLOAD(array_square_len_inA)
+        $ => B          :MLOAD(array_square_len_in)
         $               :EQ, JMPC(array_square_loop_index_check)
                         return_array_square_loop_index_check:
                         :JMP(array_square_loopZero2inA)
