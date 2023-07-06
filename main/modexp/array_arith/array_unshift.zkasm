@@ -7,19 +7,31 @@
 ;;                  · D ∈ [0, 2²⁵⁶ - 1], the element to unshift
 ;;
 ;;          output: 
-;;                  · in = [D, in[0], in[1], ..., in[C - 1]], with len = C + 1
+;;                  · in = [D, in[0], in[1], ..., in[C - 1]]
+;;                  · len = C + 1
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 VAR GLOBAL array_unshift_in[300]
+VAR GLOBAL array_unshift_len
+
+VAR GLOBAL array_unshift_RR
 
 array_unshift:
+        RR              :MSTORE(array_unshift_RR)
+
+        C + 1           :MSTORE(array_unshift_len)
+
+        C               :JMPZ(array_unshift_end)
+
+array_unshift_loop:
         C - 1 => E
         $ => A          :MLOAD(array_unshift_in + E)
         C => E
         A               :MSTORE(array_unshift_in + E)
         C - 1 => C      :JMPZ(array_unshift_end)
-                        :JMP(array_unshift)
+                        :JMP(array_unshift_loop)
 
 array_unshift_end:
         D               :MSTORE(array_unshift_in)
+        $ => RR         :MLOAD(array_unshift_RR)
                         :RETURN
