@@ -1,0 +1,95 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; array_div_mod_normalize:
+;;             in: 
+;;                  · C ∈ [0, 2²⁵⁶ - 1], the len of inA
+;;                  · D ∈ [0, 2²⁵⁶ - 1], the len of inB
+;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
+;;                  · inB ∈ [0, 2²⁵⁶ - 1]^D, the second input array
+;;
+;;          output: 
+;;                  · inA·k
+;;                  · inB·k, where k = 2^l is such that inB[D-1]·k >= 2²⁵⁵
+;;                  · k
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL array_div_mod_normalize_inA[300]
+VAR GLOBAL array_div_mod_normalize_inB[300]
+VAR GLOBAL array_div_mod_normalize_k
+
+VAR GLOBAL array_div_mod_normalize_len_inA
+VAR GLOBAL array_div_mod_normalize_len_inB
+
+VAR GLOBAL array_div_mod_normalize_bm
+
+VAR GLOBAL array_div_mod_normalize_RR
+
+array_div_mod_normalize:
+        RR             	:MSTORE(array_div_mod_normalize_RR)
+
+        C		:MSTORE(array_div_mod_normalize_len_inA)
+	D		:MSTORE(array_div_mod_normalize_len_inB)
+
+        D - 1 => E
+        $ => A          :MLOAD(array_div_mod_normalize_inB + E)
+
+	; Initialization
+	A 		:MSTORE(array_div_mod_normalize_bm)
+	1n 	 	:MSTORE(array_div_mod_normalize_k)
+
+; short mul by 2
+; ---------------------------------------------------------------
+0 => E
+array_div_mod_normalize_doble_prepare:
+        $ => A          :MLOAD(array_div_mod_normalize_inA + E)
+        A               :MSTORE(array_mul_short_inA + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_div_mod_normalize_doble)
+                        :JMP(array_div_mod_normalize_doble_prepare)
+
+array_div_mod_normalize_doble:
+	2n 		:MSTORE(array_mul_short_inB)
+                        :CALL(array_mul_short)
+
+$ => B    	:MLOAD(array_div_mod_normalize_len_inA)
+B + 1 => B
+0 => E ; reset the loop counter
+array_div_mod_normalize_doble_post:
+        $ => A          :MLOAD(array_mul_short_out + E)
+        A               :MSTORE(array_div_mod_normalize_inA + E)
+        E + 1 => E
+        E => A
+        $               :EQ, JMPC(array_div_mod_normalize_continue)
+                        :JMP(array_div_mod_normalize_doble_post)
+
+array_div_mod_normalize_continue:
+        4               :MLOAD(array_unshift_len)
+        ${dump(mem.out[0],mem.out[1],mem.out[2],mem.out[3])}
+; ---------------------------------------------------------------
+
+
+array_div_mod_normalize_loopZero2inA:
+        ; dividendi = remainder * base + a[i]
+        ; qi = dividendi / b
+        ; remainder = dividendi - qi * b
+        ; quotient[i] = qi
+	RCX - 1 => RR
+        $ => D          :MLOAD(array_div_mod_normalize_rem)
+        $ => E          :MLOAD(array_div_mod_normalize_inA + RR)
+        $${var _array_dividendi = (D << 256) + E}
+        ${_array_dividendi / mem.array_div_mod_normalize_inB[0]} => A
+        $ => B          :MLOAD(array_div_mod_normalize_inB)
+        ${_array_dividendi % mem.array_div_mod_normalize_inB[0]} => C
+        $ => E :MLOAD(array_div_mod_normalize_inA + RR), ARITH
+
+        A     		:MSTORE(array_div_mod_normalize_quo + RR)
+        C               :MSTORE(array_div_mod_normalize_rem)
+
+        RCX - 1 => RCX 	:JMPZ(array_div_mod_normalize_end)
+                        :JMP(array_div_mod_normalize_loopZero2inA)
+
+array_div_mod_normalize_end:
+        $ => RR         :MLOAD(array_div_mod_normalize_RR)
+                        :RETURN

@@ -296,6 +296,61 @@ array_unshift_test_1_dump:
         ${dump(mem.out[0],mem.out[1],mem.out[2],mem.out[3])}
 ; ---------------------------------------------------------------
 
+; array trim
+; ---------------------------------------------------------------
+; 1] [2,1,0] should return 2
+array_trim_test_1: 
+        2n              :MSTORE(inA)
+        1 => E
+        1n              :MSTORE(inA + E)
+        2 => E
+        0n              :MSTORE(inA + E)
+
+3 => C
+0 => E
+array_trim_test_1_memory_copy_in_loop:
+        $ => A          :MLOAD(inA + E)
+        A               :MSTORE(array_trim_in + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_trim_test_1_trim)
+                        :JMP(array_trim_test_1_memory_copy_in_loop)
+
+array_trim_test_1_trim:
+                        :CALL(array_trim)
+        2               :MLOAD(array_trim_len_in)
+
+; 2] [0] should return 1
+array_trim_test_2: 
+        0n              :MSTORE(inA)
+        1 => E
+        0n              :MSTORE(inA + E)
+        2 => E
+        0n              :MSTORE(inA + E)
+        3 => E
+        0n              :MSTORE(inA + E)
+        4 => E
+        0n              :MSTORE(inA + E)
+        5 => E
+        0n              :MSTORE(inA + E)
+
+6 => C
+0 => E
+array_trim_test_2_memory_copy_in_loop:
+        $ => A          :MLOAD(inA + E)
+        A               :MSTORE(array_trim_in + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_trim_test_2_trim)
+                        :JMP(array_trim_test_2_memory_copy_in_loop)
+
+array_trim_test_2_trim:
+                        :CALL(array_trim)
+        1               :MLOAD(array_trim_len_in)
+; ---------------------------------------------------------------
+
 end:
 
         $ => A           :MLOAD(initial_A)
@@ -324,3 +379,4 @@ checkAndSaveFrom:
 
 INCLUDE "array_compare.zkasm"
 INCLUDE "array_unshift.zkasm"
+INCLUDE "array_trim.zkasm"
