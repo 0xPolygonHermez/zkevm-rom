@@ -12,37 +12,22 @@
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1   :JMPN(outOfCountersMemalign)
 
     ; check stack underflow
     SP - 1 => SP    :JMPN(stackUnderflow)
     ; check out-of-gas
     GAS - %GAS_FASTEST_STEP => GAS    :JMPN(outOfGas)
+    ; return 0 for contract creation
+    $               :MLOAD(isCreateContract), JMPNZ(CALLDATALOADreturn0)
     $ => A          :MLOAD(SP); [offset => A]
     $ => B          :MLOAD(txCalldataLen)
-    ; if offset is not lower than calldata length, return 0
+    ; if offset is not lower than calldata length, return 0.
+    ; This check is also done at `readFromCalldataOffset` but we do it here with a binary to be sure offset is lower than 32 bits
     $               :LT,JMPNC(CALLDATALOADreturn0)
-                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
-    ; store SP at D
-    SP => D
-    ; add %CALLDATA_OFFSET to point calldata in the memory
-    %CALLDATA_OFFSET + E => SP
-    C               :JMPNZ(opCALLDATALOAD2) ; data not aligned
-    $ => B          :MLOAD(SP); [stack => B]
-    ; recover previous stack pointer
-    D => SP
-    B               :MSTORE(SP++), JMP(readCode); [data(offset) => SP]
-
-opCALLDATALOAD2:
-    $ => A          :MLOAD(SP++)
-    ; reading beyond the calldata length will result in reading 0
-    ; calldata memory reservation in zkEVM (2**16 * 32 bytes) is larger than maximum bytes allowed as calldata fixed in the smart contract (300.000 bytes)
-    ; therefore it is assured that remaining memory space will be always 0 and never writen or over exceed
-    $ => B          :MLOAD(SP)
-    $ => A          :MEM_ALIGN_RD
-    ; recover SP
-    D => SP
-    A           :MSTORE(SP++), JMP(readCode); [data(offset) => SP]
+    32              :MSTORE(readXFromCalldataLength)
+    A               :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataOffset: result value]
+    $ => A          :MLOAD(readXFromCalldataResult)
+    A               :MSTORE(SP++), JMP(readCode); [data(offset) => SP]
 
 CALLDATALOADreturn0:
     0               :MSTORE(SP++), JMP(readCode); [0 => SP]
@@ -61,20 +46,20 @@ opCALLDATASIZE:
     ; check out-of-gas
     GAS-%GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
     ; return 0 for contract creation
-    $ => A          :MLOAD(isCreateContract), JMPNZ(opCALLDATASIZEdep)
+    $               :MLOAD(isCreateContract), JMPNZ(opCALLDATASIZEdep)
     $ => B          :MLOAD(txCalldataLen)
     B               :MSTORE(SP++); [size => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
+    %MAX_STACK_SIZE - SP       :JMPN(stackOverflow, readCode)
 
 opCALLDATASIZEdep:
     0               :MSTORE(SP++); [0 => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
+    %MAX_STACK_SIZE - SP       :JMPN(stackOverflow, readCode)
 
 VAR GLOBAL auxDestOffset
-VAR GLOBAL calldataOffset
-VAR GLOBAL auxOffset
+VAR GLOBAL calldataCopyOffset ; current calldatacopy offset
+VAR GLOBAL auxOffset ; original calldatacopy offset
 VAR GLOBAL numLastBytes
 /**
  * @link [https://www.evm.codes/#37?fork=berlin]
@@ -89,12 +74,12 @@ opCALLDATACOPY:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 2   :JMPN(outOfCountersMemalign)
     ; check stack underflow
     SP - 3 => SP    :JMPN(stackUnderflow)
     $ => E          :MLOAD(SP+2); [destOffset => E]
     $ => B          :MLOAD(SP+1); [offset => B]
     B               :MSTORE(auxOffset)
+    B               :MSTORE(calldataCopyOffset)
     $ => C          :MLOAD(SP); [size => C]
     C               :MSTORE(numLastBytes)
     ; store lastMemOffset for memory expansion gas cost
@@ -108,19 +93,25 @@ opCALLDATACOPY:
     C+31 => A
                         :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     GAS - 3*E => GAS    :JMPN(outOfGas)
-    ; save current stack pointer
-    SP              :MSTORE(SPw)
     ; Recover destOffset at E
     $ => E          :MLOAD(lastMemOffset)
     ; Recover size at C
     $ => C          :MLOAD(lastMemLength)
+    ; If is a calldataCopy called from codeCopy, copy code from calldata alloccation, else if is a create contract, return 0
+    $               :MLOAD(isCalldataCopyFromCodeCopy), JMPNZ(continueOpCalldatacopyFromCodeCopy)
+    $               :MLOAD(isCreateContract), JMPNZ(opCALLDATACOPY0, continueOpCalldatacopy)
+    continueOpCalldatacopyFromCodeCopy:
+    0               :MSTORE(isCalldataCopyFromCodeCopy)
+    continueOpCalldatacopy:
     B => A
     $ => B          :MLOAD(txCalldataLen); less than 2**32 bytes (calldata). Enforced by memory expansion gas cost & smart contract batchL2DataHash
     ; if offset is not lower than calldata length, return 0
+    ; This check is also done at `readFromCalldataOffset` but we do it here with a binary to be sure offset is lower than 32 bits
     $               :LT,JMPNC(opCALLDATACOPY0)
     B => A
     $ => B          :MLOAD(auxOffset)
     B + C => B
+    32              :MSTORE(readXFromCalldataLength)
     ; if txCalldataLen < (offset + size) --> opCALLDATACOPYX0
     $               :LT,JMPC(opCALLDATACOPYX0)
     $ => B          :MLOAD(auxOffset),JMP(opCALLDATACOPYloop)
@@ -137,17 +128,13 @@ opCALLDATACOPYloop:
     C               :JMPZ(opCALLDATACOPYcheckLen)
     ; copy last bytes
     C - 32          :JMPN(opCALLDATACOPYfinal)
-    B => A          :MSTORE(calldataOffset)
-    E => B
-                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
-    ; add %CALLDATA_OFFSET to offset to reach calldata in memory
-    ; set stack pointer to first byte to read
-    %CALLDATA_OFFSET + E => SP
-    B => E
-    $ => A          :MLOAD(SP++)
-    $ => B          :MLOAD(SP)
-    $ => A          :MEM_ALIGN_RD, MSTORE(bytesToStore)
-    E => A
+    B + 32          :MSTORE(calldataCopyOffset)
+    B               :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A          :MLOAD(readXFromCalldataResult)
+    A               :MSTORE(bytesToStore)
+    $ => A          :MLOAD(lastMemOffset)
+    ; checks zk-counters
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN  - 1     :JMPN(outOfCountersMemalign)
     ; Store 32 bytes from calldata to memory
                     :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     E               :MSTORE(auxDestOffset)
@@ -165,31 +152,15 @@ opCALLDATACOPYloop:
     C - 32 => C     :MSTORE(numLastBytes)
     $ => E          :MLOAD(lastMemOffset)
     E + 32 => E     :MSTORE(lastMemOffset)
-    $ => B          :MLOAD(calldataOffset)
-    B + 32 => B     :JMP(opCALLDATACOPYloop)
+    $ => B          :MLOAD(calldataCopyOffset), JMP(opCALLDATACOPYloop)
 
 opCALLDATACOPYfinal:
     ; copy last bytes
-    C               :MSTORE(numLastBytes)
-    B => A
-    E => D
-                    :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
-    ; add %CALLDATA_OFFSET to offset to reach calldata in memory
-    ; set SP to calldata
-    %CALLDATA_OFFSET + E => SP
-    D => E
-    C => D
-    $ => A          :MLOAD(SP++), CALL(SHLarith); [calldata => A]; in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    ; Recover init SP to recover input size
-    $ => C          :MLOAD(numLastBytes); [size => C]
-    ; point to next memory slot
-    C - 32 + D => D :JMPN(opCALLDATACOPYxor)
-    D               :JMPZ(opCALLDATACOPYxor)
-    A => B
-    $ => A          :MLOAD(SP); [calldata => C]
-    32 - D => D     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    32 - C => D     :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    B + A => A
+    C               :MSTORE(readXFromCalldataLength)
+    $ => D          :MLOAD(calldataCopyOffset)
+    D               :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A          :MLOAD(readXFromCalldataResult)
+
     ; set bytesToStore with value to use in MSTORE
     A               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
                     :JMP(opCALLDATACOPYcheckLen)
@@ -206,13 +177,6 @@ opCALLDATACOPY320:
     0               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     C - 32 => C     :JMP(opCALLDATACOPY0)
 
-
-opCALLDATACOPYxor:
-    32 - C => D     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-                    :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    ; set bytesToStore with value to use in MSTORE
-    A               :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset, C: length] out: [E: new offset]
-
 opCALLDATACOPYcheckLen:
     ; fill missing values with 0 (size > calldata)
     $ => C          :MLOAD(lastMemLength)
@@ -222,8 +186,7 @@ opCALLDATACOPYcheckLen:
 
 
 opCALLDATACOPYend:
-    ; retrieve SP
-    $ => SP         :MLOAD(SPw), JMP(readCode)
+                    :JMP(readCode)
 
 /**
  * @link [https://www.evm.codes/#38?fork=berlin]
@@ -250,13 +213,13 @@ opCODESIZE:
     $ => A          :SLOAD
     A               :MSTORE(SP++); [size => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
+    %MAX_STACK_SIZE - SP       :JMPN(stackOverflow, readCode)
 
 opCODESIZEdep:
     $ => B          :MLOAD(txCalldataLen)
     B               :MSTORE(SP++); [size => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
+    %MAX_STACK_SIZE - SP       :JMPN(stackOverflow, readCode)
 
 VAR GLOBAL memOffset
 VAR GLOBAL remainingBytes
@@ -264,6 +227,8 @@ VAR GLOBAL previousValue
 VAR GLOBAL codecopyHashId
 VAR GLOBAL codecopyBytecodeLength
 VAR GLOBAL memInteger
+; Flag to check if the calldataCopy function is being called from the codecopy function
+VAR CTX isCalldataCopyFromCodeCopy
 /**
  * @link [https://www.evm.codes/#39?fork=berlin]
  * @zk-counters
@@ -279,7 +244,9 @@ opCODECOPY:
     ;Check counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     ; if is a create, copy from calldata
-    $ => A          :MLOAD(isCreateContract), JMPNZ(opCALLDATACOPY)
+    $ => A          :MLOAD(isCreateContract), JMPZ(continueOpCODECOPY)
+    1               :MSTORE(isCalldataCopyFromCodeCopy), JMP(opCALLDATACOPY)
+continueOpCODECOPY:
     ; check stack underflow
     SP - 3 => SP          :JMPN(stackUnderflow)
     $ => C          :MLOAD(SP+2); [destOffset => C]
@@ -531,7 +498,7 @@ opRETURNDATASIZE:
 endOpRETURNDATASIZE:
     A               :MSTORE(SP++); [size => SP]
     ; check stack overflow
-    %CALLDATA_OFFSET - SP       :JMPN(stackOverflow, readCode)
+    %MAX_STACK_SIZE - SP       :JMPN(stackOverflow, readCode)
 
 /**
  * @link [https://www.evm.codes/#3E?fork=berlin]

@@ -99,8 +99,8 @@ skipSetGlobalExitRoot:
         0                                   :MSTORE(batchHashPos)
         E                                   :MSTORE(batchHashDataId)
         $ => A                              :MLOAD(lastCtxUsed)
-        A                                   :MSTORE(ctxTxToUse) ; Points at first context to be used when processing transactions
-
+        A + %CALLDATA_RESERVED_CTX => A     :MSTORE(ctxTxToUse) ; Points at first context to be used when processing transactions. We reserve ctx = 1 for calldata
+        A                                   :MSTORE(lastCtxUsed)
         $${var p = 0}
         ; set flag isLoadingRLP to 1
         1               :MSTORE(isLoadingRLP)
@@ -125,10 +125,10 @@ endCheckRLP:
 
 txLoop:
         $ => A          :MLOAD(pendingTxs)
-        A-1             :MSTORE(pendingTxs), JMPN(processTxsEnd)
+        A - 1           :MSTORE(pendingTxs), JMPN(processTxsEnd)
 
         $ => A          :MLOAD(ctxTxToUse) ; Load first context used by transaction
-        A+1 => CTX      :MSTORE(ctxTxToUse),JMP(processTx)
+        A + 1 => CTX    :MSTORE(ctxTxToUse),JMP(processTx)
 
 processTxEnd:
                         :CALL(updateSystemData)
