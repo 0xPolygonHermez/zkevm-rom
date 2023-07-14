@@ -5,7 +5,7 @@ INCLUDE "vars.zkasm"
 ;       A - Load initial registers into memory: oldStateRoot (B), oldAccInputHash (C), oldNumBatch (SP) & chainID (GAS)
 ;       B - Compute keccaks needed to finish the batch
 ;       C - Loop parsing RLP transactions
-;       D - Loop processing transactions
+;       D - Load blockNum variable & Loop processing transactions
 ;       E - Batch computations: get newLocalExitRoot, assert transactions size, compute batchHashData & compute newAccInputHash
 ;       F - Finalize execution
 
@@ -78,12 +78,18 @@ txLoopRLP:
 endCheckRLP:
         ; set flag isLoadingRLP to 0
         0               :MSTORE(isLoadingRLP)
-                        :JMP(txLoop)
 
 ;;;;;;;;;;;;;;;;;;
-;; D - Loop processing transactions
-;;      - Load transaction data and interpret it
+;; D    - Load blockNum variable
+;;      - Loop processing transactions
+;;              - Load transaction data and interpret it
 ;;;;;;;;;;;;;;;;;;
+
+setBlockNum:
+        %LAST_BLOCK_STORAGE_POS => C
+        %ADDRESS_SYSTEM => A
+        %SMT_KEY_SC_STORAGE => B
+        $               :SLOAD,MSTORE(blockNum)
 
 txLoop:
         $ => A          :MLOAD(pendingTxs)
