@@ -12,6 +12,8 @@
 ;;                  · [quo,rem] = [inA / inB, inA % inB], with len(quo) <= C - D, len(rem) <= D
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
 
+; TODO: handle len quo and rem
+
 VAR GLOBAL array_div_mod_long_inA[300]
 VAR GLOBAL array_div_mod_long_inB[300]
 VAR GLOBAL array_div_mod_long_quo[299]
@@ -41,10 +43,30 @@ array_div_mod_long:
         ${(D != 1) || (mem.array_div_mod_long_inB != 0)}   :JMPZ(array_div_mod_long_inB_is_zero)
 
         ; 3] Check if inA = inB or inA < inB
-        ;                                 :CALL(array_compare) ; TODO: Finish
-        ; $ => A                          :MLOAD(array_compare_result), JMPZ(array_div_mod_long_inALTinB)
-        ; 1n => B     
-        ; 1               :EQ, JMPC(array_div_mod_long_same_input)
+        0 => RR,E
+array_div_mod_long_compare_inA1:
+        $ => A          :MLOAD(array_div_mod_long_inA + RR)
+        A               :MSTORE(array_compare_inA + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_div_mod_long_compare_inB1)
+                        :JMP(array_div_mod_long_compare_inA1)
+
+array_div_mod_long_compare_inB1:
+        $ => A          :MLOAD(array_div_mod_long_inB + E)
+        A               :MSTORE(array_compare_inB + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_div_mod_long_compare1)
+                        :JMP(array_div_mod_long_compare_inB1)
+
+array_div_mod_long_compare1:
+                        :CALL(array_compare)
+        $ => A          :MLOAD(array_compare_result), JMPZ(array_div_mod_long_prep_inALTinB)
+        1n => B     
+        $               :EQ, JMPC(array_div_mod_long_same_input)
 
         ; From here, it is assumed that inA > inB
         $${MPdiv(addr.array_div_mod_long_inA,mem.array_div_mod_long_len_inA,addr.array_div_mod_long_inB,mem.array_div_mod_long_len_inB)}
@@ -73,11 +95,15 @@ array_div_mod_long_same_input:
         0n              :MSTORE(array_div_mod_long_rem)
         0 => B          :JMP(array_div_mod_long_end)
 
+array_div_mod_long_prep_inALTinB:
+        $ => C          :MLOAD(array_div_mod_long_len_inA)
+        0 => RR
+
 array_div_mod_long_inALTinB:
-        C - 1n => C     :JMPZ(array_div_mod_long_inALTinB_before_end)
+        C - 1 => C      :JMPZ(array_div_mod_long_inALTinB_before_end)
         $ => A          :MLOAD(array_div_mod_long_inA + RR)
         A               :MSTORE(array_div_mod_long_rem + RR)
-        RR + 1n => RR   :JMP(array_div_mod_long_inALTinB)
+        RR + 1 => RR    :JMP(array_div_mod_long_inALTinB)
 
 array_div_mod_long_inALTinB_before_end:
         0n              :MSTORE(array_div_mod_long_quo)
@@ -142,25 +168,25 @@ array_div_mod_long_add_res_rem:
         $ => C          :MLOAD(array_add_AGTB_len_out)
         $ => D          :MLOAD(array_div_mod_long_len_inA)
 
-array_div_mod_long_compare_inA:
+array_div_mod_long_compare_inA2:
         $ => A          :MLOAD(array_add_AGTB_out + RR)
         A               :MSTORE(array_compare_inA + RR)
         RR + 1 => RR
         RR => A
         C => B
-        $               :EQ, JMPC(array_div_mod_long_compare_inB)
-                        :JMP(array_div_mod_long_compare_inA)
+        $               :EQ, JMPC(array_div_mod_long_compare_inB2)
+                        :JMP(array_div_mod_long_compare_inA2)
 
-array_div_mod_long_compare_inB:
+array_div_mod_long_compare_inB2:
         $ => A          :MLOAD(array_div_mod_long_inA + E)
         A               :MSTORE(array_compare_inB + E)
         E + 1 => E
         E => A
         C => B
-        $               :EQ, JMPC(array_div_mod_long_compare)
-                        :JMP(array_div_mod_long_compare_inB)
+        $               :EQ, JMPC(array_div_mod_long_compare2)
+                        :JMP(array_div_mod_long_compare_inB2)
 
-array_div_mod_long_compare:
+array_div_mod_long_compare2:
                         :CALL(array_compare)
         1               :MLOAD(array_compare_result)
         0 => B
