@@ -225,8 +225,6 @@ module.exports = class myHelper {
 
         ctx.quotient = quo;
         ctx.remainder = rem;
-        console.log("quo", quo);
-        console.log("rem", rem);
     }
 
     eval_receiveQuotientChunk(ctx, tag) {

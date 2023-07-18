@@ -17,6 +17,9 @@ VAR GLOBAL array_mul_long_inB[300]
 VAR GLOBAL array_mul_long_out[600]
 VAR GLOBAL array_mul_long_len_inA
 VAR GLOBAL array_mul_long_len_inB
+VAR GLOBAL array_mul_long_len_out
+
+VAR GLOBAL array_mul_long_result_carry
 
 VAR GLOBAL array_mul_long_RR
 
@@ -24,30 +27,42 @@ array_mul_long:
         RR              :MSTORE(array_mul_long_RR)
         C               :MSTORE(array_mul_long_len_inA)
         D               :MSTORE(array_mul_long_len_inB)
+        C + D           :MSTORE(array_mul_long_len_out)
 
-        0n => RCX   ; first index in loops
-        0n => RR ; second index in loops
-                        :JMP(array_mul_long_loopZero2inB)
+        0 => E     ; auxiliar index
+        0 => RCX   ; first index in loops
+        0 => RR    ; second index in loops
+                        :JMP(array_mul_long_clean_out)
 
 array_mul_long_add_carry:
         D + 1n => D
                         :JMP(return_array_mul_long_add_carry)
 
+array_mul_long_add_result_carry:
+        1n              :MSTORE(array_mul_long_result_carry)
+                        :JMP(return_array_mul_long_add_result_carry)
+
 array_mul_long_loop_index_check:
-        RCX + 1n => RCX
+        RCX + 1 => RCX
         RCX => A
         $ => B          :MLOAD(array_mul_long_len_inA)
-        $               :EQ, JMPC(array_mul_long_end)
+        $               :EQ, JMPC(array_mul_long_prep_trim_in)
 
-        0n => RR
-
-
+        0 => RR
                         :JMP(return_array_mul_long_loop_index_check)
+
+array_mul_long_clean_out:
+        $ => A          :MLOAD(array_mul_long_out + E)
+        0n              :MSTORE(array_mul_long_out + E)
+        E + 1 => E
+        E => A
+        C + D => B
+        $               :EQ, JMPC(array_mul_long_loopZero2inB)
+                        :JMP(array_mul_long_clean_out)
 
 array_mul_long_loopZero2inB:
         RCX => E
         ; product = a_i * b_j + out[i + j]
-        ; carry = product / B;
         $ => A          :MLOAD(array_mul_long_inA + E)
         $ => B          :MLOAD(array_mul_long_inB + RR)
         0n => C
@@ -55,26 +70,54 @@ array_mul_long_loopZero2inB:
         ${_arrayLongMul_AB >> 256} => D
         ${_arrayLongMul_AB} => E :ARITH
 
+        ; sum lower part
         E => A
         RCX + RR => E
         $ => B          :MLOAD(array_mul_long_out + E)
         $ => C          :ADD, JMPC(array_mul_long_add_carry)
                         return_array_mul_long_add_carry:
 
+        ; sum higher part
+        D => A
+        $ => B          :MLOAD(array_mul_long_result_carry)
+        $ => D          :ADD
+
         ; out[i + j] = product - carry·B
-        ; out[i + j + 1] += carry
         C               :MSTORE(array_mul_long_out + E)
-        E + 1n => E
+        
+        ; out[i + j + 1] += carry
+        E + 1 => E
         $ => A          :MLOAD(array_mul_long_out + E)
         D => B
-        $               :ADD, MSTORE(array_mul_long_out + E)
+        $ => C          :ADD, JMPC(array_mul_long_add_result_carry)
+        0n              :MSTORE(array_mul_long_result_carry)
+                        return_array_mul_long_add_result_carry:
+        C               :MSTORE(array_mul_long_out + E)
 
-        RR + 1n => RR
+        RR + 1 => RR
         RR => A
         $ => B          :MLOAD(array_mul_long_len_inB)
         $               :EQ, JMPC(array_mul_long_loop_index_check)
                         return_array_mul_long_loop_index_check:
                         :JMP(array_mul_long_loopZero2inB)
+
+array_mul_long_prep_trim_in:
+        0 => E
+        $ => C          :MLOAD(array_mul_long_len_out)
+
+array_mul_long_trim_in:
+        $ => A          :MLOAD(array_mul_long_out + E)
+        A               :MSTORE(array_trim_in + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_mul_long_trim)
+                        :JMP(array_mul_long_trim_in)
+
+array_mul_long_trim:
+                        :CALL(array_trim)
+        $ => A          :MLOAD(array_trim_len)
+        A               :MSTORE(array_mul_long_len_out)
 
 array_mul_long_end:
         $ => RR         :MLOAD(array_mul_long_RR)
