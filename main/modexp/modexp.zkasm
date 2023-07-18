@@ -1,129 +1,281 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Assumes: the three of B, E, M have no trailing zero chunks
 ;;
 ;; modexp:
 ;; ----------------------------------------
 ;;          input: 
-;;                  · Bsize ∈ [0, 2²⁵⁶ - 1], the byte size of the base B
-;;                  · Esize ∈ [0, 2²⁵⁶ - 1], the byte size of the exponent E
-;;                  · Msize ∈ [0, 2²⁵⁶ - 1], the byte size of the modulus M
-;;                  ·     B ∈ [0, 2^(Bsize·8) - 1], represented in (little-endian) ⌈Bsize/32⌉ chunks of 256 bits
-;;                  ·     E ∈ [0, 2^(Esize·8) - 1], represented in (little-endian) ⌈Esize/32⌉ chunks of 256 bits
-;;                  ·     M ∈ [0, 2^(Msize·8) - 1], represented in (little-endian) ⌈Msize/32⌉ chunks of 256 bits
+;;                  · Blen ∈ [0, 2²⁵⁶ - 1], the len of B
+;;                  · Elen ∈ [0, 2²⁵⁶ - 1], the len of E
+;;                  · Mlen ∈ [0, 2²⁵⁶ - 1], the len of M
+;;                  ·     B ∈ [0, 2²⁵⁶ - 1]^Blen, the base represented in little-endian
+;;                  ·     E ∈ [0, 2²⁵⁶ - 1]^Elen, the exponent represented in little-endian
+;;                  ·     M ∈ [0, 2²⁵⁶ - 1]^Mlen, the modulus represented in little-endian
 ;;
 ;;          output: 
-;;                  · B^E (mod M)
+;;                  · B^E (mod M) ∈ [0, 2²⁵⁶ - 1]^Mlen
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-VAR GLOBAL modexp_Bsize
-VAR GLOBAL modexp_Esize
-VAR GLOBAL modexp_Msize
-; VAR GLOBAL modexp_Binit
-; VAR GLOBAL modexp_Einit
-; VAR GLOBAL modexp_Minit
-; VAR GLOBAL modexp_Bpos
-; VAR GLOBAL modexp_Epos
-; VAR GLOBAL modexp_Mpos
-VAR GLOBAL modexp_B[20]
-VAR GLOBAL modexp_E[20]
-VAR GLOBAL modexp_M[20]
+VAR GLOBAL modexp_Blen
+VAR GLOBAL modexp_Elen
+VAR GLOBAL modexp_Mlen
+VAR GLOBAL modexp_B[300]
+VAR GLOBAL modexp_E[300]
+VAR GLOBAL modexp_M[300]
 
-VAR GLOBAL modexp_result[20]
-
-VAR GLOBAL modexp_result
-VAR GLOBAL modexp_base
-VAR GLOBAL modexp_newexp
-VAR GLOBAL modexp_numBits
+VAR GLOBAL modexp_out[300]
+VAR GLOBAL modexp_outlen
 
 VAR GLOBAL modexp_RR
 
-/**
-function modExp(B, E, M){
-    if (M == 1) {
-        return 0
-    }
-
-    const arrayBitsE = convertToBits(E);
-    let result = 1;
-    let base = B % M;
-    for (let i = 0; i < arrayBitsE.length; i++){
-        const bit = arrayBitsE[i];
-        if (bit == 1) {
-            result = (result * base) % M --> mulFpBN254
-        }
-        base = (base * base) % M --> squareFpBN254
-    }
-    return result;
-}
-*/
-
 modexp:
-    RR                  :MSTORE(modexp_RR)
+        RR              :MSTORE(modexp_RR)
 
-    $ => C              :MLOAD(modexp_M)
-    C                   :JMPZ(modexp_0)
-    C - 1               :JMPZ(modexp_0)
+        $ => C          :MLOAD(modexp_Mlen)
+        $ => A          :MLOAD(modexp_M)
+        A               :MSTORE(array_is_zero_in)
+                        :CALL(array_is_zero)
+        $ => A          :MLOAD(array_is_zero_result), JMPNZ(modexp_M_is_zero)
+        ; From here, M > 0
 
-    $ => A              :MLOAD(modexp_Esize)
-    32 - A              :JMPN(expGT322)
-    $ => A              :MLOAD(modexp_E)
-    A                   :JMPZ(modexp_1)
-    A                   :MSTORE(modexp_newexp)
+        $ => C          :MLOAD(modexp_Mlen)
+        $ => A          :MLOAD(modexp_M)
+        A               :MSTORE(array_is_one_in)
+                        :CALL(array_is_one)
+        $ => A          :MLOAD(array_is_one_result), JMPNZ(modexp_M_is_one)
+        ; From here, M > 1
 
-expGT322:
-    $ => B              :MLOAD(modexp_B)
-    B - 1               :JMPZ(modexp_1)
+        1n              :MSTORE(modexp_out)
+        1               :MSTORE(modexp_outlen)
 
-    B                   :MSTORE(arithA)
-    C                   :MSTORE(arithB),CALL(divARITH)
-    $ => B              :MLOAD(arithRes2)
-    B                   :MSTORE(modexp_base)
+        ; prepare for B = B % M
+        $ => C          :MLOAD(modexp_Blen)
+        $ => D          :MLOAD(modexp_Mlen)
+        0 => RR,E
 
-    $ => CTX            :MLOAD(originCTX)
+; Compute B = B % M
+; -------------------
+modexp_B_to_divmod:
+        $ => A          :MLOAD(modexp_B + RR)
+        A               :MSTORE(array_div_mod_long_inA + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(modexp_M_to_divmod1)
+                        :JMP(modexp_B_to_divmod)
 
-    $ => E              :MLOAD(modexp_Minit)
-    E - 1               :MSTORE(modexp_Epos)
-    1                   :MSTORE(modexp_result)
-    1 => C
+modexp_M_to_divmod1:
+        $ => A          :MLOAD(modexp_M + E)
+        A               :MSTORE(array_div_mod_long_inB + E)
+        E + 1 => E
+        E => A
+        D => B
+        $               :EQ, JMPC(modexp_divmod_B_and_M)
+                        :JMP(modexp_M_to_divmod1)
 
-modexp_byteloop:
-    1 => C
-    $ => E              :MLOAD(modexp_Epos)
-    $ => B              :MLOAD(modexp_Einit)
-    E - B + 1           :JMPZ(modexp_end)
-    E - 1               :MSTORE(modexp_Epos)
-                        :CALL(MLOADX)
-    31 => D             :CALL(SHRarith)
-    A                   :MSTORE(modexp_newexp)
-    8 => E              :MSTORE(modexp_numBits)
+modexp_divmod_B_and_M:
+                        :CALL(array_div_mod_long)
+
+        $ => C          :MLOAD(array_div_mod_long_len_rem)
+        0 => RR
+
+modexp_rem_from_divmod1:
+        $ => A          :MLOAD(array_div_mod_long_rem + RR)
+        A               :MSTORE(modexp_B + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(modexp_pre_loop)
+                        :JMP(modexp_rem_from_divmod1)
+; -------------------
+
+; Begin of edge cases
+modexp_M_is_one:
+        0                   :MSTORE(modexp_out), JMP(modexp_end)
+
+modexp_M_is_zero:
+        0                   :MSTORE(modexp_out), JMP(modexp_end)
+
+modexp_B_is_zero:
+        0                   :MSTORE(modexp_out), JMP(modexp_end)
+; End of edge cases
+
+modexp_pre_loop:
+        ; check if E is zero
+        $ => C          :MLOAD(modexp_Elen)
+        $ => A          :MLOAD(modexp_E)
+        A               :MSTORE(array_is_zero_in)
+                        :CALL(array_is_zero)
+        $ => A          :MLOAD(array_is_zero_result), JMPNZ(modexp_end)
 
 modexp_loop:
-    $ => A              :MLOAD(modexp_newexp)
-    A                   :MSTORE(arithA)
-    2                   :MSTORE(arithB),CALL(divARITH)
-    $ => A              :MLOAD(arithRes1)
-    A                   :MSTORE(modexp_newexp)
-    $                   :MLOAD(arithRes2),JMPZ(modexp_loop0)
-    $ => A              :MLOAD(modexp_result)
-    $ => B              :MLOAD(modexp_base)
-    $ => C              :MLOAD(modexp_M),CALL(modexp_mulmod)
-    C                   :MSTORE(modexp_result)
+        ; check if B is zero
+        $ => C          :MLOAD(modexp_Blen)
+        $ => A          :MLOAD(modexp_B)
+        A               :MSTORE(array_is_zero_in)
+                        :CALL(array_is_zero)
+        $ => A          :MLOAD(array_is_zero_result), JMPNZ(modexp_B_is_zero)
 
-modexp_loop0:
-    $ => A              :MLOAD(modexp_base)
-    $ => C              :MLOAD(modexp_M),CALL(modexp_A2C)
-    B                   :MSTORE(modexp_base)
-    $ => E              :MLOAD(modexp_numBits)
-    E - 1               :MSTORE(modexp_numBits),JMPZ(modexp_byteloop,modexp_loop)
+        ; check if E is odd
+        $ => A          :MLOAD(modexp_E)
+        A               :MSTORE(array_is_odd_in)
+                        :CALL(array_is_odd)
+        $ => A          :MLOAD(array_is_odd_result), JMPNZ(modexp_loop_multiply)
+                        return_modexp_loop_multiply:
 
-modexp_1:
-    1                   :MSTORE(modexp_result),JMP(modexp_end)
+        $ => C          :MLOAD(modexp_Elen)
+        2n              :MSTORE(array_div_mod_short_inB)
+        0 => RR
 
-modexp_0:
-    0                   :MSTORE(modexp_result)
+; Compute E = E / 2
+; -------------------
+modexp_E_to_divmod_short:
+        $ => A          :MLOAD(modexp_E + RR)
+        A               :MSTORE(array_div_mod_long_inA + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(modexp_divmod_E_and_2)
+                        :JMP(modexp_E_to_divmod_short)
+
+modexp_divmod_E_and_2:
+                        :CALL(array_div_mod_short)
+
+        $ => C          :MLOAD(array_div_mod_short_len_quo)
+        0 => RR
+
+modexp_quo_from_divmod_short:
+        $ => A          :MLOAD(array_div_mod_short_quo + RR)
+        A               :MSTORE(modexp_E + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(modexp_pre_B_square)
+                        :JMP(modexp_quo_from_divmod_short)
+; -------------------
+
+; Compute B^2
+; -------------------
+modexp_pre_B_square:
+        $ => C          :MLOAD(modexp_Blen)
+        0 => RR
+
+modexp_B_to_square:
+        $ => A          :MLOAD(modexp_B + RR)
+        A               :MSTORE(array_square_in + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(modexp_square_B)
+                        :JMP(modexp_B_to_square)
+
+modexp_square_B:
+                        :CALL(array_square)
+
+        $ => C          :MLOAD(array_square_len_out)
+        $ => D          :MLOAD(modexp_Mlen)
+        0 => RR,E
+
+; Compute B = (B^2) % M
+modexp_out_to_divmod2:
+        $ => A          :MLOAD(array_square_out + RR)
+        A               :MSTORE(array_div_mod_long_inA + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(modexp_M_to_divmod2)
+                        :JMP(modexp_out_to_divmod2)
+modexp_M_to_divmod2:
+        $ => A          :MLOAD(modexp_M + E)
+        A               :MSTORE(array_div_mod_long_inB + E)
+        E + 1 => E
+        E => A
+        D => B
+        $               :EQ, JMPC(modexp_divmod_out_and_M1)
+                        :JMP(modexp_M_to_divmod2)
+
+modexp_divmod_out_and_M1:
+                        :CALL(array_div_mod_long)
+
+        $ => C          :MLOAD(array_div_mod_long_len_rem)
+        0 => RR
+
+modexp_rem_from_divmod3:
+        $ => A          :MLOAD(array_div_mod_long_rem + RR)
+        A               :MSTORE(modexp_B + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(modexp_pre_loop)
+                        :JMP(modexp_rem_from_divmod3)
+; -------------------
+
+modexp_loop_multiply:
+        $ => C          :MLOAD(modexp_outlen)
+        $ => D          :MLOAD(modexp_Blen)
+        0 => RR,E
+
+; Compute out * B
+; -------------------
+modexp_out_to_mul_long:
+        $ => A          :MLOAD(modexp_out + RR)
+        A               :MSTORE(array_mul_long_inA + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(modexp_B_to_mul_long)
+                        :JMP(modexp_out_to_mul_long)
+
+modexp_B_to_mul_long:
+        $ => A          :MLOAD(modexp_B + E)
+        A               :MSTORE(array_mul_long_inB + E)
+        E + 1 => E
+        E => A
+        D => B
+        $               :EQ, JMPC(modexp_mul_long_out_and_B)
+                        :JMP(modexp_B_to_mul_long)
+
+modexp_mul_long_out_and_B:
+                        :CALL(array_mul_long)
+
+        $ => C          :MLOAD(array_mul_long_len_out)
+        $ => D          :MLOAD(modexp_Mlen)
+        0 => RR,E
+
+; Compute out = (out * B) % M
+modexp_out_to_divmod1:
+        $ => A          :MLOAD(array_mul_long_out + RR)
+        A               :MSTORE(array_div_mod_long_inA + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(modexp_M_to_divmod)
+                        :JMP(modexp_out_to_divmod1)
+modexp_M_to_divmod:
+        $ => A          :MLOAD(modexp_M + E)
+        A               :MSTORE(array_div_mod_long_inB + E)
+        E + 1 => E
+        E => A
+        D => B
+        $               :EQ, JMPC(modexp_divmod_out_and_M2)
+                        :JMP(modexp_M_to_divmod)
+
+modexp_divmod_out_and_M2:
+                        :CALL(array_div_mod_long)
+
+        $ => C          :MLOAD(array_div_mod_long_len_rem)
+        0 => RR
+
+modexp_rem_from_divmod2:
+        $ => A          :MLOAD(array_div_mod_long_rem + RR)
+        A               :MSTORE(modexp_out + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(return_modexp_loop_multiply)
+                        :JMP(modexp_rem_from_divmod2)
+; -------------------
 
 modexp_end:
-    $ => CTX            :MLOAD(currentCTX)
-    $ => A              :MLOAD(modexp_result)
-    $ => RR             :MLOAD(modexp_RR)
-                        :RETURN
+        $ => RR             :MLOAD(modexp_RR)
+                                :RETURN
