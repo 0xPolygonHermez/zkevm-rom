@@ -27,11 +27,20 @@ array_mul_short:
 
         0n => RCX   ; index in loops
         0n              :MSTORE(array_mul_short_carry)
-                        :JMP(array_mul_short_loopZero2inA)
+                        :JMP(array_mul_short_clean_out)
 
 array_mul_short_carry:
         D + 1n => D
                         :JMP(return_array_mul_short_carry)
+
+array_mul_short_clean_out:
+        $ => A          :MLOAD(array_mul_short_out + E)
+        0n              :MSTORE(array_mul_short_out + E)
+        E + 1 => E
+        E => A
+        C + 1 => B
+        $               :EQ, JMPC(array_mul_short_loopZero2inA)
+                        :JMP(array_mul_short_clean_out)
 
 array_mul_short_loopZero2inA:
         RCX => E
@@ -61,7 +70,8 @@ array_mul_short_loopZero2inA:
 
 array_mul_short_carry_check:
         $ => A          :MLOAD(array_mul_short_carry)
-        0n              :EQ, JMPC(array_mul_short_prep_trim_in)
+        0 => B
+        $               :EQ, JMPC(array_mul_short_prep_trim_in)
 
         RCX => E
         A              :MSTORE(array_mul_short_out + E)

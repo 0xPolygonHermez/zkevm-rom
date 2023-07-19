@@ -12,8 +12,6 @@
 ;;                  · [quo,rem] = [inA / inB, inA % inB], with len(quo) <= C - D, len(rem) <= D
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
 
-; TODO: handle len quo and rem
-
 VAR GLOBAL array_div_mod_long_inA[300]
 VAR GLOBAL array_div_mod_long_inB[300]
 VAR GLOBAL array_div_mod_long_quo[299]
@@ -93,6 +91,8 @@ array_div_mod_long_inB_is_zero:
 array_div_mod_long_same_input:
         1n              :MSTORE(array_div_mod_long_quo)
         0n              :MSTORE(array_div_mod_long_rem)
+        1               :MSTORE(array_div_mod_long_len_quo)
+        1               :MSTORE(array_div_mod_long_len_rem)
         0 => B          :JMP(array_div_mod_long_end)
 
 array_div_mod_long_prep_inALTinB:
@@ -107,11 +107,15 @@ array_div_mod_long_inALTinB:
 
 array_div_mod_long_inALTinB_before_end:
         0n              :MSTORE(array_div_mod_long_quo)
+        1               :MSTORE(array_div_mod_long_len_quo)
+        $ => C          :MLOAD(array_div_mod_long_len_inA)
+        C               :MSTORE(array_div_mod_long_len_rem)
         0 => B          :JMP(array_div_mod_long_end)
 ; End of edge cases
 
 array_div_mod_long_prepare_mul_quo_inB:
         ${receiveLenQuotient()} => C
+        C               :MSTORE(array_div_mod_long_len_quo)
         $ => D          :MLOAD(array_div_mod_long_len_inB)
 
 array_div_mod_long_quo_to_mul:
@@ -140,6 +144,7 @@ array_div_mod_long_mul_quo_inB:
         0 => RR,E
         $ => C          :MLOAD(array_mul_long_len_out)
         ${receiveLenRemainder()} => D
+        D               :MSTORE(array_div_mod_long_len_rem)
 
 array_div_mod_long_res_to_add:
         $ => A          :MLOAD(array_mul_long_out + RR)

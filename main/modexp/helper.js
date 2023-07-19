@@ -260,22 +260,22 @@ module.exports = class myHelper {
 
         const [quo, rem] = this._MPdiv_short(input1, input2);
 
-        ctx.quotient = quo;
-        ctx.remainder = rem;
+        ctx.quotient_short = quo;
+        ctx.remainder_short = rem;
     }
 
     eval_receiveQuotientChunk_short(ctx, tag) {
         const pos = Number(this.evalCommand(ctx, tag.params[0]));
-        const quoi = ctx.quotient[pos];
+        const quoi = ctx.quotient_short[pos];
         return quoi;
     }
 
     eval_receiveRemainderChunk_short(ctx) {
-        const remi = ctx.remainder;
+        const remi = ctx.remainder_short;
         return remi;
     }
     
     eval_receiveLenQuotient_short(ctx) {
-        return ctx.quotient.length;
+        return ctx.quotient_short.length;
     }
 };
