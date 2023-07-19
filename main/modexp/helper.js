@@ -160,7 +160,7 @@ module.exports = class myHelper {
             }
 
             if (an[n - 1] < bm) {
-                qn = this.MP_short_div(aguess, bm)[0][0]; // this is always a single digit
+                qn = this._MPdiv_short(aguess, bm)[0][0]; // this is always a single digit
             } else if (an[n - 1] === bm) {
                 if (b_l < n) {
                     qn = this.base - 1n;
@@ -184,13 +184,13 @@ module.exports = class myHelper {
             if (a_l === 0) break;
             an.unshift(a[--a_l]);
         }
-        remainder = this.MP_short_div(remainder, shift)[0];
+        remainder = this._MPdiv_short(remainder, shift)[0];
         this.trim(quotient);
         this.trim(remainder);
         return [quotient, remainder];
     }
 
-    MP_short_div(a, b) {
+    _MPdiv_short(a, b) {
         let a_l = a.length;
         let quotient = [];
         let remainder = 0n;
@@ -203,6 +203,7 @@ module.exports = class myHelper {
             remainder = dividendi - qi * b;
             quotient[i] = qi;
         }
+        this.trim(quotient);
         return [quotient, remainder];
     }
 
@@ -245,5 +246,36 @@ module.exports = class myHelper {
 
     eval_receiveLenRemainder(ctx) {
         return ctx.remainder.length;
+    }
+
+    eval_MPdiv_short(ctx, tag) {
+        const addr1 = Number(this.evalCommand(ctx, tag.params[0]));
+        const len1 = Number(this.evalCommand(ctx, tag.params[1]));
+        const input2 = this.evalCommand(ctx, tag.params[2]);
+
+        let input1 = [];
+        for (let i = 0; i < len1; ++i) {
+            input1.push(fea2scalar(ctx.Fr, ctx.mem[addr1 + i]));
+        }
+
+        const [quo, rem] = this._MPdiv_short(input1, input2);
+
+        ctx.quotient = quo;
+        ctx.remainder = rem;
+    }
+
+    eval_receiveQuotientChunk_short(ctx, tag) {
+        const pos = Number(this.evalCommand(ctx, tag.params[0]));
+        const quoi = ctx.quotient[pos];
+        return quoi;
+    }
+
+    eval_receiveRemainderChunk_short(ctx) {
+        const remi = ctx.remainder;
+        return remi;
+    }
+    
+    eval_receiveLenQuotient_short(ctx) {
+        return ctx.quotient.length;
     }
 };

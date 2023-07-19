@@ -1,0 +1,129 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Assumes: len(inB) >= 2
+;;
+;; array_div_mod_long:
+;;             in: 
+;;                  · C ∈ [0, 2²⁵⁶ - 1], the len of inA
+;;                  · D ∈ [0, 2²⁵⁶ - 1], the len of inB
+;;
+;;          output: 
+;;                  · [quo,rem] = [inA / inB, inA % inB], with len(quo) <= C - D, len(rem) <= D
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+
+VAR GLOBAL array_div_mod_long_len_inA
+VAR GLOBAL array_div_mod_long_len_inB
+
+VAR GLOBAL array_div_mod_long_highx[2]
+VAR GLOBAL array_div_mod_long_highy[2]
+
+VAR GLOBAL array_div_mod_long_RR
+
+; ERROR CODES (B)
+; 0 - no error
+; 1 - inB is zero
+
+array_div_mod_long:
+        RR              :MSTORE(array_div_mod_long_RR)
+        C               :MSTORE(array_div_mod_long_len_inA)
+        D               :MSTORE(array_div_mod_long_len_inB)
+
+        0n => RR   ; index in loops
+
+        ; Let's cover the edge cases
+        ; 1] Check if inA = 0
+        ${(C != 1) || (mem.inA != 0)}   :JMPZ(array_div_mod_long_inA_is_zero)
+
+        ; 2] Check if inB = 0
+        ${(D != 1) || (mem.inB != 0)}   :JMPZ(array_div_mod_long_inB_is_zero)
+
+        ; 3] Check if inA = inB or inA < inB
+                                        :CALL(array_compare)
+        $ => A                          :MLOAD(array_compare_result), JMPZ(array_div_mod_long_inALTinB)
+        1n => B     
+        1               :EQ, JMPC(array_div_mod_long_same_input)
+
+        ; From here, it is assumed that inA > inB
+                        :JMP(array_div_mod_long_loopZero2inA)
+
+array_div_mod_long_inA_is_zero:
+        0n              :MSTORE(quo)
+        0n              :MSTORE(rem)
+        0 => B          :JMP(array_div_mod_long_end)
+
+array_div_mod_long_same_input:
+        1n              :MSTORE(quo)
+        0n              :MSTORE(rem)
+        0 => B          :JMP(array_div_mod_long_end)
+
+array_div_mod_long_inALTinB:
+        C - 1n => C     :JMPZ(array_div_mod_long_inALTinB_before_end)
+        $ => A          :MLOAD(inA + RR)
+        A               :MSTORE(rem + RR)
+        RR + 1n => RR   :JMP(array_div_mod_long_inALTinB)
+
+array_div_mod_long_inALTinB_before_end:
+        0n              :MSTORE(quo)
+        0 => B          :JMP(array_div_mod_long_end)
+
+array_div_mod_long_compare1:
+        0n              :MSTORE(quo + RR)
+                        :JMP(array_div_mod_long_loopZero2inA)
+
+array_div_mod_long_loopZero2inA:
+        RR + 1 => RR
+        RR => A
+        $ => B          :MLOAD(array_div_mod_long_len_inA)
+        B + 1n => B
+        $               :EQ, JMPC(array_div_mod_long_end)
+
+        $ => E          :MLOAD(array_div_mod_long_len_inA)
+        E - 1 => E
+        $ => A          :MLOAD(inA + E)
+        A               :MSTORE(rem + E)
+                        :CALL(array_compare) ; TODO: compare rem and b
+        $ => A          :MLOAD(array_compare_result), JMPZ(array_div_mod_long_compare1)
+
+        ; highx = rem_i·2²⁵⁶ + rem_{i-1}
+        $ => E          :MLOAD(array_div_mod_long_len_inA)
+        E - 1 => E
+        $ => A          :MLOAD(rem + E)
+        A               :MSTORE(array_div_mod_long_highx)
+        E - 1 => E
+        $ => A          :MLOAD(rem + E)
+        A               :MSTORE(array_div_mod_long_highx + 1)
+
+
+        ; highy = inB_{len(inB)-1}·2²⁵⁶ + inB_{len(inB)-2}
+        $ => E          :MLOAD(array_div_mod_long_len_inB)
+        E - 1 => E
+        $ => A          :MLOAD(inB + E)
+        A               :MSTORE(array_div_mod_long_highy)
+        E - 1 => E
+        $ => A          :MLOAD(inB + E)
+        A               :MSTORE(array_div_mod_long_highy + 1)
+
+        ; TODO: Do the inner if
+
+array_div_mod_long_guess_quo:
+        ${guessnextqi(mem.array_div_mod_long_highx[0],mem.array_div_mod_long_highx[1],mem.array_div_mod_long_highy[0],mem.array_div_mod_long_highy[1])} => A
+        1n => RCX ; guess
+                        :CALL(array_mul_short) ; TODO: multiply inB by RCX
+                        :CALL(array_compare) ; TODO: compare previous result with rem
+        $ => A          :MLOAD(array_compare_result), JMPNZ(array_div_mod_long_last_loop_step)
+        ; 1n => B     
+        ; 1               :EQ, JMPC(array_div_mod_long_same_input)
+
+array_div_mod_long_last_loop_step:
+        RCX             :MSTORE(quo + RR)
+                        :CALL(array_sub) ; TODO: sub rem with previous result
+                        :JMP(array_div_mod_long_loopZero2inA)
+
+; Errors
+array_div_mod_long_inB_is_zero:
+        1               :MLOAD(array_div_mod_long_len_inB)
+        0n              :MLOAD(inB)
+        1 => B          :JMP(array_div_mod_long_end)
+
+array_div_mod_long_end:
+        $ => RR         :MLOAD(array_div_mod_long_RR)
+                        :RETURN

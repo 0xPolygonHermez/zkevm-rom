@@ -15,33 +15,171 @@ VAR GLOBAL array_div_mod_short_inB
 VAR GLOBAL array_div_mod_short_quo[299]
 VAR GLOBAL array_div_mod_short_rem
 
+VAR GLOBAL array_div_mod_short_len_inA
+VAR GLOBAL array_div_mod_short_len_quo
+
 VAR GLOBAL array_div_mod_short_RR
 
+; ERROR CODES (B)
+; 0 - no error
+; 1 - inB is zero
+
 array_div_mod_short:
-        RR             	:MSTORE(array_div_mod_short_RR)
+        RR              :MSTORE(array_div_mod_short_RR)
+        C               :MSTORE(array_div_mod_short_len_inA)
+        C - 1           :MSTORE(array_div_mod_short_len_quo)
+        1 => D ; this is for the first compare to be correct
 
-        C => RCX   ; index in loops
-        0n   		:MSTORE(array_div_mod_short_rem)
+        ; Let's cover the edge cases
+        ; 1] Check if inA = 0
+        ${(C != 1) || (mem.array_div_mod_short_inA != 0)}   :JMPZ(array_div_mod_short_inA_is_zero)
 
-array_div_mod_short_loopZero2inA:
-        ; dividendi = remainder * base + a[i]
-        ; qi = dividendi / b
-        ; remainder = dividendi - qi * b
-        ; quotient[i] = qi
-	RCX - 1 => RR
-        $ => D          :MLOAD(array_div_mod_short_rem)
-        $ => E          :MLOAD(array_div_mod_short_inA + RR)
-        $${var _array_dividendi = (D << 256) + E}
-        ${_array_dividendi / mem.array_div_mod_short_inB[0]} => A
-        $ => B          :MLOAD(array_div_mod_short_inB)
-        ${_array_dividendi % mem.array_div_mod_short_inB[0]} => C
-        $ => E :MLOAD(array_div_mod_short_inA + RR), ARITH
+        ; 2] Check if inB = 0
+        ${mem.array_div_mod_short_inB != 0}   :JMPZ(array_div_mod_short_inB_is_zero)
 
-        A     		:MSTORE(array_div_mod_short_quo + RR)
-        C               :MSTORE(array_div_mod_short_rem)
+        ; 3] Check if inA = inB or inA < inB
+        0 => RR,E
+array_div_mod_short_compare_inA1:
+        $ => A          :MLOAD(array_div_mod_short_inA + RR)
+        A               :MSTORE(array_compare_inA + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_div_mod_short_compare_inB1)
+                        :JMP(array_div_mod_short_compare_inA1)
 
-        RCX - 1 => RCX 	:JMPZ(array_div_mod_short_end)
-                        :JMP(array_div_mod_short_loopZero2inA)
+array_div_mod_short_compare_inB1:
+        $ => A          :MLOAD(array_div_mod_short_inB)
+        A               :MSTORE(array_compare_inB)
+
+array_div_mod_short_compare1:
+                        :CALL(array_compare)
+        $ => A          :MLOAD(array_compare_result), JMPZ(array_div_mod_short_prep_inALTinB)
+        1n => B     
+        $               :EQ, JMPC(array_div_mod_short_same_input)
+
+        ; From here, it is assumed that inA > inB
+        $${MPdiv_short(addr.array_div_mod_short_inA,mem.array_div_mod_short_len_inA,mem.array_div_mod_short_inB)}
+
+        0 => RR,E
+                        :JMP(array_div_mod_short_prepare_mul_quo_inB)
+
+; Begin of edge cases
+array_div_mod_short_inA_is_zero:
+        1               :MLOAD(array_div_mod_short_len_inA)
+        0n              :MLOAD(array_div_mod_short_inA)
+
+        0n              :MSTORE(array_div_mod_short_quo)
+        0n              :MSTORE(array_div_mod_short_rem)
+        1               :MSTORE(array_div_mod_short_len_quo)
+        0 => B          :JMP(array_div_mod_short_end)
+
+array_div_mod_short_inB_is_zero:
+        0n              :MLOAD(array_div_mod_short_inB)
+        1 => B          :JMP(array_div_mod_short_end)
+
+array_div_mod_short_same_input:
+        1n              :MSTORE(array_div_mod_short_quo)
+        1               :MSTORE(array_div_mod_short_len_quo)
+        0n              :MSTORE(array_div_mod_short_rem)
+        0 => B          :JMP(array_div_mod_short_end)
+
+array_div_mod_short_prep_inALTinB:
+        0n              :MSTORE(array_div_mod_short_quo)
+        1               :MSTORE(array_div_mod_short_len_quo)
+        $ => A          :MLOAD(array_div_mod_short_inA)
+        A               :MSTORE(array_div_mod_short_rem)
+        0 => B          :JMP(array_div_mod_short_end)
+; End of edge cases
+
+array_div_mod_short_prepare_mul_quo_inB:
+        ${receiveLenQuotient_short()} => C
+
+array_div_mod_short_quo_to_mul:
+        ${receiveQuotientChunk_short(RR)} => A
+        A               :MSTORE(array_div_mod_short_quo + RR)
+        A               :MSTORE(array_mul_short_inA + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_div_mod_short_inB_to_mul)
+                        :JMP(array_div_mod_short_quo_to_mul)
+
+array_div_mod_short_inB_to_mul:
+        $ => A          :MLOAD(array_div_mod_short_inB)
+        A               :MSTORE(array_mul_short_inB)
+
+array_div_mod_short_mul_quo_inB:
+                        :CALL(array_mul_short)
+
+        ; prepare next
+        0 => RR,E
+        $ => C          :MLOAD(array_mul_short_len_out)
+        1 => D
+
+; TODO: Implement short addition
+array_div_mod_short_res_to_add:
+        $ => A          :MLOAD(array_mul_short_out + RR)
+        A               :MSTORE(array_add_AGTB_inA + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_div_mod_short_rem_to_add)
+                        :JMP(array_div_mod_short_res_to_add)
+
+array_div_mod_short_rem_to_add:
+        ${receiveRemainderChunk_short()} => A
+        A               :MSTORE(array_div_mod_short_rem)
+        A               :MSTORE(array_add_AGTB_inB)
+
+array_div_mod_short_add_res_rem:
+                        :CALL(array_add_AGTB)
+
+        ; prepare next
+        0 => RR,E
+        $ => C          :MLOAD(array_add_AGTB_len_out)
+        $ => D          :MLOAD(array_div_mod_short_len_inA)
+
+array_div_mod_short_compare_inA2:
+        $ => A          :MLOAD(array_add_AGTB_out + RR)
+        A               :MSTORE(array_compare_inA + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_div_mod_short_compare_inB2)
+                        :JMP(array_div_mod_short_compare_inA2)
+
+array_div_mod_short_compare_inB2:
+        $ => A          :MLOAD(array_div_mod_short_inA + E)
+        A               :MSTORE(array_compare_inB + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_div_mod_short_compare2)
+                        :JMP(array_div_mod_short_compare_inB2)
+
+array_div_mod_short_compare2:
+                        :CALL(array_compare)
+        1               :MLOAD(array_compare_result)
+
+array_div_mod_short_prep_trim_in:
+        0 => E
+        $ => C          :MLOAD(array_div_mod_short_len_quo)
+
+array_div_mod_short_trim_in:
+        $ => A          :MLOAD(array_div_mod_short_quo + E)
+        A               :MSTORE(array_trim_in + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_div_mod_short_trim)
+                        :JMP(array_div_mod_short_trim_in)
+
+array_div_mod_short_trim:
+                        :CALL(array_trim)
+        $ => A          :MLOAD(array_trim_len)
+        A               :MSTORE(array_div_mod_short_len_quo)
+        0 => B
 
 array_div_mod_short_end:
         $ => RR         :MLOAD(array_div_mod_short_RR)
