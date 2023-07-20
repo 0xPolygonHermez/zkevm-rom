@@ -9,7 +9,7 @@
 ;;                  · inB ∈ [0, 2²⁵⁶ - 1]^D, the second input array
 ;;
 ;;          output: 
-;;                  · [quo,rem] = [inA / inB, inA % inB], with len(quo) <= C - D, len(rem) <= D
+;;                  · [quo,rem] = [inA / inB, inA % inB], with len(quo) <= C - D + 1, len(rem) <= D
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
 
 VAR GLOBAL array_div_mod_long_inA[300]
@@ -45,7 +45,6 @@ array_div_mod_long:
 array_div_mod_long_compare_inA1:
         $ => A          :MLOAD(array_div_mod_long_inA + RR)
         A               :MSTORE(array_compare_inA + RR)
-        ; ${dump(A)}
         RR + 1 => RR
         RR => A
         C => B
@@ -55,10 +54,9 @@ array_div_mod_long_compare_inA1:
 array_div_mod_long_compare_inB1:
         $ => A          :MLOAD(array_div_mod_long_inB + E)
         A               :MSTORE(array_compare_inB + E)
-        ; ${dump(A)}
         E + 1 => E
         E => A
-        C => B
+        D => B
         $               :EQ, JMPC(array_div_mod_long_compare1)
                         :JMP(array_div_mod_long_compare_inB1)
 
@@ -69,7 +67,6 @@ array_div_mod_long_compare1:
         $               :EQ, JMPC(array_div_mod_long_same_input)
 
         ; From here, it is assumed that inA > inB
-        ; ${dump(mem.array_div_mod_long_inA,mem.array_div_mod_long_len_inA,mem.array_div_mod_long_inB,mem.array_div_mod_long_len_inB)}
         $${MPdiv(addr.array_div_mod_long_inA,mem.array_div_mod_long_len_inA,addr.array_div_mod_long_inB,mem.array_div_mod_long_len_inB)}
 
         0 => RR,E
@@ -123,9 +120,8 @@ array_div_mod_long_prepare_mul_quo_inB:
 
 array_div_mod_long_quo_to_mul:
         ${receiveQuotientChunk(RR)} => A
-        ; ${dump(A)}
         A               :MSTORE(array_div_mod_long_quo + RR)
-        A               :MSTORE(array_mul_long_inA + RR)
+        A               :MSTORE(array_mul_inA + RR)
         RR + 1 => RR
         RR => A
         C => B
@@ -134,7 +130,7 @@ array_div_mod_long_quo_to_mul:
 
 array_div_mod_long_inB_to_mul:
         $ => A          :MLOAD(array_div_mod_long_inB + E)
-        A               :MSTORE(array_mul_long_inB + E)
+        A               :MSTORE(array_mul_inB + E)
         E + 1 => E
         E => A
         D => B
@@ -142,16 +138,16 @@ array_div_mod_long_inB_to_mul:
                         :JMP(array_div_mod_long_inB_to_mul)
 
 array_div_mod_long_mul_quo_inB:
-                        :CALL(array_mul_long)
+                        :CALL(array_mul)
 
         ; prepare next
         0 => RR,E
-        $ => C          :MLOAD(array_mul_long_len_out)
+        $ => C          :MLOAD(array_mul_len_out)
         ${receiveLenRemainder()} => D
         D               :MSTORE(array_div_mod_long_len_rem)
 
 array_div_mod_long_res_to_add:
-        $ => A          :MLOAD(array_mul_long_out + RR)
+        $ => A          :MLOAD(array_mul_out + RR)
         A               :MSTORE(array_add_AGTB_inA + RR)
         RR + 1 => RR
         RR => A
@@ -161,7 +157,6 @@ array_div_mod_long_res_to_add:
 
 array_div_mod_long_rem_to_add:
         ${receiveRemainderChunk(E)} => A
-        ; ${dump(A)}
         A               :MSTORE(array_div_mod_long_rem + E)
         A               :MSTORE(array_add_AGTB_inB + E)
         E + 1 => E

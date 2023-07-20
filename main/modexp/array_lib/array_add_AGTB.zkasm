@@ -19,7 +19,6 @@ VAR GLOBAL array_add_AGTB_len_inA
 VAR GLOBAL array_add_AGTB_len_inB
 VAR GLOBAL array_add_AGTB_len_out
 
-VAR GLOBAL array_add_AGTB_pre_carry
 VAR GLOBAL array_add_AGTB_carry
 
 VAR GLOBAL array_add_AGTB_RR
@@ -30,35 +29,40 @@ array_add_AGTB:
         D               :MSTORE(array_add_AGTB_len_inB)
 
         0n => E ; index in loops
-        0n => D ; cleanup, check if necessary
         0n              :MSTORE(array_add_AGTB_carry)
                         :JMP(array_add_AGTB_loopZero2inB)
 
 ; Begin of branching
 array_add_AGTB_add_carry1:
-        1n              :MSTORE(array_add_AGTB_pre_carry)
+        D + 1n => D
                         :JMP(return_array_add_AGTB_add_carry1)
 
 array_add_AGTB_add_carry2:
-        1n              :MSTORE(array_add_AGTB_pre_carry)
+        D + 1n => D
                         :JMP(return_array_add_AGTB_add_carry2)
+
+array_add_AGTB_add_carry3:
+        D + 1n => D
+                        :JMP(return_array_add_AGTB_add_carry3)
 ; End of branching
 
 array_add_AGTB_loopZero2inB:
-        ; sum = (a[i] + b[i]) + carry
+        0 => D  ; for the carry
+
+        ; a[i] + b[i]
         $ => A          :MLOAD(array_add_AGTB_inA + E)
         $ => B          :MLOAD(array_add_AGTB_inB + E)
         $ => C          :ADD, JMPC(array_add_AGTB_add_carry1)
-        0n              :MSTORE(array_add_AGTB_pre_carry)
                         return_array_add_AGTB_add_carry1:
 
+        ; sum = (a[i] + b[i]) + carry
         $ => A          :MLOAD(array_add_AGTB_carry)
         C => B
-        $ => C          :ADD
+        $ => C          :ADD, JMPC(array_add_AGTB_add_carry2)
+                        return_array_add_AGTB_add_carry2:
 
         C               :MSTORE(array_add_AGTB_out + E)
-        $ => A          :MLOAD(array_add_AGTB_pre_carry)
-        A               :MSTORE(array_add_AGTB_carry)
+        D               :MSTORE(array_add_AGTB_carry)
 
         E + 1 => E
         E => A
@@ -69,18 +73,16 @@ array_add_AGTB_loop_index_check1:
         E => A
         $ => B          :MLOAD(array_add_AGTB_len_inA)
         $               :EQ, JMPC(array_add_AGTB_check_carry)
-
+        0n => D
 array_add_AGTB_loopInB2InA:
         ; sum = a[i] + carry
         $ => A          :MLOAD(array_add_AGTB_inA + E)
         $ => B          :MLOAD(array_add_AGTB_carry)
-        $ => C          :ADD, JMPC(array_add_AGTB_add_carry2)
-        0n              :MSTORE(array_add_AGTB_pre_carry)
-                        return_array_add_AGTB_add_carry2:
+        $ => C          :ADD, JMPC(array_add_AGTB_add_carry3)
+                        return_array_add_AGTB_add_carry3:
 
         C               :MSTORE(array_add_AGTB_out + E)
-        $ => A          :MLOAD(array_add_AGTB_pre_carry)
-        A               :MSTORE(array_add_AGTB_carry)
+        D               :MSTORE(array_add_AGTB_carry)
 
         E + 1 => E
         E => A

@@ -57,7 +57,7 @@ modexp:
 ; -------------------
 modexp_B_to_divmod:
         $ => A          :MLOAD(modexp_B + RR)
-        A               :MSTORE(array_div_mod_long_inA + RR)
+        A               :MSTORE(array_div_mod_inA + RR)
         RR + 1 => RR
         RR => A
         C => B
@@ -66,7 +66,7 @@ modexp_B_to_divmod:
 
 modexp_M_to_divmod1:
         $ => A          :MLOAD(modexp_M + E)
-        A               :MSTORE(array_div_mod_long_inB + E)
+        A               :MSTORE(array_div_mod_inB + E)
         E + 1 => E
         E => A
         D => B
@@ -74,14 +74,14 @@ modexp_M_to_divmod1:
                         :JMP(modexp_M_to_divmod1)
 
 modexp_divmod_B_and_M:
-                        :CALL(array_div_mod_long)
+                        :CALL(array_div_mod)
 
-        $ => C          :MLOAD(array_div_mod_long_len_rem)
+        $ => C          :MLOAD(array_div_mod_len_rem)
         C               :MSTORE(modexp_Blen)
         0 => RR
 
 modexp_rem_from_divmod1:
-        $ => A          :MLOAD(array_div_mod_long_rem + RR)
+        $ => A          :MLOAD(array_div_mod_rem + RR)
         A               :MSTORE(modexp_B + RR)
         RR + 1 => RR
         RR => A
@@ -102,8 +102,6 @@ modexp_B_is_zero:
 ; End of edge cases
 
 modexp_pre_loop:
-        ; ${dump(mem.modexp_Blen,mem.modexp_B[0])} ; THIS IS THE PROBLEM
-        ; ${dump(mem.modexp_outlen,mem.modexp_out)} ; this is correctly computed
         ; check if E is zero
         $ => C          :MLOAD(modexp_Elen)
         $ => A          :MLOAD(modexp_E)
@@ -169,7 +167,6 @@ modexp_pre_B_square:
 modexp_B_to_square1:
         $ => A          :MLOAD(modexp_B + RR)
         A               :MSTORE(array_mul_inA + RR)
-        ; ${dump(A)}
         RR + 1 => RR
         RR => A
         C => B
@@ -179,7 +176,6 @@ modexp_B_to_square1:
 modexp_B_to_square2:
         $ => A          :MLOAD(modexp_B + E)
         A               :MSTORE(array_mul_inB + E)
-        ; ${dump(A)}
         E + 1 => E
         E => A
         D => B
@@ -188,7 +184,6 @@ modexp_B_to_square2:
 
 modexp_square_B:
                         :CALL(array_mul)
-        ; ${dump(mem.modexp_B,mem.array_square_out)}
 
         $ => C          :MLOAD(array_mul_len_out)
         $ => D          :MLOAD(modexp_Mlen)
@@ -197,9 +192,7 @@ modexp_square_B:
 ; Compute B = (B^2) % M
 modexp_out_to_divmod2:
         $ => A          :MLOAD(array_mul_out + RR)
-        ; ${dump(A)}
-        A               :MSTORE(array_div_mod_long_inA + RR)
-        ; ${dump(A)}
+        A               :MSTORE(array_div_mod_inA + RR)
         RR + 1 => RR
         RR => A
         C => B
@@ -207,8 +200,7 @@ modexp_out_to_divmod2:
                         :JMP(modexp_out_to_divmod2)
 modexp_M_to_divmod2:
         $ => A          :MLOAD(modexp_M + E)
-        A               :MSTORE(array_div_mod_long_inB + E)
-        ; ${dump(A)}
+        A               :MSTORE(array_div_mod_inB + E)
         E + 1 => E
         E => A
         D => B
@@ -216,16 +208,14 @@ modexp_M_to_divmod2:
                         :JMP(modexp_M_to_divmod2)
 
 modexp_divmod_out_and_M1:
-                        :CALL(array_div_mod_long)
-        ; ${dump(mem.modexp_M,mem.array_div_mod_long_rem)}
+                        :CALL(array_div_mod)
 
-        $ => C          :MLOAD(array_div_mod_long_len_rem)
+        $ => C          :MLOAD(array_div_mod_len_rem)
         C               :MSTORE(modexp_Blen)
         0 => RR
 
 modexp_rem_from_divmod3:
-        $ => A          :MLOAD(array_div_mod_long_rem + RR)
-        ; ${dump(A)}
+        $ => A          :MLOAD(array_div_mod_rem + RR)
         A               :MSTORE(modexp_B + RR)
         RR + 1 => RR
         RR => A
@@ -269,7 +259,7 @@ modexp_mul_long_out_and_B:
 ; Compute out = (out * B) % M
 modexp_out_to_divmod1:
         $ => A          :MLOAD(array_mul_out + RR)
-        A               :MSTORE(array_div_mod_long_inA + RR)
+        A               :MSTORE(array_div_mod_inA + RR)
         RR + 1 => RR
         RR => A
         C => B
@@ -277,7 +267,7 @@ modexp_out_to_divmod1:
                         :JMP(modexp_out_to_divmod1)
 modexp_M_to_divmod:
         $ => A          :MLOAD(modexp_M + E)
-        A               :MSTORE(array_div_mod_long_inB + E)
+        A               :MSTORE(array_div_mod_inB + E)
         E + 1 => E
         E => A
         D => B
@@ -285,14 +275,14 @@ modexp_M_to_divmod:
                         :JMP(modexp_M_to_divmod)
 
 modexp_divmod_out_and_M2:
-                        :CALL(array_div_mod_long)
+                        :CALL(array_div_mod)
 
-        $ => C          :MLOAD(array_div_mod_long_len_rem)
+        $ => C          :MLOAD(array_div_mod_len_rem)
         C               :MSTORE(modexp_outlen)
         0 => RR
 
 modexp_rem_from_divmod2:
-        $ => A          :MLOAD(array_div_mod_long_rem + RR)
+        $ => A          :MLOAD(array_div_mod_rem + RR)
         A               :MSTORE(modexp_out + RR)
         RR + 1 => RR
         RR => A
