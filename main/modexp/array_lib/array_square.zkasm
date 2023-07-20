@@ -14,6 +14,10 @@ VAR GLOBAL array_square_out[600]
 VAR GLOBAL array_square_len_in
 VAR GLOBAL array_square_len_out
 
+VAR GLOBAL array_square_high
+
+VAR GLOBAL array_square_aux
+
 VAR GLOBAL array_square_carry_high
 VAR GLOBAL array_square_carry_low
 VAR GLOBAL array_square_carry_sign; 0 if negative, 1 if positive
@@ -39,6 +43,7 @@ array_square:
         D               :MSTORE(array_square_carry_high)
         E               :MSTORE(array_square_carry_low)
         0               :MSTORE(array_square_carry_sign)
+        0               :MSTORE(array_square_high)
 
         $ => C          :MLOAD(array_square_len_out)
                         :JMP(array_square_clean_out)
@@ -51,25 +56,39 @@ array_square_add_carry_2:
         D + 1n => D
                         :JMP(return_array_square_add_carry_2)
 
+array_square_add_carry_3:
+        D + 1n => D
+                        :JMP(return_array_square_add_carry_3)
+
+array_square_add_carry_4:
+        1               :MSTORE(array_square_high)
+                        :JMP(return_array_square_add_carry_4)
+
+array_square_add_carry_5:
+        0               :MSTORE(array_square_high)
+                        :JMP(return_array_square_add_carry_5)
+
+array_square_add_carry_6:
+        1               :MSTORE(array_square_high)
+                        :JMP(return_array_square_add_carry_6)
+
 array_square_is_negative_1:
         $ => C          :SUB, JMPC(array_square_sub_carry_2)
                         :JMP(return_array_square_is_negative_1)
 
 array_square_is_negative_2:
-        $ => D          :SUB ; I do not need to take care about the carry
+        $ => D          :SUB, JMPC(array_square_sub_carry_3)
                         :JMP(return_array_square_is_negative_2)
-
-array_square_sub_carry_1:
-        D => A
-        1n => B
-        $ => D          :SUB ; I don't need to care about the carry
-                        :JMP(return_array_square_sub_carry_1)
 
 array_square_sub_carry_2:
         D => A
         1n => B
         $ => D          :SUB ; I don't need to care about the carry
                         :JMP(return_array_square_is_negative_1)
+
+array_square_sub_carry_3:
+        0               :MSTORE(array_square_high)
+                        :JMP(return_array_square_is_negative_2)
 ; End of branching
 
 array_square_loop_index_check:
@@ -78,6 +97,9 @@ array_square_loop_index_check:
         $ => B          :MLOAD(array_square_len_in)
         RCX + B => E
         A                 :MSTORE(array_square_out + E)
+
+        $ => A          :MLOAD(array_square_carry_high)
+        A               :MSTORE(array_square_aux)
 
         ; update indices
         RCX + 1n => RCX
@@ -96,6 +118,7 @@ array_square_loop_index_check:
         D               :MSTORE(array_square_carry_high)
         E               :MSTORE(array_square_carry_low)
         0               :MSTORE(array_square_carry_sign)
+        0               :MSTORE(array_square_high)
 
                         :JMP(return_array_square_loop_index_check)
 
@@ -132,7 +155,8 @@ array_square_loopZero2inA:
                         return_array_square_add_carry_1:
         $ => A          :MLOAD(array_square_aiaj_high)
         D => B 
-        $ => D          :ADD ; I don't need to care about the highest carry
+        $ => D          :ADD, JMPC(array_square_add_carry_4)
+                        return_array_square_add_carry_4:
 
         ; 3] 2·a_i·a_j + out[i + j]: This number cannot be GT base² + (base - 3)·base + 1, three chunks
         RR + RCX => E
@@ -141,23 +165,30 @@ array_square_loopZero2inA:
         $ => C          :ADD, JMPC(array_square_add_carry_2)
                         return_array_square_add_carry_2:
 
+        $ => A          :MLOAD(array_square_aux)
+        D => B
+        $ => D          :ADD, JMPC(array_square_add_carry_6)
+                        return_array_square_add_carry_6:
+
         ; 4] 2·a_i·a_j + out[i + j] + carry: This number cannot be GT (base - 2)·base + 1, two chunks
         C => A
         $ => B          :MLOAD(array_square_carry_low)
         $               :MLOAD(array_square_carry_sign), JMPZ(array_square_is_negative_1)
-        $ => C          :ADD, JMPC(array_square_sub_carry_1)
-                        return_array_square_sub_carry_1:
+        $ => C          :ADD, JMPC(array_square_add_carry_3)
+                        return_array_square_add_carry_3:
                         return_array_square_is_negative_1:
 
         D => A
         $ => B          :MLOAD(array_square_carry_high)
         $               :MLOAD(array_square_carry_sign), JMPZ(array_square_is_negative_2)
-        $ => D          :ADD; I don't need to care about the highest carry either
+        $ => D          :ADD, JMPC(array_square_add_carry_5)
+                        return_array_square_add_carry_5:
                         return_array_square_is_negative_2:
 
         ; carry
         D               :MSTORE(array_square_carry_low)
-        0n              :MSTORE(array_square_carry_high)
+        $ => A          :MLOAD(array_square_high)
+        A               :MSTORE(array_square_carry_high)
         1               :MSTORE(array_square_carry_sign)
 
         ; out[i + j] = product - carry·B;
