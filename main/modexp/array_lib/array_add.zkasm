@@ -1,47 +1,106 @@
-; TODO: Finish if necessary
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; array_add:
+;;             in: 
+;;                  · C ∈ [1, 300], the len of inA
+;;                  · D ∈ [1, 300], the len of inB
+;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
+;;                  · inB ∈ [0, 2²⁵⁶ - 1]^D, the second input array
+;;
+;;          output: 
+;;                  · out = inA + inB, with len(out) <= C + 1
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
 
-; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; ;;
-; ;; array_add:
-; ;;             in: 
-; ;;                  · C ∈ [1, 300], the len of inA
-; ;;                  · D ∈ [1, 300], the len of inB
-; ;;
-; ;;          output: 
-; ;;                  · out = inA - inB, with len(out) <= max(C, D)
-; ;;                  · sign = 0 if inA >= inB, 1 otherwise
-; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+VAR GLOBAL array_add_inA[300]
+VAR GLOBAL array_add_inB[300]
+VAR GLOBAL array_add_out[301]
+VAR GLOBAL array_add_len_inA
+VAR GLOBAL array_add_len_inB
+VAR GLOBAL array_add_len_out
 
-; VAR GLOBAL array_add_inA[300]
-; VAR GLOBAL array_add_inB[300]
-; VAR GLOBAL array_add_out[300]
-; VAR GLOBAL array_add_len_inA
-; VAR GLOBAL array_add_len_inB
-; VAR GLOBAL array_add_sign
+VAR GLOBAL array_add_RR
 
-; VAR GLOBAL array_add_RR
+array_add:
+        RR              :MSTORE(array_add_RR)
+        C               :MSTORE(array_add_len_inA)
+        D               :MSTORE(array_add_len_inB)
+        0 => RR,E
 
-; array_add:
-;         RR              :MSTORE(array_add_RR)
-;         C               :MSTORE(array_add_len_inA)
-;         D               :MSTORE(array_add_len_inB)
+        D => A
+        C => B
+        $               :LT, JMPC(array_add_inA_to_add_AGTB)
 
-;                         :CALL(array_compare)
-;         $ => C          :MLOAD(array_add_len_inA)
-;         $ => D          :MLOAD(array_add_len_inB)
-;         $ => A          :MLOAD(array_compare_result)
-;         0 => B
-;         $               :EQ, JMPC(array_add_BGTA_case)
+; BGTA
+array_add_prep_BGTA:
+    C => A
+    D => C
+    A => D
 
-;         ; inA >= inB
-;                         :CALL(array_add_AGTB)
-;         0               :MSTORE(array_add_sign)
-;                         :JMP(array_add_end)
+array_add_inA_to_add_BGTA:
+        $ => A          :MLOAD(array_add_inB + RR)
+        A               :MSTORE(array_add_AGTB_inA + RR)
+        RR + 1 => RR
+        RR => A
+        D => B
+        $               :EQ, JMPC(array_add_inB_to_add_BGTA)
+                        :JMP(array_add_inA_to_add_BGTA)
 
-; array_add_BGTA_case:
-;                         :CALL(array_add_BGTA)
-;         1               :MSTORE(array_add_sign)
+array_add_inB_to_add_BGTA:
+        $ => A          :MLOAD(array_add_inA + E)
+        A               :MSTORE(array_add_AGTB_inB + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_add_compute_BGTA)
+                        :JMP(array_add_inB_to_add_BGTA)
 
-; array_add_end:
-;         $ => RR         :MLOAD(array_add_RR)
-;                         :RETURN
+array_add_compute_BGTA:
+                        :CALL(array_add_AGTB)
+        $ => C          :MLOAD(array_add_AGTB_len_out)
+        C               :MSTORE(array_add_len_out)
+        0 => RR
+array_add_assign_BGTA:
+        $ => A          :MLOAD(array_add_AGTB_out + RR)
+        A               :MSTORE(array_add_out + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_add_end)
+                        :JMP(array_add_assign_BGTA)
+
+; AGTB
+array_add_inA_to_add_AGTB:
+        $ => A          :MLOAD(array_add_inA + RR)
+        A               :MSTORE(array_add_AGTB_inA + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_add_inB_to_add_AGTB)
+                        :JMP(array_add_inA_to_add_AGTB)
+
+array_add_inB_to_add_AGTB:
+        $ => A          :MLOAD(array_add_inB + E)
+        A               :MSTORE(array_add_AGTB_inB + E)
+        E + 1 => E
+        E => A
+        D => B
+        $               :EQ, JMPC(array_add_compute_AGTB)
+                        :JMP(array_add_inB_to_add_AGTB)
+
+array_add_compute_AGTB:
+                        :CALL(array_add_AGTB)
+        $ => C          :MLOAD(array_add_AGTB_len_out)
+        C               :MSTORE(array_add_len_out)
+        0 => RR
+array_add_assign_AGTB:
+        $ => A          :MLOAD(array_add_AGTB_out + RR)
+        A               :MSTORE(array_add_out + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_add_end)
+                        :JMP(array_add_assign_AGTB)
+
+array_add_end:
+        $ => RR         :MLOAD(array_add_RR)
+                        :RETURN
