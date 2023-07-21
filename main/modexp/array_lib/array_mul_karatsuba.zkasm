@@ -1,3 +1,5 @@
+; WIK
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Assumes: len(inB) >= 2
 ;;
@@ -20,6 +22,14 @@ VAR GLOBAL array_mul_karatsuba_len_inB
 VAR GLOBAL array_mul_karatsuba_len_out
 
 VAR GLOBAL array_mul_karatsuba_max_len
+VAR GLOBAL array_mul_karatsuba_ah[150]
+VAR GLOBAL array_mul_karatsuba_al[150]
+VAR GLOBAL array_mul_karatsuba_bh[150]
+VAR GLOBAL array_mul_karatsuba_bl[150]
+
+VAR GLOBAL array_mul_karatsuba_d0
+VAR GLOBAL array_mul_karatsuba_d1
+VAR GLOBAL array_mul_karatsuba_d2
 
 VAR GLOBAL array_mul_karatsuba_RR
 
@@ -45,7 +55,7 @@ array_mul_karatsuba_compute_max_len:
         ; if n <= 2, then fall back to long multiplication
         $ => A         :MLOAD(array_mul_karatsuba_max_len)
         3 => B
-        $               :LT, JMPNZ(array_mul_karatsuba_start_recursion)
+        $               :LT, JMPZ(array_mul_karatsuba_start_recursion)
 
 array_mul_karatsuba_inA_to_mul_long:
         $ => A          :MLOAD(array_mul_karatsuba_inA + RR)
@@ -80,6 +90,184 @@ array_mul_karatsuba_assign_long:
                         :JMP(array_mul_karatsuba_assign_long)
 
 array_mul_karatsuba_start_recursion:
+        ${mem.array_mul_karatsuba_max_len / 2} => A
+        2 => B
+        ${mem.array_mul_karatsuba_max_len % 2} => C
+        0 => D
+        $ => E          :MLOAD(array_mul_karatsuba_max_len), ARITH
+        A               :MSTORE(array_mul_karatsuba_max_len)
+
+        ; we must check that the the value in C is lower than 2
+        C => A
+        2 => B
+        1               :LT
+
+
+; compute ah, al, bh, bl
+        $ => C          :MLOAD(array_mul_karatsuba_len_inA)
+        $ => RR         :MLOAD(array_mul_karatsuba_max_len)
+        0 => E
+array_mul_karatsuba_compute_ah:
+        $ => A          :MLOAD(array_mul_karatsuba_inA + RR)
+        A               :MSTORE(array_mul_karatsuba_ah + E)
+        E + 1 => E
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_mul_karatsuba_pre_compute_al)
+                        :JMP(array_mul_karatsuba_compute_ah)
+
+array_mul_karatsuba_pre_compute_al:
+        $ => C          :MLOAD(array_mul_karatsuba_max_len)
+        0 => RR
+
+array_mul_karatsuba_compute_al:
+        $ => A          :MLOAD(array_mul_karatsuba_inA + RR)
+        A               :MSTORE(array_mul_karatsuba_al + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_mul_karatsuba_pre_compute_bh)
+                        :JMP(array_mul_karatsuba_compute_al)
+
+array_mul_karatsuba_pre_compute_bh:
+        $ => C          :MLOAD(array_mul_karatsuba_len_inB)
+        $ => RR         :MLOAD(array_mul_karatsuba_max_len)
+        0 => E
+
+array_mul_karatsuba_compute_bh:
+        $ => A          :MLOAD(array_mul_karatsuba_inB + RR)
+        A               :MSTORE(array_mul_karatsuba_bh + E)
+        E + 1 => E
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_mul_karatsuba_pre_compute_bl)
+                        :JMP(array_mul_karatsuba_compute_bh)
+
+array_mul_karatsuba_pre_compute_bl:
+        $ => C          :MLOAD(array_mul_karatsuba_max_len)
+        0 => RR
+
+array_mul_karatsuba_compute_bl:
+        $ => A          :MLOAD(array_mul_karatsuba_inB + RR)
+        A               :MSTORE(array_mul_karatsuba_bl + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_mul_karatsuba_pre_compute_d0)
+                        :JMP(array_mul_karatsuba_compute_bl)
+
+; compute d0 = array_karatsuba_mul(al, bl);
+array_mul_karatsuba_pre_compute_d0:
+        $ => C,D        :MLOAD(array_mul_karatsuba_max_len)
+        0 => RR,E
+
+array_mul_karatsuba_al_to_mul_karatsuba:
+        $ => A          :MLOAD(array_mul_karatsuba_al + RR)
+        A               :MSTORE(array_mul_karatsuba_inA + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_mul_karatsuba_bl_to_mul_karatsuba)
+                        :JMP(array_mul_karatsuba_al_to_mul_karatsuba)
+
+array_mul_karatsuba_bl_to_mul_karatsuba:
+        $ => A          :MLOAD(array_mul_karatsuba_bl + E)
+        A               :MSTORE(array_mul_karatsuba_inB + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_mul_karatsuba_al_and_bl)
+                        :JMP(array_mul_karatsuba_bl_to_mul_karatsuba)
+
+array_mul_karatsuba_al_and_bl:
+                        :CALL(array_mul_karatsuba)
+
+        $ => C          :MLOAD(array_mul_karatsuba_len_out)
+        0 => RR
+array_mul_karatsuba_obtain_d0:
+        $ => A          :MLOAD(array_mul_karatsuba_out + RR)
+        A               :MSTORE(array_mul_karatsuba_d0 + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_mul_karatsuba_pre_compute_d2)
+                        :JMP(array_mul_karatsuba_obtain_d0)
+
+; compute d2 = array_karatsuba_mul(ah, bh);
+array_mul_karatsuba_pre_compute_d2:
+        $ => C,D        :MLOAD(array_mul_karatsuba_max_len)
+        0 => RR,E
+
+array_mul_karatsuba_ah_to_mul_karatsuba:
+        $ => A          :MLOAD(array_mul_karatsuba_ah + RR)
+        A               :MSTORE(array_mul_karatsuba_inA + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_mul_karatsuba_bh_to_mul_karatsuba)
+                        :JMP(array_mul_karatsuba_ah_to_mul_karatsuba)
+
+array_mul_karatsuba_bh_to_mul_karatsuba:
+        $ => A          :MLOAD(array_mul_karatsuba_bh + E)
+        A               :MSTORE(array_mul_karatsuba_inB + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_mul_karatsuba_ah_and_bh)
+                        :JMP(array_mul_karatsuba_bh_to_mul_karatsuba)
+
+array_mul_karatsuba_ah_and_bh:
+                        :CALL(array_mul_karatsuba)
+
+        $ => C          :MLOAD(array_mul_karatsuba_len_out)
+        0 => RR
+array_mul_karatsuba_obtain_d2:
+        $ => A          :MLOAD(array_mul_karatsuba_out + RR)
+        A               :MSTORE(array_mul_karatsuba_d2 + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(modexp_M_to_divmod)
+                        :JMP(array_mul_karatsuba_obtain_d2)
+
+; compute d1 = array_karatsuba_mul(array_add(al, ah), array_add(bl, bh));
+array_mul_karatsuba_pre_compute_d1:
+        $ => C,D        :MLOAD(array_mul_karatsuba_max_len)
+        0 => RR,E
+
+array_mul_karatsuba_al_to_add:
+        $ => A          :MLOAD(array_mul_karatsuba_al + RR)
+        A               :MSTORE(array_add_inA + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(array_mul_karatsuba_ah_to_add)
+                        :JMP(array_mul_karatsuba_al_to_add)
+
+array_mul_karatsuba_ah_to_add:
+        $ => A          :MLOAD(array_mul_karatsuba_ah + E)
+        A               :MSTORE(array_add_inB + E)
+        E + 1 => E
+        E => A
+        C => B
+        $               :EQ, JMPC(array_mul_karatsuba_add_ah_and_bh)
+                        :JMP(array_mul_karatsuba_ah_to_add)
+
+array_mul_karatsuba_add_ah_and_bh:
+                        :CALL(array_add)
+
+        $ => C          :MLOAD(array_add_len_out)
+        0 => RR
+array_mul_karatsuba_LHS_to_mul_karatsuba:
+        $ => A          :MLOAD(array_add_out + RR)
+        A               :MSTORE(array_mul_karatsuba_inA + RR)
+        RR + 1 => RR
+        RR => A
+        C => B
+        $               :EQ, JMPC(modexp_M_to_divmod)
+                        :JMP(array_mul_karatsuba_LHS_to_mul_karatsuba)
 
 array_mul_karatsuba_end:
         $ => RR         :MLOAD(array_mul_karatsuba_RR)
