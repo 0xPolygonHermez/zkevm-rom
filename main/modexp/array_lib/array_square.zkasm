@@ -1,11 +1,11 @@
-; TODO: Incorrectly impelemented, it is not working
+; TODO: Incorrectly implemented, it is not working
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; array_square:
 ;;             in: 
 ;;                  · C ∈ [1, 300], the len of in
-;;                  · in ∈ [0, 2²⁵⁶ - 1]^C, the input array
+;;                  · in ∈ [0, 2²⁵ ⁶- 1]^C, the input array
 ;;
 ;;          output: 
 ;;                  · out = in², with len(out) <= 2·C
@@ -35,7 +35,7 @@ array_square:
         0 => RCX   ; first index in loops
         0 => RR ; second index in loops
 
-        ; 1] a_0²: This number cannot be GT (base - 2)·base + 1, two chunks
+        ; 1] carry = 0 - a_0²: The (unsigned) number cannot be GT (base - 2)·base + 1, two chunks
         $ => A          :MLOAD(array_square_in)
         A => B
         0n => C
@@ -52,26 +52,43 @@ array_square:
 
 ; Begin of branching
 array_square_add_carry_1:
-        D + 1n => D
+        D + 1n => D     ; I do not need to care about the highest carry
                         :JMP(return_array_square_add_carry_1)
 array_square_add_carry_2:
-        D + 1n => D
+        D => A
+        1n => B
+        $ => D          :ADD, JMPC(array_square_add_carry_carry_1)
+                        :JMP(return_array_square_add_carry_2)
+
+array_square_add_carry_carry_1:
+        $ => A          :MLOAD(array_square_high)
+        A + 1           :MSTORE(array_square_high)
                         :JMP(return_array_square_add_carry_2)
 
 array_square_add_carry_3:
-        D + 1n => D
+        D => A
+        1n => B
+        $ => D          :ADD, JMPC(array_square_add_carry_carry_2)
+                        :JMP(return_array_square_add_carry_3)
+
+array_square_add_carry_carry_2:
+        $ => A          :MLOAD(array_square_high)
+        A + 1           :MSTORE(array_square_high)
                         :JMP(return_array_square_add_carry_3)
 
 array_square_add_carry_4:
-        1               :MSTORE(array_square_high)
+        $ => A          :MLOAD(array_square_high)
+        A + 1           :MSTORE(array_square_high)
                         :JMP(return_array_square_add_carry_4)
 
 array_square_add_carry_5:
-        0               :MSTORE(array_square_high)
+        $ => A          :MLOAD(array_square_high)
+        A + 1           :MSTORE(array_square_high)
                         :JMP(return_array_square_add_carry_5)
 
 array_square_add_carry_6:
-        1               :MSTORE(array_square_high)
+        $ => A          :MLOAD(array_square_high)
+        A + 1           :MSTORE(array_square_high)
                         :JMP(return_array_square_add_carry_6)
 
 array_square_is_negative_1:
@@ -79,17 +96,23 @@ array_square_is_negative_1:
                         :JMP(return_array_square_is_negative_1)
 
 array_square_is_negative_2:
-        $ => D          :SUB, JMPC(array_square_sub_carry_3)
+        $ => D          :SUB, JMPC(array_square_sub_carry_carry_2)
                         :JMP(return_array_square_is_negative_2)
 
 array_square_sub_carry_2:
         D => A
         1n => B
-        $ => D          :SUB ; I don't need to care about the carry
+        $ => D          :SUB, JMPC(array_square_sub_carry_carry_1)
                         :JMP(return_array_square_is_negative_1)
 
-array_square_sub_carry_3:
-        0               :MSTORE(array_square_high)
+array_square_sub_carry_carry_1:
+        $ => A          :MLOAD(array_square_high)
+        A - 1           :MSTORE(array_square_high)
+                        :JMP(return_array_square_is_negative_1)
+
+array_square_sub_carry_carry_2:
+        $ => A          :MLOAD(array_square_high)
+        A - 1           :MSTORE(array_square_high)
                         :JMP(return_array_square_is_negative_2)
 ; End of branching
 
@@ -98,18 +121,19 @@ array_square_loop_index_check:
         $ => A          :MLOAD(array_square_carry_low)
         $ => B          :MLOAD(array_square_len_in)
         RCX + B => E
-        A                 :MSTORE(array_square_out + E)
+        A               :MSTORE(array_square_out + E)
 
         $ => A          :MLOAD(array_square_carry_high)
         A               :MSTORE(array_square_aux)
 
         ; update indices
-        RCX + 1n => RCX
+        RCX + 1 => RCX
         RCX => RR
 
         RCX => A
         $               :EQ, JMPC(array_square_prep_trim_in)
 
+        ; carry = 0 - a_i·a_i
         ; a_i·a_i: This number cannot be GT (base - 2)·base + 1, two chunks
         $ => A          :MLOAD(array_square_in + RR)
         A => B
@@ -129,7 +153,7 @@ array_square_clean_out:
         0n              :MSTORE(array_square_out + RR)
         RR + 1 => RR
         RR => A
-        C => B
+        C + C => B
         $               :EQ, JMPC(array_square_pre_loopZero2inA)
                         :JMP(array_square_clean_out)
 
@@ -138,9 +162,7 @@ array_square_pre_loopZero2inA:
 
 array_square_loopZero2inA:
         RCX => E
-        ; carry = 0 - a_i·a_i
         ; product = 2·(a_i·a_j) + out[i + j] + carry
-        ; carry = product / B;
         
         ; 1] a_i·a_j: This number cannot be GT (base - 2)·base + 1, two chunks
         $ => A          :MLOAD(array_square_in + E)
@@ -160,7 +182,13 @@ array_square_loopZero2inA:
         $ => D          :ADD, JMPC(array_square_add_carry_4)
                         return_array_square_add_carry_4:
 
-        ; 3] 2·a_i·a_j + out[i + j]: This number cannot be GT base² + (base - 3)·base + 1, three chunks
+        ; The result is stored as array_square_high·base² + D·base + C
+
+
+        ; 3] 2·a_i·a_j + out[i + j]: 
+        ;       a) j != len: This number cannot be GT base² + (base - 3)·base + 1, as out[i + j] < B
+        ;       b) j == len: This number cannot be GT base² + (base - 3)·base + base - 1, as  out[i + j] <= B + (B - 3)
+        ; In both cases, three chunks
         RR + RCX => E
         $ => A          :MLOAD(array_square_out + E)
         C => B
@@ -187,7 +215,7 @@ array_square_loopZero2inA:
                         return_array_square_add_carry_5:
                         return_array_square_is_negative_2:
 
-        ; carry
+        ; carry = product / B; This number cannot be greater than base + (base - 3)
         D               :MSTORE(array_square_carry_low)
         $ => A          :MLOAD(array_square_high)
         A               :MSTORE(array_square_carry_high)
@@ -198,6 +226,7 @@ array_square_loopZero2inA:
         C               :MSTORE(array_square_out + E)
 
         RR + 1n => RR
+        0n :MSTORE(array_square_high)
         RR => A
         $ => B          :MLOAD(array_square_len_in)
         $               :EQ, JMPC(array_square_loop_index_check)
