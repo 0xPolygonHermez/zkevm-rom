@@ -1,5 +1,3 @@
-; TODO: Incorrectly implemented, it is not working
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; array_square:
@@ -16,14 +14,12 @@ VAR GLOBAL array_square_out[600]
 VAR GLOBAL array_square_len_in
 VAR GLOBAL array_square_len_out
 
-VAR GLOBAL array_square_high
-
-VAR GLOBAL array_square_aux
-
 VAR GLOBAL array_square_carry_high
 VAR GLOBAL array_square_carry_low
 VAR GLOBAL array_square_carry_sign; 0 if negative, 1 if positive
 VAR GLOBAL array_square_aiaj_high
+VAR GLOBAL array_square_highest_carry
+VAR GLOBAL array_square_out_carry
 
 VAR GLOBAL array_square_RR
 
@@ -45,51 +41,51 @@ array_square:
         D               :MSTORE(array_square_carry_high)
         E               :MSTORE(array_square_carry_low)
         0               :MSTORE(array_square_carry_sign)
-        0               :MSTORE(array_square_high)
+        0               :MSTORE(array_square_highest_carry)
 
-        $ => C          :MLOAD(array_square_len_out)
+        $ => B          :MLOAD(array_square_len_out)
                         :JMP(array_square_clean_out)
 
 ; Begin of branching
 array_square_add_carry_1:
-        D + 1n => D     ; I do not need to care about the highest carry
+        D + 1n => D
                         :JMP(return_array_square_add_carry_1)
 array_square_add_carry_2:
         D => A
         1n => B
-        $ => D          :ADD, JMPC(array_square_add_carry_carry_1)
-                        :JMP(return_array_square_add_carry_2)
-
-array_square_add_carry_carry_1:
-        $ => A          :MLOAD(array_square_high)
-        A + 1           :MSTORE(array_square_high)
+        $ => D          :ADD, JMPC(array_square_add_carry_carry_2)
                         :JMP(return_array_square_add_carry_2)
 
 array_square_add_carry_3:
         D => A
         1n => B
-        $ => D          :ADD, JMPC(array_square_add_carry_carry_2)
+        $ => D          :ADD, JMPC(array_square_add_carry_carry_4)
                         :JMP(return_array_square_add_carry_3)
+
+array_square_add_carry_carry_1:
+        $ => A          :MLOAD(array_square_highest_carry)
+        A + 1           :MSTORE(array_square_highest_carry)
+                        :JMP(return_array_square_add_carry_carry_1)
 
 array_square_add_carry_carry_2:
-        $ => A          :MLOAD(array_square_high)
-        A + 1           :MSTORE(array_square_high)
+        $ => A          :MLOAD(array_square_highest_carry)
+        A + 1           :MSTORE(array_square_highest_carry)
+                        :JMP(return_array_square_add_carry_2)
+
+array_square_add_carry_carry_3:
+        $ => A          :MLOAD(array_square_highest_carry)
+        A + 1           :MSTORE(array_square_highest_carry)
+                        :JMP(return_array_square_add_carry_carry_3)
+
+array_square_add_carry_carry_4:
+        $ => A          :MLOAD(array_square_highest_carry)
+        A + 1           :MSTORE(array_square_highest_carry)
                         :JMP(return_array_square_add_carry_3)
 
-array_square_add_carry_4:
-        $ => A          :MLOAD(array_square_high)
-        A + 1           :MSTORE(array_square_high)
-                        :JMP(return_array_square_add_carry_4)
-
-array_square_add_carry_5:
-        $ => A          :MLOAD(array_square_high)
-        A + 1           :MSTORE(array_square_high)
-                        :JMP(return_array_square_add_carry_5)
-
-array_square_add_carry_6:
-        $ => A          :MLOAD(array_square_high)
-        A + 1           :MSTORE(array_square_high)
-                        :JMP(return_array_square_add_carry_6)
+array_square_add_carry_carry_5:
+        $ => A          :MLOAD(array_square_highest_carry)
+        A + 1           :MSTORE(array_square_highest_carry)
+                        :JMP(return_array_square_add_carry_carry_5)
 
 array_square_is_negative_1:
         $ => C          :SUB, JMPC(array_square_sub_carry_2)
@@ -106,13 +102,13 @@ array_square_sub_carry_2:
                         :JMP(return_array_square_is_negative_1)
 
 array_square_sub_carry_carry_1:
-        $ => A          :MLOAD(array_square_high)
-        A - 1           :MSTORE(array_square_high)
+        $ => A          :MLOAD(array_square_highest_carry)
+        A - 1           :MSTORE(array_square_highest_carry)
                         :JMP(return_array_square_is_negative_1)
 
 array_square_sub_carry_carry_2:
-        $ => A          :MLOAD(array_square_high)
-        A - 1           :MSTORE(array_square_high)
+        $ => A          :MLOAD(array_square_highest_carry)
+        A - 1           :MSTORE(array_square_highest_carry)
                         :JMP(return_array_square_is_negative_2)
 ; End of branching
 
@@ -124,7 +120,7 @@ array_square_loop_index_check:
         A               :MSTORE(array_square_out + E)
 
         $ => A          :MLOAD(array_square_carry_high)
-        A               :MSTORE(array_square_aux)
+        A               :MSTORE(array_square_out_carry)
 
         ; update indices
         RCX + 1 => RCX
@@ -144,7 +140,7 @@ array_square_loop_index_check:
         D               :MSTORE(array_square_carry_high)
         E               :MSTORE(array_square_carry_low)
         0               :MSTORE(array_square_carry_sign)
-        0               :MSTORE(array_square_high)
+        0               :MSTORE(array_square_highest_carry)
 
                         :JMP(return_array_square_loop_index_check)
 
@@ -153,7 +149,6 @@ array_square_clean_out:
         0n              :MSTORE(array_square_out + RR)
         RR + 1 => RR
         RR => A
-        C + C => B
         $               :EQ, JMPC(array_square_pre_loopZero2inA)
                         :JMP(array_square_clean_out)
 
@@ -179,10 +174,10 @@ array_square_loopZero2inA:
                         return_array_square_add_carry_1:
         $ => A          :MLOAD(array_square_aiaj_high)
         D => B 
-        $ => D          :ADD, JMPC(array_square_add_carry_4)
-                        return_array_square_add_carry_4:
+        $ => D          :ADD, JMPC(array_square_add_carry_carry_1)
+                        return_array_square_add_carry_carry_1:
 
-        ; The result is stored as array_square_high·base² + D·base + C
+        ; The result is stored as array_square_highest_carry·base² + D·base + C
 
 
         ; 3] 2·a_i·a_j + out[i + j]: 
@@ -195,10 +190,10 @@ array_square_loopZero2inA:
         $ => C          :ADD, JMPC(array_square_add_carry_2)
                         return_array_square_add_carry_2:
 
-        $ => A          :MLOAD(array_square_aux)
+        $ => A          :MLOAD(array_square_out_carry)
         D => B
-        $ => D          :ADD, JMPC(array_square_add_carry_6)
-                        return_array_square_add_carry_6:
+        $ => D          :ADD, JMPC(array_square_add_carry_carry_3)
+                        return_array_square_add_carry_carry_3:
 
         ; 4] 2·a_i·a_j + out[i + j] + carry: This number cannot be GT (base - 2)·base + 1, two chunks
         C => A
@@ -211,13 +206,13 @@ array_square_loopZero2inA:
         D => A
         $ => B          :MLOAD(array_square_carry_high)
         $               :MLOAD(array_square_carry_sign), JMPZ(array_square_is_negative_2)
-        $ => D          :ADD, JMPC(array_square_add_carry_5)
-                        return_array_square_add_carry_5:
+        $ => D          :ADD, JMPC(array_square_add_carry_carry_5)
+                        return_array_square_add_carry_carry_5:
                         return_array_square_is_negative_2:
 
         ; carry = product / B; This number cannot be greater than base + (base - 3)
         D               :MSTORE(array_square_carry_low)
-        $ => A          :MLOAD(array_square_high)
+        $ => A          :MLOAD(array_square_highest_carry)
         A               :MSTORE(array_square_carry_high)
         1               :MSTORE(array_square_carry_sign)
 
@@ -226,7 +221,7 @@ array_square_loopZero2inA:
         C               :MSTORE(array_square_out + E)
 
         RR + 1n => RR
-        0n :MSTORE(array_square_high)
+        0n :MSTORE(array_square_highest_carry)
         RR => A
         $ => B          :MLOAD(array_square_len_in)
         $               :EQ, JMPC(array_square_loop_index_check)

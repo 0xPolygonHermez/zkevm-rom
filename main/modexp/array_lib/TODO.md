@@ -1,4 +1,1 @@
 - [ ] When max sizes are known, fix them all in each of the methods in this library.
-- [ ] I can call MLOAD(in + E) and MLOAD(in + RR), but I would need to do it directly in MLOAD(in + RCX) to avoid overwriting the RR register.
-- [ ] Change everywhere that the lenght of arrays can be of 256 bits. It is at most 300.
-- [ ] Tell Laia to trim the inputs before passing them to me.
