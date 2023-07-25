@@ -30,8 +30,12 @@ loadTx_rlp:
         1 => D
         ${getTxs(p,D)} => A
         A - 0x0b                        :JMPZ(decodeChangeL2BlockTx)
-        ; First transactio must be a change L2 block transaction
-        $ => A                          :MLOAD(pendingTxs), JMPZ(invalidTxRLP)
+        ; First transaction must be a change L2 block transaction if is NOT a forced batch
+        $ => A                          :MLOAD(pendingTxs), JMPNZ(loadTx_rlp_continue)
+        ; If is not forced and is not a change L2 block transaction, we discard the entire batch
+        $                               :MLOAD(isForced), JMPZ(invalidTxRLP)
+
+loadTx_rlp_continue:
         ; We get a new hashId
         $ => E                          :MLOAD(lastHashKIdUsed)
         E+1 => E                        :MSTORE(lastHashKIdUsed)
