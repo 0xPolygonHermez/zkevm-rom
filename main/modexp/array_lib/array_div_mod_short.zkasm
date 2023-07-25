@@ -45,8 +45,7 @@ array_div_mod_short_compare_inA1:
         RR + 1 => RR
         RR => A
         C => B
-        $               :EQ, JMPC(array_div_mod_short_compare_inB1)
-                        :JMP(array_div_mod_short_compare_inA1)
+        $               :EQ, JMPC(array_div_mod_short_compare_inB1, array_div_mod_short_compare_inA1)
 
 array_div_mod_short_compare_inB1:
         $ => A          :MLOAD(array_div_mod_short_inB)
@@ -103,8 +102,7 @@ array_div_mod_short_quo_to_mul:
         RR + 1 => RR
         RR => A
         C => B
-        $               :EQ, JMPC(array_div_mod_short_inB_to_mul)
-                        :JMP(array_div_mod_short_quo_to_mul)
+        $               :EQ, JMPC(array_div_mod_short_inB_to_mul, array_div_mod_short_quo_to_mul)
 
 array_div_mod_short_inB_to_mul:
         $ => A          :MLOAD(array_div_mod_short_inB)
@@ -114,41 +112,37 @@ array_div_mod_short_mul_quo_inB:
                         :CALL(array_mul_short)
 
         ; prepare next
-        0 => RR,E
+        0 => RR
         $ => C          :MLOAD(array_mul_short_len_out)
-        1 => D
 
-; TODO: Implement short addition??
 array_div_mod_short_res_to_add:
         $ => A          :MLOAD(array_mul_short_out + RR)
-        A               :MSTORE(array_add_AGTB_inA + RR)
+        A               :MSTORE(array_add_short_inA + RR)
         RR + 1 => RR
         RR => A
         C => B
-        $               :EQ, JMPC(array_div_mod_short_rem_to_add)
-                        :JMP(array_div_mod_short_res_to_add)
+        $               :EQ, JMPC(array_div_mod_short_rem_to_add, array_div_mod_short_res_to_add)
 
 array_div_mod_short_rem_to_add:
         ${receiveRemainderChunk_short()} => A
         A               :MSTORE(array_div_mod_short_rem)
-        A               :MSTORE(array_add_AGTB_inB)
+        A               :MSTORE(array_add_short_inB)
 
 array_div_mod_short_add_res_rem:
-                        :CALL(array_add_AGTB)
+                        :CALL(array_add_short)
 
         ; prepare next
         0 => RR,E
-        $ => C          :MLOAD(array_add_AGTB_len_out)
+        $ => C          :MLOAD(array_add_short_len_out)
         $ => D          :MLOAD(array_div_mod_short_len_inA)
 
 array_div_mod_short_compare_inA2:
-        $ => A          :MLOAD(array_add_AGTB_out + RR)
+        $ => A          :MLOAD(array_add_short_out + RR)
         A               :MSTORE(array_compare_inA + RR)
         RR + 1 => RR
         RR => A
         C => B
-        $               :EQ, JMPC(array_div_mod_short_compare_inB2)
-                        :JMP(array_div_mod_short_compare_inA2)
+        $               :EQ, JMPC(array_div_mod_short_compare_inB2, array_div_mod_short_compare_inA2)
 
 array_div_mod_short_compare_inB2:
         $ => A          :MLOAD(array_div_mod_short_inA + E)
@@ -156,8 +150,7 @@ array_div_mod_short_compare_inB2:
         E + 1 => E
         E => A
         D => B
-        $               :EQ, JMPC(array_div_mod_short_compare2)
-                        :JMP(array_div_mod_short_compare_inB2)
+        $               :EQ, JMPC(array_div_mod_short_compare2, array_div_mod_short_compare_inB2)
 
 array_div_mod_short_compare2:
                         :CALL(array_compare)

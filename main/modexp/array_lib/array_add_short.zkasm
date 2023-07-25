@@ -1,0 +1,69 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Assumes: len(inA) >= len(inB)
+;;
+;; array_add_short:
+;;             in: 
+;;                  · C ∈ [1, 300], the len of inA
+;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
+;;                  · inB ∈ [0, 2²⁵⁶ - 1],   the second input
+;;
+;;          output: 
+;;                  · out = inA + inB, with len(out) <= C + 1
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+
+VAR GLOBAL array_add_short_inA[300]
+VAR GLOBAL array_add_short_inB
+VAR GLOBAL array_add_short_out[301]
+VAR GLOBAL array_add_short_len_inA
+VAR GLOBAL array_add_short_len_out
+
+VAR GLOBAL array_add_short_carry
+
+VAR GLOBAL array_add_short_RR
+
+array_add_short:
+        RR              :MSTORE(array_add_short_RR)
+        C               :MSTORE(array_add_short_len_inA)
+
+        0n => E ; index in loops
+        $ => A          :MLOAD(array_add_short_inB)
+        A               :MSTORE(array_add_short_carry)
+                        :JMP(array_add_short_loopZero2inA)
+
+; Begin of branching
+array_add_short_add_carry1:
+        D + 1n => D
+                        :JMP(return_array_add_short_add_carry1)
+; End of branching
+
+array_add_short_loopZero2inA:
+        0 => D  ; for the carry
+
+        ; a[i] + carry
+        $ => A          :MLOAD(array_add_short_inA + E)
+        $ => B          :MLOAD(array_add_short_carry)
+        $ => C          :ADD, JMPC(array_add_short_add_carry1)
+                        return_array_add_short_add_carry1:
+
+        C               :MSTORE(array_add_short_out + E)
+        D               :MSTORE(array_add_short_carry)
+
+        E + 1 => E
+        E => A
+        $ => B          :MLOAD(array_add_short_len_inA)
+        $               :EQ, JMPC(array_add_short_check_carry, array_add_short_loopZero2inA)
+
+array_add_short_check_carry:
+        $ => A          :MLOAD(array_add_short_carry)
+        0n => B
+        $               :EQ, JMPC(array_add_short_len_out)
+        1n              :MSTORE(array_add_short_out + E)
+        E + 1           :MSTORE(array_add_short_len_out)
+                        :JMP(array_add_short_end)
+
+array_add_short_len_out:
+        E               :MSTORE(array_add_short_len_out)
+
+array_add_short_end:
+        $ => RR         :MLOAD(array_add_short_RR)
+                        :RETURN
