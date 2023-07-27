@@ -10,7 +10,7 @@ const buildPoseidon = require('@0xpolygonhermez/zkevm-commonjs').getPoseidon;
 
 const folderPaths = [
     '../node_modules/@0xpolygonhermez/zkevm-testvectors/inputs-executor',
-    '../node_modules/@0xpolygonhermez/zkevm-testvectors/tools/ethereum-tests/GeneralStateTests',
+    '../node_modules/@0xpolygonhermez/zkevm-testvectors/inputs-executor/ethereum-tests/GeneralStateTests',
 ];
 
 const fileCachePil = path.join(__dirname, '../node_modules/@0xpolygonhermez/zkevm-proverjs/cache-main-pil.json');

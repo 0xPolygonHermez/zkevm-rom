@@ -7,17 +7,12 @@ processChangeL2Block:
     %MAX_CNT_STEPS - STEP - 500             :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 4        :JMPN(outOfCountersBinary)
 
-    ; Verify valid deltaTimestamp (not zero)
-    $ => B, D                               :MLOAD(deltaTimestamp)
-    0 => A
-    $                                       :EQ, JMPC(invalidChangeL2Block)
-
     ; Load current timestamp
     %TIMESTAMP_STORAGE_POS => C
     %ADDRESS_SYSTEM => A
     %SMT_KEY_SC_STORAGE => B
     $ => A                                  :SLOAD
-    D => B
+    $ => B                                  :MLOAD(deltaTimestamp)
     ; Addition of two values of 8 bytes (currentTimestamp + deltaTimestamp)
     $ => B                                  :ADD, MSTORE(timestamp)
 
@@ -25,8 +20,12 @@ processChangeL2Block:
     $ => A                                  :MLOAD(timestampLimit)
     $                                       :LT, JMPC(invalidChangeL2Block)
 
+    ; Retrieve newGER from free input
+    $ => A                                  :MLOAD(currentTx)
+    ${getNewGERRoot(A)}                     :MSTORE(newGER)
+
     ; Verify newGER | indexHistoricalGERTree belong to historicGER
-                                          ;  :CALL(verifyMerkleProof)
+    ; $                                      :MLOAD(indexHistGERTree),JMPNZ(verifyMerkleProof)
 
     ; Set new timestamp (currentTimestamp + deltaTimestamp)
     %TIMESTAMP_STORAGE_POS => C
@@ -89,7 +88,7 @@ processChangeL2Block:
 processForcedChangeL2Block:
 
     $${eventLog(onProcessTx)}
- ; checks zk-counters
+    ; checks zk-counters
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*6  :JMPN(outOfCountersPoseidon)
     $ => A                                  :MLOAD(cntKeccakPreProcess)
     %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2 :JMPN(outOfCountersKeccak)
