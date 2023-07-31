@@ -21,6 +21,7 @@ VAR GLOBAL tmpVarAmodexp
 VAR GLOBAL tmpVarBmodexp
 VAR GLOBAL tmpVarCmodexp
 VAR GLOBAL tmpVarDmodexp
+VAR GLOBAL offsetInitModexp
 VAR GLOBAL tmpVarEmodexp
 VAR GLOBAL tmpZkPCmodexp
 VAR GLOBAL modExpArrayIndex
@@ -31,8 +32,10 @@ modexp_getBase:
     B                   :MSTORE(tmpVarBmodexp)
     C                   :MSTORE(tmpVarCmodexp)
     D                   :MSTORE(tmpVarDmodexp)
+    E                   :MSTORE(offsetInitModexp)
     E + C => E          ;E = offset final
     0                   :MSTORE(modExpArrayIndex)
+    0                   :MSTORE(modexp_Blen)
 
 modexp_getBaseLoop:
     C => A
@@ -42,22 +45,27 @@ modexp_getBaseLoop:
     $                   :LT,JMPC(modexp_getBaseMloadX)
     E - 32 => E
                         :CALL(MLOAD32)
+    E - 32 => E
     ${log(A,chunk)}
     C - 32 => C         :JMP(modexp_getBaseMstore)
 
 modexp_getBaseMloadX:
     E - C => E
                         :CALL(MLOADX)
+    E - C => E
     ${log(A,chunk)}
     32 - C => D         :CALL(SHRarith)
     0 => C
 
 modexp_getBaseMstore:
     E                   :MSTORE(tmpVarEmodexp)
-    $ => B, E           :MLOAD(modExpArrayIndex)
+    A => E
+    $ => B              :MLOAD(modExpArrayIndex)
     $ => A              :ADD
     0 => B
     $                   :EQ,JMPC(modexp_getBaseFinal)
+    E => A
+    $ => E              :MLOAD(modExpArrayIndex)
     ${log(A,chunk)}
     ${log(E,desfase)}
     A                   :MSTORE(modexp_B+E)
@@ -67,9 +75,14 @@ modexp_getBaseFinal:
     $ => E              :MLOAD(tmpVarEmodexp),JMP(modexp_getBaseLoop)
 
 modexp_saveBaseLen:
-    $ => B              :MLOAD(modExpArrayIndex)
-    ${log(B,lenBase)}
-    B                   :MSTORE(modexp_Blen),JMP(modexp_getReturn)
+    $ => A              :MLOAD(modExpArrayIndex)
+    0 => B
+    $                   :EQ,JMPC(modexp_getReturn)
+    A - 1 => E          :MSTORE(modExpArrayIndex)
+    $ => A              :MLOAD(modexp_B + E)
+    $                   :EQ,JMPC(modexp_saveBaseLen)
+    ${log(E,lenfalta1)}
+    E + 1               :MSTORE(modexp_Blen),JMP(modexp_getReturn)
 
 modexp_getExp:
     RR                  :MSTORE(tmpZkPCmodexp)
@@ -77,8 +90,11 @@ modexp_getExp:
     B                   :MSTORE(tmpVarBmodexp)
     C                   :MSTORE(tmpVarCmodexp)
     D                   :MSTORE(tmpVarDmodexp)
+    E                   :MSTORE(offsetInitModexp)
     E + C => E          ;E = offset final
+    ${log(E,offsetfinal)}
     0                   :MSTORE(modExpArrayIndex)
+    0                   :MSTORE(modexp_Elen)
 
 modexp_getExpLoop:
     C => A
@@ -87,7 +103,6 @@ modexp_getExpLoop:
     32 => B
     $                   :LT,JMPC(modexp_getExpMloadX)
     E - 32 => E
-    ${log(E,offset)}
                         :CALL(MLOAD32)
     E - 32 => E
     ${log(A,chunk)}
@@ -95,8 +110,8 @@ modexp_getExpLoop:
 
 modexp_getExpMloadX:
     E - C => E
-    ${log(E,offset)}
                         :CALL(MLOADX)
+    E - C => E
     32 - C => D         :CALL(SHRarith)
     ${log(A,chunk)}
     0 => C
@@ -116,13 +131,17 @@ modexp_getExpMstore:
     E + 1 => B          :MSTORE(modExpArrayIndex)
 
 modexp_getExpFinal:
-    $ => E              :MLOAD(tmpVarEmodexp)
-                        :JMP(modexp_getExpLoop)
+    $ => E              :MLOAD(tmpVarEmodexp),JMP(modexp_getExpLoop)
 
 modexp_saveExpLen:
-    $ => B              :MLOAD(modExpArrayIndex)
-    ${log(B,lenExp)}
-    B                   :MSTORE(modexp_Elen),JMP(modexp_getReturn)
+    $ => A              :MLOAD(modExpArrayIndex)
+    0 => B
+    $                   :EQ,JMPC(modexp_getReturn)
+    A - 1 => E          :MSTORE(modExpArrayIndex)
+    $ => A              :MLOAD(modexp_E + E)
+    $                   :EQ,JMPC(modexp_saveExpLen)
+    ${log(E,lenfalta1)}
+    E + 1               :MSTORE(modexp_Elen),JMP(modexp_getReturn)
 
 modexp_getMod:
     RR                  :MSTORE(tmpZkPCmodexp)
@@ -130,8 +149,10 @@ modexp_getMod:
     B                   :MSTORE(tmpVarBmodexp)
     C                   :MSTORE(tmpVarCmodexp)
     D                   :MSTORE(tmpVarDmodexp)
+    E                   :MSTORE(offsetInitModexp)
     E + C => E          ;E = offset final
     0                   :MSTORE(modExpArrayIndex)
+    0                   :MSTORE(modexp_Mlen)
 
 modexp_getModLoop:
     C => A
@@ -141,22 +162,27 @@ modexp_getModLoop:
     $                   :LT,JMPC(modexp_getModMloadX)
     E - 32 => E
                         :CALL(MLOAD32)
+    E - 32 => E
     ${log(A,chunk)}
     C - 32 => C         :JMP(modexp_getModMstore)
 
 modexp_getModMloadX:
     E - C => E
                         :CALL(MLOADX)
-    ${log(A,chunk)}
+    E - C => E
     32 - C => D         :CALL(SHRarith)
+    ${log(A,chunk)}
     0 => C
 
 modexp_getModMstore:
     E                   :MSTORE(tmpVarEmodexp)
-    $ => B, E           :MLOAD(modExpArrayIndex)
+    A => E
+    $ => B              :MLOAD(modExpArrayIndex)
     $ => A              :ADD
     0 => B
     $                   :EQ,JMPC(modexp_getModFinal)
+    E => A
+    $ => E              :MLOAD(modExpArrayIndex)
     ${log(A,chunk)}
     ${log(E,desfase)}
     A                   :MSTORE(modexp_M+E)
@@ -166,9 +192,14 @@ modexp_getModFinal:
     $ => E              :MLOAD(tmpVarEmodexp),JMP(modexp_getModLoop)
 
 modexp_saveModLen:
-    $ => B              :MLOAD(modExpArrayIndex)
-    ${log(B,lenMod)}
-    B                   :MSTORE(modexp_Mlen),JMP(modexp_getReturn)
+    $ => A              :MLOAD(modExpArrayIndex)
+    0 => B
+    $                   :EQ,JMPC(modexp_getReturn)
+    A - 1 => E          :MSTORE(modExpArrayIndex)
+    $ => A              :MLOAD(modexp_M + E)
+    $                   :EQ,JMPC(modexp_saveModLen)
+    ${log(E,lenfalta1)}
+    E + 1               :MSTORE(modexp_Mlen),JMP(modexp_getReturn)
 
 modexp_getReturn:
     $ => RR             :MLOAD(tmpZkPCmodexp)
@@ -176,4 +207,7 @@ modexp_getReturn:
     $ => B              :MLOAD(tmpVarBmodexp)
     $ => C              :MLOAD(tmpVarCmodexp)
     $ => D              :MLOAD(tmpVarDmodexp)
+    $ => E              :MLOAD(offsetInitModexp)
+    E + C => E
+    ${log(E,offsefinal)}
                         :RETURN
