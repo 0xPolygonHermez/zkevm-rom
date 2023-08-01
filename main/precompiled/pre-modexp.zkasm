@@ -38,6 +38,9 @@ VAR GLOBAL multiplication_complexity
 VAR GLOBAL modexp_Bsize
 VAR GLOBAL modexp_Esize
 VAR GLOBAL modexp_Msize
+VAR GLOBAL modexp_Einit
+VAR GLOBAL modexp_Mend
+VAR GLOBAL modexp_offset
 
 funcModexp:
 
@@ -56,25 +59,17 @@ funcModexp:
     $ => CTX        :MLOAD(originCTX)
     $ => E          :MLOAD(argsOffsetCall)
                     :CALL(MLOAD32)
-    ${log(A,modexp_Bsize)}
     A               :MSTORE(modexp_Bsize)           ;Bsize = base size
                     :CALL(MLOAD32)
-    ${log(A,modexp_Esize)}
     A               :MSTORE(modexp_Esize)           ;Esize = exp size
                     :CALL(MLOAD32)
-    ${log(A,modexp_Msize)}
     A               :MSTORE(modexp_Msize)           ;Msize = mod size
-    $ => C          :MLOAD(modexp_Bsize)
-    ${log(E,modexp_getBase)}
-                    :CALL(modexp_getBase)
-    $ => C          :MLOAD(modexp_Esize)
-    ${log(E,modexp_getExp)}
-                    :CALL(modexp_getExp)
-    $ => C          :MLOAD(modexp_Msize)
-    ${log(E,modexp_getMod)}
-                    :CALL(modexp_getMod)
-    $ => A          :MLOAD(modexp_Elen),JMPZ(modexpExp0)
+    E               :MSTORE(modexp_offset)
     $ => A          :MLOAD(modexp_Bsize)
+    A               :MSTORE(arithA)
+    E               :MSTORE(arithB),CALL(addARITH)
+    $ => B          :MLOAD(arithRes1)
+    B               :MSTORE(modexp_Einit)
     $ => B          :MLOAD(modexp_Msize)
     $               :LT, JMPC(calculateGas)
     A => B          :JMP(calculateGas)              ;B: max_length = max(Blen, Mlen)
@@ -102,47 +97,49 @@ VAR GLOBAL iteration_count
 calculateGas:
     0 => E
     ; B = max(Bsize, Msize)
-    B + 7                               :MSTORE(arithA)
+    B                                   :MSTORE(arithA)
+    7                                   :MSTORE(arithB),CALL(addARITH)
+    $ => B                              :MLOAD(arithRes1)
+    B                                   :MSTORE(arithA)
     8                                   :MSTORE(arithB),CALL(divARITH)
     $ => C                              :MLOAD(arithRes1)   ;C: words = (max_length + 7) / 8
     C                                   :MSTORE(arithA)
     C                                   :MSTORE(arithB),CALL(mulARITH)
     $ => A                              :MLOAD(arithRes1)   ;A: multiplication_complexity = words**2
     A                                   :MSTORE(multiplication_complexity)
-    ${log(A,multiplication_complexity)}
 
 continueGas:
     $ => A                              :MLOAD(modexp_Esize)
     33 => B
     $ => B                              :LT,JMPC(modexp_expLT32)    ;if Esize <= 32 --> modexp_expLT32
     ;elif Esize > 32: iteration_count = (8 * (Esize - 32)) + ((exponent & (2**256 - 1)).bit_length() - 1)
-    A - 32                              :MSTORE(arithA)
+    A                                   :MSTORE(arithA)
+    32                                  :MSTORE(arithB),CALL(subARITH)
+    $ => A                              :MLOAD(arithRes1)
+    A                                   :MSTORE(arithA)
     8                                   :MSTORE(arithB),CALL(mulARITH)
     $ => A                              :MLOAD(arithRes1)   ; A = 8 * (Esize - 32)
     A                                   :MSTORE(iteration_count)    ;interation_count = 8 * (Esize - 32)
-    $ => E                              :MLOAD(modexp_Elen)
-    E                                   :JMPZ(continueGas2)         ;if Esize without 0's === 0 --> continueGas2
-    $ => B                              :MLOAD(modexp_E)
-     ${log(B,firstbyte)}
-                                        :CALL(getLenBits)
-    ${log(A,lenbits_firstbyte)}
+    $ => E                              :MLOAD(modexp_Einit)
+                                        :CALL(MLOAD32)
+    A => B                              :CALL(getLenBits)   ; A bits length
+    A                                   :JMPZ(finalIterationCount)
+    A - 1 => A
+
+finalIterationCount:
     $ => B                              :MLOAD(iteration_count)
     A + B                               :MSTORE(iteration_count) ; iteration_count = (8 * (Esize - 32)) + ((exponent & (2**256 - 1)).bit_length() - 1)
-    $ => B                              :MLOAD(iteration_count)
-    ${log(B,iteration_count)}
-
-continueGas2:
-    ; calculates the bits of the first byte
-    1 => C                              :CALL(MLOADX)
-    31 => D                             :CALL(SHRarith)
-    A => B                              :CALL(getLenBits)
-    $ => A                              :MLOAD(iteration_count)
-    B + A - 1 => E                      :MSTORE(iteration_count),JMP(finalGas) ; iteration_count = (8 * (Esize - 32)) + ((exponent & (2**256 - 1)).bit_length() - 1)
+    $ => E                              :MLOAD(iteration_count),JMP(finalGas) ; iteration_count = (8 * (Esize - 32)) + ((exponent & (2**256 - 1)).bit_length() - 1)
 
 modexp_expLT32:
-    $ => B                              :MLOAD(modexp_E),JMPZ(finalGas) ;if Exp === 0 --> finalGas
-                                        :CALL(getLenBits)   ;A = exponent.bit_length()
-    A - 1 => E                                              ;E = exponent.bit_length() - 1
+    $ => C                              :MLOAD(modexp_Esize)
+    $ => E                              :MLOAD(modexp_Einit)
+                                        :CALL(MLOADX)
+    32 - C => D                         :CALL(SHRarith)
+    A => B                              :CALL(getLenBits)    ;A = exponent.bit_length()
+    A => E
+    E                                   :JMPZ(finalGas)
+    E - 1 => E                                              ;E = exponent.bit_length() - 1
 
 finalGas:
     1 => A
@@ -151,7 +148,6 @@ finalGas:
     1 => E
 
 dinamicGas:
-    ${log(E, calculate_iteration)}
     ; E = calculate_iteration_count = max(iteration_count, 1)
     $ => A                              :MLOAD(multiplication_complexity)
     A                                   :MSTORE(arithA)
@@ -166,13 +162,36 @@ dinamicGas:
 
 callMODEXP:
     ; B = max(200, multiplication_complexity * iteration_count / 3)
-    ${log(B, gas)}
     $ => CTX                            :MLOAD(currentCTX)
     GAS - B => GAS                      :JMPN(outOfGas)
+    $ => CTX                            :MLOAD(originCTX)
+    0 => A
+    $ => B                              :MLOAD(modexp_Bsize)
+    $                                   :EQ,JMPC(save0out)
+    $ => B                              :MLOAD(modexp_Msize)
+    $                                   :EQ,JMPC(save0out)
+    %MAX_SIZE_MODEXP => A
+    $ => B                              :MLOAD(modexp_Bsize)
+    $                                   :LT,JMPC(endMODEXPFail)
+    $ => B                              :MLOAD(modexp_Esize)
+    $                                   :LT,JMPC(endMODEXPFail)
+    $ => B                              :MLOAD(modexp_Msize)
+    $                                   :LT,JMPC(endMODEXPFail)
+    $ => E                              :MLOAD(modexp_offset)
+    $ => C                              :MLOAD(modexp_Bsize)
+                                        :CALL(modexp_getBase)
+    $ => C                              :MLOAD(modexp_Esize)
+                                        :CALL(modexp_getExp)
+    $ => C                              :MLOAD(modexp_Msize)
+    E                                   :MSTORE(arithA)
+    C                                   :MSTORE(arithB),CALL(addARITH)
+    $ => B                              :MLOAD(arithRes1)
+    %MAX_SAFE_INTEGER_MODEXP => A
+    $                                   :LT,JMPC(endMODEXPFail)
+                                        :CALL(modexp_getMod)
+    $ => A                              :MLOAD(modexp_Elen),JMPZ(modexpExp0)
     $ => A                              :MLOAD(modexp_Mlen),JMPZ(modexpMod0)
-    ${log(A, modexp_Mlen)}
     $ => A                              :MLOAD(modexp_Blen),JMPZ(modexpBase0)
-    ${log(A, modexp_Blen)}
                                         :CALL(modexp)
                                         :JMP(finalMODEXP)
 
@@ -182,8 +201,6 @@ modexpBase0:
     0                                   :MSTORE(modexp_out),JMP(finalMODEXP)
 
 modexpExp0:
-    $ => CTX                            :MLOAD(currentCTX)
-    GAS - 200 => GAS                    :JMPN(outOfGas)
 modexpMod0:
     $ => A                              :MLOAD(modexp_Mlen)
     0                                   :MSTORE(modexp_out)
@@ -192,9 +209,13 @@ modexpMod0:
     $ => A                              :MLOAD(modexp_M)
     A - 1                               :JMPZ(finalMODEXP)
 save1out:
-    1                                   :MSTORE(modexp_out)
+    1                                   :MSTORE(modexp_out),JMP(finalMODEXP)
+
+save0out:
+    0                                   :MSTORE(modexp_out),JMP(finalMODEXP)
 
 finalMODEXP:
+    $ => CTX                            :MLOAD(currentCTX)
     ; write data into memory
     0 => E
     $ => C                              :MLOAD(modexp_Msize)
@@ -228,9 +249,8 @@ continueMODEXP:
     $ => CTX                            :MLOAD(originCTX), CALL(MSTOREX) ; in: [bytesToStore, E: offset] out: [E: new offset]
                                         :JMP(endMODEXP)
 
-modexpSizeMod0:
-    $ => CTX                            :MLOAD(currentCTX)
 endMODEXPFail:
+    $ => CTX                            :MLOAD(currentCTX)
     $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
     A => CTX
     0                                   :MSTORE(retDataCTX)
