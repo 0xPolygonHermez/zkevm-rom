@@ -57,26 +57,23 @@ funcModexp:
 
     ; read data stored in argsOffsetCall
     ; Bsize [32 bytes], Esize [32 bytes], Msize [32 bytes]
-    $ => CTX        :MLOAD(originCTX)
-    $ => E          :MLOAD(argsOffsetCall)
-                    :CALL(MLOAD32)
-                    ${log(A,bsize)}
-    A               :MSTORE(modexp_Bsize)           ;Bsize = base size
-                    :CALL(MLOAD32)
-                    ${log(A,esize)}
-    A               :MSTORE(modexp_Esize)           ;Esize = exp size
-                    :CALL(MLOAD32)
-                    ${log(A,msize)}
-    A               :MSTORE(modexp_Msize)           ;Msize = mod size
-    E               :MSTORE(modexp_offset)
-    $ => A          :MLOAD(modexp_Bsize)
-    A               :MSTORE(arithA)
-    E               :MSTORE(arithB),CALL(addARITH)
-    $ => B          :MLOAD(arithRes1)
-    B               :MSTORE(modexp_Einit)
-    $ => B          :MLOAD(modexp_Msize)
-    $               :LT, JMPC(calculateGas)
-    A => B          :JMP(calculateGas)              ;B: max_length = max(Blen, Mlen)
+    $ => CTX                            :MLOAD(originCTX)
+    $ => E                              :MLOAD(argsOffsetCall)
+                                        :CALL(MLOAD32)
+    A                                   :MSTORE(modexp_Bsize)           ;Bsize = base size
+                                        :CALL(MLOAD32)
+    A                                   :MSTORE(modexp_Esize)           ;Esize = exp size
+                                        :CALL(MLOAD32)
+    A                                   :MSTORE(modexp_Msize)           ;Msize = mod size
+    E                                   :MSTORE(modexp_offset)
+    $ => A                              :MLOAD(modexp_Bsize)
+    A                                   :MSTORE(arithA)
+    E                                   :MSTORE(arithB),CALL(addARITH)
+    $ => B                              :MLOAD(arithRes1)
+    B                                   :MSTORE(modexp_Einit)           ;Einit = offset exp
+    $ => B                              :MLOAD(modexp_Msize)
+    $                                   :LT, JMPC(calculateGas)
+    A => B                              :JMP(calculateGas)              ;B: max_length = max(Blen, Mlen)
 
 /*
 Gas
@@ -125,8 +122,8 @@ continueGas:
     $ => A                              :MLOAD(arithRes1)   ; A = 8 * (Esize - 32)
     A                                   :MSTORE(iteration_count)    ;interation_count = 8 * (Esize - 32)
     $ => E                              :MLOAD(modexp_Einit)
-                                        :CALL(MLOAD32)
-    A => B                              :CALL(getLenBits)   ; A bits length
+                                        :CALL(MLOAD32) ; A number first 32 bytes
+    A => B                              :CALL(getLenBits)   ; A bits length first 32 bytes
     A                                   :JMPZ(finalIterationCount)
     A - 1 => A
 
@@ -143,7 +140,7 @@ modexp_expLT32:
     A => B                              :CALL(getLenBits)    ;A = exponent.bit_length()
     A => E
     E                                   :JMPZ(finalGas)
-    E - 1 => E                                              ;E = exponent.bit_length() - 1
+    E - 1 => E                                               ;E = exponent.bit_length() - 1
 
 finalGas:
     1 => A
@@ -171,16 +168,16 @@ callMODEXP:
     $ => CTX                            :MLOAD(originCTX)
     0 => A
     $ => B                              :MLOAD(modexp_Msize)
-    $                                   :EQ,JMPC(save0outMod0)
+    $                                   :EQ,JMPC(save0outMod0)  ; if Msize = 0 --> save0outMod0
     $ => B                              :MLOAD(modexp_Bsize)
-    $                                   :EQ,JMPC(save0out)
+    $                                   :EQ,JMPC(save0out)      ; if Bsize = 0 --> save0outMod0
     %MAX_SIZE_MODEXP => A
     $ => B                              :MLOAD(modexp_Bsize)
-    $                                   :LT,JMPC(endMODEXPFail)
+    $                                   :LT,JMPC(endMODEXPFail) ; if Bsize > MAX_SIZE_MODEXP --> endMODEXPFail
     $ => B                              :MLOAD(modexp_Esize)
-    $                                   :LT,JMPC(endMODEXPFail)
+    $                                   :LT,JMPC(endMODEXPFail) ; if Esize > MAX_SIZE_MODEXP --> endMODEXPFail
     $ => B                              :MLOAD(modexp_Msize)
-    $                                   :LT,JMPC(endMODEXPFail)
+    $                                   :LT,JMPC(endMODEXPFail) ; if Msize > MAX_SIZE_MODEXP --> endMODEXPFail
     $ => E                              :MLOAD(modexp_offset)
     $ => C                              :MLOAD(modexp_Bsize)
                                         :CALL(modexp_getBase)
@@ -191,7 +188,7 @@ callMODEXP:
     C                                   :MSTORE(arithB),CALL(addARITH)
     $ => B                              :MLOAD(arithRes1)
     %MAX_SAFE_INTEGER_MODEXP => A
-    $                                   :LT,JMPC(endMODEXPFail)
+    $                                   :LT,JMPC(endMODEXPFail) ; if Msize+offset > MAX_SAFE_INTEGER_MODEXP --> endMODEXPFail
                                         :CALL(modexp_getMod)
     $ => A                              :MLOAD(modexp_Elen),JMPZ(modexpExp0)
     $ => A                              :MLOAD(modexp_Mlen),JMPZ(modexpMod0)
@@ -218,9 +215,7 @@ save1out:
 save0out:
     $ => B                              :MLOAD(modexp_Msize)
     %MAX_SAFE_INTEGER_MODEXP => A
-    ${log(A,aqui)}
     $                                   :LT,JMPC(endMODEXPFail)
-    ${log(A,aquino)}
     0                                   :MSTORE(modexp_out),JMP(finalMODEXP)
 
 save0outMod0:
@@ -250,22 +245,17 @@ finalMODEXP:
     32 - C => D                         :CALL(SHLarith)
     A                                   :MSTORE(bytesToStore)
     B => E
-    ${log(E,offset)}
                                         :CALL(MSTOREX) ; in: [bytesToStore, E: offset] out: [E: new offset]
-    ${log(E,newoffset)}
     E => B
     $ => A                              :MLOAD(modexp_Msize)
-    A - C                               :JMPZ(endMODEXP)
+    A - C => C                          :JMPZ(endMODEXP)
     $ => E                              :MLOAD(modexp_returnIndex)
 
 returnLoop:
     E - 1 => E                          :MSTORE(modexp_returnIndex)
-    ${log(E,index)}
     $ => A                              :MLOAD(modexp_out+E)
     A                                   :MSTORE(bytesToStore)
-    ${log(A,bytes)}
     B => E
-    ${log(E,offset)}
                                         :CALL(MSTORE32)
     E => B
     $ => E                              :MLOAD(modexp_returnIndex)
