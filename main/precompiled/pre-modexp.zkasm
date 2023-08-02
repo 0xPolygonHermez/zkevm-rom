@@ -41,6 +41,7 @@ VAR GLOBAL modexp_Msize
 VAR GLOBAL modexp_Einit
 VAR GLOBAL modexp_Mend
 VAR GLOBAL modexp_offset
+VAR GLOBAL modexp_returnIndex
 
 funcModexp:
 
@@ -59,10 +60,13 @@ funcModexp:
     $ => CTX        :MLOAD(originCTX)
     $ => E          :MLOAD(argsOffsetCall)
                     :CALL(MLOAD32)
+                    ${log(A,bsize)}
     A               :MSTORE(modexp_Bsize)           ;Bsize = base size
                     :CALL(MLOAD32)
+                    ${log(A,esize)}
     A               :MSTORE(modexp_Esize)           ;Esize = exp size
                     :CALL(MLOAD32)
+                    ${log(A,msize)}
     A               :MSTORE(modexp_Msize)           ;Msize = mod size
     E               :MSTORE(modexp_offset)
     $ => A          :MLOAD(modexp_Bsize)
@@ -166,9 +170,9 @@ callMODEXP:
     GAS - B => GAS                      :JMPN(outOfGas)
     $ => CTX                            :MLOAD(originCTX)
     0 => A
-    $ => B                              :MLOAD(modexp_Bsize)
-    $                                   :EQ,JMPC(save0out)
     $ => B                              :MLOAD(modexp_Msize)
+    $                                   :EQ,JMPC(save0outMod0)
+    $ => B                              :MLOAD(modexp_Bsize)
     $                                   :EQ,JMPC(save0out)
     %MAX_SIZE_MODEXP => A
     $ => B                              :MLOAD(modexp_Bsize)
@@ -212,42 +216,61 @@ save1out:
     1                                   :MSTORE(modexp_out),JMP(finalMODEXP)
 
 save0out:
+    $ => B                              :MLOAD(modexp_Msize)
+    %MAX_SAFE_INTEGER_MODEXP => A
+    ${log(A,aqui)}
+    $                                   :LT,JMPC(endMODEXPFail)
+    ${log(A,aquino)}
     0                                   :MSTORE(modexp_out),JMP(finalMODEXP)
+
+save0outMod0:
+    0                                   :MSTORE(modexp_out),JMP(endMODEXP)
 
 finalMODEXP:
     $ => CTX                            :MLOAD(currentCTX)
     ; write data into memory
     0 => E
     $ => C                              :MLOAD(modexp_Msize)
-    ; TODO: change modexp_out --> modexp_out[300]
-    $ => A                              :MLOAD(modexp_out)
-    A                                   :MSTORE(bytesToStore), CALL(MSTOREX); in: [bytesToStore, E: offset] out: [E: new offset]
 
     ; prepare return data
     0                                   :MSTORE(retDataOffset)
     C                                   :MSTORE(retDataLength)
+    $ => B                              :MLOAD(retCallOffset)
     $ => A                              :MLOAD(originCTX),JMPZ(handleGas)
     ; set retDataCTX
-    $ => B                              :MLOAD(currentCTX)
+    $ => E                              :MLOAD(currentCTX)
     A => CTX
-    B                                   :MSTORE(retDataCTX)
-    B => CTX
-
-    ; write result modexp into previous context memory
-    $ => C                              :MLOAD(modexp_Msize), JMPZ(preEndMODEXP)
-    $ => E                              :MLOAD(retCallOffset)
-
-    ; result is in bytesToStore
-    C - 32                              :JMPN(continueMODEXP)
-    ; TODO: change modexp_out --> modexp_out[300]
-    32 => C
-
-continueMODEXP:
-    $ => A                              :MLOAD(modexp_out)
+    C                                   :MSTORE(arithA)
+    32                                  :MSTORE(arithB),CALL(divARITH)
+    $ => E                              :MLOAD(arithRes1)
+    E                                   :MSTORE(modexp_returnIndex)
+    $ => A                              :MLOAD(arithRes2),JMPZ(returnLoop)
+    A => C
+    $ => A                              :MLOAD(modexp_out+E)
     32 - C => D                         :CALL(SHLarith)
     A                                   :MSTORE(bytesToStore)
-    $ => CTX                            :MLOAD(originCTX), CALL(MSTOREX) ; in: [bytesToStore, E: offset] out: [E: new offset]
-                                        :JMP(endMODEXP)
+    B => E
+    ${log(E,offset)}
+                                        :CALL(MSTOREX) ; in: [bytesToStore, E: offset] out: [E: new offset]
+    ${log(E,newoffset)}
+    E => B
+    $ => A                              :MLOAD(modexp_Msize)
+    A - C                               :JMPZ(endMODEXP)
+    $ => E                              :MLOAD(modexp_returnIndex)
+
+returnLoop:
+    E - 1 => E                          :MSTORE(modexp_returnIndex)
+    ${log(E,index)}
+    $ => A                              :MLOAD(modexp_out+E)
+    A                                   :MSTORE(bytesToStore)
+    ${log(A,bytes)}
+    B => E
+    ${log(E,offset)}
+                                        :CALL(MSTORE32)
+    E => B
+    $ => E                              :MLOAD(modexp_returnIndex)
+    C - 32 => C                         :JMPZ(endMODEXP, returnLoop)
+
 
 endMODEXPFail:
     $ => CTX                            :MLOAD(currentCTX)
