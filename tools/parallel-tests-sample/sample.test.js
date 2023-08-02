@@ -41,6 +41,7 @@ it(`${nameFile}`, async () => {
             },
             stepsN: stepsN,
             counters,
+            assertOutputs: true,
         };
         await smMain.execute(cmPols.Main, input, rom, config);
     } catch (err) {
