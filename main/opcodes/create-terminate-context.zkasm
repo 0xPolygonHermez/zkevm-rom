@@ -143,11 +143,11 @@ opCREATE:
     ; update GAS to computed gas send call
     A => GAS
     B                   :MSTORE(txSrcAddr)
-    ; copy calldata from origin CTX to current CTX
-    C                   :MSTORE(gasRefund), CALL(copySP)
+    C                   :MSTORE(gasRefund)
     ; set CTX var values
     $ => A              :MLOAD(argsLengthCall)
-    A                   :MSTORE(txCalldataLen)
+    ; set calldata pointers to current CTX
+    A                   :MSTORE(txCalldataLen), CALL(saveCalldataPointer)
     $ => A              :MLOAD(valueCall)
     ; Save touched root when a new context is created
     A                   :MSTORE(txValue), CALL(checkpointTouched)
@@ -277,8 +277,8 @@ opCALLend:
     ; update GAS to computed gas send call
     A => GAS
     $ => A              :MLOAD(argsLengthCall)
-    ; copy calldata from origin CTX to current CTX
-    A                   :MSTORE(txCalldataLen), CALL(copySP)
+    ; set calldata pointers to current CTX
+    A                   :MSTORE(txCalldataLen), CALL(saveCalldataPointer)
     ; save touched root when a new context is created
                         :CALL(checkpointTouched)
                         :JMP(txType)
@@ -385,8 +385,8 @@ opCALLCODEend:
     A => GAS
     D               :MSTORE(isStaticCall)
     $ => A          :MLOAD(argsLengthCall)
-    ; copy calldata from origin CTX to current CTX
-    A               :MSTORE(txCalldataLen), CALL(copySP)
+    ; set calldata pointers to current CTX
+    A               :MSTORE(txCalldataLen), CALL(saveCalldataPointer)
     ; Save touched root when a new context is created
                     :CALL(checkpointTouched)
                     :JMP(txType)
@@ -500,40 +500,30 @@ opRETURNcreate:
 
     ; save offset memory and length to compute contract hash
     E               :MSTORE(memOffsetLinearPoseidon)
-    C               :MSTORE(memSizeLinearPoseidon)
-    ; decrease context and set values
-    CTX             :MSTORE(currentCTX)
-    $ => B          :MLOAD(gasRefund)
-    $ => CTX        :MLOAD(originCTX)
-    B               :MSTORE(gasRefund)
-    $ => B          :MLOAD(gasCTX)
-    B + GAS => GAS
-    $ => CTX        :MLOAD(currentCTX)
-    $ => A          :MLOAD(txSrcAddr)
-    $ => D          :MLOAD(txNonce)
-
-    ; set bytecode length and read bytecode first byte
-    $ => A          :MLOAD(createContractAddress), CALL(checkBytecodeStartsEF) ; in: [memOffset], out: [startsWithEFn
-
+    C               :MSTORE(memSizeLinearPoseidon), CALL(checkBytecodeStartsEF) ; in: [memOffset], out: [startsWithEF]
     ; check bytecode first byte != 0xEF
     $               :MLOAD(startsWithEF), JMPNZ(invalidCodeStartsEF)
-
+    ; set bytecode length
     ; set key for smt smart contract length query
+    $ => A          :MLOAD(createContractAddress)
     %SMT_KEY_SC_LENGTH => B
     C => D
     0 => C
     ; get bytecode and hash it
     $ => SR             :SSTORE, CALL(hashPoseidonLinearFromMemory); in: [memOffsetLinearPoseidon, memSizeLinearPoseidon], out: [D: resulting linear poseidon]
-    $ => A              :MLOAD(createContractAddress)
-    0 => C
     ; set key for smt smart contract bytecode query
     %SMT_KEY_SC_CODE => B
     $ => SR                         :SSTORE
 
 opRETURNcreateEnd:
+
     ; return to origin CTX
-    $ => A          :MLOAD(createContractAddress)
+    $ => B          :MLOAD(gasRefund)
     $ => CTX        :MLOAD(originCTX)
+    ; Update gasRefund at origin CTX
+    B               :MSTORE(gasRefund)
+    $ => B          :MLOAD(gasCTX)
+    B + GAS => GAS
     CTX             :MSTORE(currentCTX)
     0               :MSTORE(retDataCTX)
     ; set SP and PC
@@ -632,8 +622,8 @@ opDELEGATECALL:
 
 opDELEGATECALLend:
     $ => A          :MLOAD(argsLengthCall)
-    ; copy calldata from origin CTX to current CTX
-    A               :MSTORE(txCalldataLen), CALL(copySP)
+    ; set calldata pointers to current CTX
+    A               :MSTORE(txCalldataLen), CALL(saveCalldataPointer)
     ; Save touched root when a new context is created
                     :CALL(checkpointTouched)
                     :JMP(txType)
@@ -751,11 +741,11 @@ opCREATE2:
     $ => CTX            :MLOAD(currentCTX)
     C                   :MSTORE(gasRefund)
     ; update GAS to computed gas send call
-    ; copy calldata from origin CTX to current CTX
-    A => GAS            :CALL(copySP)
+    A => GAS
     ; set CTX var values
     $ => A              :MLOAD(argsLengthCall)
-    A                   :MSTORE(txCalldataLen)
+    ; set calldata pointers to current CTX
+    A                   :MSTORE(txCalldataLen), CALL(saveCalldataPointer)
     $ => A              :MLOAD(valueCall)
     ; Save touched root when a new context is created
     A                   :MSTORE(txValue), CALL(checkpointTouched)
@@ -837,8 +827,8 @@ opSTATICCALL:
     ; update GAS to computed gas send call
     A => GAS
     $ => A          :MLOAD(argsLengthCall)
-    ; copy calldata from origin CTX to current CTX
-    A               :MSTORE(txCalldataLen), CALL(copySP)
+    ; set calldata pointers to current CTX
+    A               :MSTORE(txCalldataLen), CALL(saveCalldataPointer)
     ; save touched root when a new context is created
                     :CALL(checkpointTouched)
                     :JMP(txType)
