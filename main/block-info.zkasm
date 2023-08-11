@@ -1,0 +1,68 @@
+VAR GLOBAL tmpBlockInfoSR
+
+initBlockInfoTree:
+    0               :MSTORE(blockInfoSR), RETURN
+
+; @info Save blockInfo root when a new context is created
+checkpointBlockInfoTree:
+    $ => A          :MLOAD(blockInfoSR)
+    A               :MSTORE(initBlockInfoSR), RETURN
+
+; @info Back to initial blockInfo root
+revertBlockInfoTree:
+    $ => A               :MLOAD(initBlockInfoSR)
+    A                    :MSTORE(blockInfoSR), RETURN
+
+; @info Fill Block Info tree with initial block values
+fillBlockInfoTreeWithTxReceipt:
+
+    ; save current state root & load block info root
+    SR              :MSTORE(tmpBlockInfoSR)
+    $ => SR         :MLOAD(touchedSR)
+    ; Insert transaction hash
+    ; key: H([txIndex[0:4], txIndex[4:8], txIndex[8:12], txIndex[12:16], txIndex[16:20], 0, SMT_KEY_BLOCK_HEADER_TRANSACTION_HASH, 0], [hk0[0], hk0[1], hk0[2], hk0[3]])
+    ; value: txHash
+    $ => A          :MLOAD(txIndex)
+    %SMT_KEY_BLOCK_HEADER_TRANSACTION_HASH => B
+    0 => C
+    $ => D          :MLOAD(l2TxHash)
+    $ => SR         :SSTORE
+
+    ; Insert transaction status
+    ; key: H([txIndex[0:4], txIndex[4:8], txIndex[8:12], txIndex[12:16], txIndex[16:20], 0, SMT_KEY_BLOCK_HEADER_STATUS, 0], [hk0[0], hk0[1], hk0[2], hk0[3]])
+    ; value: txStatus
+    %SMT_KEY_BLOCK_HEADER_STATUS => B
+    0 => C
+    $ => D          :MLOAD(txStatus)
+    $ => SR         :SSTORE
+
+    ; Insert transaction cumulativeGasUsed
+    ; key: H([txIndex[0:4], txIndex[4:8], txIndex[8:12], txIndex[12:16], txIndex[16:20], 0, SMT_KEY_BLOCK_HEADER_CUMULATIVE_GAS_USED, 0], [hk0[0], hk0[1], hk0[2], hk0[3]])
+    ; value: txStatus
+    %SMT_KEY_BLOCK_HEADER_CUMULATIVE_GAS_USED => B
+    0 => C
+    $ => D          :MLOAD(cumulativeGasUsed)
+    $ => SR         :SSTORE
+
+    ; Restore current SR
+    SR             :MSTORE(blockInfoSR)
+    $ => SR        :MLOAD(tmpBlockInfoSR), RETURN
+
+; @info Fill Block Info tree with initial block values
+fillBlockInfoTreeWithBlockGasUsed:
+    ; save current state root & load block info root
+    SR              :MSTORE(tmpBlockInfoSR)
+    $ => SR         :MLOAD(touchedSR)
+
+    ; Insert transaction cumulativeGasUsed
+    ; key: H([blockHeaderParams[0:4], blockHeaderParams[4:8], blockHeaderParams[8:12], blockHeaderParams[12:16], blockHeaderParams[16:20], 0, SMT_KEY_BLOCK_HEADER_PARAM, 0], [hk0[0], hk0[1], hk0[2], hk0[3]])
+    ; value: txStatus
+    %INDEX_BLOCK_HEADER_PARAM_GAS_USED => A
+    %SMT_KEY_BLOCK_HEADER_PARAM => B
+    0 => C
+    $ => D          :MLOAD(cumulativeGasUsed)
+    $ => SR         :SSTORE
+
+    ; Restore current SR
+    SR             :MSTORE(blockInfoSR)
+    $ => SR        :MLOAD(tmpBlockInfoSR), RETURN

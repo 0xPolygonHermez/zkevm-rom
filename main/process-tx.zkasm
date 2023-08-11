@@ -67,7 +67,8 @@ endCheckChainId:
         $ => A                          :MLOAD(txSrcOriginAddr), CALL(initTouchedTree)
                                         :CALL(isColdAddress) ; add tx.origin to touched addresses
         0                               :MSTORE(depth) ; Initial depth is 0
-
+; Set tx status to success by default
+        1                               :MSTORE(txStatus)
 ;; Set gasPrice global var depending on effectivePercentage [0-255] -> txGasPrice = Floor((gasPrice * (effectivePercentage + 1)) / 256)
         ; gasPrice => A
         $ => A                          :MLOAD(txGasPriceRLP)
@@ -486,7 +487,7 @@ endDeploy:
         $ => A                          :MLOAD(createContractAddress)
         0 => C
         %SMT_KEY_SC_CODE => B
-        $ => SR                         :SSTORE
+        $ => SR                         :SSTORE, JMP(handleGas)
 
 ;;;;;;;;;;;;;;;;;;
 ;; G - Handle GAS
@@ -494,7 +495,9 @@ endDeploy:
 ;;   - Return gas not used to caller
 ;;   - Pay gas to sequencer
 ;;;;;;;;;;;;;;;;;;
-
+handleGasFromError:
+    ; Set tx status to failure
+    0               :MSTORE(txStatus)
 ;; compute maximum gas to refund
 handleGas:
         %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
@@ -581,7 +584,7 @@ invalidIntrinsicBatchGasLimit:
 invalidIntrinsicTxSenderCode:
         $${eventLog(onError, intrinsic_invalid_sender_code)} :JMP(handleIntrinsicError)
 handleIntrinsicError:
-        $ => SR                         :MLOAD(originSR), JMP(processTxFinished)
+        $ => SR                         :MLOAD(originSR), JMP(processIntrinsicTxFinished)
 
 ;; handle error no more bytecode to read
 defaultOpCode:

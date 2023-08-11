@@ -106,9 +106,21 @@ txLoop:
         A - 1           :JMPZ(processChangeL2Block, processTx)
 
 processTxFinished:
+        ; Increase txIndex
+        $ => A          :MLOAD(txIndex)
+        A + 1           :MSTORE(txIndex)
+        ; Increase cumulativeGasUsed
+        $ => A          :MLOAD(txGasLimit)
+        A - GAS => A
+        $ => B          :MLOAD(cumulativeGasUsed)
+        ; Fill block info tree with tx receipt
+        A + B           :MSTORE(cumulativeGasUsed), CALL(fillBlockInfoTreeWithTxReceipt)
+processIntrinsicTxFinished:
         $${eventLog(onFinishTx)}   :JMP(txLoop)
 
 processTxsEnd:
+        ; Fill block info tree with block gas used
+                        :CALL(fillBlockInfoTreeWithBlockGasUsed)
 
 ;;;;;;;;;;;;;;;;;;
 ;; E - Batch asserts & computations:
@@ -192,4 +204,5 @@ INCLUDE "load-tx-rlp.zkasm"
 INCLUDE "process-tx.zkasm"
 INCLUDE "process-change-l2-block.zkasm"
 INCLUDE "utils.zkasm"
+INCLUDE "block-info.zkasm"
 

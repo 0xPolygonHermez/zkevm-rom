@@ -912,9 +912,7 @@ handleError:
     ;revert all state changes
     $ => SR         :MLOAD(initSR), CALL(revertTouched)
     ;remaining gas = 0
-    $ => A          :MLOAD(originCTX)
-    0 => B
-    $               :EQ,JMPC(firstContextInvalid)
+    $ => A          :MLOAD(originCTX), JMPZ(errorAtFirstContext)
     A => CTX
     ; Add return data context value to origin context
     ; Clear return data context
@@ -935,7 +933,9 @@ handleBatchError:
     $                           :MLOAD(isLoadingRLP),JMPNZ(appendTxsInit)
     $${eventLog(onFinishTx)}    :JMP(processTxsEnd)
 
-firstContextInvalid:
+errorAtFirstContext:
+    ; Set tx status to failure
+    0               :MSTORE(txStatus)
     ;save Root and jump to send gas to sequencer
     0               :MSTORE(gasRefund)
     0 => GAS        :JMP(sendGasSeq)
