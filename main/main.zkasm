@@ -57,7 +57,7 @@ start: ; main zkROM entry point
 ;;      - If an error is found in any transaction, the batch will not process any transaction
 ;;;;;;;;;;;;;;;;;;
 
-        E+1 => E                            :MSTORE(lastHashKIdUsed)
+        1 => E                              :MSTORE(lastHashKIdUsed)
         0                                   :MSTORE(batchHashPos)
         E                                   :MSTORE(batchHashDataId)
         $ => A                              :MLOAD(lastCtxUsed)
@@ -91,7 +91,9 @@ setBlockNum:
         %SMT_KEY_SC_STORAGE => B
         $               :SLOAD,MSTORE(blockNum)
         ; If forced batch, process a forced changeL2BlockTx
-        $               :MLOAD(isForced), JMPNZ(processForcedChangeL2Block)
+        $               :MLOAD(isForced), JMPZ(txLoop, handleForcedBatch)
+handleForcedBatch:
+        1               :MSTORE(currentTx), JMP(processChangeL2Block)
 txLoop:
         $ => A          :MLOAD(pendingTxs)
         A - 1           :MSTORE(pendingTxs), JMPN(processTxsEnd)
@@ -106,21 +108,21 @@ txLoop:
         A - 1           :JMPZ(processChangeL2Block, processTx)
 
 processTxFinished:
-        ; Increase txIndex
-        $ => A          :MLOAD(txIndex)
-        A + 1           :MSTORE(txIndex)
         ; Increase cumulativeGasUsed
         $ => A          :MLOAD(txGasLimit)
         A - GAS => A
         $ => B          :MLOAD(cumulativeGasUsed)
         ; Fill block info tree with tx receipt
         A + B           :MSTORE(cumulativeGasUsed), CALL(fillBlockInfoTreeWithTxReceipt)
+        ; Increase txIndex
+        $ => A          :MLOAD(txIndex)
+        A + 1           :MSTORE(txIndex)
 processIntrinsicTxFinished:
         $${eventLog(onFinishTx)}   :JMP(txLoop)
 
 processTxsEnd:
-        ; Fill block info tree with block gas used
-                        :CALL(fillBlockInfoTreeWithBlockGasUsed)
+        ;  Write values at storage at the end of block processing
+                        :CALL(consolidateBlock)
 
 ;;;;;;;;;;;;;;;;;;
 ;; E - Batch asserts & computations:

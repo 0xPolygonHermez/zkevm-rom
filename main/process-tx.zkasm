@@ -43,6 +43,16 @@ checkAndSaveFrom:
         A                               :MSTORE(txSrcAddr)
         A                               :MSTORE(txSrcOriginAddr)
         $                               :EQ,JMPC(invalidIntrinsicTxSignature)
+        ; Compute l2TxHash
+        20 => D
+        $ => E                          :MLOAD(l2TxHashPointer)
+        $ => HASHPOS                    :MLOAD(l2HASHP)
+        A                               :HASHP(E)
+        HASHPOS                         :HASHPLEN(E)
+        $ => B                          :HASHPDIGEST(E)
+        B                               :MSTORE(l2TxHash)
+
+
 
 ;;;;;;;;;;;;;;;;;;
 ;; B - Verify tx.sender does not have any code deployed (EIP3607)
@@ -67,6 +77,8 @@ endCheckChainId:
         $ => A                          :MLOAD(txSrcOriginAddr), CALL(initTouchedTree)
                                         :CALL(isColdAddress) ; add tx.origin to touched addresses
         0                               :MSTORE(depth) ; Initial depth is 0
+        0                               :MSTORE(currentLogIndex), CALL(checkpointBlockInfoTree) ; initial log index is 0
+
 ; Set tx status to success by default
         1                               :MSTORE(txStatus)
 ;; Set gasPrice global var depending on effectivePercentage [0-255] -> txGasPrice = Floor((gasPrice * (effectivePercentage + 1)) / 256)

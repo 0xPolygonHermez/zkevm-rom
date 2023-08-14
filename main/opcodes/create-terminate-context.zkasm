@@ -148,9 +148,9 @@ opCREATE:
     ; set CTX var values
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txCalldataLen)
-    $ => A              :MLOAD(valueCall)
-    ; Save touched root when a new context is created
-    A                   :MSTORE(txValue), CALL(checkpointTouched)
+    $ => B              :MLOAD(valueCall), CALL(checkpointBlockInfoTree)
+    ; save touched root and block info root when a new context is created
+    B                   :MSTORE(txValue), CALL(checkpointTouched)
                         :JMP(txType)
 
 opCreateFail:
@@ -279,8 +279,9 @@ opCALLend:
     $ => A              :MLOAD(argsLengthCall)
     ; copy calldata from origin CTX to current CTX
     A                   :MSTORE(txCalldataLen), CALL(copySP)
-    ; save touched root when a new context is created
+    ; save touched root and block info root when a new context is created
                         :CALL(checkpointTouched)
+                        :CALL(checkpointBlockInfoTree)
                         :JMP(txType)
 
 /**
@@ -387,8 +388,9 @@ opCALLCODEend:
     $ => A          :MLOAD(argsLengthCall)
     ; copy calldata from origin CTX to current CTX
     A               :MSTORE(txCalldataLen), CALL(copySP)
-    ; Save touched root when a new context is created
+    ; save touched root and block info root when a new context is created
                     :CALL(checkpointTouched)
+                    :CALL(checkpointBlockInfoTree)
                     :JMP(txType)
 /**
  * @link [https://www.evm.codes/#f3?fork=berlin]
@@ -634,8 +636,9 @@ opDELEGATECALLend:
     $ => A          :MLOAD(argsLengthCall)
     ; copy calldata from origin CTX to current CTX
     A               :MSTORE(txCalldataLen), CALL(copySP)
-    ; Save touched root when a new context is created
+    ; save touched root and block info root when a new context is created
                     :CALL(checkpointTouched)
+                    :CALL(checkpointBlockInfoTree)
                     :JMP(txType)
 
 /**
@@ -756,9 +759,9 @@ opCREATE2:
     ; set CTX var values
     $ => A              :MLOAD(argsLengthCall)
     A                   :MSTORE(txCalldataLen)
-    $ => A              :MLOAD(valueCall)
-    ; Save touched root when a new context is created
-    A                   :MSTORE(txValue), CALL(checkpointTouched)
+    $ => B              :MLOAD(valueCall), CALL(checkpointBlockInfoTree)
+    ; save touched root and block info root when a new context is created
+    B                   :MSTORE(txValue), CALL(checkpointTouched)
                         :JMP(txType)
 
 /**
@@ -839,8 +842,9 @@ opSTATICCALL:
     $ => A          :MLOAD(argsLengthCall)
     ; copy calldata from origin CTX to current CTX
     A               :MSTORE(txCalldataLen), CALL(copySP)
-    ; save touched root when a new context is created
+    ; save touched root and block info root when a new context is created
                     :CALL(checkpointTouched)
+                    :CALL(checkpointBlockInfoTree)
                     :JMP(txType)
 /**
  * @link [https://www.evm.codes/#fd?fork=berlin]
@@ -859,7 +863,7 @@ opREVERT:
     ; revert touched accounts
     $ => SR         :MLOAD(initSR), CALL(revertTouched)
 
-    $ => E          :MLOAD(SP+1); [offset => E]
+    $ => E          :MLOAD(SP+1), CALL(revertBlockInfoTree); [offset => E]
     $ => C          :MLOAD(SP); [size => C]
     E               :MSTORE(retDataOffset)
     C               :MSTORE(retDataLength)

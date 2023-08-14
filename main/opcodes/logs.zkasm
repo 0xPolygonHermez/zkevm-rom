@@ -7,6 +7,8 @@
  *  - stack input: [offset, size, topic]
  *  - stack output: none
  */
+ VAR GLOBAL opLogAux
+
 opLOG0:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
@@ -37,10 +39,7 @@ opLOG0:
     GAS => A
     ; check out-of-gas
     $                   :LT,JMPC(outOfGas)
-    GAS - B => GAS
-    $ => B              :MLOAD(nextFreeLogIndex) ; load logIndex
-    B + 1               :MSTORE(nextFreeLogIndex), JMP(opLOGLoop) ; store next free log index
-
+    GAS - B => GAS      :JMP(initLogLoop)
 opLOG1:
 
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
@@ -60,9 +59,7 @@ opLOG1:
     GAS => A
     ; check out-of-gas
     $                   :LT,JMPC(outOfGas)
-    GAS - B => GAS
-    $ => B              :MLOAD(nextFreeLogIndex)
-    B + 1               :MSTORE(nextFreeLogIndex), JMP(opLOGLoop)
+    GAS - B => GAS      :JMP(initLogLoop)
 
 opLOG2:
 
@@ -83,9 +80,7 @@ opLOG2:
     GAS => A
     ; check out-of-gas
     $                   :LT,JMPC(outOfGas)
-    GAS - B => GAS
-    $ => B              :MLOAD(nextFreeLogIndex)
-    B + 1               :MSTORE(nextFreeLogIndex), JMP(opLOGLoop)
+    GAS - B => GAS      :JMP(initLogLoop)
 
 opLOG3:
 
@@ -106,9 +101,7 @@ opLOG3:
     GAS => A
     ; check out-of-gas
     $                   :LT,JMPC(outOfGas)
-    GAS - B => GAS
-    $ => B              :MLOAD(nextFreeLogIndex)
-    B + 1               :MSTORE(nextFreeLogIndex), JMP(opLOGLoop)
+    GAS - B => GAS      :JMP(initLogLoop)
 
 opLOG4:
 
@@ -129,39 +122,58 @@ opLOG4:
     GAS => A
     ; check out-of-gas
     $                   :LT,JMPC(outOfGas)
-    GAS - B => GAS
-    $ => B              :MLOAD(nextFreeLogIndex)
-    B + 1               :MSTORE(nextFreeLogIndex), JMP(opLOGLoop)
+    GAS - B => GAS      :JMP(initLogLoop)
 
-opLOGLoop:
+initLogLoop:
+    0 => HASHPOS
+    32 => D
+logLoop:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     C               :JMPZ(opSaveTopicsInit)
     ; load next 32 bytes
-    C - 32          :JMPN(opLOGFinal)
+    C - 32          :JMPN(opLogFinal)
                     :CALL(MLOAD32); in: [E: offset] out: [A: value]
+    E               :MSTORE(opLogAux)
+    $ => E          :MLOAD(nextHashPId)
+    A               :HASHP(E)
+    $ => E          :MLOAD(opLogAux)
     $${storeLog(B, 0, A)} ; storeLog(indexLog, isTopic, bytesToStore)
-    C - 32 => C     :JMP(opLOGLoop)
+    C - 32 => C     :JMP(logLoop)
 
-opLOGFinal:
+opLogFinal:
     ; load last C bytes
                     :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
+    C => D
+    $ => E          :MLOAD(nextHashPId)
+    A               :HASHP(E)
     $${storeLog(B, 0, A)}; storeLog(indexLog, isTopic, bytesToStore)
                     :JMP(opSaveTopicsInit) ; instruction added to allow executing $$ function
 
 opSaveTopicsInit:
     ; save topics
     $ => A          :MLOAD(numTopics)
+    $ => E          :MLOAD(nextHashPId)
+    32 => D
 
 opSaveTopicsLoop:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
 
-    A                   :JMPZ(readCode)
+    A                           :JMPZ(finishSaveTopics)
     ; check stack underflow
     SP - 1 => SP
     ; check out-of-gas
-    GAS - %LOG_TOPIC_GAS => GAS    :JMPN(outOfGas)
-    $ => C              :MLOAD(SP)   ; [topic => C]
+    GAS - %LOG_TOPIC_GAS => GAS :JMPN(outOfGas)
+    $ => C                      :MLOAD(SP)   ; [topic => C]
+    C                           :HASHP(E)
     $${storeLog(B, 1, C)}     ; storeLog(indexLog, isTopic, bytesToStore)
-    A - 1 =>  A         :JMP(opSaveTopicsLoop)
+    A - 1 =>  A                 :JMP(opSaveTopicsLoop)
+
+finishSaveTopics:
+    ; Update nextHashPId
+    E + 1                       :MSTORE(nextHashPId)
+    ; Compute hash of the log
+    HASHPOS                     :HASHPLEN(E)
+    $ => D                      :HASHPDIGEST(E), CALL(fillBlockInfoTreeWithLog); in: [D: linearPoseidon(log_data + log_topics)]
+                                :JMP(readCode)

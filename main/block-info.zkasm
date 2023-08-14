@@ -1,24 +1,93 @@
 VAR GLOBAL tmpBlockInfoSR
+VAR GLOBAL currentLogIndex
 
 initBlockInfoTree:
     0               :MSTORE(blockInfoSR), RETURN
 
 ; @info Save blockInfo root when a new context is created
 checkpointBlockInfoTree:
+    $ => A          :MLOAD(currentLogIndex)
+    A               :MSTORE(initLogIndex)
     $ => A          :MLOAD(blockInfoSR)
     A               :MSTORE(initBlockInfoSR), RETURN
 
 ; @info Back to initial blockInfo root
 revertBlockInfoTree:
-    $ => A               :MLOAD(initBlockInfoSR)
-    A                    :MSTORE(blockInfoSR), RETURN
+    $ => A          :MLOAD(initLogIndex)
+    A               :MSTORE(currentLogIndex)
+    $ => A          :MLOAD(initBlockInfoSR)
+    A               :MSTORE(blockInfoSR), RETURN
 
 ; @info Fill Block Info tree with initial block values
+setupNewBlockInfoTree:
+    ; save current state root & load block info root
+    SR              :MSTORE(tmpBlockInfoSR)
+    $ => SR         :MLOAD(blockInfoSR)
+
+    ; Insert previous block hash
+    ; key: H([blockHeaderParams[0:4], blockHeaderParams[4:8], blockHeaderParams[8:12], blockHeaderParams[12:16], blockHeaderParams[16:20], 0, SMT_KEY_BLOCK_HEADER_PARAM, 0], [hk0[0], hk0[1], hk0[2], hk0[3]])
+    ; value: previousBlockHash
+    %INDEX_BLOCK_HEADER_PARAM_BLOCK_HASH => A
+    %SMT_KEY_BLOCK_HEADER_PARAM => B
+    0 => C
+    $ => D          :MLOAD(previousBlockHash)
+    $ => SR         :SSTORE
+
+    ; Insert coinbase address
+    ; key: H([blockHeaderParams[0:4], blockHeaderParams[4:8], blockHeaderParams[8:12], blockHeaderParams[12:16], blockHeaderParams[16:20], 0, SMT_KEY_BLOCK_HEADER_PARAM, 0], [hk0[0], hk0[1], hk0[2], hk0[3]])
+    ; value: sequencerAddr
+    %INDEX_BLOCK_HEADER_PARAM_COINBASE => A
+    %SMT_KEY_BLOCK_HEADER_PARAM => B
+    0 => C
+    $ => D          :MLOAD(sequencerAddr)
+    $ => SR         :SSTORE
+
+    ; Insert block number
+    ; key: H([blockHeaderParams[0:4], blockHeaderParams[4:8], blockHeaderParams[8:12], blockHeaderParams[12:16], blockHeaderParams[16:20], 0, SMT_KEY_BLOCK_HEADER_PARAM, 0], [hk0[0], hk0[1], hk0[2], hk0[3]])
+    ; value: blockNum
+    %INDEX_BLOCK_HEADER_PARAM_NUMBER => A
+    %SMT_KEY_BLOCK_HEADER_PARAM => B
+    0 => C
+    $ => D          :MLOAD(blockNum)
+    $ => SR         :SSTORE
+
+    ; Insert block gas limit
+    ; key: H([blockHeaderParams[0:4], blockHeaderParams[4:8], blockHeaderParams[8:12], blockHeaderParams[12:16], blockHeaderParams[16:20], 0, SMT_KEY_BLOCK_HEADER_PARAM, 0], [hk0[0], hk0[1], hk0[2], hk0[3]])
+    ; value: blockNum
+    %INDEX_BLOCK_HEADER_PARAM_GAS_LIMIT => A
+    %SMT_KEY_BLOCK_HEADER_PARAM => B
+    0 => C
+    %BLOCK_GAS_LIMIT => D
+    $ => SR         :SSTORE
+
+    ; Insert block timestamp
+    ; key: H([blockHeaderParams[0:4], blockHeaderParams[4:8], blockHeaderParams[8:12], blockHeaderParams[12:16], blockHeaderParams[16:20], 0, SMT_KEY_BLOCK_HEADER_PARAM, 0], [hk0[0], hk0[1], hk0[2], hk0[3]])
+    ; value: timestamp
+    %INDEX_BLOCK_HEADER_PARAM_TIMESTAMP => A
+    %SMT_KEY_BLOCK_HEADER_PARAM => B
+    0 => C
+    $ => D          :MLOAD(timestamp)
+    $ => SR         :SSTORE
+
+    ; Insert block timestamp
+    ; key: H([blockHeaderParams[0:4], blockHeaderParams[4:8], blockHeaderParams[8:12], blockHeaderParams[12:16], blockHeaderParams[16:20], 0, SMT_KEY_BLOCK_HEADER_PARAM, 0], [hk0[0], hk0[1], hk0[2], hk0[3]])
+    ; value: GER
+    %INDEX_BLOCK_HEADER_PARAM_GER => A
+    %SMT_KEY_BLOCK_HEADER_PARAM => B
+    0 => C
+    $ => D          :MLOAD(newGER)
+    $ => SR         :SSTORE
+
+    ; Restore current SR
+    SR             :MSTORE(blockInfoSR)
+    $ => SR        :MLOAD(tmpBlockInfoSR), RETURN
+
+; @info Fill Block Info tree with tx receipt values
 fillBlockInfoTreeWithTxReceipt:
 
     ; save current state root & load block info root
     SR              :MSTORE(tmpBlockInfoSR)
-    $ => SR         :MLOAD(touchedSR)
+    $ => SR         :MLOAD(blockInfoSR)
     ; Insert transaction hash
     ; key: H([txIndex[0:4], txIndex[4:8], txIndex[8:12], txIndex[12:16], txIndex[16:20], 0, SMT_KEY_BLOCK_HEADER_TRANSACTION_HASH, 0], [hk0[0], hk0[1], hk0[2], hk0[3]])
     ; value: txHash
@@ -48,11 +117,11 @@ fillBlockInfoTreeWithTxReceipt:
     SR             :MSTORE(blockInfoSR)
     $ => SR        :MLOAD(tmpBlockInfoSR), RETURN
 
-; @info Fill Block Info tree with initial block values
-fillBlockInfoTreeWithBlockGasUsed:
+; @info Fill Block Info tree with block gas used at the end of block processing and Store block Info Root in storage
+consolidateBlock:
     ; save current state root & load block info root
     SR              :MSTORE(tmpBlockInfoSR)
-    $ => SR         :MLOAD(touchedSR)
+    $ => SR         :MLOAD(blockInfoSR)
 
     ; Insert transaction cumulativeGasUsed
     ; key: H([blockHeaderParams[0:4], blockHeaderParams[4:8], blockHeaderParams[8:12], blockHeaderParams[12:16], blockHeaderParams[16:20], 0, SMT_KEY_BLOCK_HEADER_PARAM, 0], [hk0[0], hk0[1], hk0[2], hk0[3]])
@@ -61,6 +130,36 @@ fillBlockInfoTreeWithBlockGasUsed:
     %SMT_KEY_BLOCK_HEADER_PARAM => B
     0 => C
     $ => D          :MLOAD(cumulativeGasUsed)
+    $ => SR         :SSTORE
+
+    ; Restore current SR
+    SR             :MSTORE(blockInfoSR)
+    $ => SR        :MLOAD(tmpBlockInfoSR)
+
+    ; Store block Info Root in storage
+    %ADDRESS_SYSTEM => A
+    %SMT_KEY_SC_STORAGE => B
+    %BLOCK_INFO_ROOT_STORAGE_POS => C
+    $ => D                                  :MLOAD(blockInfoSR)
+    $ => SR                                 :SSTORE, RETURN
+
+; @info add new log hash to block info tree
+; @in D => Value to store (linearPoseidon(log_data + log_topics))
+fillBlockInfoTreeWithLog:
+    ; save current state root & load block info root
+    SR              :MSTORE(tmpBlockInfoSR)
+    $ => SR         :MLOAD(blockInfoSR)
+
+    ; Retrieve and update curentLogIndex
+    $ => C              :MLOAD(currentLogIndex)
+    C + 1               :MSTORE(currentLogIndex)
+
+    ; Insert new log to block info tree
+    ; key: H([logIndexKey[0:4], logIndexKey[4:8], logIndexKey[8:12], logIndexKey[12:16], logIndexKey[16:20], 0, SMT_KEY_BLOCK_HEADER_LOGS, 0], [hk0[0], hk0[1], hk0[2], hk0[3]])
+    ; hk0: H([logIndex[0:4], logIndex[4:8], logIndex[8:12], logIndex[12:16], logIndex[16:20], logIndex[20:24], logIndex[24:28], logIndex[28:32], [0, 0, 0, 0])
+    ; value: linearPoseidon(log_data + log_topics)
+    $ => A          :MLOAD(txIndex)
+    %SMT_KEY_BLOCK_HEADER_LOGS => B
     $ => SR         :SSTORE
 
     ; Restore current SR

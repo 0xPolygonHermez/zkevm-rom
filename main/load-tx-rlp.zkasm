@@ -37,9 +37,11 @@ loadTx_rlp:
 
 loadTx_rlp_continue:
         ; We get a new hashId
+        $ => E                          :MLOAD(nextHashPId)
+        E                               :MSTORE(l2TxHashPointer)
+        E + 1                           :MSTORE(nextHashPId)
         $ => E                          :MLOAD(lastHashKIdUsed)
-        E+1 => E                        :MSTORE(lastHashKIdUsed)
-
+        E + 1 => E                      :MSTORE(lastHashKIdUsed)
 ;;;;;;;;;;;;;;;;;;
 ;; B - Read and check RLP fields. Fill 'batchHashData' and Ethereum signed transaction bytes
 ;;;;;;;;;;;;;;;;;;
@@ -83,17 +85,18 @@ nonceREAD:
         A - 0x89                        :JMPN(shortNonce, invalidTxRLP)
 
 nonce0:
-        0 => A                         :MSTORE(lengthNonce), JMP(endNonce)
+        0 => A                         :MSTORE(lengthNonce)
+                                       :JMP(endNonce)
 
 shortNonce:
         A - 0x80 => D
-        D                               :MSTORE(lengthNonce), CALL(addHashTx)
+        D                               :MSTORE(lengthNonce)
                                         :CALL(addBatchHashData)
                                         :CALL(checkShortRLP)
                                         :CALL(checkNonLeadingZeros)
 
 endNonce:
-        A                               :MSTORE(txNonce)
+        A                               :MSTORE(txNonce), CALL(addL2HashTx)
 
 ;; Read RLP 'gas price'
         ; 256 bits max
@@ -114,7 +117,7 @@ shortGasPrice:
                                         :CALL(checkNonLeadingZeros)
 
 endGasPrice:
-        A                               :MSTORE(txGasPriceRLP)
+        A                               :MSTORE(txGasPriceRLP), CALL(addL2HashTx)
 
 
 ;; Read RLP 'gas limit'
@@ -136,7 +139,7 @@ shortGasLimit:
                                         :CALL(checkNonLeadingZeros)
 
 endGasLimit:
-        A                               :MSTORE(txGasLimit)
+        A                               :MSTORE(txGasLimit), CALL(addL2HashTx)
 
 ;; Read RLP 'to'
         ; 160 bits or empty
@@ -149,10 +152,12 @@ toREAD:
         A - 0x95                        :JMPN(shortTo, invalidTxRLP)
 
 noTo:
+        0 => A
         1                               :MSTORE(isCreateContract), JMP(endTo)
 
 shortTo:
         A - 0x80 => D                   :CALL(addHashTx)
+                                        :CALL(addL2HashTx)
                                         :CALL(addBatchHashData)
         A                               :MSTORE(txDestAddr)
         A                               :MSTORE(storageAddr)
@@ -178,7 +183,7 @@ shortValue:
                                         :CALL(checkNonLeadingZeros)
 
 endValue:
-        A                               :MSTORE(txValue)
+        A                               :MSTORE(txValue), CALL(addL2HashTx)
 
 ;; Read RLP 'data'
         ; should not be a list
@@ -197,7 +202,7 @@ dataREAD:
         A - 0xbb                        :JMPN(longData, invalidTxRLP)
 
 veryShortData:
-        1                               :MSTORE(txCalldataLen)
+        1                               :MSTORE(txCalldataLen), CALL(addL2HashTx)
         31 => D                         :CALL(SHLarith)
         A                               :MSTORE(SP++), JMP(endData)
 
@@ -219,12 +224,14 @@ readData:
         32 => D
         B - D                           :JMPN(readDataFinal)
         B - D                           :MSTORE(txDataRead), CALL(addHashTx)
+                                        :CALL(addL2HashTx)
         A                               :MSTORE(SP++), CALL(addBatchHashByteByByte)
         $ => B                          :MLOAD(txDataRead), JMP(readData)
 
 readDataFinal:
         B - 1                           :JMPN(endData)
         B => D                          :CALL(addHashTx)
+                                        :CALL(addL2HashTx)
         32 - D => D                     :CALL(SHLarith)
         A                               :MSTORE(SP)
         32 - D => D                     :CALL(addBatchHashByteByByte)
