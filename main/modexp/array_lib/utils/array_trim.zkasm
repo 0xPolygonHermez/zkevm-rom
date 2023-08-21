@@ -1,0 +1,47 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; array_trim:
+;;             in: 
+;;                  · C ∈ [1, 839], the len of in
+;;                  · in ∈ [0, 2²⁵⁶ - 1]^C, the input array
+;;
+;;          output: 
+;;                  · C, the new length of in
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; function array_trim(a: bigint[]): void {
+;     let i = a.length;
+;
+;     while (a[--i] === 0n);
+;
+;     a.length = i + 1;
+; }
+
+VAR GLOBAL array_trim_in[839]
+
+VAR GLOBAL array_trim_RR
+
+array_trim:
+        %MAX_CNT_STEPS - STEP - 2       :JMPN(outOfCountersStep)
+
+        RR             	:MSTORE(array_trim_RR)
+
+        C => E
+        ; scan from the last chunk to the first chunks until we find a non-zero chunk
+        ; in case of zero input array, we return 1
+array_trim_loop:
+        %MAX_CNT_BINARY - CNT_BINARY - 1        :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP - 4               :JMPN(outOfCountersStep)
+
+        E - 1 => E      :JMPZ(array_trim_end)
+        $ => A          :MLOAD(array_trim_in + E)
+        0 => B
+        $               :EQ, JMPZ(array_trim_end, array_trim_loop)
+
+array_trim_end:
+        %MAX_CNT_STEPS - STEP - 2       :JMPN(outOfCountersStep)
+
+        $ => RR         :MLOAD(array_trim_RR)
+
+        E + 1 => C      :RETURN

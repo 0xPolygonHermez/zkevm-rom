@@ -1,0 +1,24 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; reduceFrBN254:
+;;             in: B ∈ [0, 2²⁵⁶-1]
+;;             out: A = B (mod BN254_R) ∈ Fr
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL reduceFrBN254_tmp
+
+reduceFrBN254:
+        ; 1] It must be satisfied that:
+        ; [BN254_R]·[B / r] + [B % r] = [0]·2²⁵⁶ + E
+        B       :MSTORE(reduceFrBN254_tmp)
+        ${B % const.BN254_R} => C        ; residue (256 bits)
+        ${B / const.BN254_R} => B        ; quotient  (256 bits)
+        %BN254_R => A
+        0n => D          
+        $       :MLOAD(reduceFrBN254_tmp), ARITH
+
+        ; 2] Check the the residue is less than r
+        A => B
+        C => A
+        1       :LT, RETURN

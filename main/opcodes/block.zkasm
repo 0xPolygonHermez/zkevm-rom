@@ -34,7 +34,7 @@ opBLOCKHASH:
     B                                   :HASHK(E)
     %STATE_ROOT_STORAGE_POS             :HASHK(E)
     HASHPOS                             :HASHKLEN(E)
-    ; blockhash key = hash(blockNumber, STATE_ROOT_STORAGE_POS)
+    ; blockhash key = hash(blockNumber, BLOCK_INFO_ROOT_STORAGE_POS)
     $ => C                              :HASHKDIGEST(E)
     %ADDRESS_SYSTEM => A
     ; set key for smt storage query
@@ -94,16 +94,12 @@ opTIMESTAMP:
 opNUMBER:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 1   :JMPN(outOfCountersBinary)
 
     ; check out-of-gas
     GAS - %GAS_QUICK_STEP => GAS  :JMPN(outOfGas)
     ; Get current tx count
-    $ => A          :MLOAD(txCount)
-    1 => B
-
-    ; call binary:add state machine and push to the stack
-    $               :ADD, MSTORE(SP++); [blockNumber => SP]
+    $ => A          :MLOAD(blockNum)
+    A               :MSTORE(SP++); [blockNumber => SP]
     ; check stack overflow
     %MAX_STACK_SIZE - SP       :JMPN(stackOverflow, readCode)
 
@@ -142,7 +138,7 @@ opGASLIMIT:
     ; check out-of-gas
     GAS-%GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
     ; constant tx gas limit
-    %TX_GAS_LIMIT => A
+    %BLOCK_GAS_LIMIT => A
     A               :MSTORE(SP++); [gasLimit => SP]
     ; check stack overflow
     %MAX_STACK_SIZE - SP       :JMPN(stackOverflow, readCode)

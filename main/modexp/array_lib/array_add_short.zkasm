@@ -1,0 +1,88 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; array_add_short:
+;;             in: 
+;;                  · C ∈ [1, 839], the len of inA
+;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
+;;                  · inB ∈ [0, 2²⁵⁶ - 1],   the second input
+;;
+;;          output: 
+;;                  · out = inA + inB, with len(out) <= C + 1
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+
+; function array_add_short(a: bigint[], b: bigint, B: bigint): bigint[] {
+;     const alen = a.length;
+;     let result = new Array<bigint>(alen);
+;     let sum = 0n;
+;     let carry = b;
+;     for (let i = 0; i < alen; i++) {
+;         sum = a[i] + carry;
+;         carry = sum >= B ? 1n : 0n;
+;         result[i] = sum - carry * B;
+;     }
+
+;     if (carry === 1n) {
+;         result.push(carry);
+;     }
+;     return result;
+; }
+
+VAR GLOBAL array_add_short_inA[839]
+VAR GLOBAL array_add_short_len_inA
+VAR GLOBAL array_add_short_inB
+VAR GLOBAL array_add_short_out[840]
+VAR GLOBAL array_add_short_len_out
+
+VAR GLOBAL array_add_short_carry
+
+VAR GLOBAL array_add_short_RR
+
+array_add_short:
+        %MAX_CNT_BINARY - CNT_BINARY     - 2*C  - 1       :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 6 - 12*C - 8       :JMPN(outOfCountersStep)
+
+        RR              :MSTORE(array_add_short_RR)
+
+        C               :MSTORE(array_add_short_len_inA)
+
+        0 => E ; index in loops
+        $ => A          :MLOAD(array_add_short_inB)
+        A               :MSTORE(array_add_short_carry)
+                        :JMP(array_add_short_loopZero2inA)
+
+; Begin of branching
+array_add_short_add_carry:
+        D + 1 => D     :JMP(return_array_add_short_add_carry)
+; End of branching
+
+array_add_short_loopZero2inA:
+        0 => D  ; for the carry
+
+        ; a[i] + carry. If i = 0, then carry = inB.
+        $ => A          :MLOAD(array_add_short_inA + E)
+        $ => B          :MLOAD(array_add_short_carry)
+        $ => C          :ADD, JMPC(array_add_short_add_carry)
+                        return_array_add_short_add_carry:
+
+        C               :MSTORE(array_add_short_out + E)
+        D               :MSTORE(array_add_short_carry)
+
+        E + 1 => E
+        E => A
+        $ => B          :MLOAD(array_add_short_len_inA)
+        $               :EQ, JMPC(array_add_short_check_carry, array_add_short_loopZero2inA)
+
+array_add_short_check_carry:
+        D => A
+        1 => B
+        $               :EQ, JMPNC(array_add_short_len_out)
+        1               :MSTORE(array_add_short_out + E)
+        E + 1           :MSTORE(array_add_short_len_out)
+                        :JMP(array_add_short_end)
+
+array_add_short_len_out:
+        E               :MSTORE(array_add_short_len_out)
+
+array_add_short_end:
+        $ => RR         :MLOAD(array_add_short_RR)
+                        :RETURN

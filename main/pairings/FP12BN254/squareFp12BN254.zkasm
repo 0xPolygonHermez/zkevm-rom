@@ -1,0 +1,375 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; squareFp12BN254:
+;;             in: (a1 + a2·w) ∈ Fp12, where ai ∈ Fp6
+;;             out: (a1 + a2·w)² = (c1 + c2·w) ∈ Fp12, where:
+;;                  - c1 = (a1-a2)·(a1-a2·v) + a1·a2 + a1·a2·v
+;;                  - c2 = 2·a1·a2
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL squareFp12BN254_a11_x
+VAR GLOBAL squareFp12BN254_a11_y
+VAR GLOBAL squareFp12BN254_a12_x
+VAR GLOBAL squareFp12BN254_a12_y
+VAR GLOBAL squareFp12BN254_a13_x
+VAR GLOBAL squareFp12BN254_a13_y
+VAR GLOBAL squareFp12BN254_a21_x
+VAR GLOBAL squareFp12BN254_a21_y
+VAR GLOBAL squareFp12BN254_a22_x
+VAR GLOBAL squareFp12BN254_a22_y
+VAR GLOBAL squareFp12BN254_a23_x
+VAR GLOBAL squareFp12BN254_a23_y
+VAR GLOBAL squareFp12BN254_c11_x
+VAR GLOBAL squareFp12BN254_c11_y
+VAR GLOBAL squareFp12BN254_c12_x
+VAR GLOBAL squareFp12BN254_c12_y
+VAR GLOBAL squareFp12BN254_c13_x
+VAR GLOBAL squareFp12BN254_c13_y
+VAR GLOBAL squareFp12BN254_c21_x
+VAR GLOBAL squareFp12BN254_c21_y
+VAR GLOBAL squareFp12BN254_c22_x
+VAR GLOBAL squareFp12BN254_c22_y
+VAR GLOBAL squareFp12BN254_c23_x
+VAR GLOBAL squareFp12BN254_c23_y
+
+VAR GLOBAL squareFp12BN254_a1a2mul1_x
+VAR GLOBAL squareFp12BN254_a1a2mul1_y
+VAR GLOBAL squareFp12BN254_a1a2mul2_x
+VAR GLOBAL squareFp12BN254_a1a2mul2_y
+VAR GLOBAL squareFp12BN254_a1a2mul3_x
+VAR GLOBAL squareFp12BN254_a1a2mul3_y
+
+VAR GLOBAL squareFp12BN254_a2vmul1_x
+VAR GLOBAL squareFp12BN254_a2vmul1_y
+VAR GLOBAL squareFp12BN254_a2vmul2_x
+VAR GLOBAL squareFp12BN254_a2vmul2_y
+VAR GLOBAL squareFp12BN254_a2vmul3_x
+VAR GLOBAL squareFp12BN254_a2vmul3_y
+
+VAR GLOBAL squareFp12BN254_a1a2vmul1_x
+VAR GLOBAL squareFp12BN254_a1a2vmul1_y
+VAR GLOBAL squareFp12BN254_a1a2vmul2_x
+VAR GLOBAL squareFp12BN254_a1a2vmul2_y
+VAR GLOBAL squareFp12BN254_a1a2vmul3_x
+VAR GLOBAL squareFp12BN254_a1a2vmul3_y
+
+VAR GLOBAL squareFp12BN254_a1a2sub1_x
+VAR GLOBAL squareFp12BN254_a1a2sub1_y
+VAR GLOBAL squareFp12BN254_a1a2sub2_x
+VAR GLOBAL squareFp12BN254_a1a2sub2_y
+VAR GLOBAL squareFp12BN254_a1a2sub3_x
+VAR GLOBAL squareFp12BN254_a1a2sub3_y
+VAR GLOBAL squareFp12BN254_a1a2vsub1_x
+VAR GLOBAL squareFp12BN254_a1a2vsub1_y
+VAR GLOBAL squareFp12BN254_a1a2vsub2_x
+VAR GLOBAL squareFp12BN254_a1a2vsub2_y
+VAR GLOBAL squareFp12BN254_a1a2vsub3_x
+VAR GLOBAL squareFp12BN254_a1a2vsub3_y
+
+VAR GLOBAL squareFp12BN254_RR
+
+squareFp12BN254:
+        RR              :MSTORE(squareFp12BN254_RR)
+
+        ; 1] a1·a2
+        $ => A          :MLOAD(squareFp12BN254_a11_x)
+        $ => B          :MLOAD(squareFp12BN254_a11_y)
+        A               :MSTORE(mulFp6BN254_a1_x)
+        B               :MSTORE(mulFp6BN254_a1_y)
+        $ => A          :MLOAD(squareFp12BN254_a12_x)
+        $ => B          :MLOAD(squareFp12BN254_a12_y)
+        A               :MSTORE(mulFp6BN254_a2_x)
+        B               :MSTORE(mulFp6BN254_a2_y)
+        $ => A          :MLOAD(squareFp12BN254_a13_x)
+        $ => B          :MLOAD(squareFp12BN254_a13_y)
+        A               :MSTORE(mulFp6BN254_a3_x)
+        B               :MSTORE(mulFp6BN254_a3_y)
+
+        $ => A          :MLOAD(squareFp12BN254_a21_x)
+        $ => B          :MLOAD(squareFp12BN254_a21_y)
+        A               :MSTORE(mulFp6BN254_b1_x)
+        B               :MSTORE(mulFp6BN254_b1_y)
+        $ => A          :MLOAD(squareFp12BN254_a22_x)
+        $ => B          :MLOAD(squareFp12BN254_a22_y)
+        A               :MSTORE(mulFp6BN254_b2_x)
+        B               :MSTORE(mulFp6BN254_b2_y)
+        $ => A          :MLOAD(squareFp12BN254_a23_x)
+        $ => B          :MLOAD(squareFp12BN254_a23_y)
+        A               :MSTORE(mulFp6BN254_b3_x)
+        B               :MSTORE(mulFp6BN254_b3_y), CALL(mulFp6BN254)
+        $ => A          :MLOAD(mulFp6BN254_c1_x)
+        $ => B          :MLOAD(mulFp6BN254_c1_y)
+        A               :MSTORE(squareFp12BN254_a1a2mul1_x)
+        B               :MSTORE(squareFp12BN254_a1a2mul1_y)
+        $ => A          :MLOAD(mulFp6BN254_c2_x)
+        $ => B          :MLOAD(mulFp6BN254_c2_y)
+        A               :MSTORE(squareFp12BN254_a1a2mul2_x)
+        B               :MSTORE(squareFp12BN254_a1a2mul2_y)
+        $ => A          :MLOAD(mulFp6BN254_c3_x)
+        $ => B          :MLOAD(mulFp6BN254_c3_y)
+        A               :MSTORE(squareFp12BN254_a1a2mul3_x)
+        B               :MSTORE(squareFp12BN254_a1a2mul3_y)
+
+        ; 2] a2·v
+        $ => A          :MLOAD(squareFp12BN254_a21_x)
+        $ => B          :MLOAD(squareFp12BN254_a21_y)
+        A               :MSTORE(sparseMulAFp6BN254_a1_x)
+        B               :MSTORE(sparseMulAFp6BN254_a1_y)
+        $ => A          :MLOAD(squareFp12BN254_a22_x)
+        $ => B          :MLOAD(squareFp12BN254_a22_y)
+        A               :MSTORE(sparseMulAFp6BN254_a2_x)
+        B               :MSTORE(sparseMulAFp6BN254_a2_y)
+        $ => A          :MLOAD(squareFp12BN254_a23_x)
+        $ => B          :MLOAD(squareFp12BN254_a23_y)
+        A               :MSTORE(sparseMulAFp6BN254_a3_x)
+        B               :MSTORE(sparseMulAFp6BN254_a3_y)
+
+        1n              :MSTORE(sparseMulAFp6BN254_b2_x)
+        0n              :MSTORE(sparseMulAFp6BN254_b2_y), CALL(sparseMulAFp6BN254)
+        $ => A          :MLOAD(sparseMulAFp6BN254_c1_x)
+        $ => B          :MLOAD(sparseMulAFp6BN254_c1_y)
+        A               :MSTORE(squareFp12BN254_a2vmul1_x)
+        B               :MSTORE(squareFp12BN254_a2vmul1_y)
+        $ => A          :MLOAD(sparseMulAFp6BN254_c2_x)
+        $ => B          :MLOAD(sparseMulAFp6BN254_c2_y)
+        A               :MSTORE(squareFp12BN254_a2vmul2_x)
+        B               :MSTORE(squareFp12BN254_a2vmul2_y)
+        $ => A          :MLOAD(sparseMulAFp6BN254_c3_x)
+        $ => B          :MLOAD(sparseMulAFp6BN254_c3_y)
+        A               :MSTORE(squareFp12BN254_a2vmul3_x)
+        B               :MSTORE(squareFp12BN254_a2vmul3_y)
+
+        ; 2] a1·a2·v
+        $ => A          :MLOAD(squareFp12BN254_a1a2mul1_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2mul1_y)
+        A               :MSTORE(sparseMulAFp6BN254_a1_x)
+        B               :MSTORE(sparseMulAFp6BN254_a1_y)
+        $ => A          :MLOAD(squareFp12BN254_a1a2mul2_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2mul2_y)
+        A               :MSTORE(sparseMulAFp6BN254_a2_x)
+        B               :MSTORE(sparseMulAFp6BN254_a2_y)
+        $ => A          :MLOAD(squareFp12BN254_a1a2mul3_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2mul3_y)
+        A               :MSTORE(sparseMulAFp6BN254_a3_x)
+        B               :MSTORE(sparseMulAFp6BN254_a3_y)
+
+        1n              :MSTORE(sparseMulAFp6BN254_b2_x)
+        0n              :MSTORE(sparseMulAFp6BN254_b2_y), CALL(sparseMulAFp6BN254)
+        $ => A          :MLOAD(sparseMulAFp6BN254_c1_x)
+        $ => B          :MLOAD(sparseMulAFp6BN254_c1_y)
+        A               :MSTORE(squareFp12BN254_a1a2vmul1_x)
+        B               :MSTORE(squareFp12BN254_a1a2vmul1_y)
+        $ => A          :MLOAD(sparseMulAFp6BN254_c2_x)
+        $ => B          :MLOAD(sparseMulAFp6BN254_c2_y)
+        A               :MSTORE(squareFp12BN254_a1a2vmul2_x)
+        B               :MSTORE(squareFp12BN254_a1a2vmul2_y)
+        $ => A          :MLOAD(sparseMulAFp6BN254_c3_x)
+        $ => B          :MLOAD(sparseMulAFp6BN254_c3_y)
+        A               :MSTORE(squareFp12BN254_a1a2vmul3_x)
+        B               :MSTORE(squareFp12BN254_a1a2vmul3_y)
+
+        ; 3] c2 = 2·a1·a2
+        $ => A          :MLOAD(squareFp12BN254_a1a2mul1_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2mul1_y)
+        A               :MSTORE(escalarMulFp6BN254_a1_x)
+        B               :MSTORE(escalarMulFp6BN254_a1_y)
+        $ => A          :MLOAD(squareFp12BN254_a1a2mul2_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2mul2_y)
+        A               :MSTORE(escalarMulFp6BN254_a2_x)
+        B               :MSTORE(escalarMulFp6BN254_a2_y)
+        $ => A          :MLOAD(squareFp12BN254_a1a2mul3_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2mul3_y)
+        A               :MSTORE(escalarMulFp6BN254_a3_x)
+        B               :MSTORE(escalarMulFp6BN254_a3_y)
+
+        2n              :MSTORE(escalarMulFp6BN254_b), CALL(escalarMulFp6BN254)
+        $ => A          :MLOAD(escalarMulFp6BN254_c1_x)
+        $ => B          :MLOAD(escalarMulFp6BN254_c1_y)
+        A               :MSTORE(squareFp12BN254_c21_x)
+        B               :MSTORE(squareFp12BN254_c21_y)
+        $ => A          :MLOAD(escalarMulFp6BN254_c2_x)
+        $ => B          :MLOAD(escalarMulFp6BN254_c2_y)
+        A               :MSTORE(squareFp12BN254_c22_x)
+        B               :MSTORE(squareFp12BN254_c22_y)
+        $ => A          :MLOAD(escalarMulFp6BN254_c3_x)
+        $ => B          :MLOAD(escalarMulFp6BN254_c3_y)
+        A               :MSTORE(squareFp12BN254_c23_x)
+        B               :MSTORE(squareFp12BN254_c23_y)
+
+        ; 4] a1-a2
+        $ => A          :MLOAD(squareFp12BN254_a11_x)
+        $ => B          :MLOAD(squareFp12BN254_a11_y)
+        A               :MSTORE(subFp6BN254_a1_x)
+        B               :MSTORE(subFp6BN254_a1_y)
+        $ => A          :MLOAD(squareFp12BN254_a12_x)
+        $ => B          :MLOAD(squareFp12BN254_a12_y)
+        A               :MSTORE(subFp6BN254_a2_x)
+        B               :MSTORE(subFp6BN254_a2_y)
+        $ => A          :MLOAD(squareFp12BN254_a13_x)
+        $ => B          :MLOAD(squareFp12BN254_a13_y)
+        A               :MSTORE(subFp6BN254_a3_x)
+        B               :MSTORE(subFp6BN254_a3_y)
+        
+        $ => A          :MLOAD(squareFp12BN254_a21_x)
+        $ => B          :MLOAD(squareFp12BN254_a21_y)
+        A               :MSTORE(subFp6BN254_b1_x)
+        B               :MSTORE(subFp6BN254_b1_y)
+        $ => A          :MLOAD(squareFp12BN254_a22_x)
+        $ => B          :MLOAD(squareFp12BN254_a22_y)
+        A               :MSTORE(subFp6BN254_b2_x)
+        B               :MSTORE(subFp6BN254_b2_y)
+        $ => A          :MLOAD(squareFp12BN254_a23_x)
+        $ => B          :MLOAD(squareFp12BN254_a23_y)
+        A               :MSTORE(subFp6BN254_b3_x)
+        B               :MSTORE(subFp6BN254_b3_y), CALL(subFp6BN254)
+
+        $ => A          :MLOAD(subFp6BN254_c1_x)
+        $ => B          :MLOAD(subFp6BN254_c1_y)
+        A               :MSTORE(squareFp12BN254_a1a2sub1_x)
+        B               :MSTORE(squareFp12BN254_a1a2sub1_y)
+        $ => A          :MLOAD(subFp6BN254_c2_x)
+        $ => B          :MLOAD(subFp6BN254_c2_y)
+        A               :MSTORE(squareFp12BN254_a1a2sub2_x)
+        B               :MSTORE(squareFp12BN254_a1a2sub2_y)
+        $ => A          :MLOAD(subFp6BN254_c3_x)
+        $ => B          :MLOAD(subFp6BN254_c3_y)
+        A               :MSTORE(squareFp12BN254_a1a2sub3_x)
+        B               :MSTORE(squareFp12BN254_a1a2sub3_y)
+
+        
+        ; 5] a1-a2·v
+        $ => A          :MLOAD(squareFp12BN254_a11_x)
+        $ => B          :MLOAD(squareFp12BN254_a11_y)
+        A               :MSTORE(subFp6BN254_a1_x)
+        B               :MSTORE(subFp6BN254_a1_y)
+        $ => A          :MLOAD(squareFp12BN254_a12_x)
+        $ => B          :MLOAD(squareFp12BN254_a12_y)
+        A               :MSTORE(subFp6BN254_a2_x)
+        B               :MSTORE(subFp6BN254_a2_y)
+        $ => A          :MLOAD(squareFp12BN254_a13_x)
+        $ => B          :MLOAD(squareFp12BN254_a13_y)
+        A               :MSTORE(subFp6BN254_a3_x)
+        B               :MSTORE(subFp6BN254_a3_y)
+        
+        $ => A          :MLOAD(squareFp12BN254_a2vmul1_x)
+        $ => B          :MLOAD(squareFp12BN254_a2vmul1_y)
+        A               :MSTORE(subFp6BN254_b1_x)
+        B               :MSTORE(subFp6BN254_b1_y)
+        $ => A          :MLOAD(squareFp12BN254_a2vmul2_x)
+        $ => B          :MLOAD(squareFp12BN254_a2vmul2_y)
+        A               :MSTORE(subFp6BN254_b2_x)
+        B               :MSTORE(subFp6BN254_b2_y)
+        $ => A          :MLOAD(squareFp12BN254_a2vmul3_x)
+        $ => B          :MLOAD(squareFp12BN254_a2vmul3_y)
+        A               :MSTORE(subFp6BN254_b3_x)
+        B               :MSTORE(subFp6BN254_b3_y), CALL(subFp6BN254)
+
+        $ => A          :MLOAD(subFp6BN254_c1_x)
+        $ => B          :MLOAD(subFp6BN254_c1_y)
+        A               :MSTORE(squareFp12BN254_a1a2vsub1_x)
+        B               :MSTORE(squareFp12BN254_a1a2vsub1_y)
+        $ => A          :MLOAD(subFp6BN254_c2_x)
+        $ => B          :MLOAD(subFp6BN254_c2_y)
+        A               :MSTORE(squareFp12BN254_a1a2vsub2_x)
+        B               :MSTORE(squareFp12BN254_a1a2vsub2_y)
+        $ => A          :MLOAD(subFp6BN254_c3_x)
+        $ => B          :MLOAD(subFp6BN254_c3_y)
+        A               :MSTORE(squareFp12BN254_a1a2vsub3_x)
+        B               :MSTORE(squareFp12BN254_a1a2vsub3_y)
+
+        ; 7] c1 = (a1-a2)·(a1-a2·v) + a1·a2 + a1·a2·v
+        $ => A          :MLOAD(squareFp12BN254_a1a2sub1_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2sub1_y)
+        A               :MSTORE(mulFp6BN254_a1_x)
+        B               :MSTORE(mulFp6BN254_a1_y)
+        $ => A          :MLOAD(squareFp12BN254_a1a2sub2_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2sub2_y)
+        A               :MSTORE(mulFp6BN254_a2_x)
+        B               :MSTORE(mulFp6BN254_a2_y)
+        $ => A          :MLOAD(squareFp12BN254_a1a2sub3_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2sub3_y)
+        A               :MSTORE(mulFp6BN254_a3_x)
+        B               :MSTORE(mulFp6BN254_a3_y)
+        
+
+        $ => A          :MLOAD(squareFp12BN254_a1a2vsub1_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2vsub1_y)
+        A               :MSTORE(mulFp6BN254_b1_x)
+        B               :MSTORE(mulFp6BN254_b1_y)
+        $ => A          :MLOAD(squareFp12BN254_a1a2vsub2_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2vsub2_y)
+        A               :MSTORE(mulFp6BN254_b2_x)
+        B               :MSTORE(mulFp6BN254_b2_y)
+        $ => A          :MLOAD(squareFp12BN254_a1a2vsub3_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2vsub3_y)
+        A               :MSTORE(mulFp6BN254_b3_x)
+        B               :MSTORE(mulFp6BN254_b3_y), CALL(mulFp6BN254)
+
+        $ => A          :MLOAD(mulFp6BN254_c1_x)
+        $ => B          :MLOAD(mulFp6BN254_c1_y)
+        A               :MSTORE(addFp6BN254_a1_x)
+        B               :MSTORE(addFp6BN254_a1_y)
+        $ => A          :MLOAD(mulFp6BN254_c2_x)
+        $ => B          :MLOAD(mulFp6BN254_c2_y)
+        A               :MSTORE(addFp6BN254_a2_x)
+        B               :MSTORE(addFp6BN254_a2_y)
+        $ => A          :MLOAD(mulFp6BN254_c3_x)
+        $ => B          :MLOAD(mulFp6BN254_c3_y)
+        A               :MSTORE(addFp6BN254_a3_x)
+        B               :MSTORE(addFp6BN254_a3_y)
+
+        $ => A          :MLOAD(squareFp12BN254_a1a2mul1_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2mul1_y)
+        A               :MSTORE(addFp6BN254_b1_x)
+        B               :MSTORE(addFp6BN254_b1_y)
+        $ => A          :MLOAD(squareFp12BN254_a1a2mul2_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2mul2_y)
+        A               :MSTORE(addFp6BN254_b2_x)
+        B               :MSTORE(addFp6BN254_b2_y)
+        $ => A          :MLOAD(squareFp12BN254_a1a2mul3_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2mul3_y)
+        A               :MSTORE(addFp6BN254_b3_x)
+        B               :MSTORE(addFp6BN254_b3_y), CALL(addFp6BN254)
+
+        $ => A          :MLOAD(addFp6BN254_c1_x)
+        $ => B          :MLOAD(addFp6BN254_c1_y)
+        A               :MSTORE(addFp6BN254_a1_x)
+        B               :MSTORE(addFp6BN254_a1_y)
+        $ => A          :MLOAD(addFp6BN254_c2_x)
+        $ => B          :MLOAD(addFp6BN254_c2_y)
+        A               :MSTORE(addFp6BN254_a2_x)
+        B               :MSTORE(addFp6BN254_a2_y)
+        $ => A          :MLOAD(addFp6BN254_c3_x)
+        $ => B          :MLOAD(addFp6BN254_c3_y)
+        A               :MSTORE(addFp6BN254_a3_x)
+        B               :MSTORE(addFp6BN254_a3_y)
+
+        $ => A          :MLOAD(squareFp12BN254_a1a2vmul1_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2vmul1_y)
+        A               :MSTORE(addFp6BN254_b1_x)
+        B               :MSTORE(addFp6BN254_b1_y)
+        $ => A          :MLOAD(squareFp12BN254_a1a2vmul2_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2vmul2_y)
+        A               :MSTORE(addFp6BN254_b2_x)
+        B               :MSTORE(addFp6BN254_b2_y)
+        $ => A          :MLOAD(squareFp12BN254_a1a2vmul3_x)
+        $ => B          :MLOAD(squareFp12BN254_a1a2vmul3_y)
+        A               :MSTORE(addFp6BN254_b3_x)
+        B               :MSTORE(addFp6BN254_b3_y), CALL(addFp6BN254)
+
+        $ => A          :MLOAD(addFp6BN254_c1_x)
+        $ => B          :MLOAD(addFp6BN254_c1_y)
+        A               :MSTORE(squareFp12BN254_c11_x)
+        B               :MSTORE(squareFp12BN254_c11_y)
+        $ => A          :MLOAD(addFp6BN254_c2_x)
+        $ => B          :MLOAD(addFp6BN254_c2_y)
+        A               :MSTORE(squareFp12BN254_c12_x)
+        B               :MSTORE(squareFp12BN254_c12_y)
+        $ => A          :MLOAD(addFp6BN254_c3_x)
+        $ => B          :MLOAD(addFp6BN254_c3_y)
+        A               :MSTORE(squareFp12BN254_c13_x)
+        B               :MSTORE(squareFp12BN254_c13_y)
+
+        $ => RR         :MLOAD(squareFp12BN254_RR)
+                        :RETURN

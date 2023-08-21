@@ -3,9 +3,9 @@ INCLUDE "vars.zkasm"
 
 ; Blocks zkROM
 ;       A - Load initial registers into memory: oldStateRoot (B), oldAccInputHash (C), oldNumBatch (SP) & chainID (GAS)
-;       B - Set batch global variables
+;       B - Compute keccaks needed to finish the batch
 ;       C - Loop parsing RLP transactions
-;       D - Loop processing transactions
+;       D - Load blockNum variable & Loop processing transactions
 ;       E - Batch computations: get newLocalExitRoot, assert transactions size, compute batchHashData & compute newAccInputHash
 ;       F - Finalize execution
 
@@ -24,59 +24,21 @@ start: ; main zkROM entry point
         SP                                  :MSTORE(oldNumBatch)
         GAS                                 :MSTORE(chainID) ; assumed to be less than 32 bits
 
-        ${getGlobalExitRoot()}              :MSTORE(globalExitRoot)
+        ${getHistoricGERRoot()}             :MSTORE(historicGER)
         ${getSequencerAddr()}               :MSTORE(sequencerAddr)
-        ${getTimestamp()}                   :MSTORE(timestamp)
+        ${getTimestampLimit()}              :MSTORE(timestampLimit)
         ${getTxsLen()}                      :MSTORE(batchL2DataLength) ; less than 300.000 bytes. Enforced by the smart contract
+        ${getIsForced()}                    :MSTORE(isForced)
 
         B => SR ;set initial state root
-
+        SR                                  :MSTORE(batchSR)
         ; Increase batch number
         SP + 1                              :MSTORE(newNumBatch)
 
 ;;;;;;;;;;;;;;;;;;
-;; B - Set batch global variables
-;;     - set globalExitRoot in Bridge contract
-;;     - load transaction count from system smart contract
-;;     - compute keccaks needed to finish the batch
+;; B - Compute keccaks needed to finish the batch
 ;;;;;;;;;;;;;;;;;;
         $${eventLog(onStartBatch, C)}
-
-        $ => A                                  :MLOAD(globalExitRoot)
-        0 => B
-        $                                       :EQ, JMPC(skipSetGlobalExitRoot)
-
-;; Set global exit root
-setGlobalExitRoot:
-        0 => HASHPOS
-        $ => E                                  :MLOAD(lastHashKIdUsed)
-        E+1 => E                                :MSTORE(lastHashKIdUsed)
-
-        32 => D
-        A                                       :HASHK(E)
-        %GLOBAL_EXIT_ROOT_STORAGE_POS           :HASHK(E) ; Storage position of the global exit root map
-        HASHPOS                                 :HASHKLEN(E)
-        $ => C                                  :HASHKDIGEST(E)
-
-        %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2 => A
-        %SMT_KEY_SC_STORAGE => B
-
-        ; read timestamp given the globalExitRoot
-        ; skip overwrite timestamp if it is different than 0
-        ; Since timestamp is enforced by the smart contract it is safe to compare only 32 bits in 'op0' with JMPNZ
-        $ => D                                  :SLOAD, JMPNZ(skipSetGlobalExitRoot)
-
-        $ => D                                  :MLOAD(timestamp)
-        $ => SR                                 :SSTORE ; Store 'timestamp' in storage position 'keccak256(globalExitRoot, 0)'
-
-skipSetGlobalExitRoot:
-        SR                                      :MSTORE(batchSR)
-        ; Load current tx count
-        %LAST_TX_STORAGE_POS => C
-        %ADDRESS_SYSTEM => A
-        %SMT_KEY_SC_STORAGE => B
-        $ => D          :SLOAD
-        D               :MSTORE(txCount)
 
         ; Compute necessary keccak counters to finish batch
         $ => A          :MLOAD(batchL2DataLength)
@@ -95,7 +57,7 @@ skipSetGlobalExitRoot:
 ;;      - If an error is found in any transaction, the batch will not process any transaction
 ;;;;;;;;;;;;;;;;;;
 
-        E+1 => E                            :MSTORE(lastHashKIdUsed)
+        1 => E                              :MSTORE(lastHashKIdUsed)
         0                                   :MSTORE(batchHashPos)
         E                                   :MSTORE(batchHashDataId)
         $ => A                              :MLOAD(lastCtxUsed)
@@ -116,26 +78,51 @@ txLoopRLP:
 endCheckRLP:
         ; set flag isLoadingRLP to 0
         0               :MSTORE(isLoadingRLP)
-                        :JMP(txLoop)
 
 ;;;;;;;;;;;;;;;;;;
-;; D - Loop processing transactions
-;;      - Load transaction data and interpret it
+;; D    - Load blockNum variable
+;;      - Loop processing transactions
+;;              - Load transaction data and interpret it
 ;;;;;;;;;;;;;;;;;;
 
+setBlockNum:
+        %LAST_BLOCK_STORAGE_POS => C
+        %ADDRESS_SYSTEM => A
+        %SMT_KEY_SC_STORAGE => B
+        $               :SLOAD,MSTORE(blockNum)
+        ; If forced batch, process a forced changeL2BlockTx
+        $               :MLOAD(isForced), JMPZ(txLoop, handleForcedBatch)
+handleForcedBatch:
+        1               :MSTORE(currentTx), JMP(processChangeL2Block)
 txLoop:
         $ => A          :MLOAD(pendingTxs)
         A - 1           :MSTORE(pendingTxs), JMPN(processTxsEnd)
-
+        $ => A          :MLOAD(currentTx)
+        A + 1           :MSTORE(currentTx)
         $ => A          :MLOAD(ctxTxToUse) ; Load first context used by transaction
-        A + 1 => CTX    :MSTORE(ctxTxToUse),JMP(processTx)
+        A + 1 => CTX    :MSTORE(ctxTxToUse)
+        ; Detect if transaction is a change L2 block tx
+        ; Store initial state at the beginning of the transaction
+        SR              :MSTORE(originSR)
+        $ => A          :MLOAD(isChangeL2BlockTx)
+        A - 1           :JMPZ(processChangeL2Block, processTx)
 
-processTxEnd:
-                        :CALL(updateSystemData)
 processTxFinished:
+        ; Increase cumulativeGasUsed
+        $ => A          :MLOAD(txGasLimit)
+        A - GAS => A
+        $ => B          :MLOAD(cumulativeGasUsed)
+        ; Fill block info tree with tx receipt
+        A + B           :MSTORE(cumulativeGasUsed), CALL(fillBlockInfoTreeWithTxReceipt)
+        ; Increase txIndex
+        $ => A          :MLOAD(txIndex)
+        A + 1           :MSTORE(txIndex)
+processIntrinsicTxFinished:
         $${eventLog(onFinishTx)}   :JMP(txLoop)
 
 processTxsEnd:
+        ;  Write values at storage at the end of block processing
+                        :CALL(consolidateBlock)
 
 ;;;;;;;;;;;;;;;;;;
 ;; E - Batch asserts & computations:
@@ -178,17 +165,19 @@ processTxsEnd:
         $ => A                          :MLOAD(batchHashData)
         A                               :HASHK(0)
 
-        $ => A                          :MLOAD(globalExitRoot)
+        $ => A                          :MLOAD(historicGER)
         A                               :HASHK(0)
 
         8 => D
-        $ => A                          :MLOAD(timestamp)
+        $ => A                          :MLOAD(timestampLimit)
         A                               :HASHK(0)
 
         20 => D
         $ => A                          :MLOAD(sequencerAddr)
         A                               :HASHK(0)
 
+        $ => A                          :MLOAD(isForced)
+        A                               :HASHK1(0)
         HASHPOS                         :HASHKLEN(0)
 
         $ => C                          :HASHKDIGEST(0)
@@ -215,5 +204,7 @@ processTxsEnd:
 INCLUDE "end.zkasm"
 INCLUDE "load-tx-rlp.zkasm"
 INCLUDE "process-tx.zkasm"
+INCLUDE "process-change-l2-block.zkasm"
 INCLUDE "utils.zkasm"
+INCLUDE "block-info.zkasm"
 

@@ -21,20 +21,19 @@ async function main() {
     // Get all zkasm files
     const pathZkasm = path.join(process.cwd(), process.argv[2]);
     const files = await getTestFiles(pathZkasm);
-    
+
     let wasFailed = false;
     // Run all zkasm files
     // eslint-disable-next-line no-restricted-syntax
     console.log(chalk.yellow('--> Start running zkasm files'));
     for (const file of files) {
-        if (file.includes('ignore'))
-            continue;
+        if (file.includes('ignore')) { continue; }
         if (await runTest(file, cmPols) == 1) {
             wasFailed = true;
         }
     }
     if (wasFailed) {
-        process.exit(1); 
+        process.exit(1);
     }
 }
 
@@ -46,7 +45,6 @@ async function runTest(pathTest, cmPols) {
         allowUndefinedLabels: true,
         allowOverwriteLabels: true,
     };
-
 
     const config = {
         debug: true,
@@ -73,6 +71,7 @@ async function runTest(pathTest, cmPols) {
         console.log(e);
         failed = true;
     }
+
     return failed;
 }
 

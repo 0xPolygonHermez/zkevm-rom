@@ -1,0 +1,28 @@
+decodeChangeL2BlockTx:
+    ; No changeL2BlockTx to allowed at forced batches
+    $                               :MLOAD(isForced), JMPNZ(invalidTxRLP)
+
+    ; decode "txType" / 1 byte
+    1 => D                          :CALL(getTxData)
+    C + D => C                      :CALL(addBatchHashData)
+    ; Decode deltaTimestamp / 8 bytes
+    8 => D                          :CALL(getTxData)
+    C + D => C                      :CALL(addBatchHashData)
+    A                               :MSTORE(deltaTimestamp)
+    ; Decode indexHistGERTree / 4 bytes
+    4 => D                          :CALL(getTxData)
+    C + D => C                      :CALL(addBatchHashData)
+    A                               :MSTORE(indexHistGERTree)
+    1                               :MSTORE(isChangeL2BlockTx), JMP(finishLoadChangeL2BlockTx)
+
+getTxData:
+    ${getTxs(p,D)} => A
+    $${p = p + D}
+                                    :RETURN
+finishLoadChangeL2BlockTx:
+;; update bytes parsed
+        $ => A                          :MLOAD(batchL2DataParsed)
+        A + C                           :MSTORE(batchL2DataParsed)
+;; increase number of transaction to process
+        $ => A                          :MLOAD(pendingTxs)
+        A + 1                           :MSTORE(pendingTxs), JMP(txLoopRLP)

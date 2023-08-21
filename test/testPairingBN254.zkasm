@@ -1,0 +1,442 @@
+; constants needed by executor C++
+CONST %N = 2**19
+CONST %MAX_CNT_STEPS_LIMIT = %N
+CONST %MAX_CNT_ARITH_LIMIT = %N
+CONST %MAX_CNT_BINARY_LIMIT = %N
+CONST %MAX_CNT_MEM_ALIGN_LIMIT = %N
+CONST %MAX_CNT_KECCAK_F_LIMIT = %N
+CONST %MAX_CNT_PADDING_PG_LIMIT = %N
+CONST %MAX_CNT_POSEIDON_G_LIMIT = %N
+
+VAR GLOBAL lastHashKId
+VAR GLOBAL lastHashPId
+
+VAR GLOBAL initial_A
+VAR GLOBAL initial_B
+VAR GLOBAL initial_C
+VAR GLOBAL initial_D
+VAR GLOBAL initial_E
+VAR GLOBAL initial_CTX
+VAR GLOBAL initial_SP
+VAR GLOBAL initial_PC
+VAR GLOBAL initial_GAS
+VAR GLOBAL initial_SR
+VAR GLOBAL initial_RR
+VAR GLOBAL initial_HASHPOS
+VAR GLOBAL initial_RCX
+
+start:
+
+       STEP => A
+       0 :ASSERT
+
+
+       A           :MSTORE(initial_A)
+       B           :MSTORE(initial_B)
+       C           :MSTORE(initial_C)
+       D           :MSTORE(initial_D)
+       E           :MSTORE(initial_E)
+       CTX         :MSTORE(initial_CTX)
+       SP          :MSTORE(initial_SP)
+       PC          :MSTORE(initial_PC)
+       GAS         :MSTORE(initial_GAS)
+       SR          :MSTORE(initial_SR)
+       RR          :MSTORE(initial_RR)
+       HASHPOS     :MSTORE(initial_HASHPOS)
+       RCX         :MSTORE(initial_RCX)
+       0 => A,B,C,D,E,CTX, SP, PC, GAS, SR, RR, HASHPOS, RCX
+
+       -1          :MSTORE(lastHashKId)
+       -1          :MSTORE(lastHashPId)
+
+       ; Generators P,Q
+
+       ; 1] Degenerate tests: e(0,Q) = 1 and e(P,0) = 1
+       0n                                                                                         :MSTORE(pairingBN254_P_x)
+       0n                                                                                         :MSTORE(pairingBN254_P_y)
+       4351401811647638138392695977895401859084096897123577305203754529537814663109n              :MSTORE(pairingBN254_Q_x1)
+       2046729899889901964437012741252570163462327955511008570480857952505584629957n              :MSTORE(pairingBN254_Q_x2)
+       322506915963699862059245473966830598387691259163658767351233132602858049743n               :MSTORE(pairingBN254_Q_y1)
+       14316075702276096164483565793667862351398527813470041574939773541551376891710n             :MSTORE(pairingBN254_Q_y2)
+                                                                                                  :CALL(pairingBN254)
+       1n          :MLOAD(pairingBN254_f11_x)
+       0n          :MLOAD(pairingBN254_f11_y)
+       0n          :MLOAD(pairingBN254_f12_x)
+       0n          :MLOAD(pairingBN254_f12_y)
+       0n          :MLOAD(pairingBN254_f13_x)
+       0n          :MLOAD(pairingBN254_f13_y)
+       0n          :MLOAD(pairingBN254_f21_x)
+       0n          :MLOAD(pairingBN254_f21_y)
+       0n          :MLOAD(pairingBN254_f22_x)
+       0n          :MLOAD(pairingBN254_f22_y)
+       0n          :MLOAD(pairingBN254_f23_x)
+       0n          :MLOAD(pairingBN254_f23_y)
+
+       1368015179489954701390400359078579693043519447331113978918064868415326638035n              :MSTORE(pairingBN254_P_x)
+       9918110051302171585080402603319702774565515993150576347155970296011118125764n              :MSTORE(pairingBN254_P_y)
+       0n                                                                                         :MSTORE(pairingBN254_Q_x1)
+       0n                                                                                         :MSTORE(pairingBN254_Q_x2)
+       0n                                                                                         :MSTORE(pairingBN254_Q_y1)
+       0n                                                                                         :MSTORE(pairingBN254_Q_y2)
+                                                                                                  :CALL(pairingBN254)
+       1n          :MLOAD(pairingBN254_f11_x)
+       0n          :MLOAD(pairingBN254_f11_y)
+       0n          :MLOAD(pairingBN254_f12_x)
+       0n          :MLOAD(pairingBN254_f12_y)
+       0n          :MLOAD(pairingBN254_f13_x)
+       0n          :MLOAD(pairingBN254_f13_y)
+       0n          :MLOAD(pairingBN254_f21_x)
+       0n          :MLOAD(pairingBN254_f21_y)
+       0n          :MLOAD(pairingBN254_f22_x)
+       0n          :MLOAD(pairingBN254_f22_y)
+       0n          :MLOAD(pairingBN254_f23_x)
+       0n          :MLOAD(pairingBN254_f23_y)
+
+       ; 2] P not in range
+       21888242871839275222246405745257275088696311157297823662689037894645226208583n                                                                                      :MSTORE(pairingBN254_P_x)
+       0n                                                                                         :MSTORE(pairingBN254_P_y)
+       1n           :MSTORE(pairingBN254_Q_x1)
+       2n           :MSTORE(pairingBN254_Q_x2)
+       3n            :MSTORE(pairingBN254_Q_y1)
+       4n          :MSTORE(pairingBN254_Q_y2)
+                                                                                                  :CALL(pairingBN254)
+       1 => A
+       1               :EQ
+
+       0n                                                                                         :MSTORE(pairingBN254_P_x)
+       21888242871839275222246405745257275088696311157297823662689037894645226208583n                                                                                      :MSTORE(pairingBN254_P_y)
+       1n           :MSTORE(pairingBN254_Q_x1)
+       2n           :MSTORE(pairingBN254_Q_x2)
+       3n            :MSTORE(pairingBN254_Q_y1)
+       4n          :MSTORE(pairingBN254_Q_y2)
+                                                                                                  :CALL(pairingBN254)
+       2 => A
+       1               :EQ
+
+       ; 3] Q not in range
+       0n                                                                                         :MSTORE(pairingBN254_P_x)
+       0n                                                                                         :MSTORE(pairingBN254_P_y)
+       21888242871839275222246405745257275088696311157297823662689037894645226208583n             :MSTORE(pairingBN254_Q_x1)
+       2n           :MSTORE(pairingBN254_Q_x2)
+       3n            :MSTORE(pairingBN254_Q_y1)
+       4n          :MSTORE(pairingBN254_Q_y2)
+                                                                                                  :CALL(pairingBN254)
+       3 => A
+       1               :EQ
+
+       0n                                                                                         :MSTORE(pairingBN254_P_x)
+       0n                                                                                         :MSTORE(pairingBN254_P_y)
+       1n           :MSTORE(pairingBN254_Q_x1)
+       21888242871839275222246405745257275088696311157297823662689037894645226208583n             :MSTORE(pairingBN254_Q_x2)
+       3n            :MSTORE(pairingBN254_Q_y1)
+       4n          :MSTORE(pairingBN254_Q_y2)
+                                                                                                  :CALL(pairingBN254)
+       4 => A
+       1               :EQ
+
+       0n                                                                                         :MSTORE(pairingBN254_P_x)
+       0n                                                                                         :MSTORE(pairingBN254_P_y)
+       1n           :MSTORE(pairingBN254_Q_x1)
+       2n           :MSTORE(pairingBN254_Q_x2)
+       21888242871839275222246405745257275088696311157297823662689037894645226208583n             :MSTORE(pairingBN254_Q_y1)
+       4n          :MSTORE(pairingBN254_Q_y2)
+                                                                                                  :CALL(pairingBN254)
+       5 => A
+       1               :EQ
+
+       0n                                                                                         :MSTORE(pairingBN254_P_x)
+       0n                                                                                         :MSTORE(pairingBN254_P_y)
+       1n           :MSTORE(pairingBN254_Q_x1)
+       2n           :MSTORE(pairingBN254_Q_x2)
+       3n            :MSTORE(pairingBN254_Q_y1)
+       21888242871839275222246405745257275088696311157297823662689037894645226208583n             :MSTORE(pairingBN254_Q_y2)
+                                                                                                  :CALL(pairingBN254)
+       6 => A
+       1               :EQ
+
+       ; 4] P not in G1
+       1n                                                                                         :MSTORE(pairingBN254_P_x)
+       1n                                                                                         :MSTORE(pairingBN254_P_y)
+       0n           :MSTORE(pairingBN254_Q_x1)
+       0n           :MSTORE(pairingBN254_Q_x2)
+       0n            :MSTORE(pairingBN254_Q_y1)
+       0n          :MSTORE(pairingBN254_Q_y2)
+                                                                                                  :CALL(pairingBN254)
+       7 => A
+       1               :EQ
+
+       ; 5] Q not in G2
+       0n                                                                                         :MSTORE(pairingBN254_P_x)
+       0n                                                                                         :MSTORE(pairingBN254_P_y)
+       13952973379259391431794065814946995996741015657664522404741834284791195202656n             :MSTORE(pairingBN254_Q_x1)
+       10904417650644905372723866879625669404817699819926286815323845522270190436451n             :MSTORE(pairingBN254_Q_x2)
+       12292403207927938194042684085166933223459250332097452603928615449631462314854n             :MSTORE(pairingBN254_Q_y1)
+       3535501093699632689489376651381121898720279562088698464643486166587401099479n              :MSTORE(pairingBN254_Q_y2)
+                                                                                                  :CALL(pairingBN254)
+       8 => A
+       1               :EQ
+
+       ; 6] Bilinearity test: e(2P,12Q) = e(P,12Q)² = e(2P,Q)¹² = e(P,Q)²⁴ = e(12P,2Q) 
+       ; e(2P,12Q)
+       1368015179489954701390400359078579693043519447331113978918064868415326638035n              :MSTORE(pairingBN254_P_x)
+       9918110051302171585080402603319702774565515993150576347155970296011118125764n              :MSTORE(pairingBN254_P_y)
+       4351401811647638138392695977895401859084096897123577305203754529537814663109n              :MSTORE(pairingBN254_Q_x1)
+       2046729899889901964437012741252570163462327955511008570480857952505584629957n              :MSTORE(pairingBN254_Q_x2)
+       322506915963699862059245473966830598387691259163658767351233132602858049743n               :MSTORE(pairingBN254_Q_y1)
+       14316075702276096164483565793667862351398527813470041574939773541551376891710n             :MSTORE(pairingBN254_Q_y2)
+                                                                                                  :CALL(pairingBN254)
+       13413524510323321318921703539856938196252165859353070108808910520379565591578n             :MLOAD(pairingBN254_f11_x)
+       3548381829456735642031500506306367847474828769923557674325753657986253436214n              :MLOAD(pairingBN254_f11_y)
+       11258588180307399598255242775094467208478122055367286369273756816466078325984n             :MLOAD(pairingBN254_f12_x)
+       15692415863664227683780306499051704744181486071132299317385971936570963983778n             :MLOAD(pairingBN254_f12_y)
+       14331327121685823241734822812072572580994818894715351943735993854561590776973n             :MLOAD(pairingBN254_f13_x)
+       5829057651356763815288519037751619402051833008237861839412688801032331829766n              :MLOAD(pairingBN254_f13_y)   
+       15475783993587934296880977452723101772140252350911606731569729596277613550216n             :MLOAD(pairingBN254_f21_x)
+       5097655688415311910623889733978393264040884000272175630800968927057028195666n              :MLOAD(pairingBN254_f21_y)
+       11451831001542370722617744987566735321553462342240810632153337322850540201855n             :MLOAD(pairingBN254_f22_x)
+       10214880648406402761779167726229820911960967566000435639888288131094179536430n             :MLOAD(pairingBN254_f22_y)
+       7513746461017094458199399930075345786758663515755635567834665490471393582925n              :MLOAD(pairingBN254_f23_x)
+       1522857835029638585907442329762418957365351568194442821861575097484378991036n              :MLOAD(pairingBN254_f23_y)
+
+       ; e(P,12Q)
+       1n         :MSTORE(pairingBN254_P_x)
+       2n         :MSTORE(pairingBN254_P_y)
+       4351401811647638138392695977895401859084096897123577305203754529537814663109n              :MSTORE(pairingBN254_Q_x1)
+       2046729899889901964437012741252570163462327955511008570480857952505584629957n              :MSTORE(pairingBN254_Q_x2)
+       322506915963699862059245473966830598387691259163658767351233132602858049743n               :MSTORE(pairingBN254_Q_y1)
+       14316075702276096164483565793667862351398527813470041574939773541551376891710n             :MSTORE(pairingBN254_Q_y2)
+                                                                                                  :CALL(pairingBN254)
+       2n     :MSTORE(expCycloFp12BN254_e)
+       $ => A :MLOAD(pairingBN254_f11_x)
+       $ => B :MLOAD(pairingBN254_f11_y)
+       A      :MSTORE(expCycloFp12BN254_a11_x)
+       B      :MSTORE(expCycloFp12BN254_a11_y)
+       $ => A :MLOAD(pairingBN254_f12_x)
+       $ => B :MLOAD(pairingBN254_f12_y)
+       A      :MSTORE(expCycloFp12BN254_a12_x)
+       B      :MSTORE(expCycloFp12BN254_a12_y)
+       $ => A :MLOAD(pairingBN254_f13_x)
+       $ => B :MLOAD(pairingBN254_f13_y)
+       A      :MSTORE(expCycloFp12BN254_a13_x)
+       B      :MSTORE(expCycloFp12BN254_a13_y)
+       $ => A :MLOAD(pairingBN254_f21_x)
+       $ => B :MLOAD(pairingBN254_f21_y)
+       A      :MSTORE(expCycloFp12BN254_a21_x)
+       B      :MSTORE(expCycloFp12BN254_a21_y)
+       $ => A :MLOAD(pairingBN254_f22_x)
+       $ => B :MLOAD(pairingBN254_f22_y)
+       A      :MSTORE(expCycloFp12BN254_a22_x)
+       B      :MSTORE(expCycloFp12BN254_a22_y)
+       $ => A :MLOAD(pairingBN254_f23_x)
+       $ => B :MLOAD(pairingBN254_f23_y)
+       A      :MSTORE(expCycloFp12BN254_a23_x)
+       B      :MSTORE(expCycloFp12BN254_a23_y)
+              :CALL(expCycloFp12BN254)
+       13413524510323321318921703539856938196252165859353070108808910520379565591578n             :MLOAD(expCycloFp12BN254_c11_x)
+       3548381829456735642031500506306367847474828769923557674325753657986253436214n              :MLOAD(expCycloFp12BN254_c11_y)
+       11258588180307399598255242775094467208478122055367286369273756816466078325984n             :MLOAD(expCycloFp12BN254_c12_x)
+       15692415863664227683780306499051704744181486071132299317385971936570963983778n             :MLOAD(expCycloFp12BN254_c12_y)
+       14331327121685823241734822812072572580994818894715351943735993854561590776973n             :MLOAD(expCycloFp12BN254_c13_x)
+       5829057651356763815288519037751619402051833008237861839412688801032331829766n              :MLOAD(expCycloFp12BN254_c13_y)
+       15475783993587934296880977452723101772140252350911606731569729596277613550216n             :MLOAD(expCycloFp12BN254_c21_x)
+       5097655688415311910623889733978393264040884000272175630800968927057028195666n              :MLOAD(expCycloFp12BN254_c21_y)
+       11451831001542370722617744987566735321553462342240810632153337322850540201855n             :MLOAD(expCycloFp12BN254_c22_x)
+       10214880648406402761779167726229820911960967566000435639888288131094179536430n             :MLOAD(expCycloFp12BN254_c22_y)
+       7513746461017094458199399930075345786758663515755635567834665490471393582925n              :MLOAD(expCycloFp12BN254_c23_x)
+       1522857835029638585907442329762418957365351568194442821861575097484378991036n              :MLOAD(expCycloFp12BN254_c23_y)
+
+       ; e(2P,Q)
+       1368015179489954701390400359078579693043519447331113978918064868415326638035n              :MSTORE(pairingBN254_P_x)
+       9918110051302171585080402603319702774565515993150576347155970296011118125764n              :MSTORE(pairingBN254_P_y)
+       10857046999023057135944570762232829481370756359578518086990519993285655852781n             :MSTORE(pairingBN254_Q_x1)
+       11559732032986387107991004021392285783925812861821192530917403151452391805634n             :MSTORE(pairingBN254_Q_x2)
+       8495653923123431417604973247489272438418190587263600148770280649306958101930n              :MSTORE(pairingBN254_Q_y1)
+       4082367875863433681332203403145435568316851327593401208105741076214120093531n              :MSTORE(pairingBN254_Q_y2)
+                                                                                                  :CALL(pairingBN254)
+       12n     :MSTORE(expCycloFp12BN254_e)
+       $ => A :MLOAD(pairingBN254_f11_x)
+       $ => B :MLOAD(pairingBN254_f11_y)
+       A      :MSTORE(expCycloFp12BN254_a11_x)
+       B      :MSTORE(expCycloFp12BN254_a11_y)
+       $ => A :MLOAD(pairingBN254_f12_x)
+       $ => B :MLOAD(pairingBN254_f12_y)
+       A      :MSTORE(expCycloFp12BN254_a12_x)
+       B      :MSTORE(expCycloFp12BN254_a12_y)
+       $ => A :MLOAD(pairingBN254_f13_x)
+       $ => B :MLOAD(pairingBN254_f13_y)
+       A      :MSTORE(expCycloFp12BN254_a13_x)
+       B      :MSTORE(expCycloFp12BN254_a13_y)
+       $ => A :MLOAD(pairingBN254_f21_x)
+       $ => B :MLOAD(pairingBN254_f21_y)
+       A      :MSTORE(expCycloFp12BN254_a21_x)
+       B      :MSTORE(expCycloFp12BN254_a21_y)
+       $ => A :MLOAD(pairingBN254_f22_x)
+       $ => B :MLOAD(pairingBN254_f22_y)
+       A      :MSTORE(expCycloFp12BN254_a22_x)
+       B      :MSTORE(expCycloFp12BN254_a22_y)
+       $ => A :MLOAD(pairingBN254_f23_x)
+       $ => B :MLOAD(pairingBN254_f23_y)
+       A      :MSTORE(expCycloFp12BN254_a23_x)
+       B      :MSTORE(expCycloFp12BN254_a23_y)
+              :CALL(expCycloFp12BN254)
+       13413524510323321318921703539856938196252165859353070108808910520379565591578n             :MLOAD(expCycloFp12BN254_c11_x)
+       3548381829456735642031500506306367847474828769923557674325753657986253436214n              :MLOAD(expCycloFp12BN254_c11_y)
+       11258588180307399598255242775094467208478122055367286369273756816466078325984n             :MLOAD(expCycloFp12BN254_c12_x)
+       15692415863664227683780306499051704744181486071132299317385971936570963983778n             :MLOAD(expCycloFp12BN254_c12_y)
+       14331327121685823241734822812072572580994818894715351943735993854561590776973n             :MLOAD(expCycloFp12BN254_c13_x)
+       5829057651356763815288519037751619402051833008237861839412688801032331829766n              :MLOAD(expCycloFp12BN254_c13_y)
+       15475783993587934296880977452723101772140252350911606731569729596277613550216n             :MLOAD(expCycloFp12BN254_c21_x)
+       5097655688415311910623889733978393264040884000272175630800968927057028195666n              :MLOAD(expCycloFp12BN254_c21_y)
+       11451831001542370722617744987566735321553462342240810632153337322850540201855n             :MLOAD(expCycloFp12BN254_c22_x)
+       10214880648406402761779167726229820911960967566000435639888288131094179536430n             :MLOAD(expCycloFp12BN254_c22_y)
+       7513746461017094458199399930075345786758663515755635567834665490471393582925n              :MLOAD(expCycloFp12BN254_c23_x)
+       1522857835029638585907442329762418957365351568194442821861575097484378991036n              :MLOAD(expCycloFp12BN254_c23_y)
+
+       ; e(P,Q)
+       1n         :MSTORE(pairingBN254_P_x)
+       2n         :MSTORE(pairingBN254_P_y)
+       10857046999023057135944570762232829481370756359578518086990519993285655852781n             :MSTORE(pairingBN254_Q_x1)
+       11559732032986387107991004021392285783925812861821192530917403151452391805634n             :MSTORE(pairingBN254_Q_x2)
+       8495653923123431417604973247489272438418190587263600148770280649306958101930n              :MSTORE(pairingBN254_Q_y1)
+       4082367875863433681332203403145435568316851327593401208105741076214120093531n              :MSTORE(pairingBN254_Q_y2)
+                                                                                                  :CALL(pairingBN254)
+       24n     :MSTORE(expCycloFp12BN254_e)
+       $ => A :MLOAD(pairingBN254_f11_x)
+       $ => B :MLOAD(pairingBN254_f11_y)
+       A      :MSTORE(expCycloFp12BN254_a11_x)
+       B      :MSTORE(expCycloFp12BN254_a11_y)
+       $ => A :MLOAD(pairingBN254_f12_x)
+       $ => B :MLOAD(pairingBN254_f12_y)
+       A      :MSTORE(expCycloFp12BN254_a12_x)
+       B      :MSTORE(expCycloFp12BN254_a12_y)
+       $ => A :MLOAD(pairingBN254_f13_x)
+       $ => B :MLOAD(pairingBN254_f13_y)
+       A      :MSTORE(expCycloFp12BN254_a13_x)
+       B      :MSTORE(expCycloFp12BN254_a13_y)
+       $ => A :MLOAD(pairingBN254_f21_x)
+       $ => B :MLOAD(pairingBN254_f21_y)
+       A      :MSTORE(expCycloFp12BN254_a21_x)
+       B      :MSTORE(expCycloFp12BN254_a21_y)
+       $ => A :MLOAD(pairingBN254_f22_x)
+       $ => B :MLOAD(pairingBN254_f22_y)
+       A      :MSTORE(expCycloFp12BN254_a22_x)
+       B      :MSTORE(expCycloFp12BN254_a22_y)
+       $ => A :MLOAD(pairingBN254_f23_x)
+       $ => B :MLOAD(pairingBN254_f23_y)
+       A      :MSTORE(expCycloFp12BN254_a23_x)
+       B      :MSTORE(expCycloFp12BN254_a23_y)
+              :CALL(expCycloFp12BN254)
+       13413524510323321318921703539856938196252165859353070108808910520379565591578n             :MLOAD(expCycloFp12BN254_c11_x)
+       3548381829456735642031500506306367847474828769923557674325753657986253436214n              :MLOAD(expCycloFp12BN254_c11_y)
+       11258588180307399598255242775094467208478122055367286369273756816466078325984n             :MLOAD(expCycloFp12BN254_c12_x)
+       15692415863664227683780306499051704744181486071132299317385971936570963983778n             :MLOAD(expCycloFp12BN254_c12_y)
+       14331327121685823241734822812072572580994818894715351943735993854561590776973n             :MLOAD(expCycloFp12BN254_c13_x)
+       5829057651356763815288519037751619402051833008237861839412688801032331829766n              :MLOAD(expCycloFp12BN254_c13_y)
+       15475783993587934296880977452723101772140252350911606731569729596277613550216n             :MLOAD(expCycloFp12BN254_c21_x)
+       5097655688415311910623889733978393264040884000272175630800968927057028195666n              :MLOAD(expCycloFp12BN254_c21_y)
+       11451831001542370722617744987566735321553462342240810632153337322850540201855n             :MLOAD(expCycloFp12BN254_c22_x)
+       10214880648406402761779167726229820911960967566000435639888288131094179536430n             :MLOAD(expCycloFp12BN254_c22_y)
+       7513746461017094458199399930075345786758663515755635567834665490471393582925n              :MLOAD(expCycloFp12BN254_c23_x)
+       1522857835029638585907442329762418957365351568194442821861575097484378991036n              :MLOAD(expCycloFp12BN254_c23_y)
+
+       ; e(12P,2Q)
+       17108685722251241369314020928988529881027530433467445791267465866135602972753n             :MSTORE(pairingBN254_P_x)
+       20666112440056908034039013737427066139426903072479162670940363761207457724060n             :MSTORE(pairingBN254_P_y)
+       18029695676650738226693292988307914797657423701064905010927197838374790804409n             :MSTORE(pairingBN254_Q_x1)
+       14583779054894525174450323658765874724019480979794335525732096752006891875705n             :MSTORE(pairingBN254_Q_x2)
+       2140229616977736810657479771656733941598412651537078903776637920509952744750n              :MSTORE(pairingBN254_Q_y1)
+       11474861747383700316476719153975578001603231366361248090558603872215261634898n             :MSTORE(pairingBN254_Q_y2)
+                                                                                                  :CALL(pairingBN254)
+       13413524510323321318921703539856938196252165859353070108808910520379565591578n             :MLOAD(expCycloFp12BN254_c11_x)
+       3548381829456735642031500506306367847474828769923557674325753657986253436214n              :MLOAD(expCycloFp12BN254_c11_y)
+       11258588180307399598255242775094467208478122055367286369273756816466078325984n             :MLOAD(expCycloFp12BN254_c12_x)
+       15692415863664227683780306499051704744181486071132299317385971936570963983778n             :MLOAD(expCycloFp12BN254_c12_y)
+       14331327121685823241734822812072572580994818894715351943735993854561590776973n             :MLOAD(expCycloFp12BN254_c13_x)
+       5829057651356763815288519037751619402051833008237861839412688801032331829766n              :MLOAD(expCycloFp12BN254_c13_y)
+       15475783993587934296880977452723101772140252350911606731569729596277613550216n             :MLOAD(expCycloFp12BN254_c21_x)
+       5097655688415311910623889733978393264040884000272175630800968927057028195666n              :MLOAD(expCycloFp12BN254_c21_y)
+       11451831001542370722617744987566735321553462342240810632153337322850540201855n             :MLOAD(expCycloFp12BN254_c22_x)
+       10214880648406402761779167726229820911960967566000435639888288131094179536430n             :MLOAD(expCycloFp12BN254_c22_y)
+       7513746461017094458199399930075345786758663515755635567834665490471393582925n              :MLOAD(expCycloFp12BN254_c23_x)
+       1522857835029638585907442329762418957365351568194442821861575097484378991036n              :MLOAD(expCycloFp12BN254_c23_y)
+
+end:
+
+        $ => A           :MLOAD(initial_A)
+        $ => B           :MLOAD(initial_B)
+        $ => C           :MLOAD(initial_C)
+        $ => D           :MLOAD(initial_D)
+        $ => E           :MLOAD(initial_E)
+        $ => CTX         :MLOAD(initial_CTX)
+        $ => SP          :MLOAD(initial_SP)
+        $ => PC          :MLOAD(initial_PC)
+        $ => GAS         :MLOAD(initial_GAS)
+        $ => SR          :MLOAD(initial_SR)
+        $ => RR          :MLOAD(initial_RR)
+        $ => HASHPOS     :MLOAD(initial_HASHPOS)
+        $ => RCX         :MLOAD(initial_RCX)
+
+; label finalizeExecution needed by executor C++
+finalizeExecution:
+        ${beforeLast()}  : JMPN(finalizeExecution)
+
+                         : JMP(start)
+opINVALID:
+; label checkAndSaveFrom needed by executor C++
+checkAndSaveFrom:
+                         :JMP(opINVALID)
+
+INCLUDE "../main/pairings/constants.zkasm"
+
+INCLUDE "../main/pairings/pairingBN254.zkasm"
+
+INCLUDE "../main/pairings/FRBN254/reduceFrBN254.zkasm"
+
+INCLUDE "../main/pairings/FPBN254/addFpBN254.zkasm"
+INCLUDE "../main/pairings/FPBN254/mulFpBN254.zkasm"
+
+INCLUDE "../main/pairings/FP2BN254/addFp2BN254.zkasm"
+INCLUDE "../main/pairings/FP2BN254/subFp2BN254.zkasm"
+INCLUDE "../main/pairings/FP2BN254/mulFp2BN254.zkasm"
+INCLUDE "../main/pairings/FP2BN254/squareFp2BN254.zkasm"
+INCLUDE "../main/pairings/FP2BN254/escalarMulFp2BN254.zkasm"
+INCLUDE "../main/pairings/FP2BN254/invFp2BN254.zkasm"
+
+INCLUDE "../main/pairings/FP4BN254/squareFp4BN254.zkasm"
+
+INCLUDE "../main/pairings/FP6BN254/addFp6BN254.zkasm"
+INCLUDE "../main/pairings/FP6BN254/subFp6BN254.zkasm"
+INCLUDE "../main/pairings/FP6BN254/mulFp6BN254.zkasm"
+INCLUDE "../main/pairings/FP6BN254/escalarMulFp6BN254.zkasm"
+INCLUDE "../main/pairings/FP6BN254/sparseMulAFp6BN254.zkasm"
+INCLUDE "../main/pairings/FP6BN254/sparseMulBFp6BN254.zkasm"
+INCLUDE "../main/pairings/FP6BN254/sparseMulCFp6BN254.zkasm"
+INCLUDE "../main/pairings/FP6BN254/squareFp6BN254.zkasm"
+INCLUDE "../main/pairings/FP6BN254/inverseFp6BN254.zkasm"
+
+INCLUDE "../main/pairings/FP12BN254/mulFp12BN254.zkasm"
+INCLUDE "../main/pairings/FP12BN254/sparseMulAFp12BN254.zkasm"
+INCLUDE "../main/pairings/FP12BN254/sparseMulBFp12BN254.zkasm"
+INCLUDE "../main/pairings/FP12BN254/squareFp12BN254.zkasm"
+INCLUDE "../main/pairings/FP12BN254/inverseFp12BN254.zkasm"
+INCLUDE "../main/pairings/FP12BN254/frobFp12BN254.zkasm"
+INCLUDE "../main/pairings/FP12BN254/frob2Fp12BN254.zkasm"
+INCLUDE "../main/pairings/FP12BN254/frob3Fp12BN254.zkasm"
+
+INCLUDE "../main/pairings/FP12BN254/CYCLOFP12BN254/xBinDecompBN254.zkasm"
+INCLUDE "../main/pairings/FP12BN254/CYCLOFP12BN254/compressFp12BN254.zkasm"
+INCLUDE "../main/pairings/FP12BN254/CYCLOFP12BN254/decompressFp12BN254.zkasm"
+INCLUDE "../main/pairings/FP12BN254/CYCLOFP12BN254/squareCompCycloFp12BN254.zkasm"
+INCLUDE "../main/pairings/FP12BN254/CYCLOFP12BN254/squareCycloFp12BN254.zkasm"
+INCLUDE "../main/pairings/FP12BN254/CYCLOFP12BN254/expByXCompCycloFp12BN254.zkasm"
+
+INCLUDE "../main/pairings/BN254/addPointBN254.zkasm"
+INCLUDE "../main/pairings/BN254/escalarMulBN254.zkasm"
+INCLUDE "../main/pairings/BN254/lineSamePointsBN254.zkasm"
+INCLUDE "../main/pairings/BN254/lineDiffPointsBN254.zkasm"
+
+INCLUDE "../main/pairings/millerLoopBN254.zkasm"
+INCLUDE "../main/pairings/loopLengthBN254.zkasm"
+INCLUDE "../main/pairings/finalExpBN254.zkasm"
+
+INCLUDE "../main/pairings/utilsTests/expCycloFp12BN254.zkasm"

@@ -1,0 +1,132 @@
+; constants needed by executor C++
+CONST %N = 2**19
+CONST %MAX_CNT_STEPS_LIMIT = %N
+CONST %MAX_CNT_ARITH_LIMIT = %N
+CONST %MAX_CNT_BINARY_LIMIT = %N
+CONST %MAX_CNT_MEM_ALIGN_LIMIT = %N
+CONST %MAX_CNT_KECCAK_F_LIMIT = %N
+CONST %MAX_CNT_PADDING_PG_LIMIT = %N
+CONST %MAX_CNT_POSEIDON_G_LIMIT = %N
+
+VAR GLOBAL lastHashKId
+VAR GLOBAL lastHashPId
+
+VAR GLOBAL initial_A
+VAR GLOBAL initial_B
+VAR GLOBAL initial_C
+VAR GLOBAL initial_D
+VAR GLOBAL initial_E
+VAR GLOBAL initial_CTX
+VAR GLOBAL initial_SP
+VAR GLOBAL initial_PC
+VAR GLOBAL initial_GAS
+VAR GLOBAL initial_SR
+VAR GLOBAL initial_RR
+VAR GLOBAL initial_HASHPOS
+VAR GLOBAL initial_RCX
+
+start:
+
+       STEP => A
+       0 :ASSERT
+
+
+       A           :MSTORE(initial_A)
+       B           :MSTORE(initial_B)
+       C           :MSTORE(initial_C)
+       D           :MSTORE(initial_D)
+       E           :MSTORE(initial_E)
+       CTX         :MSTORE(initial_CTX)
+       SP          :MSTORE(initial_SP)
+       PC          :MSTORE(initial_PC)
+       GAS         :MSTORE(initial_GAS)
+       SR          :MSTORE(initial_SR)
+       RR          :MSTORE(initial_RR)
+       HASHPOS     :MSTORE(initial_HASHPOS)
+       RCX         :MSTORE(initial_RCX)
+       0 => A,B,C,D,E,CTX, SP, PC, GAS, SR, RR, HASHPOS, RCX
+
+       -1          :MSTORE(lastHashKId)
+       -1          :MSTORE(lastHashPId)
+
+        1368015179489954701390400359078579693043519447331113978918064868415326638035n           :MSTORE(halfPairingBN254_P_x)
+        9918110051302171585080402603319702774565515993150576347155970296011118125764n           :MSTORE(halfPairingBN254_P_y)
+        4351401811647638138392695977895401859084096897123577305203754529537814663109n           :MSTORE(halfPairingBN254_Q_x1)
+        2046729899889901964437012741252570163462327955511008570480857952505584629957n           :MSTORE(halfPairingBN254_Q_x2)
+        322506915963699862059245473966830598387691259163658767351233132602858049743n            :MSTORE(halfPairingBN254_Q_y1)
+        14316075702276096164483565793667862351398527813470041574939773541551376891710n          :MSTORE(halfPairingBN254_Q_y2)
+                                                                                                :CALL(halfPairingBN254)
+        13640254227245024655838601068231183157721360561601028708811475275217122101072n          :MLOAD(halfPairingBN254_f11_x)
+        19308417300657558492615098636528930118171456086181403615599560648373004008445n          :MLOAD(halfPairingBN254_f11_y)
+        11600807028088028070223911119334614254604789223029238428546002219857166268982n          :MLOAD(halfPairingBN254_f12_x)
+        4879406373235938927297467572708988980645988929154072556290202741257062565094n           :MLOAD(halfPairingBN254_f12_y)
+        4171685090913488783052266386653991584736187693807813444268445186114207424938n           :MLOAD(halfPairingBN254_f13_x)
+        1277573873092817905392452044933753278511826457458184982228668801202320403016n           :MLOAD(halfPairingBN254_f13_y)
+        14431703268682647902296102635071887590346322924866425403256046961671041030534n          :MLOAD(halfPairingBN254_f21_x)
+        11898392435919290118390574221795784387718317590754683868792519816848089304255n          :MLOAD(halfPairingBN254_f21_y)
+        583787015380908422861158991038392109634638768690762169717364137330743074526n            :MLOAD(halfPairingBN254_f22_x)
+        13126870183170761631152540488140870675640427576483291663794972909787720839738n          :MLOAD(halfPairingBN254_f22_y)
+        6457767870676104874999362178075129079810053093666926870765167604207462152679n           :MLOAD(halfPairingBN254_f23_x)
+        12911511138445339632082563502636262379527290965988664015632615336010308825090n          :MLOAD(halfPairingBN254_f23_y)
+
+end:
+
+        $ => A           :MLOAD(initial_A)
+        $ => B           :MLOAD(initial_B)
+        $ => C           :MLOAD(initial_C)
+        $ => D           :MLOAD(initial_D)
+        $ => E           :MLOAD(initial_E)
+        $ => CTX         :MLOAD(initial_CTX)
+        $ => SP          :MLOAD(initial_SP)
+        $ => PC          :MLOAD(initial_PC)
+        $ => GAS         :MLOAD(initial_GAS)
+        $ => SR          :MLOAD(initial_SR)
+        $ => RR          :MLOAD(initial_RR)
+        $ => HASHPOS     :MLOAD(initial_HASHPOS)
+        $ => RCX         :MLOAD(initial_RCX)
+
+; label finalizeExecution needed by executor C++
+finalizeExecution:
+        ${beforeLast()}  : JMPN(finalizeExecution)
+
+                         : JMP(start)
+opINVALID:
+; label checkAndSaveFrom needed by executor C++
+checkAndSaveFrom:
+                         :JMP(opINVALID)
+
+INCLUDE "../main/pairings/constants.zkasm"
+
+INCLUDE "../main/pairings/halfPairingBN254.zkasm"
+
+INCLUDE "../main/pairings/FRBN254/reduceFrBN254.zkasm"
+
+INCLUDE "../main/pairings/FPBN254/addFpBN254.zkasm"
+INCLUDE "../main/pairings/FPBN254/mulFpBN254.zkasm"
+
+INCLUDE "../main/pairings/FP2BN254/addFp2BN254.zkasm"
+INCLUDE "../main/pairings/FP2BN254/subFp2BN254.zkasm"
+INCLUDE "../main/pairings/FP2BN254/mulFp2BN254.zkasm"
+INCLUDE "../main/pairings/FP2BN254/squareFp2BN254.zkasm"
+INCLUDE "../main/pairings/FP2BN254/escalarMulFp2BN254.zkasm"
+INCLUDE "../main/pairings/FP2BN254/invFp2BN254.zkasm"
+
+INCLUDE "../main/pairings/FP6BN254/addFp6BN254.zkasm"
+INCLUDE "../main/pairings/FP6BN254/subFp6BN254.zkasm"
+INCLUDE "../main/pairings/FP6BN254/mulFp6BN254.zkasm"
+INCLUDE "../main/pairings/FP6BN254/escalarMulFp6BN254.zkasm"
+INCLUDE "../main/pairings/FP6BN254/sparseMulAFp6BN254.zkasm"
+INCLUDE "../main/pairings/FP6BN254/sparseMulBFp6BN254.zkasm"
+INCLUDE "../main/pairings/FP6BN254/sparseMulCFp6BN254.zkasm"
+
+INCLUDE "../main/pairings/FP12BN254/sparseMulAFp12BN254.zkasm"
+INCLUDE "../main/pairings/FP12BN254/sparseMulBFp12BN254.zkasm"
+INCLUDE "../main/pairings/FP12BN254/squareFp12BN254.zkasm"
+
+INCLUDE "../main/pairings/BN254/addPointBN254.zkasm"
+INCLUDE "../main/pairings/BN254/escalarMulBN254.zkasm"
+INCLUDE "../main/pairings/BN254/lineSamePointsBN254.zkasm"
+INCLUDE "../main/pairings/BN254/lineDiffPointsBN254.zkasm"
+
+INCLUDE "../main/pairings/millerLoopBN254.zkasm"
+INCLUDE "../main/pairings/loopLengthBN254.zkasm"

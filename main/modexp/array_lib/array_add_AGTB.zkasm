@@ -1,0 +1,132 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PRE: len(inA) >= len(inB)
+;;
+;;
+;; array_add_AGTB:
+;;             in: 
+;;                  · C ∈ [1, 839], the len of inA
+;;                  · D ∈ [1, 839], the len of inB
+;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
+;;                  · inB ∈ [0, 2²⁵⁶ - 1]^D, the second input array
+;;
+;;          output: 
+;;                  · out = inA + inB, with len(out) <= C + 1
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+
+; function array_add_AGTB(a: bigint[], b: bigint[], B: bigint): bigint[] {
+;     const alen = a.length;
+;     const blen = b.length;
+;     let result = new Array<bigint>(alen);
+;     let sum = 0n;
+;     let carry = 0n;
+;     for (let i = 0; i < blen; i++) {
+;         sum = a[i] + b[i] + carry;
+;         carry = sum >= B ? 1n : 0n;
+;         result[i] = sum - carry * B;
+;     }
+;     for (let i = blen; i < alen; i++) {
+;         sum = a[i] + carry;
+;         carry = sum == B ? 1n : 0n; // the past carry is at most 1n
+;         result[i] = sum - carry * B;
+;     }
+
+;     if (carry === 1n) {
+;         result.push(carry);
+;     }
+;     return result;
+; }
+
+; NOTE: It's unoptimized for the case where len(inB) = 1. Use array_add_short instead if possible.
+
+VAR GLOBAL array_add_AGTB_inA[839]
+VAR GLOBAL array_add_AGTB_inB[839]
+VAR GLOBAL array_add_AGTB_out[840]
+VAR GLOBAL array_add_AGTB_len_inA
+VAR GLOBAL array_add_AGTB_len_inB
+VAR GLOBAL array_add_AGTB_len_out
+
+VAR GLOBAL array_add_AGTB_carry
+
+VAR GLOBAL array_add_AGTB_RR
+
+array_add_AGTB:
+        %MAX_CNT_BINARY - CNT_BINARY     - 3*D  - 1 -    C+   D - 1      :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 6 - 17*D - 4 - 11*C+11*D - 8      :JMPN(outOfCountersStep)
+
+        RR              :MSTORE(array_add_AGTB_RR)
+
+        C               :MSTORE(array_add_AGTB_len_inA)
+        D               :MSTORE(array_add_AGTB_len_inB)
+
+        0 => E ; index in loops
+        0               :MSTORE(array_add_AGTB_carry)
+                        :JMP(array_add_AGTB_loopZero2inB)
+
+; Begin of branching
+array_add_AGTB_add_carry1:
+        D + 1 => D     :JMP(return_array_add_AGTB_add_carry1)
+
+array_add_AGTB_add_carry2:
+        D + 1 => D     :JMP(return_array_add_AGTB_add_carry2)
+
+array_add_AGTB_add_carry3:
+        D + 1 => D     :JMP(return_array_add_AGTB_add_carry3)
+; End of branching
+
+array_add_AGTB_loopZero2inB:
+        0 => D  ; for the carry
+
+        ; a[i] + b[i]
+        $ => A          :MLOAD(array_add_AGTB_inA + E)
+        $ => B          :MLOAD(array_add_AGTB_inB + E)
+        $ => C          :ADD, JMPC(array_add_AGTB_add_carry1)
+                        return_array_add_AGTB_add_carry1:
+
+        ; sum = (a[i] + b[i]) + carry
+        $ => A          :MLOAD(array_add_AGTB_carry)
+        C => B
+        $ => C          :ADD, JMPC(array_add_AGTB_add_carry2)
+                        return_array_add_AGTB_add_carry2:
+
+        C               :MSTORE(array_add_AGTB_out + E)
+        D               :MSTORE(array_add_AGTB_carry)
+
+        E + 1 => E
+        E => A
+        $ => B          :MLOAD(array_add_AGTB_len_inB)
+        $               :EQ, JMPC(array_add_AGTB_loop_index_check1, array_add_AGTB_loopZero2inB)
+
+array_add_AGTB_loop_index_check1:
+        E => A
+        $ => B          :MLOAD(array_add_AGTB_len_inA)
+        $               :EQ, JMPC(array_add_AGTB_check_carry)
+        0 => D
+array_add_AGTB_loopInB2InA:
+        ; sum = a[i] + carry
+        $ => A          :MLOAD(array_add_AGTB_inA + E)
+        $ => B          :MLOAD(array_add_AGTB_carry)
+        $ => C          :ADD, JMPC(array_add_AGTB_add_carry3)
+                        return_array_add_AGTB_add_carry3:
+
+        C               :MSTORE(array_add_AGTB_out + E)
+        D               :MSTORE(array_add_AGTB_carry)
+
+        E + 1 => E
+        E => A
+        $ => B          :MLOAD(array_add_AGTB_len_inA)
+        $               :EQ, JMPC(array_add_AGTB_check_carry, array_add_AGTB_loopInB2InA)
+
+array_add_AGTB_check_carry:
+        $ => A          :MLOAD(array_add_AGTB_carry)
+        1 => B
+        $               :EQ, JMPNC(array_add_AGTB_len_out)
+        1               :MSTORE(array_add_AGTB_out + E)
+        E + 1           :MSTORE(array_add_AGTB_len_out)
+                        :JMP(array_add_AGTB_end)
+
+array_add_AGTB_len_out:
+        E               :MSTORE(array_add_AGTB_len_out)
+
+array_add_AGTB_end:
+        $ => RR         :MLOAD(array_add_AGTB_RR)
+                        :RETURN

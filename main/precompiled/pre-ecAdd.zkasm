@@ -1,0 +1,92 @@
+/**
+ * @link [https://www.evm.codes/precompiled#0x06?fork=shanghai]
+ * @zk-counters
+ *  - dynamic steps: 500
+ *  - dynamic arith: 50
+ *  - dynamic binary: 10
+ * @process-precompiled
+ *  - stack input: [x1, y1, x2, y2]
+ *  - stack output: [x, y]
+ */
+funcEcAdd:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 50     :JMPN(outOfCountersArith)
+    %MAX_CNT_STEPS - STEP - 500         :JMPN(outOfCountersStep)
+
+    ; Move balances if value > 0 just before executing the contract CALL
+    $ => B                              :MLOAD(txValue)
+    0 => A
+    zkPC+2 => RR
+    $                                   :LT, JMPC(moveBalances)
+
+    GAS - %ECADD_GAS => GAS             :JMPN(outOfGas) ; gas static = 150
+
+    ; read data stored in calldata
+    ; x1 [32 bytes], y1 [32 bytes], x2 [32 bytes], y2 [32 bytes]
+    32                                  :MSTORE(readXFromCalldataLength)
+    0 => E                              :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A                              :MLOAD(readXFromCalldataResult) ; x1
+    A                                   :MSTORE(ecAdd_P1_x)
+    E + 32 => E                         :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A                              :MLOAD(readXFromCalldataResult) ; y1
+    A                                   :MSTORE(ecAdd_P1_y)
+    E + 32 => E                         :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A                              :MLOAD(readXFromCalldataResult) ; x2
+    A                                   :MSTORE(ecAdd_P2_x)
+    E + 32 => E                         :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A                              :MLOAD(readXFromCalldataResult) ; y2
+    A                                   :MSTORE(ecAdd_P2_y),CALL(ecAdd)
+
+    ; check error
+    B                                   :JMPNZ(preEndFail)
+
+    ; write ecAdd data into memory
+    0 => E
+    $ => A                              :MLOAD(ecAdd_P3_x)
+    A                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    $ => A                              :MLOAD(ecAdd_P3_y)
+    A                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+
+    ; prepare return data
+    0                                   :MSTORE(retDataOffset)
+    64                                  :MSTORE(retDataLength)
+    $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
+    ; set retDataCTX
+    $ => B                              :MLOAD(currentCTX)
+    A => CTX
+    B                                   :MSTORE(retDataCTX)
+    B => CTX
+
+    ; write result ecAdd into previous context memory
+    $ => C                              :MLOAD(retCallLength), JMPZ(preEndECADD)
+    $ => E                              :MLOAD(retCallOffset)
+
+    $ => CTX                            :MLOAD(originCTX)
+    $ => A                              :MLOAD(ecAdd_P3_x)
+    A                                   :MSTORE(bytesToStore)
+    C - 32                              :JMPN(continueEcAdd)
+    C - 32 => C
+                                        :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    $ => A                              :MLOAD(ecAdd_P3_y)
+    A                                   :MSTORE(bytesToStore)
+    C - 32                              :JMPN(continueEcAdd)
+                                        :CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+                                        :JMP(endECADD)
+
+continueEcAdd:
+                                        :CALL(MSTOREX); in: [bytesToStore, E: offset] out: [E: new offset]
+                                        :JMP(endECADD)
+
+;endECADDFail:
+;    $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
+;    0 => GAS
+;    A => CTX
+;    0                                   :MSTORE(retDataCTX)
+;    CTX                                 :MSTORE(currentCTX), JMP(preEndFail)
+
+preEndECADD:
+    $ => CTX                            :MLOAD(originCTX)
+
+endECADD:
+    CTX                                 :MSTORE(currentCTX), JMP(preEnd)

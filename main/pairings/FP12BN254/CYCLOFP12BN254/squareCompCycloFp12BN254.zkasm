@@ -1,0 +1,210 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; squareCompCycloFp12BN254:
+;;             in: [a2,a3,a4,a5] ∈ Fp2⁴, where ai ∈ Fp2
+;;             out: C(a²) = [b2, b3, b4, b5] ∈ Fp2⁴, where:
+;;                  - b2 = 2(a2 + 3·(9+u)·B45)
+;;                  - b3 = 3·(A45 - (10+u)·B45) - 2·a3
+;;                  - b4 = 3·(A23 - (10+u)·B23) - 2·a4
+;;                  - b5 = 2·(a5 + 3·B23)
+;;                 - A23 = (a2 + a3)·(a2 + (9+u)·a3)
+;;                 - A45 = (a4 + a5)·(a4 + (9+u)·a5)
+;;                 - B23 = a2·a3
+;;                 - B45 = a4·a5
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL squareCompCycloFp12BN254_Ca2_x
+VAR GLOBAL squareCompCycloFp12BN254_Ca2_y
+VAR GLOBAL squareCompCycloFp12BN254_Ca3_x
+VAR GLOBAL squareCompCycloFp12BN254_Ca3_y
+VAR GLOBAL squareCompCycloFp12BN254_Ca4_x
+VAR GLOBAL squareCompCycloFp12BN254_Ca4_y
+VAR GLOBAL squareCompCycloFp12BN254_Ca5_x
+VAR GLOBAL squareCompCycloFp12BN254_Ca5_y
+VAR GLOBAL squareCompCycloFp12BN254_Cb2_x
+VAR GLOBAL squareCompCycloFp12BN254_Cb2_y
+VAR GLOBAL squareCompCycloFp12BN254_Cb3_x
+VAR GLOBAL squareCompCycloFp12BN254_Cb3_y
+VAR GLOBAL squareCompCycloFp12BN254_Cb4_x
+VAR GLOBAL squareCompCycloFp12BN254_Cb4_y
+VAR GLOBAL squareCompCycloFp12BN254_Cb5_x
+VAR GLOBAL squareCompCycloFp12BN254_Cb5_y
+
+VAR GLOBAL squareCompCycloFp12BN254_B23_x
+VAR GLOBAL squareCompCycloFp12BN254_B23_y
+VAR GLOBAL squareCompCycloFp12BN254_B45_x
+VAR GLOBAL squareCompCycloFp12BN254_B45_y
+VAR GLOBAL squareCompCycloFp12BN254_A23_x
+VAR GLOBAL squareCompCycloFp12BN254_A23_y
+VAR GLOBAL squareCompCycloFp12BN254_A45_x
+VAR GLOBAL squareCompCycloFp12BN254_A45_y
+
+VAR GLOBAL squareCompCycloFp12BN254_A23right_x
+VAR GLOBAL squareCompCycloFp12BN254_A23right_y
+VAR GLOBAL squareCompCycloFp12BN254_A45right_x
+VAR GLOBAL squareCompCycloFp12BN254_A45right_y
+
+VAR GLOBAL squareCompCycloFp12BN254_twoCa3_x
+VAR GLOBAL squareCompCycloFp12BN254_twoCa3_y
+
+VAR GLOBAL squareCompCycloFp12BN254_twoCa4_x
+VAR GLOBAL squareCompCycloFp12BN254_twoCa4_y
+
+VAR GLOBAL squareCompCycloFp12BN254_RR
+
+squareCompCycloFp12BN254:
+        RR              :MSTORE(squareCompCycloFp12BN254_RR)
+
+        ; 1] B23 = a2·a3, B45 = a4·a5
+        $ => A          :MLOAD(squareCompCycloFp12BN254_Ca2_x)
+        $ => B          :MLOAD(squareCompCycloFp12BN254_Ca2_y)
+        $ => C          :MLOAD(squareCompCycloFp12BN254_Ca3_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_Ca3_y), CALL(mulFp2BN254)
+        E               :MSTORE(squareCompCycloFp12BN254_B23_x)
+        C               :MSTORE(squareCompCycloFp12BN254_B23_y)
+
+        $ => A          :MLOAD(squareCompCycloFp12BN254_Ca4_x)
+        $ => B          :MLOAD(squareCompCycloFp12BN254_Ca4_y)
+        $ => C          :MLOAD(squareCompCycloFp12BN254_Ca5_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_Ca5_y), CALL(mulFp2BN254)
+        E               :MSTORE(squareCompCycloFp12BN254_B45_x)
+        C               :MSTORE(squareCompCycloFp12BN254_B45_y)
+
+        ; 2] A23 = (a2 + a3)·(a2 + (9+u)·a3)
+        9n => A 
+        1n => B
+        $ => C          :MLOAD(squareCompCycloFp12BN254_Ca3_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_Ca3_y), CALL(mulFp2BN254)
+        E => A
+        C => B
+        $ => C          :MLOAD(squareCompCycloFp12BN254_Ca2_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_Ca2_y), CALL(addFp2BN254)
+        E               :MSTORE(squareCompCycloFp12BN254_A23right_x)
+        C               :MSTORE(squareCompCycloFp12BN254_A23right_y)
+
+        $ => A          :MLOAD(squareCompCycloFp12BN254_Ca2_x)
+        $ => B          :MLOAD(squareCompCycloFp12BN254_Ca2_y)
+        $ => C          :MLOAD(squareCompCycloFp12BN254_Ca3_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_Ca3_y), CALL(addFp2BN254)
+        E => A
+        C => B
+        $ => C          :MLOAD(squareCompCycloFp12BN254_A23right_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_A23right_y), CALL(mulFp2BN254)
+        E               :MSTORE(squareCompCycloFp12BN254_A23_x)
+        C               :MSTORE(squareCompCycloFp12BN254_A23_y)
+
+        ; 3] A45 = (a4 + a5)·(a4 + (9+u)·a5)
+        9n => A 
+        1n => B
+        $ => C          :MLOAD(squareCompCycloFp12BN254_Ca5_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_Ca5_y), CALL(mulFp2BN254)
+        E => A
+        C => B
+        $ => C          :MLOAD(squareCompCycloFp12BN254_Ca4_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_Ca4_y), CALL(addFp2BN254)
+        E               :MSTORE(squareCompCycloFp12BN254_A45right_x)
+        C               :MSTORE(squareCompCycloFp12BN254_A45right_y)
+
+        $ => A          :MLOAD(squareCompCycloFp12BN254_Ca4_x)
+        $ => B          :MLOAD(squareCompCycloFp12BN254_Ca4_y)
+        $ => C          :MLOAD(squareCompCycloFp12BN254_Ca5_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_Ca5_y), CALL(addFp2BN254)
+        E => A
+        C => B
+        $ => C          :MLOAD(squareCompCycloFp12BN254_A45right_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_A45right_y), CALL(mulFp2BN254)
+        E               :MSTORE(squareCompCycloFp12BN254_A45_x)
+        C               :MSTORE(squareCompCycloFp12BN254_A45_y)
+
+        ; 4] b2 = 2(a2 + 3·(9+u)·B45)
+        9n => A
+        1n => B
+        $ => C          :MLOAD(squareCompCycloFp12BN254_B45_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_B45_y), CALL(mulFp2BN254)
+        3n => A
+        C => D
+        E => C          :CALL(escalarMulFp2BN254)
+        E => A
+        C => B
+        $ => C          :MLOAD(squareCompCycloFp12BN254_Ca2_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_Ca2_y), CALL(addFp2BN254)
+        2n => A
+        C => D 
+        E => C          :CALL(escalarMulFp2BN254)
+        E               :MSTORE(squareCompCycloFp12BN254_Cb2_x)
+        C               :MSTORE(squareCompCycloFp12BN254_Cb2_y)
+
+        ; 5] b3 = 3·(A45 - (10+u)·B45) - 2·a3
+        2n => A
+        $ => C          :MLOAD(squareCompCycloFp12BN254_Ca3_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_Ca3_y), CALL(escalarMulFp2BN254)
+        E               :MSTORE(squareCompCycloFp12BN254_twoCa3_x)
+        C               :MSTORE(squareCompCycloFp12BN254_twoCa3_y)
+
+        10n => A
+        1n => B
+        $ => C          :MLOAD(squareCompCycloFp12BN254_B45_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_B45_y), CALL(mulFp2BN254)
+        $ => A          :MLOAD(squareCompCycloFp12BN254_A45_x)
+        $ => B          :MLOAD(squareCompCycloFp12BN254_A45_y)
+        C => D
+        E => C          :CALL(subFp2BN254)
+
+        3n => A
+        C => D
+        E => C          :CALL(escalarMulFp2BN254)
+        
+        E => A
+        C => B
+        $ => C          :MLOAD(squareCompCycloFp12BN254_twoCa3_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_twoCa3_y), CALL(subFp2BN254)
+        E               :MSTORE(squareCompCycloFp12BN254_Cb3_x)
+        C               :MSTORE(squareCompCycloFp12BN254_Cb3_y)
+
+        ; 6] b4 = 3·(A23 - (10+u)·B23) - 2·a4
+        2n => A
+        $ => C          :MLOAD(squareCompCycloFp12BN254_Ca4_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_Ca4_y), CALL(escalarMulFp2BN254)
+        E               :MSTORE(squareCompCycloFp12BN254_twoCa4_x)
+        C               :MSTORE(squareCompCycloFp12BN254_twoCa4_y)
+
+        10n => A
+        1n => B
+        $ => C          :MLOAD(squareCompCycloFp12BN254_B23_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_B23_y), CALL(mulFp2BN254)
+        $ => A          :MLOAD(squareCompCycloFp12BN254_A23_x)
+        $ => B          :MLOAD(squareCompCycloFp12BN254_A23_y)
+        C => D
+        E => C          :CALL(subFp2BN254)
+
+        3n => A
+        C => D
+        E => C          :CALL(escalarMulFp2BN254)
+
+        E => A
+        C => B
+        $ => C          :MLOAD(squareCompCycloFp12BN254_twoCa4_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_twoCa4_y), CALL(subFp2BN254)
+        E               :MSTORE(squareCompCycloFp12BN254_Cb4_x)
+        C               :MSTORE(squareCompCycloFp12BN254_Cb4_y)
+
+        ; 7] b5 = 2·(a5 + 3·B23)
+        3n => A
+        $ => C          :MLOAD(squareCompCycloFp12BN254_B23_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_B23_y), CALL(escalarMulFp2BN254)
+        E => A 
+        C => B
+        $ => C          :MLOAD(squareCompCycloFp12BN254_Ca5_x)
+        $ => D          :MLOAD(squareCompCycloFp12BN254_Ca5_y), CALL(addFp2BN254)
+        2n => A
+        C => D
+        E => C          :CALL(escalarMulFp2BN254)
+        
+        E               :MSTORE(squareCompCycloFp12BN254_Cb5_x)
+        C               :MSTORE(squareCompCycloFp12BN254_Cb5_y)
+
+        $ => RR         :MLOAD(squareCompCycloFp12BN254_RR)
+                        :RETURN
+
+                        

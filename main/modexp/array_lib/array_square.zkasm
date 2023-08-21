@@ -1,0 +1,275 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; POST: out is trimmed
+;;
+;; array_square:
+;;             in: 
+;;                  · C ∈ [1, 839], the len of in
+;;                  · in ∈ [0, 2²⁵ ⁶- 1]^C, the input array
+;;
+;;          output: 
+;;                  · out = in², with len(out) <= 2·C
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+
+; function array_square(a: bigint[], B: bigint): bigint[] {
+;     let len = a.length;
+;     let result = new Array<bigint>(len).fill(0n);
+;     let product: bigint;
+;     let carry: bigint;
+;     let a_i: bigint;
+;     let a_j: bigint;
+;     for (let i = 0; i < len; i++) {
+;         a_i = a[i];
+;         carry = 0n - a_i * a_i;
+;         for (var j = i; j < len; j++) {
+;             a_j = a[j];
+;             product = 2n * (a_i * a_j) + result[i + j] + carry;
+;             carry = product / B;
+
+;             result[i + j] = product - carry * B;
+;         }
+;         result[i + len] = carry;
+;     }
+;     trim(result);
+;     return result;
+; }
+
+VAR GLOBAL array_square_in[839]
+VAR GLOBAL array_square_out[1678]
+VAR GLOBAL array_square_len_in
+VAR GLOBAL array_square_len_out
+
+VAR GLOBAL array_square_carry_high
+VAR GLOBAL array_square_carry_low
+VAR GLOBAL array_square_carry_sign; 0 if negative, 1 if positive
+VAR GLOBAL array_square_aiaj_high
+VAR GLOBAL array_square_highest_carry
+VAR GLOBAL array_square_out_carry
+
+VAR GLOBAL array_square_RR
+
+array_square:
+        %MAX_CNT_ARITH - CNT_ARITH - 1        :JMPN(outOfCountersArith)
+        %MAX_CNT_STEPS - STEP      - 4        :JMPN(outOfCountersStep)
+
+        C => A,B
+        0 => C,D
+        ${A*A} => E :ARITH
+        A => C
+        ; E holds C*C
+
+        %MAX_CNT_BINARY - CNT_BINARY            - 10*E       :JMPN(outOfCountersBinary)
+        %MAX_CNT_ARITH - CNT_ARITH   - 1        - 2*E        :JMPN(outOfCountersArith)
+        %MAX_CNT_STEPS - STEP        - 14 - 3*C - 83*E - 2   :JMPN(outOfCountersStep)
+
+        RR              :MSTORE(array_square_RR)
+        C               :MSTORE(array_square_len_in)
+        C + C           :MSTORE(array_square_len_out)
+
+        0 => RCX       ; first index in loops
+        C + C => RR    ; second index in loops
+
+        ; 1] carry = 0 - a_0²: The (unsigned) number cannot be GT (base - 2)·base + 1, two chunks
+        $ => A          :MLOAD(array_square_in)
+        A => B
+        0 => C
+        $${var _arraySquare_a02 = A*B}    
+        ${_arraySquare_a02 >> 256} => D
+        ${_arraySquare_a02} => E :ARITH
+        D               :MSTORE(array_square_carry_high)
+        E               :MSTORE(array_square_carry_low)
+        0               :MSTORE(array_square_carry_sign)
+        0               :MSTORE(array_square_highest_carry)
+
+array_square_clean_out:
+        RR - 1 => RR
+        0               :MSTORE(array_square_out + RR)
+        RR              :JMPZ(array_square_loopZero2inA, array_square_clean_out)
+
+; Begin of branching
+array_square_add_carry_1:
+        D + 1 => D      :JMP(return_array_square_add_carry_1)
+
+array_square_add_carry_2:
+        D => A
+        1 => B
+        $ => D          :ADD, JMPC(array_square_add_carry_carry_2, return_array_square_add_carry_2)
+
+array_square_add_carry_3:
+        D => A
+        1 => B
+        $ => D          :ADD, JMPC(array_square_add_carry_carry_4, return_array_square_add_carry_3)
+
+array_square_add_carry_carry_1:
+        $ => A          :MLOAD(array_square_highest_carry)
+        A + 1           :MSTORE(array_square_highest_carry)
+                        :JMP(return_array_square_add_carry_carry_1)
+
+array_square_add_carry_carry_2:
+        $ => A          :MLOAD(array_square_highest_carry)
+        A + 1           :MSTORE(array_square_highest_carry)
+                        :JMP(return_array_square_add_carry_2)
+
+array_square_add_carry_carry_3:
+        $ => A          :MLOAD(array_square_highest_carry)
+        A + 1           :MSTORE(array_square_highest_carry)
+                        :JMP(return_array_square_add_carry_carry_3)
+
+array_square_add_carry_carry_4:
+        $ => A          :MLOAD(array_square_highest_carry)
+        A + 1           :MSTORE(array_square_highest_carry)
+                        :JMP(return_array_square_add_carry_3)
+
+array_square_add_carry_carry_5:
+        $ => A          :MLOAD(array_square_highest_carry)
+        A + 1           :MSTORE(array_square_highest_carry)
+                        :JMP(return_array_square_add_carry_carry_5)
+
+array_square_is_negative_1:
+        $ => C          :SUB, JMPC(array_square_sub_carry_2, return_array_square_is_negative_1)
+
+array_square_is_negative_2:
+        $ => D          :SUB, JMPC(array_square_sub_carry_carry_2, return_array_square_is_negative_2)
+
+array_square_sub_carry_2:
+        D => A
+        1 => B
+        $ => D          :SUB, JMPC(array_square_sub_carry_carry_1, return_array_square_is_negative_1)
+
+array_square_sub_carry_carry_1:
+        $ => A          :MLOAD(array_square_highest_carry)
+        A - 1           :MSTORE(array_square_highest_carry)
+                        :JMP(return_array_square_is_negative_1)
+
+array_square_sub_carry_carry_2:
+        $ => A          :MLOAD(array_square_highest_carry)
+        A - 1           :MSTORE(array_square_highest_carry)
+                        :JMP(return_array_square_is_negative_2)
+
+array_square_loop_index_check:
+        ; out[i + len] = carry;
+        $ => A          :MLOAD(array_square_carry_low)
+        $ => B          :MLOAD(array_square_len_in)
+        RCX + B => E
+        A               :MSTORE(array_square_out + E)
+
+        $ => A          :MLOAD(array_square_carry_high)
+        A               :MSTORE(array_square_out_carry)
+
+        ; update indices
+        RCX + 1 => RCX
+        RCX => RR
+
+        RCX => A
+        $               :EQ, JMPC(array_square_prep_trim_in)
+
+        ; carry = 0 - a_i·a_i
+        ; a_i·a_i: This number cannot be GT (base - 2)·base + 1, two chunks
+        $ => A          :MLOAD(array_square_in + RR)
+        A => B
+        0 => C
+        $${var _arraySquare_aiai = A*B}    
+        ${_arraySquare_aiai >> 256} => D
+        ${_arraySquare_aiai} => E :ARITH
+        D               :MSTORE(array_square_carry_high)
+        E               :MSTORE(array_square_carry_low)
+        0               :MSTORE(array_square_carry_sign)
+        0               :MSTORE(array_square_highest_carry)
+
+                        :JMP(return_array_square_loop_index_check)
+; End of branching
+
+array_square_loopZero2inA:
+        RCX => E
+        ; product = 2·(a_i·a_j) + out[i + j] + carry
+        
+        ; 1] a_i·a_j: This number cannot be GT (base - 2)·base + 1, two chunks
+        $ => A          :MLOAD(array_square_in + E)
+        $ => B          :MLOAD(array_square_in + RR)
+        0 => C
+        $${var _arraySquare_aiaj = A*B}    
+        ${_arraySquare_aiaj >> 256} => D
+        ${_arraySquare_aiaj} => E :ARITH
+        D              :MSTORE(array_square_aiaj_high)
+
+        ; 2] 2·a_i·a_j: This number cannot be GT base² + (base - 4)·base + 2, three chunks
+        E => A,B
+        $ => C          :ADD, JMPC(array_square_add_carry_1)
+                        return_array_square_add_carry_1:
+        $ => A          :MLOAD(array_square_aiaj_high)
+        D => B 
+        $ => D          :ADD, JMPC(array_square_add_carry_carry_1)
+                        return_array_square_add_carry_carry_1:
+
+        ; The result is stored as array_square_highest_carry·base² + D·base + C
+
+
+        ; 3] 2·a_i·a_j + out[i + j]: 
+        ;       a) j != len: This number cannot be GT base² + (base - 3)·base + 1, as out[i + j] < B
+        ;       b) j == len: This number cannot be GT base² + (base - 3)·base + base - 1, as  out[i + j] <= B + (B - 3)
+        ; In both cases, three chunks
+        RR + RCX => E
+        $ => A          :MLOAD(array_square_out + E)
+        C => B
+        $ => C          :ADD, JMPC(array_square_add_carry_2)
+                        return_array_square_add_carry_2:
+
+        $ => A          :MLOAD(array_square_out_carry)
+        D => B
+        $ => D          :ADD, JMPC(array_square_add_carry_carry_3)
+                        return_array_square_add_carry_carry_3:
+
+        ; 4] 2·a_i·a_j + out[i + j] + carry: This number cannot be GT (base - 2)·base + 1, two chunks
+        C => A
+        $ => B          :MLOAD(array_square_carry_low)
+        $               :MLOAD(array_square_carry_sign), JMPZ(array_square_is_negative_1)
+        $ => C          :ADD, JMPC(array_square_add_carry_3)
+                        return_array_square_add_carry_3:
+                        return_array_square_is_negative_1:
+
+        D => A
+        $ => B          :MLOAD(array_square_carry_high)
+        $               :MLOAD(array_square_carry_sign), JMPZ(array_square_is_negative_2)
+        $ => D          :ADD, JMPC(array_square_add_carry_carry_5)
+                        return_array_square_add_carry_carry_5:
+                        return_array_square_is_negative_2:
+
+        ; carry = product / B; This number cannot be greater than base + (base - 3)
+        D               :MSTORE(array_square_carry_low)
+        $ => A          :MLOAD(array_square_highest_carry)
+        A               :MSTORE(array_square_carry_high)
+        1               :MSTORE(array_square_carry_sign)
+
+        ; out[i + j] = product - carry·B;
+        RCX + RR => E
+        C               :MSTORE(array_square_out + E)
+
+        RR + 1 => RR
+        0              :MSTORE(array_square_highest_carry)
+        RR => A
+        $ => B          :MLOAD(array_square_len_in)
+        $               :EQ, JMPC(array_square_loop_index_check) ; [Steps: 61]
+                        return_array_square_loop_index_check:
+                        :JMP(array_square_loopZero2inA)
+
+array_square_prep_trim_in:
+        $ => C          :MLOAD(array_square_len_out)
+        C => E
+
+        %MAX_CNT_STEPS - STEP - 4*C - 1   :JMPN(outOfCountersStep)
+
+array_square_trim_in:
+        E - 1 => E
+        $ => A          :MLOAD(array_square_out + E)
+        A               :MSTORE(array_trim_in + E)
+        E               :JMPZ(array_square_trim, array_square_trim_in)
+
+array_square_trim:
+                        :CALL(array_trim)
+
+        %MAX_CNT_STEPS - STEP - 3   :JMPN(outOfCountersStep)
+
+        C               :MSTORE(array_square_len_out)
+
+array_square_end:
+        $ => RR         :MLOAD(array_square_RR)
+                        :RETURN

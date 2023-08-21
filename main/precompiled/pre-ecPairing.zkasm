@@ -1,0 +1,85 @@
+/**
+ * @link [https://www.evm.codes/precompiled#0x08?fork=shanghai]
+ * @zk-counters
+ *  - dynamic steps: 50000, 550000, 700000,...
+ *  - dynamic airth: 4000, 43000, 56000,...
+ *  - dynamic binary: 400, 700, 1100,...
+ * @process-precompiled
+ *  - stack input: [x1, y1, x2, y2, ..., xk, yk]
+ *  - stack output: [success]
+ */
+
+funcEcPairing:
+    ; Move balances if value > 0 just before executing the contract CALL
+    $ => B                              :MLOAD(txValue)
+    0 => A
+    zkPC+2 => RR
+    $                                   :LT, JMPC(moveBalances)
+
+    GAS - %ECPAIRING_GAS => GAS         :JMPN(outOfGas) ; gas static = 45000
+
+    1 => C
+    $ => B                              :MLOAD(argsLengthCall),JMPZ(continueInput0)
+    B                                   :MSTORE(arithA)
+    192                                 :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => A                              :MLOAD(arithRes2), JMPNZ(preEndFail)
+    $ => A                              :MLOAD(arithRes1)
+    A                                   :MSTORE(ecPairing_ninputs)
+
+    GAS - 34000*A => GAS                :JMPN(outOfGas) ; gas = 34000 * inputsLength
+    A - 1                               :JMPZ(counters6)
+    A - 2 => A
+
+    %MAX_CNT_BINARY - CNT_BINARY - 700 - 400*A      :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 45000 - 14000*A    :JMPN(outOfCountersArith)
+    %MAX_CNT_STEPS - STEP - 550000 - 200000*A       :JMPN(outOfCountersStep)
+                                                    :JMP(afterCounts)
+
+    $ => A                              :MLOAD(retCallLength)
+    32 => B
+    $                                   :LT,JMPC(preEndFail)
+
+counters6:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 400     :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 4000      :JMPN(outOfCountersArith)
+    %MAX_CNT_STEPS - STEP - 50000          :JMPN(outOfCountersStep)
+
+afterCounts:
+    -32                                 :MSTORE(readXFromCalldataOffset),CALL(ecPairing)
+    B                                   :JMPNZ(preEndFail)
+    $ => C                              :MLOAD(ecPairing_result)
+
+continueInput0:
+
+    ; write ecAdd data into memory
+    0 => E
+    C                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+
+    ; prepare return data
+    0                                   :MSTORE(retDataOffset)
+    32                                  :MSTORE(retDataLength)
+    $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
+    ; set retDataCTX
+    $ => B                              :MLOAD(currentCTX)
+    A => CTX
+    B                                   :MSTORE(retDataCTX)
+    B => CTX
+
+    ; write result ecpairing into previous context memory
+    $ => C                              :MLOAD(retCallLength)
+    $ => E                              :MLOAD(retCallOffset)
+
+    ; ecpairing result is in bytesToStore
+    C - 32                              :JMPN(continueECPAIRING)
+    32 => C
+
+continueECPAIRING:
+    $ => CTX                            :MLOAD(originCTX), CALL(MSTOREX)  ; in: [bytesToStore, E: offset, C: length] out: [E: new offset]
+                                        :JMP(endECPAIRING)
+
+preEndECPAIRING:
+    $ => CTX                            :MLOAD(originCTX)
+
+endECPAIRING:
+    CTX                                 :MSTORE(currentCTX), JMP(preEnd)

@@ -1,0 +1,64 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; sparseMulAFp6BN254:
+;;             in: (a1 + a2·v + a3·v²),b2·v ∈ Fp6, where ai,b2 ∈ Fp2
+;;             out: (c1 + c2·v + c3·v²) ∈ Fp6, where:
+;;                  - c1 = b2·a3·(9+u)
+;;                  - c2 = b2·a1
+;;                  - c3 = b2·a2
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL sparseMulAFp6BN254_a1_x
+VAR GLOBAL sparseMulAFp6BN254_a1_y
+VAR GLOBAL sparseMulAFp6BN254_a2_x
+VAR GLOBAL sparseMulAFp6BN254_a2_y
+VAR GLOBAL sparseMulAFp6BN254_a3_x
+VAR GLOBAL sparseMulAFp6BN254_a3_y
+
+VAR GLOBAL sparseMulAFp6BN254_b2_x
+VAR GLOBAL sparseMulAFp6BN254_b2_y
+
+VAR GLOBAL sparseMulAFp6BN254_c1_x
+VAR GLOBAL sparseMulAFp6BN254_c1_y
+VAR GLOBAL sparseMulAFp6BN254_c2_x
+VAR GLOBAL sparseMulAFp6BN254_c2_y
+VAR GLOBAL sparseMulAFp6BN254_c3_x
+VAR GLOBAL sparseMulAFp6BN254_c3_y
+
+VAR GLOBAL sparseMulAFp6BN254_RR
+
+sparseMulAFp6BN254:
+        RR              :MSTORE(sparseMulAFp6BN254_RR)
+
+        ; 1] c1 = b2·a3·(9+u)
+        $ => A          :MLOAD(sparseMulAFp6BN254_b2_x)
+        $ => B          :MLOAD(sparseMulAFp6BN254_b2_y)
+        $ => C          :MLOAD(sparseMulAFp6BN254_a3_x)
+        $ => D          :MLOAD(sparseMulAFp6BN254_a3_y), CALL(mulFp2BN254)
+        E => A 
+        C => B
+        9n => C
+        1n => D         :CALL(mulFp2BN254)
+        
+        E               :MSTORE(sparseMulAFp6BN254_c1_x)
+        C               :MSTORE(sparseMulAFp6BN254_c1_y)
+
+        ; 2] c2 = b2·a1
+        $ => A          :MLOAD(sparseMulAFp6BN254_b2_x)
+        $ => B          :MLOAD(sparseMulAFp6BN254_b2_y)
+        $ => C          :MLOAD(sparseMulAFp6BN254_a1_x)
+        $ => D          :MLOAD(sparseMulAFp6BN254_a1_y), CALL(mulFp2BN254)
+        E               :MSTORE(sparseMulAFp6BN254_c2_x)
+        C               :MSTORE(sparseMulAFp6BN254_c2_y)
+
+        ; 3] c3 = b2·a2
+        $ => A          :MLOAD(sparseMulAFp6BN254_b2_x)
+        $ => B          :MLOAD(sparseMulAFp6BN254_b2_y)
+        $ => C          :MLOAD(sparseMulAFp6BN254_a2_x)
+        $ => D          :MLOAD(sparseMulAFp6BN254_a2_y), CALL(mulFp2BN254)
+        E               :MSTORE(sparseMulAFp6BN254_c3_x)
+        C               :MSTORE(sparseMulAFp6BN254_c3_y)
+
+        $ => RR         :MLOAD(sparseMulAFp6BN254_RR)
+                        :RETURN

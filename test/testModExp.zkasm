@@ -1,0 +1,452 @@
+; constants needed by executor C++
+INCLUDE "../main/constants.zkasm"
+
+VAR GLOBAL lastHashKId
+VAR GLOBAL lastHashPId
+
+VAR GLOBAL initial_A
+VAR GLOBAL initial_B
+VAR GLOBAL initial_C
+VAR GLOBAL initial_D
+VAR GLOBAL initial_E
+VAR GLOBAL initial_CTX
+VAR GLOBAL initial_SP
+VAR GLOBAL initial_PC
+VAR GLOBAL initial_GAS
+VAR GLOBAL initial_SR
+VAR GLOBAL initial_RR
+VAR GLOBAL initial_HASHPOS
+VAR GLOBAL initial_RCX
+
+start:
+
+        STEP => A
+        0 :ASSERT
+
+        A           :MSTORE(initial_A)
+        B           :MSTORE(initial_B)
+        C           :MSTORE(initial_C)
+        D           :MSTORE(initial_D)
+        E           :MSTORE(initial_E)
+        CTX         :MSTORE(initial_CTX)
+        SP          :MSTORE(initial_SP)
+        PC          :MSTORE(initial_PC)
+        GAS         :MSTORE(initial_GAS)
+        SR          :MSTORE(initial_SR)
+        RR          :MSTORE(initial_RR)
+        HASHPOS     :MSTORE(initial_HASHPOS)
+        RCX         :MSTORE(initial_RCX)
+        0 => A,B,C,D,E,CTX, SP, PC, GAS, SR, RR, HASHPOS, RCX
+
+        -1          :MSTORE(lastHashKId)
+        -1          :MSTORE(lastHashPId)
+
+        ; EDGE CASES
+        ; ---------------------------------------------------------------------------------------------
+        ; 1] B == 0, E != 0, M != 0 should return 0
+        1               :MSTORE(modexp_Blen)
+        1               :MSTORE(modexp_Elen)
+        1               :MSTORE(modexp_Mlen)
+
+        0n              :MSTORE(modexp_B)
+        3n              :MSTORE(modexp_E)
+        4n              :MSTORE(modexp_M)
+                        :CALL(modexp)
+
+        0n              :MLOAD(modexp_out)
+        1               :MLOAD(modexp_outlen)
+
+        1               :MSTORE(modexp_Blen)
+        2               :MSTORE(modexp_Elen)
+        2               :MSTORE(modexp_Mlen)
+
+        0n              :MSTORE(modexp_B)
+        0n              :MSTORE(modexp_E)
+        1 => E
+        1n              :MSTORE(modexp_E + E)
+        0n              :MSTORE(modexp_M)
+        1 => E
+        1n              :MSTORE(modexp_M + E)
+                        :CALL(modexp)
+
+        0n              :MLOAD(modexp_out)
+        1               :MLOAD(modexp_outlen)
+
+        ; 2] B != 0, E == 0, M != 0 should return 1
+        1               :MSTORE(modexp_Blen)
+        1               :MSTORE(modexp_Elen)
+        1               :MSTORE(modexp_Mlen)
+
+        2n              :MSTORE(modexp_B)
+        0n              :MSTORE(modexp_E)
+        4n              :MSTORE(modexp_M)
+                        :CALL(modexp)
+
+        1n              :MLOAD(modexp_out)
+        1               :MLOAD(modexp_outlen)
+
+        2               :MSTORE(modexp_Blen)
+        1               :MSTORE(modexp_Elen)
+        2               :MSTORE(modexp_Mlen)
+
+        2n              :MSTORE(modexp_B)
+        1 => E
+        4n              :MSTORE(modexp_B + E)
+        0n              :MSTORE(modexp_E)
+        0n              :MSTORE(modexp_M)
+        1 => E
+        1n              :MSTORE(modexp_M + E)
+                        :CALL(modexp)
+
+        1n              :MLOAD(modexp_out)
+        1               :MLOAD(modexp_outlen)
+
+        ; 3] B != 0, E != 0, M == 0 should return 0
+        1               :MSTORE(modexp_Blen)
+        1               :MSTORE(modexp_Elen)
+        1               :MSTORE(modexp_Mlen)
+
+        2n              :MSTORE(modexp_B)
+        1n              :MSTORE(modexp_E)
+        0n              :MSTORE(modexp_M)
+                        :CALL(modexp)
+        0n              :MLOAD(modexp_out)
+        1               :MLOAD(modexp_outlen)
+
+        2               :MSTORE(modexp_Blen)
+        2               :MSTORE(modexp_Elen)
+        1               :MSTORE(modexp_Mlen)
+
+        2n              :MSTORE(modexp_B)
+        1 => E
+        4n              :MSTORE(modexp_B + E)
+        0n              :MSTORE(modexp_E)
+        1 => E
+        4n              :MSTORE(modexp_E + E)
+        0n              :MSTORE(modexp_M)
+                        :CALL(modexp)
+
+        0n              :MLOAD(modexp_out)
+        1               :MLOAD(modexp_outlen)
+
+        ; 4] B != 0, E != 0, M == 1 should return 0
+        1               :MSTORE(modexp_Blen)
+        1               :MSTORE(modexp_Elen)
+        1               :MSTORE(modexp_Mlen)
+
+        2n              :MSTORE(modexp_B)
+        1n              :MSTORE(modexp_E)
+        1n              :MSTORE(modexp_M)
+                        :CALL(modexp)
+        0n              :MLOAD(modexp_out)
+        1               :MLOAD(modexp_outlen)
+
+        2               :MSTORE(modexp_Blen)
+        2               :MSTORE(modexp_Elen)
+        1               :MSTORE(modexp_Mlen)
+
+        2n              :MSTORE(modexp_B)
+        1 => E
+        4n              :MSTORE(modexp_B + E)
+        0n              :MSTORE(modexp_E)
+        1 => E
+        4n              :MSTORE(modexp_E + E)
+        1n              :MSTORE(modexp_M)
+                        :CALL(modexp)
+
+        0n              :MLOAD(modexp_out)
+        1               :MLOAD(modexp_outlen)
+
+        ; 5] B == 0, E == 0, M != 0 should return 0^0 = 0
+        1               :MSTORE(modexp_Blen)
+        1               :MSTORE(modexp_Elen)
+        1               :MSTORE(modexp_Mlen)
+
+        0n              :MSTORE(modexp_B)
+        0n              :MSTORE(modexp_E)
+        4n              :MSTORE(modexp_M)
+                        :CALL(modexp)
+
+        0n              :MLOAD(modexp_out)
+        1               :MLOAD(modexp_outlen)
+
+        1               :MSTORE(modexp_Blen)
+        1               :MSTORE(modexp_Elen)
+        2               :MSTORE(modexp_Mlen)
+
+        0n              :MSTORE(modexp_B)
+        0n              :MSTORE(modexp_E)
+        0n              :MSTORE(modexp_M)
+        1 => E
+        1n              :MSTORE(modexp_M + E)
+                        :CALL(modexp)
+
+        0n              :MLOAD(modexp_out)
+        1               :MLOAD(modexp_outlen)
+
+        ; 6] B == 0, E != 0, M == 0 should return 0
+        1               :MSTORE(modexp_Blen)
+        1               :MSTORE(modexp_Elen)
+        1               :MSTORE(modexp_Mlen)
+
+        0n              :MSTORE(modexp_B)
+        4n              :MSTORE(modexp_E)
+        0n              :MSTORE(modexp_M)
+                        :CALL(modexp)
+
+        0n              :MLOAD(modexp_out)
+        1               :MLOAD(modexp_outlen)
+
+        1               :MSTORE(modexp_Blen)
+        2               :MSTORE(modexp_Elen)
+        1               :MSTORE(modexp_Mlen)
+
+        0n              :MSTORE(modexp_B)
+        0n              :MSTORE(modexp_E)
+        1 => E
+        1n              :MSTORE(modexp_E + E)
+        0n              :MSTORE(modexp_M)
+                        :CALL(modexp)
+
+        0n              :MLOAD(modexp_out)
+        1               :MLOAD(modexp_outlen)
+
+        ; 7] B != 0, E == 0, M == 0 should return 0
+        1               :MSTORE(modexp_Blen)
+        1               :MSTORE(modexp_Elen)
+        1               :MSTORE(modexp_Mlen)
+
+        1n              :MSTORE(modexp_B)
+        0n              :MSTORE(modexp_E)
+        0n              :MSTORE(modexp_M)
+                        :CALL(modexp)
+
+        0n              :MLOAD(modexp_out)
+        1               :MLOAD(modexp_outlen)
+
+        2               :MSTORE(modexp_Blen)
+        1               :MSTORE(modexp_Elen)
+        1               :MSTORE(modexp_Mlen)
+
+        0n              :MSTORE(modexp_B)
+        1 => E
+        1n              :MSTORE(modexp_B + E)
+        0n              :MSTORE(modexp_E)
+        0n              :MSTORE(modexp_M)
+                        :CALL(modexp)
+
+        0n              :MLOAD(modexp_out)
+        1               :MLOAD(modexp_outlen)
+
+        ; 8] B == 0, E == 0, M == 0 should return 0
+        1               :MSTORE(modexp_Blen)
+        1               :MSTORE(modexp_Elen)
+        1               :MSTORE(modexp_Mlen)
+
+        0n              :MSTORE(modexp_B)
+        0n              :MSTORE(modexp_E)
+        0n              :MSTORE(modexp_M)
+                        :CALL(modexp)
+
+        0n              :MLOAD(modexp_out)
+        1               :MLOAD(modexp_outlen)
+        ; ---------------------------------------------------------------------------------------------
+
+        ; 256 BITS EXPONENT TESTS
+        ; ---------------------------------------------------------------------------------------------
+        ; 1] B = [100n, 2831023n, 0n, 73916234139162n], E = [115792089237316195423570985008687907853269984665640564039457584007913129639935n], M = [0n, 0n, 8238129386n, 23102318237n]
+        ; Hamming weight of E is 256
+        4               :MSTORE(modexp_Blen)
+        1               :MSTORE(modexp_Elen)
+        4               :MSTORE(modexp_Mlen)
+
+        100n            :MSTORE(modexp_B)
+        1 => E
+        2831023n              :MSTORE(modexp_B + E)
+        2 => E
+        0n              :MSTORE(modexp_B + E)
+        3 => E
+        73916234139162n         :MSTORE(modexp_B + E)
+        115792089237316195423570985008687907853269984665640564039457584007913129639935n              :MSTORE(modexp_E)
+        0n              :MSTORE(modexp_M)
+        1 => E
+        0n              :MSTORE(modexp_M + E)
+        2 => E
+        8238129386n              :MSTORE(modexp_M + E)
+        3 => E
+        23102318237n              :MSTORE(modexp_M + E)
+                        :CALL(modexp)
+        0n             :MLOAD(modexp_out)
+        1 => E
+        0n             :MLOAD(modexp_out + E)
+        2 => E
+        25636070175539943947777314844209202718110211581133019863886488575898865601868n             :MLOAD(modexp_out + E)
+        3 => E
+        4679155145n             :MLOAD(modexp_out + E)
+        4             :MLOAD(modexp_outlen)
+
+        ; 2] B = [100n, 2831023n, 0n, 73916234139162n, 100n, 2831023n, 0n, 73916234139162n,100n, 2831023n, 0n, 73916234139162n], E = [903741926349715234612309461283471234n], M = [0n, 0n, 8238129386n, 23102318237n, 1892397612351n, 7246598123051n, 8238129386n, 1264591241237897123126n]
+        ; Hamming weight of E is 120
+        12               :MSTORE(modexp_Blen)
+        1               :MSTORE(modexp_Elen)
+        8               :MSTORE(modexp_Mlen)
+
+        100n                    :MSTORE(modexp_B)
+        1 => E
+        2831023n                :MSTORE(modexp_B + E)
+        2 => E
+        0n                      :MSTORE(modexp_B + E)
+        3 => E
+        73916234139162n         :MSTORE(modexp_B + E)
+        4 => E
+        100n                    :MSTORE(modexp_B + E)
+        5 => E
+        2831023n                :MSTORE(modexp_B + E)
+        6 => E
+        0n                      :MSTORE(modexp_B + E)
+        7 => E
+        73916234139162n         :MSTORE(modexp_B + E)
+        8 => E
+        100n                    :MSTORE(modexp_B + E)
+        9 => E
+        2831023n                :MSTORE(modexp_B + E)
+        10 => E
+        0n                      :MSTORE(modexp_B + E)
+        11 => E
+        73916234139162n         :MSTORE(modexp_B + E)
+        903741926349715234612309461283471234n              :MSTORE(modexp_E)
+        0n              :MSTORE(modexp_M)
+        1 => E
+        0n              :MSTORE(modexp_M + E)
+        2 => E
+        8238129386n              :MSTORE(modexp_M + E)
+        3 => E
+        23102318237n              :MSTORE(modexp_M + E)
+        4 => E
+        1892397612351n              :MSTORE(modexp_M + E)
+        5 => E
+        7246598123051n              :MSTORE(modexp_M + E)
+        6 => E
+        8238129386n              :MSTORE(modexp_M + E)
+        7 => E
+        1264591241237897123126n              :MSTORE(modexp_M + E)
+                        :CALL(modexp)
+        0n             :MLOAD(modexp_out)
+        1 => E
+        0n             :MLOAD(modexp_out + E)
+        2 => E
+        14984469305990977542353827078899382678368215018946198341845725551977623627446n             :MLOAD(modexp_out + E)
+        3 => E
+        68986200907052834988812862957862042564780541926701277492865197684364096948359n             :MLOAD(modexp_out + E)
+        4 => E
+        19960171666179366961875030436152164148711578520678689062449823687317995303656n             :MLOAD(modexp_out + E)
+        5 => E
+        10163909190618518832451417682132582498490814809943760852308996448668923869413n             :MLOAD(modexp_out + E)
+        6 => E
+        29735535392706191114764336807325502135962613879333248096358552087717155148899n             :MLOAD(modexp_out + E)
+        7 => E
+        511131288598502431475n             :MLOAD(modexp_out + E)
+        8             :MLOAD(modexp_outlen)
+        ; ---------------------------------------------------------------------------------------------
+        
+        ; 512 BITS EXPONENT TESTS
+        ; ---------------------------------------------------------------------------------------------
+        ; 1] B = [2n, 1n, 1n, 1n], E = [3n, 5n], M = [4n, 6n, 7n]
+        ; Hamming weight of E is 4
+        4               :MSTORE(modexp_Blen)
+        2               :MSTORE(modexp_Elen)
+        3               :MSTORE(modexp_Mlen)
+
+        2n              :MSTORE(modexp_B)
+        1 => E
+        1n              :MSTORE(modexp_B + E)
+        2 => E
+        1n              :MSTORE(modexp_B + E)
+        3 => E
+        1n              :MSTORE(modexp_B + E)
+        3n              :MSTORE(modexp_E)
+        1 => E
+        5n              :MSTORE(modexp_E + E)
+        4n              :MSTORE(modexp_M)
+        1 => E
+        6n              :MSTORE(modexp_M + E)
+        2 => E
+        7n              :MSTORE(modexp_M + E)
+                        :CALL(modexp)
+        16799222018138169590613227618843456355247327644003751420511040302320945803948n             :MLOAD(modexp_out)
+        1 => E
+        67226185770814561827024093064262870237432709513661454124124794094744315370418n             :MLOAD(modexp_out + E)
+        2 => E
+        1n             :MLOAD(modexp_out + E)
+        3             :MLOAD(modexp_outlen)
+
+        ; 2] B = [7n], E = [110n], M = [7719472615821079694904732333912527190217998977709370935963838933860875309329n, 17n]
+        ; Hamming weight of E is 5
+        1               :MSTORE(modexp_Blen)
+        1               :MSTORE(modexp_Elen)
+        2               :MSTORE(modexp_Mlen)
+
+        7n              :MSTORE(modexp_B)
+        110n            :MSTORE(modexp_E)
+        7719472615821079694904732333912527190217998977709370935963838933860875309329n              :MSTORE(modexp_M)
+        1 => E
+        17n             :MSTORE(modexp_M + E)
+                        :CALL(modexp)
+        81730215206688390341255830729934766338330049967253209305087427132484271882414n             :MLOAD(modexp_out)
+        1 => E
+        13n             :MLOAD(modexp_out + E)
+        2               :MLOAD(modexp_outlen)
+        ; ---------------------------------------------------------------------------------------------
+
+        ; 768 BITS EXPONENT TESTS
+        ; ---------------------------------------------------------------------------------------------
+        ; ---------------------------------------------------------------------------------------------
+
+        ; 1024 BITS EXPONENT TESTS
+        ; ---------------------------------------------------------------------------------------------
+        ; ---------------------------------------------------------------------------------------------
+
+outOfCountersArith:
+outOfCountersBinary:
+outOfCountersStep:
+
+end:
+
+        $ => A           :MLOAD(initial_A)
+        $ => B           :MLOAD(initial_B)
+        $ => C           :MLOAD(initial_C)
+        $ => D           :MLOAD(initial_D)
+        $ => E           :MLOAD(initial_E)
+        $ => CTX         :MLOAD(initial_CTX)
+        $ => SP          :MLOAD(initial_SP)
+        $ => PC          :MLOAD(initial_PC)
+        $ => GAS         :MLOAD(initial_GAS)
+        $ => SR          :MLOAD(initial_SR)
+        $ => RR          :MLOAD(initial_RR)
+        $ => HASHPOS     :MLOAD(initial_HASHPOS)
+        $ => RCX         :MLOAD(initial_RCX)
+
+; label finalizeExecution needed by executor C++
+finalizeExecution:
+        ${beforeLast()}  : JMPN(finalizeExecution)
+
+                         : JMP(start)
+opINVALID:
+; label checkAndSaveFrom needed by executor C++
+checkAndSaveFrom:
+                         :JMP(opINVALID)
+
+INCLUDE "../main/modexp/array_lib/utils/array_trim.zkasm"
+INCLUDE "../main/modexp/array_lib/utils/array_compare.zkasm"
+
+INCLUDE "../main/modexp/array_lib/array_add_AGTB.zkasm"
+INCLUDE "../main/modexp/array_lib/array_add_short.zkasm"
+INCLUDE "../main/modexp/array_lib/array_mul_long.zkasm"
+INCLUDE "../main/modexp/array_lib/array_mul_short.zkasm"
+INCLUDE "../main/modexp/array_lib/array_mul.zkasm"
+INCLUDE "../main/modexp/array_lib/array_square.zkasm"
+INCLUDE "../main/modexp/array_lib/array_div_mod_short.zkasm"
+INCLUDE "../main/modexp/array_lib/array_div_mod_long.zkasm"
+INCLUDE "../main/modexp/array_lib/array_div_mod.zkasm"
+
+INCLUDE "../main/modexp/modexp.zkasm"

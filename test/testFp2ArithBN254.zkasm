@@ -1,0 +1,138 @@
+; constants needed by executor C++
+CONST %N = 2**19
+CONST %MAX_CNT_STEPS_LIMIT = %N
+CONST %MAX_CNT_ARITH_LIMIT = %N
+CONST %MAX_CNT_BINARY_LIMIT = %N
+CONST %MAX_CNT_MEM_ALIGN_LIMIT = %N
+CONST %MAX_CNT_KECCAK_F_LIMIT = %N
+CONST %MAX_CNT_PADDING_PG_LIMIT = %N
+CONST %MAX_CNT_POSEIDON_G_LIMIT = %N
+
+CONSTL %BN254_P = 21888242871839275222246405745257275088696311157297823662689037894645226208583n 
+
+VAR GLOBAL lastHashKId
+VAR GLOBAL lastHashPId
+
+VAR GLOBAL initial_A
+VAR GLOBAL initial_B
+VAR GLOBAL initial_C
+VAR GLOBAL initial_D
+VAR GLOBAL initial_E
+VAR GLOBAL initial_CTX
+VAR GLOBAL initial_SP
+VAR GLOBAL initial_PC
+VAR GLOBAL initial_GAS
+VAR GLOBAL initial_SR
+VAR GLOBAL initial_RR
+VAR GLOBAL initial_HASHPOS
+VAR GLOBAL initial_RCX
+
+start:
+
+        STEP => A
+        0 :ASSERT
+
+
+        A           :MSTORE(initial_A)
+        B           :MSTORE(initial_B)
+        C           :MSTORE(initial_C)
+        D           :MSTORE(initial_D)
+        E           :MSTORE(initial_E)
+        CTX         :MSTORE(initial_CTX)
+        SP          :MSTORE(initial_SP)
+        PC          :MSTORE(initial_PC)
+        GAS         :MSTORE(initial_GAS)
+        SR          :MSTORE(initial_SR)
+        RR          :MSTORE(initial_RR)
+        HASHPOS     :MSTORE(initial_HASHPOS)
+        RCX         :MSTORE(initial_RCX)
+        0 => A,B,C,D,E,CTX, SP, PC, GAS, SR, RR, HASHPOS, RCX
+
+        -1          :MSTORE(lastHashKId)
+        -1          :MSTORE(lastHashPId)
+
+        1n => A
+        2n => B
+        3n => C
+        4n => D
+                :CALL(addFp2BN254)
+        E => A
+        4n => B :ASSERT
+        C => A
+        6n => B :ASSERT
+
+        1n => A
+        4n => B
+        3n => C
+        2n => D
+                :CALL(subFp2BN254)
+        E => A
+        21888242871839275222246405745257275088696311157297823662689037894645226208581n => B :ASSERT
+        C => A
+        2n => B :ASSERT
+
+        1n => A
+        2n => B
+                :CALL(invFp2BN254)
+        C => A
+        13132945723103565133347843447154365053217786694378694197613422736787135725150n => B :ASSERT
+        D => A
+        17510594297471420177797124596205820070957048925838258930151230315716180966866n => B :ASSERT
+
+        1n => A
+        4n => B
+                :CALL(invFp2BN254)
+        C => A
+        5150174793373947111116801351825241197340308507599487920632714798740053225549n => B :ASSERT
+        D => A
+        1287543698343486777779200337956310299335077126899871980158178699685013306387n => B :ASSERT
+
+        1n => A
+        4n => B
+                :CALL(squareFp2BN254)
+        E => A
+        21888242871839275222246405745257275088696311157297823662689037894645226208568n => B :ASSERT
+        C => A
+        8n => B :ASSERT
+
+        3n => A
+        6n => C
+        4n => D
+                :CALL(escalarMulFp2BN254)
+        E => A
+        18n => B :ASSERT
+        C => A
+        12n => B :ASSERT
+
+
+end:
+
+        $ => A           :MLOAD(initial_A)
+        $ => B           :MLOAD(initial_B)
+        $ => C           :MLOAD(initial_C)
+        $ => D           :MLOAD(initial_D)
+        $ => E           :MLOAD(initial_E)
+        $ => CTX         :MLOAD(initial_CTX)
+        $ => SP          :MLOAD(initial_SP)
+        $ => PC          :MLOAD(initial_PC)
+        $ => GAS         :MLOAD(initial_GAS)
+        $ => SR          :MLOAD(initial_SR)
+        $ => RR          :MLOAD(initial_RR)
+        $ => HASHPOS     :MLOAD(initial_HASHPOS)
+        $ => RCX         :MLOAD(initial_RCX)
+
+; label finalizeExecution needed by executor C++
+finalizeExecution:
+        ${beforeLast()}  : JMPN(finalizeExecution)
+
+                         : JMP(start)
+opINVALID:
+; label checkAndSaveFrom needed by executor C++
+checkAndSaveFrom:
+                         :JMP(opINVALID)
+
+INCLUDE "../main/pairings/FP2BN254/addFp2BN254.zkasm"
+INCLUDE "../main/pairings/FP2BN254/subFp2BN254.zkasm"
+INCLUDE "../main/pairings/FP2BN254/invFp2BN254.zkasm"
+INCLUDE "../main/pairings/FP2BN254/squareFp2BN254.zkasm"
+INCLUDE "../main/pairings/FP2BN254/escalarMulFp2BN254.zkasm"

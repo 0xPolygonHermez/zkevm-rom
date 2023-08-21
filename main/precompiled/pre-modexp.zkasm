@@ -1,0 +1,289 @@
+/**
+ * @link [https://www.evm.codes/precompiled#0x05?fork=shanghai]
+ * @zk-counters
+ *  - dynamic steps:
+ *  - dynamic arith:
+ *  - dynamic binary:
+ * @process-precompiled
+ *  - stack input: [x1, y1, x2, y2]
+ *  - stack output: [x, y]
+ */
+INCLUDE "../modexp/modexp.zkasm"
+INCLUDE "../modexp/modexp_utils.zkasm"
+
+INCLUDE "../modexp/array_lib/utils/array_trim.zkasm"
+INCLUDE "../modexp/array_lib/utils/array_compare.zkasm"
+
+INCLUDE "../modexp/array_lib/array_add_AGTB.zkasm"
+INCLUDE "../modexp/array_lib/array_add_short.zkasm"
+INCLUDE "../modexp/array_lib/array_mul_long.zkasm"
+INCLUDE "../modexp/array_lib/array_mul_short.zkasm"
+INCLUDE "../modexp/array_lib/array_mul.zkasm"
+INCLUDE "../modexp/array_lib/array_square.zkasm"
+INCLUDE "../modexp/array_lib/array_div_mod_short.zkasm"
+INCLUDE "../modexp/array_lib/array_div_mod_long.zkasm"
+INCLUDE "../modexp/array_lib/array_div_mod.zkasm"
+
+VAR GLOBAL multiplication_complexity
+
+VAR GLOBAL modexp_Bsize
+VAR GLOBAL modexp_Esize
+VAR GLOBAL modexp_Msize
+VAR GLOBAL modexp_Mend
+VAR GLOBAL modexp_offset
+VAR GLOBAL modexp_returnIndex
+VAR GLOBAL expLenBits
+
+funcModexp:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 20   :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 2     :JMPN(outOfCountersArith)
+    %MAX_CNT_STEPS - STEP - 400         :JMPN(outOfCountersStep)
+
+    ; Move balances if value > 0 just before executing the contract CALL
+    $ => B                              :MLOAD(txValue)
+    0 => A
+    zkPC+2 => RR
+    $                                   :LT, JMPC(moveBalances)
+
+    ; read data stored in calldata
+    ; Bsize [32 bytes], Esize [32 bytes], Msize [32 bytes]
+    ; Bsize [32 bytes]
+    32                                  :MSTORE(readXFromCalldataLength)
+    0 => E                              :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A                              :MLOAD(readXFromCalldataResult)
+    A                                   :MSTORE(modexp_Bsize) ;Bsize = base size
+    ; Esize [32 bytes]
+    E + 32 => E                         :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A                              :MLOAD(readXFromCalldataResult)
+    A                                   :MSTORE(modexp_Esize) ;Esize = exp size
+    ; Msize [32 bytes]
+    E + 32 => E                         :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A                              :MLOAD(readXFromCalldataResult)
+    A                                   :MSTORE(modexp_Msize) ;Msize = mod size
+    ; store offset modexp num values
+    E + 32 => E
+    E                                   :MSTORE(modexp_offset)
+    $ => A                              :MLOAD(modexp_Bsize)
+    A                                   :MSTORE(arithA)
+    96                                  :MSTORE(arithB),CALL(addARITH)
+    $ => A                              :MLOAD(arithRes1)
+    $ => B                              :MLOAD(txCalldataLen)
+    0                                   :MSTORE(expLenBits)
+    $                                   :LT,JMPC(setExpBits,setMaxLen)
+
+setExpBits:
+    A => E
+    $ => A,C                            :MLOAD(modexp_Esize)
+    33 => B
+    ; if Esize <= 32 --> setExpBitsContinue
+    $ => B                              :LT,JMPC(setExpBitsContinue)
+    32 => C
+
+setExpBitsContinue:
+    C                                   :MSTORE(readXFromCalldataLength)
+    E                                   :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A                              :MLOAD(readXFromCalldataResult)
+    32 - C => D                         :CALL(SHRarith)
+    A => B                              :CALL(getLenBits); A bits length first 32 bytes
+    A                                   :JMPZ(setMaxLen)
+    A - 1                               :MSTORE(expLenBits)
+
+setMaxLen:
+    $ => B                              :MLOAD(modexp_Msize)
+    $ => A                              :MLOAD(modexp_Bsize)
+    $                                   :LT, JMPC(calculateGas)
+    A => B
+
+; B: max_length = max(Blen, Mlen)
+calculateGas:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 10   :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 2    :JMPN(outOfCountersArith)
+    %MAX_CNT_STEPS - STEP - 120         :JMPN(outOfCountersStep)
+
+    B                                   :MSTORE(arithA)
+    7                                   :MSTORE(arithB),CALL(addARITH)
+    $ => B                              :MLOAD(arithRes1)
+    B                                   :MSTORE(arithA)
+    8                                   :MSTORE(arithB),CALL(divARITH)
+    ; C: words = (max_length + 7) / 8
+    $ => B                              :MLOAD(arithRes1)
+    %MAX_GAS_WORD_MODEXP => A
+    $                                   :LT,JMPC(outOfGas)
+    ; A: multiplication_complexity = words**2
+    B                                   :MSTORE(arithA)
+    B                                   :MSTORE(arithB),CALL(mulARITH)
+    $ => A                              :MLOAD(arithRes1)
+    A                                   :MSTORE(multiplication_complexity),JMPZ(dinamicGas)
+
+    $ => A                              :MLOAD(modexp_Esize)
+    33 => B
+    ; if Esize <= 32 --> modexp_expLT32
+    $ => B                              :LT,JMPC(modexp_expLT32)
+    ;elif Esize > 32: iteration_count = (8 * (Esize - 32)) + ((exponent & (2**256 - 1)).bit_length() - 1)
+    A                                   :MSTORE(arithA)
+    32                                  :MSTORE(arithB),CALL(subARITH)
+    $ => A                              :MLOAD(arithRes1)
+    A                                   :MSTORE(arithA)
+    8                                   :MSTORE(arithB),CALL(mulARITH)
+    ; A = 8 * (Esize - 32)
+    $ => A                              :MLOAD(arithRes1)
+    $ => B                              :MLOAD(expLenBits)
+    ; iteration_count = (8 * (Esize - 32)) + ((exponent & (2**256 - 1)).bit_length() - 1)
+    A + B => E                          :JMP(finalGas)
+    ; E = iteration_count
+
+modexp_expLT32:
+    $ => E                              :MLOAD(expLenBits)
+
+finalGas:
+    E => B
+    %MAX_GAS_IT_MODEXP => A
+    $                                   :LT,JMPC(outOfGas)
+    1 => A
+    $                                   :LT,JMPC(dinamicGas)
+    1 => E
+
+dinamicGas:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 9   :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 3     :JMPN(outOfCountersArith)
+    %MAX_CNT_STEPS - STEP - 55         :JMPN(outOfCountersStep)
+
+    ; E = calculate_iteration_count = max(iteration_count, 1)
+    $ => A                              :MLOAD(multiplication_complexity)
+    A                                   :MSTORE(arithA)
+    E                                   :MSTORE(arithB),CALL(mulARITH)
+    ; A = multiplication_complexity * iteration_count
+    $ => A                              :MLOAD(arithRes1)
+    A                                   :MSTORE(arithA)
+    3                                   :MSTORE(arithB),CALL(divARITH)
+    ; A = multiplication_complexity * iteration_count / 3
+    $ => A                              :MLOAD(arithRes1)
+    %TX_GAS_LIMIT => B
+    $                                   :LT,JMPNC(outOfGas)
+    200 => B
+    $                                   :LT,JMPC(callMODEXP)
+    A => B
+
+callMODEXP:
+    ; B = max(200, multiplication_complexity * iteration_count / 3)
+    GAS - B => GAS                      :JMPN(outOfGas)
+    0 => A
+    $ => B                              :MLOAD(modexp_Msize)
+    $                                   :EQ,JMPC(save0outMod0)  ; if Msize = 0 --> save0outMod0
+    $ => B                              :MLOAD(modexp_Bsize)
+    $                                   :EQ,JMPC(save0out)      ; if Bsize = 0 --> save0outMod0
+    %MAX_SIZE_MODEXP => A
+    $ => B                              :MLOAD(modexp_Bsize)
+    $                                   :LT,JMPC(endMODEXPFail) ; if Bsize > MAX_SIZE_MODEXP --> endMODEXPFail
+    $ => B                              :MLOAD(modexp_Esize)
+    $                                   :LT,JMPC(endMODEXPFail) ; if Esize > MAX_SIZE_MODEXP --> endMODEXPFail
+    $ => B                              :MLOAD(modexp_Msize)
+    $                                   :LT,JMPC(endMODEXPFail) ; if Msize > MAX_SIZE_MODEXP --> endMODEXPFail
+    $ => E                              :MLOAD(modexp_offset)
+    $ => C                              :MLOAD(modexp_Bsize)
+                                        :CALL(modexp_getBase)
+    $ => C                              :MLOAD(modexp_Esize)
+                                        :CALL(modexp_getExp)
+    $ => C                              :MLOAD(modexp_Msize)
+    E                                   :MSTORE(arithA)
+    C                                   :MSTORE(arithB),CALL(addARITH)
+    $ => B                              :MLOAD(arithRes1)
+    %MAX_SAFE_INTEGER_MODEXP => A
+    $                                   :LT,JMPC(endMODEXPFail) ; if Msize+offset > MAX_SAFE_INTEGER_MODEXP --> endMODEXPFail
+                                        :CALL(modexp_getMod)
+    $ => A                              :MLOAD(modexp_Elen),JMPZ(modexpExp0)
+    $ => A                              :MLOAD(modexp_Mlen),JMPZ(modexpMod0)
+    $ => A                              :MLOAD(modexp_Blen),JMPZ(modexpBase0)
+                                        :CALL(modexp)
+                                        :JMP(finalMODEXP)
+
+modexpBase0:
+    $ => A                              :MLOAD(modexp_Elen)
+    A                                   :JMPZ(save1out)
+    0                                   :MSTORE(modexp_out),JMP(finalMODEXP)
+
+modexpExp0:
+modexpMod0:
+    $ => A                              :MLOAD(modexp_Mlen)
+    0                                   :MSTORE(modexp_out)
+    A                                   :JMPZ(finalMODEXP)
+    A - 1                               :JMPNZ(save1out)
+    $ => A                              :MLOAD(modexp_M)
+    A - 1                               :JMPZ(finalMODEXP)
+save1out:
+    1                                   :MSTORE(modexp_out),JMP(finalMODEXP)
+
+save0out:
+    $ => B                              :MLOAD(modexp_Msize)
+    %MAX_SAFE_INTEGER_MODEXP => A
+    $                                   :LT,JMPC(endMODEXPFail)
+    0                                   :MSTORE(modexp_out),JMP(finalMODEXP)
+
+save0outMod0:
+    0                                   :MSTORE(modexp_out),JMP(endMODEXP)
+
+finalMODEXP:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 3   :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 1     :JMPN(outOfCountersArith)
+    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+
+    ; write data into memory
+    0 => E
+    $ => C                              :MLOAD(modexp_Msize)
+
+    ; prepare return data
+    0                                   :MSTORE(retDataOffset)
+    C                                   :MSTORE(retDataLength)
+    $ => B                              :MLOAD(retCallOffset)
+    $ => A                              :MLOAD(originCTX),JMPZ(handleGas)
+    ; set retDataCTX
+    $ => E                              :MLOAD(currentCTX)
+    A => CTX
+    E                                   :MSTORE(retDataCTX)
+
+    C                                   :MSTORE(arithA)
+    32                                  :MSTORE(arithB),CALL(divARITH)
+    $ => E                              :MLOAD(arithRes1)
+    E                                   :MSTORE(modexp_returnIndex)
+    $ => A                              :MLOAD(arithRes2),JMPZ(returnLoop)
+    A => C
+    $ => A                              :MLOAD(modexp_out+E)
+    32 - C => D                         :CALL(SHLarith)
+    A                                   :MSTORE(bytesToStore)
+    B => E
+                                        :CALL(MSTOREX) ; in: [bytesToStore, E: offset] out: [E: new offset]
+    E => B
+    $ => A                              :MLOAD(modexp_Msize)
+    A - C => C                          :JMPZ(endMODEXP)
+    $ => E                              :MLOAD(modexp_returnIndex)
+
+returnLoop:
+    %MAX_CNT_BINARY - CNT_BINARY - 2   :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 50         :JMPN(outOfCountersStep)
+
+    E - 1 => E                          :MSTORE(modexp_returnIndex)
+    $ => A                              :MLOAD(modexp_out+E)
+    A                                   :MSTORE(bytesToStore)
+    B => E
+                                        :CALL(MSTORE32)
+    E => B
+    $ => E                              :MLOAD(modexp_returnIndex)
+    C - 32 => C                         :JMPZ(endMODEXP, returnLoop)
+
+
+endMODEXPFail:
+    $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
+    A => CTX
+    0                                   :MSTORE(retDataCTX)
+    0 => GAS
+    CTX                                 :MSTORE(currentCTX), JMP(preEndFail)
+
+preEndMODEXP:
+    $ => CTX                            :MLOAD(originCTX)
+
+endMODEXP:
+    CTX                                 :MSTORE(currentCTX), JMP(preEnd)

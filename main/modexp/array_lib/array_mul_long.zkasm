@@ -1,0 +1,158 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  PRE: len(inB) >= 2
+;; POST: out is trimmed
+;;
+;; array_mul_long:
+;;             in: 
+;;                  · C ∈ [1, 839], the len of inA
+;;                  · D ∈ [1, 839], the len of inB
+;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
+;;                  · inB ∈ [0, 2²⁵⁶ - 1]^D, the second input array
+;;
+;;          output: 
+;;                  · out = inA·inB, with len(out) <= C + D
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+
+; function array_mul_long(a: bigint[], b: bigint[], B: bigint): bigint[] {
+;     const alen = a.length;
+;     const blen = b.length;
+;     const len = alen + blen;
+;     const result = new Array<bigint>(len).fill(0n);
+;     let product: bigint;
+;     let carry: bigint;
+;     let ai: bigint;
+;     let bj: bigint;
+;     for (let i = 0; i < alen; i++) {
+;         ai = a[i];
+;         for (let j = 0; j < blen; j++) {
+;             bj = b[j];
+;             product = ai * bj + result[i + j];
+;             carry = product / B;
+;             result[i + j] = product - carry * B;
+;             result[i + j + 1] += carry;
+;         }
+;     }
+;     trim(result);
+;     return result;
+; }
+
+VAR GLOBAL array_mul_long_inA[839]
+VAR GLOBAL array_mul_long_inB[839]
+VAR GLOBAL array_mul_long_out[1678]
+VAR GLOBAL array_mul_long_len_inA
+VAR GLOBAL array_mul_long_len_inB
+VAR GLOBAL array_mul_long_len_out
+
+VAR GLOBAL array_mul_long_result_carry
+
+VAR GLOBAL array_mul_long_RR
+
+array_mul_long:
+        %MAX_CNT_ARITH - CNT_ARITH - 1        :JMPN(outOfCountersArith)
+        %MAX_CNT_STEPS - STEP      - 6        :JMPN(outOfCountersStep)
+
+        C => A
+        D => B   
+        0 => C,D
+        ${A*B} => E :ARITH
+        A => C
+        B => D
+        ; E holds C*D
+
+        %MAX_CNT_BINARY - CNT_BINARY                 - 5*E                :JMPN(outOfCountersBinary)
+        %MAX_CNT_ARITH - CNT_ARITH                   - E                  :JMPN(outOfCountersArith)
+        %MAX_CNT_STEPS - STEP        - 7 - 3*C - 3*D - 35*E - 2 - 4*C - 1 :JMPN(outOfCountersStep)
+
+        RR              :MSTORE(array_mul_long_RR)
+        C               :MSTORE(array_mul_long_len_inA)
+        D               :MSTORE(array_mul_long_len_inB)
+        C + D           :MSTORE(array_mul_long_len_out)
+
+        C + D => E ; auxiliar index
+        0 => RCX   ; first index in loops
+        0 => RR    ; second index in loops
+
+array_mul_long_clean_out:
+        E - 1 => E
+        0               :MSTORE(array_mul_long_out + E)
+        E               :JMPZ(array_mul_long_loopZero2inB, array_mul_long_clean_out)
+
+; Begin of branching
+array_mul_long_add_carry:
+        D + 1 => D      :JMP(return_array_mul_long_add_carry)
+
+array_mul_long_add_result_carry:
+        1               :MSTORE(array_mul_long_result_carry)
+                        :JMP(return_array_mul_long_add_result_carry)
+
+array_mul_long_loop_index_check:
+        RCX + 1 => RCX
+        RCX => A
+        $ => B          :MLOAD(array_mul_long_len_inA)
+        $               :EQ, JMPC(array_mul_long_prep_trim_in)
+
+        0 => RR
+                        :JMP(return_array_mul_long_loop_index_check)
+; End of branching
+
+array_mul_long_loopZero2inB:
+        RCX => E
+        ; product = a_i * b_j + out[i + j]
+        $ => A          :MLOAD(array_mul_long_inA + E)
+        $ => B          :MLOAD(array_mul_long_inB + RR)
+        0 => C
+        $${var _arrayLongMul_AB = A*B}
+        ${_arrayLongMul_AB >> 256} => D
+        ${_arrayLongMul_AB} => E :ARITH
+
+        ; sum lower part
+        E => A
+        RCX + RR => E
+        $ => B          :MLOAD(array_mul_long_out + E)
+        $ => C          :ADD, JMPC(array_mul_long_add_carry)
+                        return_array_mul_long_add_carry:
+
+        ; sum higher part
+        D => A
+        $ => B          :MLOAD(array_mul_long_result_carry)
+        $ => D          :ADD
+
+        ; out[i + j] = product - carry·B
+        C               :MSTORE(array_mul_long_out + E)
+        
+        ; out[i + j + 1] += carry
+        E + 1 => E
+        $ => A          :MLOAD(array_mul_long_out + E)
+        D => B
+        $ => C          :ADD, JMPC(array_mul_long_add_result_carry)
+        0               :MSTORE(array_mul_long_result_carry)
+                        return_array_mul_long_add_result_carry:
+        C               :MSTORE(array_mul_long_out + E)
+
+        RR + 1 => RR
+        RR => A
+        $ => B          :MLOAD(array_mul_long_len_inB)
+        $               :EQ, JMPC(array_mul_long_loop_index_check)
+                        return_array_mul_long_loop_index_check:
+                        :JMP(array_mul_long_loopZero2inB)
+
+array_mul_long_prep_trim_in:
+        $ => C          :MLOAD(array_mul_long_len_out)
+        C => E
+
+array_mul_long_trim_in:
+        E - 1 => E
+        $ => A          :MLOAD(array_mul_long_out + E)
+        A               :MSTORE(array_trim_in + E)
+        E               :JMPZ(array_mul_long_trim, array_mul_long_trim_in)
+
+array_mul_long_trim:
+                        :CALL(array_trim)
+
+        %MAX_CNT_STEPS - STEP - 3   :JMPN(outOfCountersStep)
+
+        C               :MSTORE(array_mul_long_len_out)
+
+array_mul_long_end:
+        $ => RR         :MLOAD(array_mul_long_RR)
+                        :RETURN
