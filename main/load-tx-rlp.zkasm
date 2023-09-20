@@ -17,7 +17,7 @@ INCLUDE "load-tx-rlp-utils.zkasm"
 loadTx_rlp:
         ; check one keccak is available to begin processing the RLP
         $ => D                                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1 - D        :JMPN(handleOOCKatRLP)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1 - D        :JMPN(outOfCountersKeccak)
 
         ; A new hash with position 0 is started
         0 => HASHPOS
@@ -59,7 +59,7 @@ endList:
         136                             :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
         $ => B                          :MLOAD(arithRes1)
         $ => D                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B - D - 1:JMPN(handleOOCKatRLP)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B - D - 1:JMPN(outOfCountersKeccak)
 
 ;; Read RLP 'nonce'
         ; 64 bits max
@@ -171,10 +171,13 @@ endValue:
 ;; Read RLP 'data'
         ; should not be a list
 dataREAD:
+        ; Set calldata offset and CTX
+        $ => D                          :MLOAD(globalCalldataMemoryOffset)
+        %CALLDATA_RESERVED_CTX          :MSTORE(calldataCTX)
+        D * 32                          :MSTORE(calldataOffset)
         $ => D                          :MLOAD(batchHashPos)
         D                               :MSTORE(dataStarts)
-        1 => D
-        %CALLDATA_OFFSET => SP          :CALL(addHashTx)
+        1 => D                          :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(veryShortData)
         A - 0x81                        :JMPN(endData)
@@ -186,8 +189,17 @@ dataREAD:
 
 veryShortData:
         1                               :MSTORE(txCalldataLen)
-        31 => D                         :CALL(SHLarith)
-        A                               :MSTORE(SP++), JMP(endData)
+        31 => D                         :CALL(SHLarith) ; in: [A: value, D: #bytes to left shift] out: [A: shifted result]
+        ; Store current CTX
+        CTX => B
+        ; Store calldata to calldata CTX's memory
+        %CALLDATA_RESERVED_CTX => CTX
+        $ => E                          :MLOAD(globalCalldataMemoryOffset)
+        A                               :MSTORE(MEM:E)
+        E + 1                           :MSTORE(globalCalldataMemoryOffset)
+        $ => E                          :MLOAD(lastHashKIdUsed)
+         ; Restore current CTX
+        B => CTX                        :JMP(endData)
 
 shortData:
         $ => D                          :MLOAD(batchHashPos)
@@ -207,15 +219,31 @@ readData:
         32 => D
         B - D                           :JMPN(readDataFinal)
         B - D                           :MSTORE(txDataRead), CALL(addHashTx)
-        A                               :MSTORE(SP++), CALL(addBatchHashByteByByte)
+        $ => E                          :MLOAD(globalCalldataMemoryOffset)
+        ; Store current CTX
+        CTX => B
+        ; Store calldata to calldata CTX's memory
+        %CALLDATA_RESERVED_CTX => CTX
+        A                               :MSTORE(MEM:E)
+        ; Restore current CTX
+        B => CTX
+        E + 1                           :MSTORE(globalCalldataMemoryOffset), CALL(addBatchHashByteByByte) ; in: [A: bytes to add, D: bytes length] out: [E: lastHashKIdUsed, A: shifted bytes to add]
         $ => B                          :MLOAD(txDataRead), JMP(readData)
 
 readDataFinal:
         B - 1                           :JMPN(endData)
         B => D                          :CALL(addHashTx)
-        32 - D => D                     :CALL(SHLarith)
-        A                               :MSTORE(SP)
-        32 - D => D                     :CALL(addBatchHashByteByByte)
+        32 - D => D                     :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
+        $ => E                          :MLOAD(globalCalldataMemoryOffset)
+        ; Store current CTX
+        CTX => B
+        ; Store calldata to calldata CTX's memory
+        %CALLDATA_RESERVED_CTX => CTX
+        A                               :MSTORE(MEM:E)
+        ; Restore current CTX
+        B => CTX
+        E + 1                           :MSTORE(globalCalldataMemoryOffset)
+        32 - D => D                     :CALL(addBatchHashByteByByte); in: [A: bytes to add, D: bytes length] out: [E: lastHashKIdUsed, A: shifted bytes to add]
                                         :CALL(checkShortDataRLP)
 
 endData:
@@ -285,15 +313,20 @@ vREADTx:
         A                               :MSTORE(txV)
         C + D => C                      :CALL(addBatchHashData)
 
+;; read effective percentage
+effectivePercentageTx:
+        1 => D                          :CALL(getTxBytes)
+        A                               :MSTORE(effectivePercentageRLP)
+        C + D => C                      :CALL(addBatchHashData)
 ;;;;;;;;;
 ;; D - Finish RLP parsing
 ;;;;;;;;;
 ;; update bytes parsed
         $ => A                          :MLOAD(batchL2DataParsed)
-        A + C => A                      :MSTORE(batchL2DataParsed)
+        A + C                           :MSTORE(batchL2DataParsed)
 ;; increase number of transaction to process
         $ => A                          :MLOAD(pendingTxs)
-        A + 1 => A                      :MSTORE(pendingTxs)
+        A + 1                           :MSTORE(pendingTxs)
 ;; compute signature
         $ => A                          :HASHKDIGEST(E)
         A                               :MSTORE(txHash), JMP(txLoopRLP)
@@ -301,19 +334,14 @@ vREADTx:
 ;;;;;;;;;
 ;; E - Handler error RLP fields
 ;;;;;;;;;
-handleOOCBatRLP:
-        $${eventLog(onError, OOCB)}      :JMP(handleOOCatRLP)
-handleOOCKatRLP:
-        $${eventLog(onError, OOCK)}      :JMP(handleOOCatRLP)
-handleOOCSatRLP:
-        $${eventLog(onError, OOCS)}      :JMP(handleOOCatRLP)
-handleOOCatRLP:
-        $ => SR                          :MLOAD(batchSR)
-
 invalidTxRLP:
+        $${eventLog(onError, invalidRLP)}        :JMP(appendTxsInit)
+
+appendTxsInit:
 ;; Append all missing 'batchL2Data' to 'batchDataHash' bytes
         $ => B                          :MLOAD(batchL2DataLength)
         $ => C                          :MLOAD(batchHashPos)
+        $${p = C}
         $ => HASHPOS                    :MLOAD(batchHashPos)
         $ => E                          :MLOAD(batchHashDataId)
 

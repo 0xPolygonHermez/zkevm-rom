@@ -18,52 +18,6 @@ absIsNeg:
     $ => A          :SUB
     1 => B          :RETURN
 
-VAR GLOBAL tmpZkPCcopy
-; @info copy calldata from previous context to current context
-; @in argsOffsetCall: offset to copy from te calldata
-; @in argsLengthCall: length to copy from the calldata
-copySP:
-    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
-    RR              :MSTORE(tmpZkPCcopy)
-    ; store current ctx
-    CTX             :MSTORE(currentCTX)
-    ; set SP at the beginning of calldata memory allocation
-    %CALLDATA_OFFSET => SP
-    ; retrieve previous context
-    $ => CTX        :MLOAD(originCTX)
-    $ => E          :MLOAD(argsOffsetCall)
-    $ => C          :MLOAD(argsLengthCall)
-
-copySPloop:
-    ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
-    C               :JMPZ(copySPEnd)
-    C - 32          :JMPN(copySPFinal)
-    ; load 32 bytes from previous context
-    zkPC+1 => RR    :JMP(MLOAD32); in: [E: offset] out: [A: value, E: new offset]
-    ; restore current context
-    $ => CTX        :MLOAD(currentCTX)
-    ; insert 32 bytes from previous context's calldata to current context's calldata
-    A               :MSTORE(SP++)
-    ; load previous context for next iteration
-    $ => CTX        :MLOAD(originCTX)
-    C - 32 => C     :JMP(copySPloop)
-
-copySPFinal:
-    ; update RR to call a function from a call and load X bytes from previous context
-    zkPC+1 => RR    :JMP(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
-    ; restore current context
-    $ => CTX        :MLOAD(currentCTX)
-    ; insert X bytes from previous context's calldata to current context's calldata
-    A               :MSTORE(SP++)
-    ; load previous context
-    $ => CTX        :MLOAD(originCTX)
-
-copySPEnd:
-    ; restore RR to return to initial call correctly
-    $ => RR         :MLOAD(tmpZkPCcopy)
-    $ => CTX        :MLOAD(currentCTX), RETURN
-
 VAR GLOBAL tmpVarBgetLen
 VAR GLOBAL tmpVarCgetLen
 VAR GLOBAL tmpVarDgetLen
@@ -928,8 +882,10 @@ handleError:
 handleBatchError:
     ; restore init state root and finish batch
     $ => SR         :MLOAD(batchSR)
-    $${eventLog(onFinishTx)}
-    $${eventLog(onFinishBatch)} :JMP(processTxsEnd)
+    ; if batch error is triggered while parsing the RLP, it jumps to 'appendTxsInit'
+    ; to fill the missing bytes to complete 'batchDataHash'
+    $                           :MLOAD(isLoadingRLP),JMPNZ(appendTxsInit)
+    $${eventLog(onFinishTx)}    :JMP(processTxsEnd)
 
 firstContextInvalid:
     ;save Root and jump to send gas to sequencer
@@ -1151,21 +1107,24 @@ finalPush:
     $ => D                      :MLOAD(pushBytes), RETURN
 
 VAR GLOBAL tmpVarDaddB
+VAR GLOBAL tmpVarBaddB
 VAR GLOBAL tmpZkPCaddB
 VAR GLOBAL auxBytes
+
 ;@info: adds data to batchHashdata byte by byte
 ;@in: A: bytes to add
 ;@in D: bytes length
 addBatchHashByteByByte:
-        %MAX_CNT_STEPS - STEP - 10      :JMPN(handleOOCSatRLP)
+        %MAX_CNT_STEPS - STEP - 10      :JMPN(outOfCountersStep)
         RR                              :MSTORE(tmpZkPCaddB)
         A                               :MSTORE(auxBytes)
         D                               :MSTORE(tmpVarDaddB)
+        B                               :MSTORE(tmpVarBaddB)
         1 => D
 
 utilsAddBatchHashBytebyByteLoop:
-        %MAX_CNT_STEPS - STEP - 50 :JMPN(handleOOCSatRLP)
-        %MAX_CNT_BINARY - CNT_BINARY - 1   :JMPN(handleOOCBatRLP)
+        %MAX_CNT_STEPS - STEP - 50      :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY - 1   :JMPN(outOfCountersBinary)
         32 - D => D
         $ => A                          :MLOAD(auxBytes), CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
         ; get last byte in A
@@ -1180,6 +1139,7 @@ utilsAddBatchHashBytebyByteLoop:
         33 - D => D
         $ => B                          :MLOAD(tmpVarDaddB)
         D - B - 1                       :JMPN(utilsAddBatchHashBytebyByteLoop)
+        $ => B                          :MLOAD(tmpVarBaddB)
         $ => RR                         :MLOAD(tmpZkPCaddB)
                                         :RETURN
 
@@ -1555,3 +1515,60 @@ expADend:
 failAssert:
     1 => A
     2               :ASSERT
+
+
+VAR GLOBAL tmpZkPCreadXFromOffset
+VAR GLOBAL readXFromCalldataOffset
+VAR GLOBAL readXFromCalldataLength
+VAR GLOBAL readXFromCalldataResult
+VAR GLOBAL tmpVarAReadXFromOffset
+VAR GLOBAL tmpVarBReadXFromOffset
+VAR GLOBAL tmpVarCReadXFromOffset
+VAR GLOBAL tmpVarDReadXFromOffset
+VAR GLOBAL tmpVarEReadXFromOffset
+; @info Reads {readXFromCalldataOffset} bytes (max 32) from a given offset in calldata memory. If offset or offset + length exceeds txCalldataLen, zeros are added
+; @internalParam {readXFromCalldataOffset} offset to read from calldata
+; @internalParam {readXFromCalldataLength} length to read from calldata
+; @returns {readXFromCalldataResult} bytes read from calldata
+readFromCalldataOffset:
+    %MAX_CNT_STEPS - STEP - 100       :JMPN(outOfCountersStep)
+    RR              :MSTORE(tmpZkPCreadXFromOffset)
+    A               :MSTORE(tmpVarAReadXFromOffset)
+    B               :MSTORE(tmpVarBReadXFromOffset)
+    C               :MSTORE(tmpVarCReadXFromOffset)
+    E               :MSTORE(tmpVarEReadXFromOffset)
+    $ => A          :MLOAD(txCalldataLen), JMPZ(return0FromCalldata)
+    $ => B          :MLOAD(calldataOffset)
+    $ => C          :MLOAD(readXFromCalldataLength)
+    $ => E          :MLOAD(readXFromCalldataOffset)
+    A - E - 1       :JMPN(return0FromCalldata) ; If offset >= txCalldataLen, return 0
+    ; if readOffset + readLength > txCalldataLen, readLength = txCalldataLen - readOffset
+    E + C - A       :JMPN(dontLimitLength)
+    A - E => C
+
+dontLimitLength:
+    $ => CTX        :MLOAD(calldataCTX) ; get calldata context
+    B + E => E      :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
+    $ => CTX        :MLOAD(currentCTX)
+    A               :MSTORE(readXFromCalldataResult), JMP(readFromCalldataOffsetEnd)
+
+return0FromCalldata:
+    0               :MSTORE(readXFromCalldataResult)
+
+readFromCalldataOffsetEnd:
+    $ => RR         :MLOAD(tmpZkPCreadXFromOffset)
+    $ => A          :MLOAD(tmpVarAReadXFromOffset)
+    $ => B          :MLOAD(tmpVarBReadXFromOffset)
+    $ => C          :MLOAD(tmpVarCReadXFromOffset)
+    $ => E          :MLOAD(tmpVarEReadXFromOffset), RETURN
+
+; @info store calldata pointer to read calldata
+saveCalldataPointer:
+    %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
+    ; load data: previous CTX & argsOffsetCall
+    $ => A, CTX         :MLOAD(originCTX)
+    $ => B              :MLOAD(argsOffsetCall)
+    ; move to current CTX and store data
+    $ => CTX            :MLOAD(currentCTX)
+    A                   :MSTORE(calldataCTX)
+    B                   :MSTORE(calldataOffset), RETURN
