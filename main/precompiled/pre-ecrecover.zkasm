@@ -1,19 +1,25 @@
 funcECRECOVER:
     ; Move balances if value > 0 just before executing the contract CALL
-    $ => B                          :MLOAD(txValue)
+    $ => B                              :MLOAD(txValue)
     0 => A
     zkPC+2 => RR
-    $                               :LT, JMPC(moveBalances)
+    $                                   :LT, JMPC(moveBalances)
 
-    GAS - %ECRECOVER_GAS => GAS     :JMPN(outOfGas) ; gas static = 3000
-
-    ; read data stored in SP + %CALLDATA_OFFSET
-    ; hash [32 bytes], v [32 bytes], r [32 bytes], s [32 bytes]
-    %CALLDATA_OFFSET => SP
-    $ => A                              :MLOAD(SP++) ; hash
-    $ => D                              :MLOAD(SP++) ; v
-    $ => B                              :MLOAD(SP++) ; r
-    $ => C                              :MLOAD(SP) ,CALL(ecrecover_precompiled) ; in: [A: hash, B: r, C: s, D: v], out: [A: result_ecrecover, B: result_code]
+    GAS - %ECRECOVER_GAS => GAS         :JMPN(outOfGas) ; gas static = 3000
+    ; read data stored in calldata
+    ; read hash [32 bytes]
+    32                                  :MSTORE(readXFromCalldataLength)
+    0 => E                              :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A                              :MLOAD(readXFromCalldataResult)
+    ; read v [32 bytes]
+    E + 32 => E                         :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => D                              :MLOAD(readXFromCalldataResult)
+    ; read r [32 bytes]
+    E + 32 => E                         :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => B                              :MLOAD(readXFromCalldataResult)
+    ; read s [32 bytes]
+    E + 32 => E                         :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => C                              :MLOAD(readXFromCalldataResult),CALL(ecrecover_precompiled) ; in: [A: hash, B: r, C: s, D: v], out: [A: result_ecrecover, B: result_code]
     B                                   :JMPNZ(endECRECOVERFail)
 
     ; write ecrecover data into memory

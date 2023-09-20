@@ -29,6 +29,7 @@ processTx:
         ; Store initial state at the beginning of the transaction
         SR                              :MSTORE(originSR)
         SR                              :MSTORE(initSR)
+        CTX                             :MSTORE(currentCTX)
         ; Minimum of 100000 steps left to process a tx
         %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCountersStep)
         %MAX_CNT_BINARY - CNT_BINARY - 100   :JMPN(outOfCountersBinary)
@@ -462,6 +463,10 @@ readCode:
 
 ;; Compute and save hash bytecode and bytecode length in the state-tree
 endDeploy:
+        ; checks zk-counters
+        %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+        %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*2 :JMPN(outOfCountersPoseidon)
+
         ; called from `opRETURNDeploy` which has: C --> length, E --> offset
         ; only when first context ends on deploy
         ; If length is 0 do not modify state-tree
