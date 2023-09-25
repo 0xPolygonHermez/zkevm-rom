@@ -21,14 +21,20 @@ async function main() {
     // Get all zkasm files
     const pathZkasm = path.join(process.cwd(), process.argv[2]);
     const files = await getTestFiles(pathZkasm);
-
+    
+    let exit_code = 0;
     // Run all zkasm files
     // eslint-disable-next-line no-restricted-syntax
     console.log(chalk.yellow('--> Start running zkasm files'));
     for (const file of files) {
         if (file.includes('ignore'))
             continue;
-        await runTest(file, cmPols);
+        if (await runTest(file, cmPols) == 1) {
+            exit_code = 1;
+        }
+    }
+    if (exit_code == 1) {
+        process.exit(1); 
     }
 }
 
@@ -46,7 +52,7 @@ async function runTest(pathTest, cmPols) {
         stepsN: 8388608,
         assertOutputs: false,
     };
-
+    let exit_code = 0;
     // execute zkasm tests
     try {
         const rom = await zkasm.compile(pathTest, null, configZkasm);
@@ -64,7 +70,9 @@ async function runTest(pathTest, cmPols) {
     } catch (e) {
         console.log(chalk.red('   --> fail'), pathTest);
         console.log(e);
+        exit_code = 1;
     }
+    return exit_code;
 }
 
 main();
