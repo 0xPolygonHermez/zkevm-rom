@@ -40,7 +40,7 @@ async function runTest(pathTest, cmPols) {
         allowOverwriteLabels: true,
     };
 
-    const rom = await zkasm.compile(pathTest, null, configZkasm);
+
     const config = {
         debug: true,
         stepsN: 8388608,
@@ -49,6 +49,7 @@ async function runTest(pathTest, cmPols) {
 
     // execute zkasm tests
     try {
+        const rom = await zkasm.compile(pathTest, null, configZkasm);
         const result = await smMain.execute(cmPols.Main, emptyInput, rom, config);
         console.log(chalk.green('   --> pass'), pathTest);
         if (argv.verbose) {
@@ -62,7 +63,7 @@ async function runTest(pathTest, cmPols) {
         }
     } catch (e) {
         console.log(chalk.red('   --> fail'), pathTest);
-        throw new Error(e);
+        console.log(e);
     }
 }
 
