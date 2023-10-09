@@ -24,11 +24,16 @@ sqrtFpEc:
         ;    a) A = FPEC_NON_SQRT, check hasn't sqrt.
         ;    b) A is an alias, it's a MP, we check hasn't sqrt, but has => no proof generated
 
+        ; A and C has same value
+
         %FPEC => B
         $ => B                                           :LT,JMPNC(sqrtFpEc_End)
 
+        ; A,C < FPEC (alias free)
         A => B
         0 => C
+
+        ; A = B  => A * A + 0 =?
 
         $${var _sqrtFpEc_sq = _sqrtFpEc_sqrt * _sqrtFpEc_sqrt }
 
@@ -45,10 +50,11 @@ sqrtFpEc:
         %FPEC => A
         E :ARITH
 
-        ; C hasn't alias because in this path C < FPEC
+        ; sqrtFpC_res hasn't alias because in this path sqrtFpC_res < FPEC
+
         1 => B
         $ => C          :MLOAD(sqrtFpC_res),RETURN
 
 sqrtFpEc_End:
-        ; B is 0, because A >= FPEC
+        ; B is 0, because C >= FPEC
         :RETURN

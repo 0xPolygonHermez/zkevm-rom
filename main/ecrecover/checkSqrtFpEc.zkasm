@@ -18,7 +18,7 @@ checkSqrtFpEc:
 
         ; 248 calls mulFpEc x 2 ariths = 496 ariths
         ; 254 calls sqFpEc x 2 ariths = 508 ariths
-        ; TOTAL = 1004 ariths
+        ; TOTAL = 1004 ariths + 1 binary
 
         RR          :MSTORE(checkSqrtFpEc_RR)
         C           :MSTORE(checkSqrtFpEc_base)
@@ -1543,7 +1543,12 @@ checkSqrtFpEc:
         C => B	:CALL(mulFpEc)
 
 
+        ; FPEC_MINUS_ONE hasn't alias of 256 bits
         C => B
         %FPEC_MINUS_ONE => A
         $ => RR     :MLOAD(checkSqrtFpEc_RR)
+
+        ; A = 1 ==> C = -1 ==> hasn't root
+        ; A = 0 ==> C != -1 ==> has root or MP, proof fails.
+
         $ => A      :EQ,RETURN
