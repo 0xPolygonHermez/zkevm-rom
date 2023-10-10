@@ -31,6 +31,11 @@ INCLUDE "constEc.zkasm"
 ; 100 - fail sqrt, but has solution (!!!)
 
 ; MAP: MAlicious Prover
+;
+; RESOURCES:
+;   PATH without root:      1014 arith + 10 binaries + 4527 steps
+;   PATH with root:         528 arith + 523 binaries + 6294 steps - 1 keccak
+;   PATH fail checks:       2 arith + 8 binaries + 45 steps
 
 ecrecover_precompiled:
         %FNEC_MINUS_ONE :MSTORE(ecrecover_s_upperlimit),JMP(ecrecover_store_args)
@@ -47,24 +52,6 @@ ecrecover_store_args:
         C           :MSTORE(ecrecover_s)
         D           :MSTORE(ecrecover_v)
 
-        ; RESOURCES    | arith | binary | keccak | steps
-        ; -------------+-------+--------+--------+ ----------------
-        ; init         |       |        |        |
-        ; check        |       |        |        |
-        ; pre-mulp     |       |        |        |
-        ; -------------+-------+--------+--------+ -----------------
-        ; PATH wo root
-        ; -------------+-------+--------+--------+ ----------------
-        ; init         |       |        |        |
-        ; check        |       |        |        |
-        ; pre-mulp     |       |        |        |
-        ; mulp-setup   |       |        |        |
-        ; mulp-loops   |       |        |        |
-        ; post-mulp    |       |        |        |
-        ; -------------+-------+--------+--------+ -----------------
-        ; PATH w root
-        ; -------------+-------+--------+--------+ -----------------
-        ; TOTAL
 
 
         %MAX_CNT_BINARY - CNT_BINARY - 1600   :JMPN(outOfCountersBinary)
@@ -93,9 +80,11 @@ ecrecover_store_args:
         $           :EQ,JMPC(ecrecover_s_is_zero)
 
         ; compute r inverse
+        ; [steps: 23, bin: 4]
         $ => A      :MLOAD(ecrecover_r),CALL(invFnEc)
         B           :MSTORE(ecrecover_r_inv)
 
+        ; [steps: 37, bin: 6, arith: 2]
         0x1Bn => B
         $ => A      :MLOAD(ecrecover_v)
         $ => E      :EQ,JMPNC(ecrecover_v_not_eq_1b)
@@ -105,6 +94,7 @@ ecrecover_store_args:
 
 ecrecover_v_not_eq_1b:
         0x1Cn => B
+        ; [steps: 42, bin: 8, arith: 2]
         $ => E      :EQ,JMPNC(ecrecover_v_not_eq_1b1c)
 
         ; ecrecover_v_eq_1c:
@@ -115,6 +105,8 @@ ecrecover_v_ok:
         ; y^2 = x^3 + 7
         ;
         ; A*B*A + 7 = calculate y from x
+        ;
+        ; [steps: 44, bin: 8, arith: 2]
         $ => A,B    :MLOAD(ecrecover_r),CALL(mulFpEc)
 
         C => A
@@ -123,17 +115,21 @@ ecrecover_v_ok:
         7 => A      :CALL(addFpEc)
 
         ; load on A parity expected
+        ; [steps: 69, bin: 8, arith: 8]
         $ => A      :MLOAD(ecrecover_v_parity)
         C           :MSTORE(ecrecover_y2),CALL(sqrtFpEc)
 
         ; If has root B = 1 else B = 0
 
+        ; [steps: 85, bin: 9, arith: 10]
         B           :JMPNZ(ecrecover_has_sqrt)
 
         ; hasn't sqrt, now verify
 
         $ => C      :MLOAD(ecrecover_y2),CALL(checkSqrtFpEc)
         ; check must return on A register 1, because the root has no solution
+
+        ; [steps: 4524, bin: 10, arith: 1014]
         1           :ASSERT,JMP(ecrecover_not_exists_sqrt_of_y)
 
 ecrecover_has_sqrt:
@@ -159,10 +155,12 @@ ecrecover_has_sqrt:
         ;   C = (hash * inv_r) % n
 
         $ => A      :MLOAD(ecrecover_hash)
+        ; [steps: 92, bin: 10, arith: 10]
         $ => B      :MLOAD(ecrecover_r_inv),CALL(mulFnEc)
 
         ; C = n - (hash * inv_r) % n
 
+        ; [steps: 100, bin: 9, arith: 12]
         ${const.FNEC - C}  => A :MSTORE(mulPointEc_k1)
         1 => B
         0 => D
@@ -171,9 +169,12 @@ ecrecover_has_sqrt:
         ; A, multipointEc_k1 is alias free, because A + C = FNEC exactly (D == 0)
 
         $ => A      :MLOAD(ecrecover_s)
+
+        ; [steps: 105, bin: 9, arith: 13]
         $ => B      :MLOAD(ecrecover_r_inv),CALL(mulFnEc)
 
         ;   C = (s * inv_r) % n
+        ; [steps: 113, bin: 9, arith: 15]
         C => A      :MSTORE(mulPointEc_k2)
         %FNEC => B
 
@@ -190,9 +191,11 @@ ecrecover_has_sqrt:
         ; y isn't an alias because was checked before
         ; (r,y) is a point of curve because it satisfacts the curve equation
         $ => A      :MLOAD(ecrecover_y)
+        ; [steps: 120, bin: 10, arith: 15]
         A           :MSTORE(mulPointEc_p2_y),CALL(mulPointEc)
 
 
+        ; [steps: 6280, bin: 522, arith: 527]
         ; generate keccak of public key to obtain ethereum address
         $ => E         :MLOAD(lastHashKIdUsed)
         E + 1 => E     :MSTORE(lastHashKIdUsed)
@@ -211,6 +214,7 @@ ecrecover_has_sqrt:
         ; for address take only last 20 bytes
         0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn => B
         $ => A         :AND
+        ; AtEnd [steps: 6294, bin: 523, keccak: 1, arith: 528]
         0 => B         :JMP(ecrecover_end)
 
 ; ERRORS
@@ -227,9 +231,11 @@ ecrecover_s_is_too_big:
         4 => B      :JMP(ecrecover_error)
 
 ecrecover_v_not_eq_1b1c:
+        ; AtEnd [steps: 45, bin: 8, arith: 2]
         5 => B      :JMP(ecrecover_error)
 
 ecrecover_not_exists_sqrt_of_y:
+        ; AtEnd [steps: 4527, bin: 10, arith: 1014]
         6 => B      :JMP(ecrecover_error)
 
 ecrecover_error:
