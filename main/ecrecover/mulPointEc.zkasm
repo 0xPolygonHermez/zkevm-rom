@@ -22,11 +22,19 @@ VAR GLOBAL mulPointEc_RCX
 ; PRECONDITION: p1,p2 are points of curve
 ; PRECONDITION: p1,p2 are alias-free
 
-; RESOURCES
-; setup: 1 arith
-; loop: (2 binaries (bits + shift k1,k2) + 2 arith (worse case, add + square)) * 256 - 1 arith = 512 binaries + 511 arith
-; loop_function: 2 binaries * 256 + number_of_bits_1(k1 | k2) * arith (add) + 256 * arith (square) - 1 arith (first add is assignment)
-; TOTAL = 512 binaries + 512 arith
+; RESOURCES (k1,k2):
+;                1 arith + 18 steps                            // setup, calculation p12
+;              + 2 binaries  * 256                             // get bits of k1,k2 (steps evaluated inside loop)
+;              + number_of_bits_1(k1|k2) * arith               // additions
+;              + (256 - left_bits_zero(k1|k2) * arith          // squares
+;              + 24 * 256 steps                                // get bits k1,k2 + additions + squares (steps, regular)
+;              - (24 - 8) * left_bits_zero(k1|k2) * steps      // get bits k1,k2 + additions + squares (steps firts bits = 0)
+;              - (24 - 12) * number_of_bits_1(k1|k2) * steps   // get bits k1,k2 + additions + squares (k1,k2 bits = 0)
+;              + (3 - 5) steps                                 // last part - last part square no done
+;              - 1 arith                                       // first asignation
+;
+;
+; RESOURCES (worse case): 512 arith + 512 binaries + 6160 steps        // 18 + 256 * 24 - 2 = 6160
 
 mulPointEc:
         RR      :MSTORE(mulPointEc_RR)
@@ -46,11 +54,14 @@ mulPointEc:
         $ => D  :MLOAD(mulPointEc_p2_y)
 
         ; check p1.x == p2.x
+        ; [steps: 11]
         ${A == C}     :JMPZ(mulPointDiffInitialPoints)
+
         ; verify path p1.x == p2.x
         C             :ASSERT
 
         ; check p1.y (B) == p2.y (D)
+        ; [steps: 13]
         ${B == D}     :JMPNZ(mulPointSameInitialPoints)
 
         ; verify path p1.y != p2.y ==> p1.y = -p2.y
@@ -67,22 +78,28 @@ mulPointEc:
 
         ; p2 == -p1
         ; mulPointEc_p12_empty = 1: no add p12 because it was origin point p = O + p = p
+        ; [steps: 18]
         1n            :MSTORE(mulPointEc_p12_empty),JMP(mulPointEc_loop)
 
 
 mulPointSameInitialPoints:
+        ; [steps.before: 13]
         ; verify path p1.y (B) == p2.y (D)
         ; as an ASSERT(B == mulPointEc_p2_y)
         B             :MLOAD(mulPointEc_p2_y)
+
         ; p2 == p1
         0n                        :MSTORE(mulPointEc_p12_empty)
         ; A == p1_x
         ; B == p1_y
         ; (A,B) * 2 = (E, op)
         ${xDblPointEc(A,B)} => E  :MSTORE(mulPointEc_p12_x)
+
+        ; [steps: 17]
         ${yDblPointEc(A,B)}       :ARITH_ECADD_SAME, MSTORE(mulPointEc_p12_y),JMP(mulPointEc_loop)
 
 mulPointDiffInitialPoints:
+        ; [steps.before: 11]
         ; verify path p1.x != p2.x
         ; p2.x != p1.x ==> p2 != p1
         ; [MP] if p1 == p2 => arith fails because p1 = p2
@@ -90,6 +107,7 @@ mulPointDiffInitialPoints:
         0n                            :MSTORE(mulPointEc_p12_empty)
         ; (A, B) + (C, D) = (E, op)
         ${xAddPointEc(A,B,C,D)} => E  :MSTORE(mulPointEc_p12_x)
+        ; [steps: 14]
         ${yAddPointEc(A,B,C,D)}       :ARITH_ECADD_DIFFERENT, MSTORE(mulPointEc_p12_y)
 
 
@@ -112,6 +130,11 @@ mulPointDiffInitialPoints:
 ;
 ;   store E to be used in next round
 ;
+; [steps.before (worse case): 18]
+;
+; [steps.byloop (p3initialempty.nolast): 8]
+; [steps.byloop (bit.k1|bit.k2 == 0): 12]
+; [steps.byloop (worse case): 7 + 17 = 24]
 
 mulPointEc_loop:
         $ => A,B  :MLOAD(mulPointEc_k1)
@@ -153,12 +176,21 @@ mulPointEc_k10_k21:
         $ => C  :MLOAD(mulPointEc_p2_x)
         $ => D  :MLOAD(mulPointEc_p2_y), JMP(mulPointEc_p2_loaded)
 
+; [steps.loadp2 (worse case): 7 (regular case 6)
+
 ; in this point C,D have point to be add
 mulPointEc_p2_loaded:
-        ; RESOURCES loop: 2 binaries
+        ; [steps.p3empty.nolast: 10]
+        ; [steps.p3empty.last: 5]
+        ; [steps.xeq.yeq: 10 + steps.square = 16]
+        ; [steps.xeq.yneq: 11 + steps.square = 17]
+        ; [steps.xneq.nolast: 7 + steps.square = 13]
+        ; [steps.xneq.last: 7 + steps.square = 13]
+        ; [steps.block: 17]
 
         ; check if p3 has a value, isn't point at infinity (Origin point)
         HASHPOS   :JMPZ(mulPointEc_p3_assignment)
+
 
         ; check C == p3.x
         ${ C == mem.mulPointEc_p3_x } :JMPNZ(mulPointEc_x_equals_before_add)
@@ -189,6 +221,10 @@ mulPointEc_p3_assignment:
         D => B   :MSTORE(mulPointEc_p3_y)
 
 mulPointEc_square:
+        ; [steps.last: 1]
+        ; [steps.nolast.p3empty: 2]
+        ; [steps.nolast.p3: 6]
+        ; [steps.block: 6]
 
         ; E,A = p3_x  B = p3_y
         RCX - 1 => RCX    :JMPZ(mulPointEc_end_loop)
@@ -204,7 +240,6 @@ mulPointEc_square:
         ${yDblPointEc(A,B)} :ARITH_ECADD_SAME, MSTORE(mulPointEc_p3_y), JMP(mulPointEc_loop)
 
 mulPointEc_x_equals_before_add:
-
         ; [MP] if C != mem.mulPointEc_p3_x ==> fails, MLOAD fails because read something different
         ; for memory. It verifies C and mulPointEc_p3_x are same value, as an ASSERT.
         C   :MLOAD(mulPointEc_p3_x)
@@ -241,6 +276,7 @@ mulPointEc_x_equals_before_add:
         0n              :MSTORE(mulPointEc_p3_y), JMP(mulPointEc_square)
 
 mulPointEc_same_point_to_add:
+        ; [steps.block: 5]
         ; must check really are equals, use MLOAD as ASSERT
         ; ASSERT(D == mulPointEc_p3_y)
 
@@ -252,6 +288,7 @@ mulPointEc_same_point_to_add:
         ${yDblPointEc(A,B)} => B  :ARITH_ECADD_SAME, MSTORE(mulPointEc_p3_y), JMP(mulPointEc_after_add)
 
 mulPointEc_end_loop:
+        ; [steps.block: 3]
 
         $ => RR         :MLOAD(mulPointEc_RR)
         $ => RCX        :MLOAD(mulPointEc_RCX)
