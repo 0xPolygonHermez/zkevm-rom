@@ -21,3 +21,4 @@ Example:
 npm run build -- -i ${path} -o ${path} -s ${steps}
 ```
 
+as
