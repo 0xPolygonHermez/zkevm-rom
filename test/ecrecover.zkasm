@@ -12,9 +12,11 @@ start:
 
         CTX     :MSTORE(originalCTX)
         -1      :MSTORE(lastHashKIdUsed)
+                :JMP(repeat_ecrecover_test)
+
+INCLUDE "../main/ecrecover/ecrecover.zkasm"
 
 repeat_ecrecover_test:
-
         ; A:ecrecover_hash B:ecrecover_r C:ecrecover_s D:ecrecover_v
 
         0xd9eba16ed0ecae432b71fe008c98cc872bb4cc214d3220a36f365326cf807d68n => A
@@ -435,9 +437,52 @@ repeat_ecrecover_test:
         :CALL(ecrecover_tx)
         0x0000000000000000000000000000000000000000n :ASSERT
 
+        ; #40 EGX
+
+        0x3cc4cb050478c49877188e4fbd022f35ccb41cee02d9d4417194cbf7ebc1eeben => A
+        %ECGX => B
+        0x2bcf13b5e4f34a04a77344d5943e0228ba2e787583036325450c889d597a16c4n => C
+        0x1bn => D
+        :CALL(ecrecover_tx)
+        0x3c8b5f2426549658f425fad7e061c500626b39a3n :ASSERT
+
+        ; #41 -EGX
+
+        0x3cc4cb050478c49877188e4fbd022f35ccb41cee02d9d4417194cbf7ebc1eeben => A
+        %ECGX => B
+        0x2bcf13b5e4f34a04a77344d5943e0228ba2e787583036325450c889d597a16c4n => C
+        0x1cn => D
+        :CALL(ecrecover_tx)
+        0x687526ad233c19b0a9b2eb8c96d1a45603f3919en :ASSERT
+
+        0x3cc4cb050478c49877188e4fbd022f35ccb41cee02d9d4417194cbf7ebc1eec0n => A ; hash
+        0xc6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5n => B ; r
+        0x2bcf13b5e4f34a04a77344d5943e0228ba2e787583036325450c889d597a16c8n => C ; s
+        0x1b => D ; v
+        :CALL(ecrecover_tx)
+        0x89fea198bd4a0efb63f36b5a04c993cca3a1891dn :ASSERT
+
+
+        0x3cc4cb050478c49877188e4fbd022f35ccb41cee02d9d4417194cbf7ebc1eec0n => A ; hash
+        0xc6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5n => B ; r
+        0x2bcf13b5e4f34a04a77344d5943e0228ba2e787583036325450c889d597a16c8n => C ; s
+        0x1c => D ; v
+        :CALL(ecrecover_tx)
+        0xc613182e8da092201765f852e3d6fbec4d281432n :ASSERT
+
+        ; p: (0xc6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5,0x1ae168fea63dc339a3c58419466ceaeef7f632653266d0e1236431a950cfe52a)
+
+        0x3cc4cb050478c49877188e4fbd022f35ccb41cee02d9d4417194cbf7ebc1eec1n => A ; hash
+        0xc6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5n => B ; r
+        0x2bcf13b5e4f34a04a77344d5943e0228ba2e787583036325450c889d597a16c8n => C ; s
+        0x1b => D ; v
+        :CALL(ecrecover_tx)
+        0x1772bf1cfa310fdca361ee65825a74013eeaa17en :ASSERT
+
+        $${dump(STEP)}
+
         :JMP(end)
 
-INCLUDE "../main/ecrecover/ecrecover.zkasm"
 outOfCountersBinary:
 outOfCountersArith:
 outOfCountersKeccak:
