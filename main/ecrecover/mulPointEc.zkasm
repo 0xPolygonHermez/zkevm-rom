@@ -34,7 +34,7 @@ VAR GLOBAL mulPointEc_RCX
 ;              - 1 arith                                       // first asignation
 ;
 ;
-; RESOURCES (worse case): 512 arith + 512 binaries + 6160 steps        // 18 + 256 * 24 - 2 = 6160
+; RESOURCES (worst case): 512 arith + 512 binaries + 6160 steps        // 18 + 256 * 24 - 2 = 6160
 
 mulPointEc:
         RR      :MSTORE(mulPointEc_RR)
@@ -102,7 +102,7 @@ mulPointDiffInitialPoints:
         ; [steps.before: 11]
         ; verify path p1.x != p2.x
         ; p2.x != p1.x ==> p2 != p1
-        ; [MP] if p1 == p2 => arith fails because p1 = p2
+        ; [MAP] if p1 == p2 => arith fails because p1 = p2
 
         0n                            :MSTORE(mulPointEc_p12_empty)
         ; (A, B) + (C, D) = (E, op)
@@ -130,11 +130,11 @@ mulPointDiffInitialPoints:
 ;
 ;   store E to be used in next round
 ;
-; [steps.before (worse case): 18]
+; [steps.before (worst case): 18]
 ;
 ; [steps.byloop (p3initialempty.nolast): 8]
 ; [steps.byloop (bit.k1|bit.k2 == 0): 12]
-; [steps.byloop (worse case): 7 + 17 = 24]
+; [steps.byloop (worst case): 7 + 17 = 24]
 
 mulPointEc_loop:
         $ => A,B  :MLOAD(mulPointEc_k1)
@@ -176,7 +176,7 @@ mulPointEc_k10_k21:
         $ => C  :MLOAD(mulPointEc_p2_x)
         $ => D  :MLOAD(mulPointEc_p2_y), JMP(mulPointEc_p2_loaded)
 
-; [steps.loadp2 (worse case): 7 (regular case 6)
+; [steps.loadp2 (worst case): 7 (regular case 6)
 
 ; in this point C,D have point to be add
 mulPointEc_p2_loaded:
@@ -195,7 +195,7 @@ mulPointEc_p2_loaded:
         ; check C == p3.x
         ${ C == mem.mulPointEc_p3_x } :JMPNZ(mulPointEc_x_equals_before_add)
 
-        ; [MP] if C == mem.mulPointEc_p3_x ==> fails arithmetic because check
+        ; [MAP] if C == mem.mulPointEc_p3_x ==> fails arithmetic because check
         ; points are different
 
         ; p3 = (A,B)
@@ -240,7 +240,7 @@ mulPointEc_square:
         ${yDblPointEc(A,B)} :ARITH_ECADD_SAME, MSTORE(mulPointEc_p3_y), JMP(mulPointEc_loop)
 
 mulPointEc_x_equals_before_add:
-        ; [MP] if C != mem.mulPointEc_p3_x ==> fails, MLOAD fails because read something different
+        ; [MAP] if C != mem.mulPointEc_p3_x ==> fails, MLOAD fails because read something different
         ; for memory. It verifies C and mulPointEc_p3_x are same value, as an ASSERT.
         C   :MLOAD(mulPointEc_p3_x)
 
