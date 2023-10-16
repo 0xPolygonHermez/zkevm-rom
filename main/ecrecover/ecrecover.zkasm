@@ -152,28 +152,44 @@ ecrecover_has_sqrt:
 
         C           :MSTORE(ecrecover_y)
 
-        ;   C = (hash * inv_r) % n
+        ;   C = (hash * inv_r) % FNEC
 
         $ => A      :MLOAD(ecrecover_hash)
         ; [steps: 92, bin: 10, arith: 10]
         $ => B      :MLOAD(ecrecover_r_inv),CALL(mulFnEc)
 
-        ; C = n - (hash * inv_r) % n
+        ; calculate k1 as (FNEC - hash * inv_r) % FNEC
+        ; C = (hash * inv_r) % FNEC no alias free
+        C => A
+        0 => B
+        $   :EQ,JMPNC(k1_c_is_not_zero)
 
         ; [steps: 100, bin: 9, arith: 12]
-        ${const.FNEC - C}  => A :MSTORE(mulPointEc_k1)
-        1 => B
-        0 => D
-        %FNEC       :ARITH
 
-        ; A, multipointEc_k1 is alias free, because A + C = FNEC exactly (D == 0)
+k1_c_is_zero:
+        0   :MSTORE(mulPointEc_k1), JMP(k1_calculated)
+
+
+k1_c_is_not_zero:
+        ; A,C = (hash * inv_r) % FNEC
+        ; check A is alias-free, if not MAP ==> proof fails
+        %FNEC => B
+        1   :LT         ; ASSERT A < FNEC
+
+        ; FNEC - A = FNEC - (hash * inv_r) % FNEC
+        A => B
+        %FNEC => A
+        ; B != 0 ==> multPointEc_k1 = FNEC - B
+        $   :SUB, MSTORE(mulPointEc_k1)
+
+k1_calculated:
 
         $ => A      :MLOAD(ecrecover_s)
 
         ; [steps: 105, bin: 9, arith: 13]
         $ => B      :MLOAD(ecrecover_r_inv),CALL(mulFnEc)
 
-        ;   C = (s * inv_r) % n
+        ;   C = (s * inv_r) % FNEC
         ; [steps: 113, bin: 9, arith: 15]
         C => A      :MSTORE(mulPointEc_k2)
         %FNEC => B
