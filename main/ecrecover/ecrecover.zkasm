@@ -120,6 +120,7 @@ ecrecover_v_ok:
         C           :MSTORE(ecrecover_y2),CALL(sqrtFpEc)
 
         ; If has root B = 1 else B = 0
+        ; If B = 1 => C is alias-free (see sqrtFpEc)
 
         ; [steps: 85, bin: 9, arith: 10]
         B           :JMPNZ(ecrecover_has_sqrt)
@@ -152,21 +153,22 @@ ecrecover_has_sqrt:
 
         C           :MSTORE(ecrecover_y)
 
-        ;   C = (hash * inv_r) % FNEC
-
+        ; calculate C as (hash * inv_r) % FNEC
         $ => A      :MLOAD(ecrecover_hash)
         ; [steps: 92, bin: 10, arith: 10]
         $ => B      :MLOAD(ecrecover_r_inv),CALL(mulFnEc)
 
         ; calculate k1 as (FNEC - hash * inv_r) % FNEC
-        ; C = (hash * inv_r) % FNEC no alias free
+        ; C = (hash * inv_r) % FNEC no alias free (MAP)
         C => A
         0 => B
+        ; C is zero, special case
         $   :EQ,JMPNC(k1_c_is_not_zero)
 
         ; [steps: 100, bin: 9, arith: 12]
 
 k1_c_is_zero:
+        ; k1 = 0 is alias-free
         0   :MSTORE(mulPointEc_k1), JMP(k1_calculated)
 
 
@@ -180,6 +182,7 @@ k1_c_is_not_zero:
         A => B
         %FNEC => A
         ; B != 0 ==> multPointEc_k1 = FNEC - B
+        ; k1 is alias-free
         $   :SUB, MSTORE(mulPointEc_k1)
 
 k1_calculated:
@@ -189,7 +192,7 @@ k1_calculated:
         ; [steps: 105, bin: 9, arith: 13]
         $ => B      :MLOAD(ecrecover_r_inv),CALL(mulFnEc)
 
-        ;   C = (s * inv_r) % FNEC
+        ;   C = (s * inv_r) % FNEC => k2
         ; [steps: 113, bin: 9, arith: 15]
         C => A      :MSTORE(mulPointEc_k2)
         %FNEC => B

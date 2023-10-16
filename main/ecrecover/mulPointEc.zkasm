@@ -2,8 +2,11 @@
 ;;
 ;; mulPointEc (p1_x,p1_y,p2_x,p2_y,k1,k2) = (p3_x, p3_y, HASPOS)
 ;;
-;; HASHPOS == 1 => valid p3_x,p3_y
-;; HASHPOS == 0 => invalid p3_x,p3_y (point at infinity)
+;; PRE: p1_x, p1_y, p2_x, p2_y, k1, k2 are alias-free
+;; POST: p3_x, p3_y is alias-free  HASHPOS = [0,1]
+;;
+;; HASHPOS = 0 ==> p3 is the point at infinity
+;; HASHPOS = 1 ==> p3 is not the point at infinity
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 VAR GLOBAL mulPointEc_p1_x
@@ -12,12 +15,21 @@ VAR GLOBAL mulPointEc_p2_x
 VAR GLOBAL mulPointEc_p2_y
 VAR GLOBAL mulPointEc_k1
 VAR GLOBAL mulPointEc_k2
+
+; p3 output point
 VAR GLOBAL mulPointEc_p3_x
 VAR GLOBAL mulPointEc_p3_y
-VAR GLOBAL mulPointEc_RR
+
+; point p12 = p1 + p2
 VAR GLOBAL mulPointEc_p12_x
 VAR GLOBAL mulPointEc_p12_y
+
+; mulPointEc_p12_empty = 1 ==> p12 is the point at infinity
+; mulPointEc_p12_empty = 0 ==> p12 isn't the point at infinity
 VAR GLOBAL mulPointEc_p12_empty
+
+; backups
+VAR GLOBAL mulPointEc_RR
 VAR GLOBAL mulPointEc_RCX
 
 ; PRECONDITION: p1,p2 are points of curve
@@ -44,6 +56,9 @@ mulPointEc:
         256 => RCX
 
         ; HASHPOS used to mulPointEc_p3_no_infinity
+        ; HASHPOS = 0 ==> p3 is the point at infinity
+        ; HASHPOS = 1 ==> p3 is not the point at infinity
+
         0n => HASHPOS :MSTORE(mulPointEc_p3_x)
 
         0n      :MSTORE(mulPointEc_p3_y)
@@ -284,6 +299,7 @@ mulPointEc_same_point_to_add:
         D       :MLOAD(mulPointEc_p3_y)
         C => A
         D => B
+
         ; (A,B) * 2 = (E, op)
         ${xDblPointEc(A,B)} => E  :MSTORE(mulPointEc_p3_x)
         ${yDblPointEc(A,B)} => B  :ARITH_ECADD_SAME, MSTORE(mulPointEc_p3_y), JMP(mulPointEc_after_add)
