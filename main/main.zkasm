@@ -24,24 +24,30 @@ start: ; main zkROM entry point
         SP                                  :MSTORE(oldNumBatch)
         GAS                                 :MSTORE(chainID) ; assumed to be less than 32 bits
 
-        ${getHistoricGERRoot()}             :MSTORE(historicGER)
+        ${getL1InfoRoot()}                  :MSTORE(l1InfoRoot)
         ${getSequencerAddr()}               :MSTORE(sequencerAddr)
         ${getTimestampLimit()}              :MSTORE(timestampLimit)
         ${getTxsLen()}                      :MSTORE(batchL2DataLength) ; less than 300.000 bytes. Enforced by the smart contract
-        ${getIsForced()}                    :MSTORE(isForced)
+        ${getForcedBlockHashL1()} => A      :MSTORE(forcedBlockHashL1)
 
-        B => SR ;set initial state root
+        ;set initial state root
+        B => SR
         SR                                  :MSTORE(batchSR)
         ; Increase batch number
         SP + 1                              :MSTORE(newNumBatch)
+        ; compute isForced flag
+        0 => B
+        $                                   :EQ, JMPC(computeKeccaks)
+        1                                   :MSTORE(isForced)
 
 ;;;;;;;;;;;;;;;;;;
 ;; B - Compute keccaks needed to finish the batch
 ;;;;;;;;;;;;;;;;;;
+computeKeccaks:
         $${eventLog(onStartBatch, C)}
 
         ; Compute necessary keccak counters to finish batch
-        $ => A          :MLOAD(batchL2DataLength)
+        $ => A                                  :MLOAD(batchL2DataLength)
         ; Divide the total data length + 1 by 136 to obtain the keccak counter increment.
         ; 136 is the value used by the prover to increment keccak counters
         A + 1                                   :MSTORE(arithA)
@@ -80,20 +86,22 @@ endCheckRLP:
         0               :MSTORE(isLoadingRLP)
 
 ;;;;;;;;;;;;;;;;;;
-;; D    - Load blockNum variable
-;;      - Loop processing transactions
-;;              - Load transaction data and interpret it
+;; D - Load blockNum variable
+;;     - Loop processing transactions
+;;     - Load transaction data and interpret it
 ;;;;;;;;;;;;;;;;;;
 
 setBlockNum:
         %LAST_BLOCK_STORAGE_POS => C
         %ADDRESS_SYSTEM => A
         %SMT_KEY_SC_STORAGE => B
-        $               :SLOAD,MSTORE(blockNum)
-        ; If forced batch, process a forced changeL2BlockTx
+        $                               :SLOAD,MSTORE(blockNum)
+        ; If forced batch ==> process a forced changeL2BlockTx
         $               :MLOAD(isForced), JMPZ(txLoop, handleForcedBatch)
+
 handleForcedBatch:
         1               :MSTORE(currentTx), JMP(processChangeL2Block)
+
 txLoop:
         $ => A          :MLOAD(pendingTxs)
         A - 1           :MSTORE(pendingTxs), JMPN(processTxsEnd)
@@ -105,6 +113,7 @@ txLoop:
         ; Store initial state at the beginning of the transaction
         SR              :MSTORE(originSR)
         $ => A          :MLOAD(isChangeL2BlockTx)
+        ; TODO: could be done with JMPN in one step maybe
         A - 1           :JMPZ(processChangeL2Block, processTx)
 
 processTxFinished:
@@ -165,7 +174,7 @@ processTxsEnd:
         $ => A                          :MLOAD(batchHashData)
         A                               :HASHK(0)
 
-        $ => A                          :MLOAD(historicGER)
+        $ => A                          :MLOAD(l1InfoRoot)
         A                               :HASHK(0)
 
         8 => D
@@ -176,8 +185,11 @@ processTxsEnd:
         $ => A                          :MLOAD(sequencerAddr)
         A                               :HASHK(0)
 
-        $ => A                          :MLOAD(isForced)
-        A                               :HASHK1(0)
+        32 => D
+        $ => A                          :MLOAD(forcedBlockHashL1)
+        A                               :HASHK(0)
+
+        ; finish accInputHash
         HASHPOS                         :HASHKLEN(0)
 
         $ => C                          :HASHKDIGEST(0)

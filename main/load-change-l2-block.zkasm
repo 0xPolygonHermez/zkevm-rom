@@ -1,28 +1,35 @@
-decodeChangeL2BlockTx:
-    ; No changeL2BlockTx to allowed at forced batches
-    $                               :MLOAD(isForced), JMPNZ(invalidTxRLP)
+;;;;;;;;;;;;;;;;;;
+;; ChangeL2BlockTx:
+;;   - fields: [type | deltaTimestamp | indexL1InfoTree ]
+;;   - bytes:  [  1  |       4        |        4        ]
+;;;;;;;;;;;;;;;;;;
 
-    ; decode "txType" / 1 byte
-    1 => D                          :CALL(getTxData)
+decodeChangeL2BlockTx:
+    ; No changeL2BlockTx allowed at forced batches
+    $                               :MLOAD(isForced), JMPNZ(invalidDecodeChangeL2Block)
+
+    ; decode txType / 1 byte
+    %TYPE_BYTES => D                :CALL(getTxData)
     C + D => C                      :CALL(addBatchHashData)
-    ; Decode deltaTimestamp / 8 bytes
-    8 => D                          :CALL(getTxData)
+    ; Decode deltaTimestamp / 4 bytes
+    %DELTA_TIMESTAMP_BYTES => D     :CALL(getTxData)
     C + D => C                      :CALL(addBatchHashData)
     A                               :MSTORE(deltaTimestamp)
-    ; Decode indexHistGERTree / 4 bytes
-    4 => D                          :CALL(getTxData)
+    ; Decode indexL1InfoTree / 4 bytes
+    %INDEX_L1INFOTREE_BYTES => D    :CALL(getTxData)
     C + D => C                      :CALL(addBatchHashData)
-    A                               :MSTORE(indexHistGERTree)
+    A                               :MSTORE(indexL1InfoTree)
     1                               :MSTORE(isChangeL2BlockTx), JMP(finishLoadChangeL2BlockTx)
 
 getTxData:
     ${getTxs(p,D)} => A
     $${p = p + D}
                                     :RETURN
+
 finishLoadChangeL2BlockTx:
 ;; update bytes parsed
-        $ => A                          :MLOAD(batchL2DataParsed)
-        A + C                           :MSTORE(batchL2DataParsed)
+        $ => A                      :MLOAD(batchL2DataParsed)
+        A + C                       :MSTORE(batchL2DataParsed)
 ;; increase number of transaction to process
-        $ => A                          :MLOAD(pendingTxs)
-        A + 1                           :MSTORE(pendingTxs), JMP(txLoopRLP)
+        $ => A                      :MLOAD(pendingTxs)
+        A + 1                       :MSTORE(pendingTxs), JMP(txLoopRLP)
