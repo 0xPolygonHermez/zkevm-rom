@@ -164,10 +164,10 @@ dinamicGas:
     %TX_GAS_LIMIT => B
     $                                   :LT,JMPNC(outOfGas)
     200 => B
-    $                                   :LT,JMPC(callMODEXP)
+    $                                   :LT,JMPC(lastChecks)
     A => B
 
-callMODEXP:
+lastChecks:
     ; B = max(200, multiplication_complexity * iteration_count / 3)
     GAS - B => GAS                      :JMPN(outOfGas)
     0 => A
@@ -194,9 +194,22 @@ callMODEXP:
     %MAX_SAFE_INTEGER_MODEXP => A
     $                                   :LT,JMPC(endMODEXPFail) ; if Msize+offset > MAX_SAFE_INTEGER_MODEXP --> endMODEXPFail
                                         :CALL(modexp_getMod)
-    $ => A                              :MLOAD(modexp_Elen),JMPZ(modexpExp0)
+    1 => B
     $ => A                              :MLOAD(modexp_Mlen),JMPZ(modexpMod0)
+    $                                   :EQ,JMPNC(checkBaseLen)
+    $ => A                              :MLOAD(modexp_M)
+    $                                   :EQ,JMPC(save1out)
+
+checkBaseLen:
     $ => A                              :MLOAD(modexp_Blen),JMPZ(modexpBase0)
+    $                                   :EQ,JMPNC(checkExpLen)
+    $ => A                              :MLOAD(modexp_B)
+    $                                   :EQ,JMPC(save1out)
+
+checkExpLen:
+    $ => A                              :MLOAD(modexp_Elen),JMPZ(modexpExp0)
+
+callMODEXP:
                                         :CALL(modexp)
                                         :JMP(finalMODEXP)
 
