@@ -54,6 +54,7 @@ async function runTest(pathTest, cmPols) {
     let failed = false;
     // execute zkasm tests
     try {
+        console.log(chalk.blue('   --> start'), pathTest);
         const rom = await zkasm.compile(pathTest, null, configZkasm);
         const result = await smMain.execute(cmPols.Main, emptyInput, rom, config);
         console.log(chalk.green('   --> pass'), pathTest);
