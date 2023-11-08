@@ -7,6 +7,12 @@
  *  - stack input: [data]
  *  - stack output: [hash]
  */
+VAR GLOBAL sha256DataOffset
+VAR GLOBAL sha256DataId
+VAR GLOBAL sha256HashPos
+VAR GLOBAL sha256Hash
+VAR GLOBAL tmpZkSHA256
+
 funcSHA2256:
     ;%MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
     ;%MAX_CNT_BINARY - CNT_BINARY - 1   :JMPN(outOfCountersBinary)
@@ -29,32 +35,14 @@ funcSHA2256:
     0               :MSTORE(retDataOffset)
     32              :MSTORE(retDataLength)
     32              :MSTORE(readXFromCalldataLength)
-    0 => E
 
-SHA2256dataLoop:
-    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
-    ; Copy from calldata to hashS (TODO)
-    C               :JMPZ(SHA2256dataReturn)
-    C - 32          :JMPN(SHA2256dataFinal)
-    E               :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
-    $ => A          :MLOAD(readXFromCalldataResult)
-    E + 32 => E
-
-    ; TODO
-    ${mockSHA256(A,32)}
-    ;A               :HASHS(E)
-
-    C - 32 => C     :JMP(SHA2256dataLoop)
-
-SHA2256dataFinal:
-    C               :MSTORE(readXFromCalldataLength)
-    E               :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
-    $ => A          :MLOAD(readXFromCalldataResult)
-    ; TODO
-    ${mockSHA256(A,C)}
-    ;A               :HASHS(E)
+    $ => E          :MLOAD(sha256DataId)
+    0 => E          :MSTORE(sha256DataOffset)
+    0 => HASHPOS
+                    :CALL(SHA2256data)
 
 SHA2256dataReturn:
+    E + 1           :MSTORE(sha256DataId)
     ; handle CTX
     $ => A          :MLOAD(originCTX), JMPZ(handleGas)
     ; set retDataCTX
@@ -62,9 +50,43 @@ SHA2256dataReturn:
     A => CTX
     B               :MSTORE(retDataCTX)
     ; Copy from memory current CTX to memory origin CTX
+    $ => A          :MLOAD(sha256Hash)
     0 => E
-    ; TODO
-    ${mockSHA256(0,0)} => A
-
     A               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
     CTX             :MSTORE(currentCTX), JMP(preEnd)
+
+SHA2256data:
+    RR              :MSTORE(tmpZkSHA256)
+
+SHA2256dataLoop:
+    ; Copy from calldata to hashS
+    C               :JMPZ(SHA2256)
+    C - 32          :JMPN(SHA2256dataFinal)
+    $ => E          :MLOAD(sha256DataOffset)
+    E               :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A          :MLOAD(readXFromCalldataResult)
+    E + 32 => E     :MSTORE(sha256DataOffset)
+
+    $ => E          :MLOAD(sha256DataId)
+    32 => D
+    A               :HASHS(E)
+
+    C - 32 => C     :JMP(SHA2256dataLoop)
+
+SHA2256dataFinal:
+    $ => E          :MLOAD(sha256DataOffset)
+    C               :MSTORE(readXFromCalldataLength)
+    E               :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A          :MLOAD(readXFromCalldataResult)
+    32 - C => D
+    zkPC+1 => RR    :JMP(SHRarith)
+    $ => E          :MLOAD(sha256DataId)
+    C => D
+    A               :HASHS(E)
+
+SHA2256:
+    HASHPOS         :HASHSLEN(E)
+    $ => A          :HASHSDIGEST(E)
+    A               :MSTORE(sha256Hash)
+    $ => RR         :MLOAD(tmpZkSHA256)
+                    :RETURN
