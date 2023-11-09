@@ -23,40 +23,56 @@ funcSHA2256:
     zkPC+2 => RR
     $               :LT, JMPC(moveBalances)
 
+    ; GAS - staticGas
     GAS - %SHA2_256_GAS => GAS :JMPN(outOfGas)
+
     $ => C          :MLOAD(txCalldataLen)
-    ;(C+31)/32 => A
+    ;words => A  === (C+31)/32 => A
     C + 31 => A
     A               :MSTORE(arithA)
     32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => A          :MLOAD(arithRes1)
 
+    ; GAS - dinamicGas
     GAS - %SHA2_256_WORD_GAS*A => GAS   :JMPN(outOfGas)
+
+    ; prepare retData
     0               :MSTORE(retDataOffset)
     32              :MSTORE(retDataLength)
     32              :MSTORE(readXFromCalldataLength)
-
-    $ => E          :MLOAD(sha256DataId)
-    0 => E          :MSTORE(sha256DataOffset)
     0 => HASHPOS
                     :CALL(SHA2256data)
+    ; get & update sha256Data ID
+    $ => E          :MLOAD(sha256DataId)
+    E + 1           :MSTORE(sha256DataId)
+
+    ; copy sha256 to retData (hash 32 bytes)
+    0 => E
+    A               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
 
 SHA2256dataReturn:
-    E + 1           :MSTORE(sha256DataId)
     ; handle CTX
     $ => A          :MLOAD(originCTX), JMPZ(handleGas)
     ; set retDataCTX
     $ => B          :MLOAD(currentCTX)
     A => CTX
     B               :MSTORE(retDataCTX)
+    B => CTX
     ; Copy from memory current CTX to memory origin CTX
-    $ => A          :MLOAD(sha256Hash)
     0 => E
-    A               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+    $ => C          :MLOAD(retCallLength)
+    ; MLOAD memory current CTX
+                    :CALL(MLOADX)
+    $ => E          :MLOAD(retCallOffset)
+    $ => CTX        :MLOAD(originCTX)
+    ; MSTORE memory origint CTX
+    A               :MSTORE(bytesToStore), CALL(MSTOREX)
+    ; set currentCTX
     CTX             :MSTORE(currentCTX), JMP(preEnd)
 
 SHA2256data:
     RR              :MSTORE(tmpZkSHA256)
+    0 => E          :MSTORE(sha256DataOffset)
 
 SHA2256dataLoop:
     ; Copy from calldata to hashS
@@ -85,6 +101,7 @@ SHA2256dataFinal:
     A               :HASHS(E)
 
 SHA2256:
+    $ => E          :MLOAD(sha256DataId)
     HASHPOS         :HASHSLEN(E)
     $ => A          :HASHSDIGEST(E)
     A               :MSTORE(sha256Hash)
