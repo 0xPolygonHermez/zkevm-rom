@@ -1,0 +1,123 @@
+/**
+ * @link [https://www.evm.codes/precompiled#0x02?fork=shanghai]
+ * @zk-counters
+ *  - dynamic steps:
+ *  - dynamic binary:
+ * @process-precompiled
+ *  - stack input: [data]
+ *  - stack output: [hash]
+ */
+VAR GLOBAL sha256DataOffset
+VAR GLOBAL sha256DataId
+VAR GLOBAL sha256HashPos
+VAR GLOBAL sha256Hash
+VAR GLOBAL tmpZkSHA256
+
+funcSHA2256:
+    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 4    :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
+
+    ; Move balances if value > 0 just before executing the contract CALL
+    $ => B          :MLOAD(txValue)
+    0 => A
+    zkPC+2 => RR
+    $               :LT, JMPC(moveBalances)
+
+    ; GAS - staticGas
+    GAS - %SHA2_256_GAS => GAS :JMPN(outOfGas)
+
+    $ => C          :MLOAD(txCalldataLen)
+    ;words => A  === (C+31)/32 => A
+    C + 31 => A
+    A               :MSTORE(arithA)
+    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => A          :MLOAD(arithRes1)
+
+    ; GAS - dinamicGas
+    GAS - %SHA2_256_WORD_GAS*A => GAS   :JMPN(outOfGas)
+
+    ; prepare retData
+    0               :MSTORE(retDataOffset)
+    32              :MSTORE(retDataLength)
+    32              :MSTORE(readXFromCalldataLength)
+    0 => HASHPOS
+                    :CALL(SHA2256data)
+    ; get & update sha256Data ID
+    $ => E          :MLOAD(sha256DataId)
+    E + 1           :MSTORE(sha256DataId)
+
+    ; copy sha256 to retData (hash 32 bytes)
+    0 => E
+    A               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+
+SHA2256dataReturn:
+    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 4    :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
+
+    ; handle CTX
+    $ => A          :MLOAD(originCTX), JMPZ(handleGas)
+    ; set retDataCTX
+    $ => B          :MLOAD(currentCTX)
+    A => CTX
+    B               :MSTORE(retDataCTX)
+    B => CTX
+    ; Copy from memory current CTX to memory origin CTX
+    0 => E
+    $ => C          :MLOAD(retCallLength)
+    ; MLOAD memory current CTX
+                    :CALL(MLOADX)
+    $ => E          :MLOAD(retCallOffset)
+    $ => CTX        :MLOAD(originCTX)
+    ; MSTORE memory origint CTX
+    A               :MSTORE(bytesToStore), CALL(MSTOREX)
+    ; set currentCTX
+    CTX             :MSTORE(currentCTX), JMP(preEnd)
+
+SHA2256data:
+    RR              :MSTORE(tmpZkSHA256)
+    0 => E          :MSTORE(sha256DataOffset)
+
+SHA2256dataLoop:
+    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 2    :JMPN(outOfCountersBinary)
+
+    ; Copy from calldata to hashS
+    C               :JMPZ(SHA2256)
+    C - 32          :JMPN(SHA2256dataFinal)
+    $ => E          :MLOAD(sha256DataOffset)
+    E               :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A          :MLOAD(readXFromCalldataResult)
+    E + 32 => E     :MSTORE(sha256DataOffset)
+
+    $ => E          :MLOAD(sha256DataId)
+    32 => D
+    A               :HASHS(E)
+    C - 32 => C     :JMP(SHA2256dataLoop)
+
+SHA2256dataFinal:
+    %MAX_CNT_STEPS - STEP - 300         :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 15   :JMPN(outOfCountersBinary)
+    %MAX_CNT_ARITH - CNT_ARITH - 10     :JMPN(outOfCountersArith)
+
+    $ => E          :MLOAD(sha256DataOffset)
+    C               :MSTORE(readXFromCalldataLength)
+    E               :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A          :MLOAD(readXFromCalldataResult)
+    32 - C => D
+    zkPC+1 => RR    :JMP(SHRarith)
+    $ => E          :MLOAD(sha256DataId)
+    C => D
+    A               :HASHS(E)
+
+SHA2256:
+    %MAX_CNT_STEPS - STEP - 20              :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_SHA256_F - 1      :JMPN(outOfCountersSha256)
+
+    $ => E          :MLOAD(sha256DataId)
+    HASHPOS         :HASHSLEN(E)
+    $ => A          :HASHSDIGEST(E)
+    A               :MSTORE(sha256Hash)
+    $ => RR         :MLOAD(tmpZkSHA256)
+                    :RETURN
