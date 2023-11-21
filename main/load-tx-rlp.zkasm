@@ -26,14 +26,15 @@ loadTx_rlp:
 
         ; Pointer to next RLP bytes to read
         0 => C
-        ; Check its a change L2 block transaction
+        ; Check it is a change L2 block transaction
         1 => D
         ${getTxs(p,D)} => A
-        A - 0x0b                        :JMPZ(decodeChangeL2BlockTx)
-        ; First transaction must be a change L2 block transaction if is NOT a forced batch
-        $ => A                          :MLOAD(pendingTxs), JMPNZ(loadTx_rlp_continue)
-        ; If is not forced and is not a change L2 block transaction, we discard the entire batch
-        $                               :MLOAD(isForced), JMPZ(invalidTxRLP)
+        A - %CHANGE_L2_BLOCK_TX_TYPE                     :JMPZ(decodeChangeL2BlockTx)
+checkFirstTxType:
+        ; First transaction must be a change L2 block transaction if it is NOT a forced batch
+        $                               :MLOAD(pendingTxs), JMPNZ(loadTx_rlp_continue)
+        ; If it is not forced and it is not a change L2 block transaction, we discard the entire batch
+        $                               :MLOAD(isForced), JMPZ(invalidNotFirstTxChangeL2Block)
 
 loadTx_rlp_continue:
         ; We get a new hashId
@@ -338,6 +339,7 @@ effectivePercentageTx:
         1 => D                          :CALL(getTxBytes)
         A                               :MSTORE(effectivePercentageRLP)
         C + D => C                      :CALL(addBatchHashData)
+
 ;;;;;;;;;
 ;; D - Finish RLP parsing
 ;;;;;;;;;
@@ -351,11 +353,13 @@ finishLoadRLP:
 ;; compute signature
         $ => A                          :HASHKDIGEST(E)
         A                               :MSTORE(txHash)
+
 ;; Compute L2txHash
 ;; Get source address from tx signature
         $ => B                          :MLOAD(txR)
         $ => C                          :MLOAD(txS)
         $ => D                          :MLOAD(txV), CALL(ecrecover_tx)
+checkAndSaveFrom:
         A                               :MSTORE(txSrcAddr)
         20 => D
         $ => E                          :MLOAD(l2TxHashPointer)
@@ -369,7 +373,13 @@ finishLoadRLP:
 ;; E - Handler error RLP fields
 ;;;;;;;;;
 invalidTxRLP:
-        $${eventLog(onError, invalidRLP)}        :JMP(appendTxsInit)
+        $${eventLog(onError, invalidRLP)}                       :JMP(appendTxsInit)
+
+invalidDecodeChangeL2Block:
+        $${eventLog(onError, invalidDecodeChangeL2Block)}       :JMP(appendTxsInit)
+
+invalidNotFirstTxChangeL2Block:
+        $${eventLog(onError, invalidNotFirstTxChangeL2Block)}   :JMP(appendTxsInit)
 
 appendTxsInit:
 ;; Append all missing 'batchL2Data' to 'batchDataHash' bytes

@@ -1,23 +1,25 @@
 processChangeL2Block:
     $${eventLog(onProcessTx)}
-    ; checks zk-counters
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*6  :JMPN(outOfCountersPoseidon)
-    $ => A                                  :MLOAD(cntKeccakPreProcess)
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2 :JMPN(outOfCountersKeccak)
-    %MAX_CNT_STEPS - STEP - 500             :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 4        :JMPN(outOfCountersBinary)
 
-    ; If it's not first tx, we must consolidate previous block
+    ; checks zk-counters
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*6     :JMPN(outOfCountersPoseidon)
+    $ => A                                                                      :MLOAD(cntKeccakPreProcess)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2                                    :JMPN(outOfCountersKeccak)
+    %MAX_CNT_STEPS - STEP - 500                                                 :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 4                                            :JMPN(outOfCountersBinary)
+
+    ; If it is not the first transaction, we must consolidate previous block
     $ => A          :MLOAD(currentTx)
     A - 1           :JMPZ(continueProcessChangeL2Block)
                     :CALL(consolidateBlock)
+
 continueProcessChangeL2Block:
     ; Reset tx index, logIndex and cumulative gas used
     0                                   :MSTORE(txIndex)
     0                                   :MSTORE(cumulativeGasUsed)
     0                                   :MSTORE(currentLogIndex)
-    ; Set block hash (current state root) on storage
-    ;Update state root mapping
+    ;; Set block hash (current state root) on storage
+    ; Update state root mapping
     32 => D
     0 => HASHPOS ; A new hash with position 0 is started
     $ => E                              :MLOAD(lastHashKIdUsed)
@@ -36,7 +38,8 @@ continueProcessChangeL2Block:
     ; Read block number, increase it by 1 and write it
     ; Get last block number
     $ => A                              :MLOAD(blockNum)
-    ;Update last block number at system storage
+
+    ; Update last block number at system storage
     1 => B
     $ => D                              :ADD, MSTORE(blockNum)
     %LAST_BLOCK_STORAGE_POS => C
@@ -48,27 +51,32 @@ continueProcessChangeL2Block:
     %TIMESTAMP_STORAGE_POS => C
     %ADDRESS_SYSTEM => A
     %SMT_KEY_SC_STORAGE => B
-    $ => A, B                               :SLOAD, MSTORE(timestamp) ; currentTimestamp => B
-    ; If is forced, new timestamp = timestampLimit, else timestamp = timestamp + deltaTimestamp
-    $ => C                                  :MLOAD(timestampLimit)
-    C                                       :MSTORE(timestamp)
-    ; If it is a forced tx, no delta timestamp is needed
-    $                                       :MLOAD(isForced), JMPNZ(processForcedChangeL2Block)
+    $ => A                                         :SLOAD ; currentTimestamp => A
+
+    $ => B                                         :MLOAD(timestampLimit) ; timestampLimit => B
+
+    ; If it is NOT a forced tx ==> verify Timestamp & L1InfoRoot
+    $                                              :MLOAD(isForced), JMPZ(verifyTimestampAndL1InfoRoot)
+
+    ; forced batch
+    ;   - update timestamp only if currentTimestamp < limitTimestamp
+    ;   - set blockHash to default
+    $ => C                                  :MLOAD(forcedBlockHashL1)
+    C                                       :MSTORE(blockchashL1InfoTree)
+    A                                       :MSTORE(timestamp)
+    $                                       :LT, JMPNC(initSetGERL1InfoTree)
+
+newForcedTimestamp:
+    B                                       :MSTORE(timestamp), JMP(setNewTimestamp)
+
+verifyTimestampAndL1InfoRoot:
     $ => B                                  :MLOAD(deltaTimestamp)
-    ; Addition of two values of 8 bytes (currentTimestamp + deltaTimestamp)
+    ; Addition of two values of 8 bytes [B: currentTimestamp(A) + deltaTimestamp(B)]
     $ => B                                  :ADD, MSTORE(timestamp)
 
-    processForcedChangeL2Block:
-    ; Verify currentTimestamp + deltaTimestamp <= limitTimestamp or Verify currentTimestamp <= limitTimestamp if forced tx
+    ; Verify (currentTimestamp + deltaTimestamp) <= limitTimestamp
     $ => A                                  :MLOAD(timestampLimit)
     $                                       :LT, JMPC(invalidChangeL2Block)
-
-    ; Retrieve newGER from free input
-    $ => A                                  :MLOAD(currentTx)
-    ${getNewGERRoot(A)}                     :MSTORE(newGER)
-
-    ; Verify newGER | indexHistoricalGERTree belong to historicGER
-    ; $                                      :MLOAD(indexHistGERTree),JMPNZ(verifyMerkleProof)
 
     ; Set new timestamp
     %TIMESTAMP_STORAGE_POS => C
@@ -77,15 +85,39 @@ continueProcessChangeL2Block:
     $ => D                                  :MLOAD(timestamp)
     $ => SR                                 :SSTORE
 
+    ; check indexL1InfoTree != 0 to verify data L1InfoTree
+    $                                       :MLOAD(indexL1InfoTree), JMPZ(skipSetGERL1InfoTree)
+
+    ${getL1InfoGER(mem.indexL1InfoTree)} => A                      :MSTORE(gerL1InfoTree)
+    ${getL1InfoBlockHash(mem.indexL1InfoTree)} => B                :MSTORE(blockchashL1InfoTree)
+    ${getL1InfoTimestamp(mem.indexL1InfoTree)} => C                :MSTORE(timestampL1InfoTree)
+                                                                   :CALL(verifyMerkleProof)
+
+    ; Verify (currentTimestamp + deltaTimestamp) >= l1InfoRoot.timestamp
+    $ => A                                  :MLOAD(timestamp)
+    $ => B                                  :MLOAD(timestampL1InfoTree)
+    $                                       :LT, JMPC(invalidChangeL2Block, initSetGERL1InfoTree)
+
+setNewTimestamp: ;make an utils function
+    ; Set new timestamp
+    %TIMESTAMP_STORAGE_POS => C
+    %ADDRESS_SYSTEM => A
+    %SMT_KEY_SC_STORAGE => B
+    $ => D                                  :MLOAD(timestamp)
+    $ => SR                                 :SSTORE
+
+initSetGERL1InfoTree:
     ; Set new GER
-    $ => A                                  :MLOAD(newGER)
-    ; If it is a forced tx, newGER = historicGER
-    $                                       :MLOAD(isForced), JMPZ(setnewGER)
-    $ => A                                  :MLOAD(historicGER)
-setnewGER:
+    $ => A                                  :MLOAD(gerL1InfoTree)
+    ; If it is a forced tx ==> gerL1InfoTree = l1InfoRoot
+    $                                       :MLOAD(isForced), JMPZ(setGERL1InfoTree)
+    $ => A                                  :MLOAD(l1InfoRoot)
+    A                                       :MSTORE(gerL1InfoTree)
+
+setGERL1InfoTree:
     0 => B
-    ; Dont set if zero
-    $                                       :EQ, JMPC(skipSetHistoricGERRoot)
+    ; Do not set if zero
+    $                                       :EQ, JMPC(skipSetGERL1InfoTree)
     0 => HASHPOS
     $ => E                                  :MLOAD(lastHashKIdUsed)
     E + 1 => E                              :MSTORE(lastHashKIdUsed)
@@ -96,16 +128,20 @@ setnewGER:
     HASHPOS                                 :HASHKLEN(E)
     $ => C                                  :HASHKDIGEST(E)
 
+    ; read blockchashL1InfoTree given the l1InfoRoot
+    ; skip overwrite blockHashL1 if it is different than 0 (already set)
     %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2 => A
     %SMT_KEY_SC_STORAGE => B
+    $ => A                                  :SLOAD
+    0 => B
+    $                                       :EQ, JMPNC(skipSetGERL1InfoTree)
 
-    ; read timestampLimit given the historicGER
-    ; skip overwrite timestampLimit if it is different than 0 (already set)
-    ; Since timestampLimit is enforced by the smart contract it is safe to compare only 32 bits in 'op0' with JMPNZ
-    $                                       :SLOAD, JMPNZ(skipSetHistoricGERRoot)
-    $ => D                                  :MLOAD(timestamp)
-    $ => SR                                 :SSTORE ; Store 'timestamp' in storage position 'keccak256(historicGER, 0)'
+    ; write blockhashL1
+    %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2 => A
+    %SMT_KEY_SC_STORAGE => B
+    $ => D                                  :MLOAD(blockchashL1InfoTree)
+    $ => SR                                 :SSTORE ; Store 'blockchashL1InfoTree' in storage position 'keccak256(gerL1InfoTree, 0)'
 
-    skipSetHistoricGERRoot:
-                                        :CALL(setupNewBlockInfoTree)
-                                        :JMP(txLoop)
+skipSetGERL1InfoTree:
+                                            :CALL(setupNewBlockInfoTree)
+                                            :JMP(txLoop)

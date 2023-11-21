@@ -839,6 +839,8 @@ outOfCountersPadding:
     $${eventLog(onError, OOCPA)} :JMP(handleBatchError)
 outOfCountersPoseidon:
     $${eventLog(onError, OOCPO)} :JMP(handleBatchError)
+outOfCountersSha256:
+    $${eventLog(onError, OOCSH)} :JMP(handleBatchError)
 invalidChangeL2Block:
     $${eventLog(onError, invalid_change_l2_block)} :JMP(handleBatchError)
 outOfGas:
@@ -1485,52 +1487,95 @@ failAssert:
     2               :ASSERT
 
 VAR GLOBAL tmpZkPCVerifyMerkleProof
-;@info verifies GER with sibilings
+;@info verifies L1Info data with sibilings
+;@in A: ger
+;@in B: blockhashL1
+;@in C: timestamp
 verifyMerkleProof:
     ; check zk-counters
-    $ => A                                  :MLOAD(cntKeccakPreProcess)
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 :JMPN(outOfCountersKeccak)
-    %MAX_CNT_BINARY - CNT_BINARY - 1        :JMPN(outOfCountersBinary)
+    $ => E                                      :MLOAD(cntKeccakPreProcess)
 
-    RR                            :MSTORE(tmpZkPCVerifyMerkleProof)
-    $ => C                        :MLOAD(newGER)
-    $ => B                        :MLOAD(indexHistGERTree)
-    B                             :MSTORE(arithA)
+    ; 1 keccak for the leaf and 32 for the L1InfoTree
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - E - 33   :JMPN(outOfCountersKeccak)
+    %MAX_CNT_BINARY - CNT_BINARY - 32           :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 20 * 32             :JMPN(outOfCountersStep)
+
+    RR                                          :MSTORE(tmpZkPCVerifyMerkleProof)
+
+    ;;;;;;;;;;;;;;;;;;;;;
+    ;; compute leaf value
+    ;;;;;;;;;;;;;;;;;;;;;
+
+    ; new keccak address
+    $ => E                        :MLOAD(lastHashKIdUsed)
+    E + 1 => E                    :MSTORE(lastHashKIdUsed)
+
+    ; add gerL1InfoTree (32 bytes)
+    0 => HASHPOS
+    32 => D
+    A                             :HASHK(E)
+
+    ; add blockHashL1 (32 bytes)
+    B                             :HASHK(E)
+
+    ; add timestamp (8 bytes)
+    8 => D
+    C                             :HASHK(E)
+
+    ; compute l1InfoTree Leaf value
+    HASHPOS                       :HASHKLEN(E)
+    $ => C                        :HASHKDIGEST(E) ; initial value
+
+    ; initialization registers for smt verify
     0 => D
 
 verifyMerkleProofLoop:
-    %MAX_CNT_STEPS - STEP - 100   :JMPN(outOfCountersStep)
-    %GER_TREE_LEVELS - D          :JMPZ(verifyMerkleProofEnd)
-    $ => B                        :MLOAD(indexHistGERTree)
-    ${getSmtProof(B, D)} => A
+    %L1INFO_TREE_LEVELS - D         :JMPZ(verifyMerkleProofEnd)
+
+    ; get left/right branch
+    $ => A                          :MLOAD(indexL1InfoTree)
     D => RR
-                                  :CALL(@exp_num + RR); out:[B: 2**RR]
-    B                             :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+                                    :CALL(@exp_num + RR); out:[B: 2**RR]
+    ; A: index, B: SMTLevel (index maximum value is 4 bytes, SMTLevel maximum value is is 2**32)
+    $ => B                          :AND
+
+
+    ; get leaf value
+    ${getSmtProof(mem.indexL1InfoTree, D)} => A
+
+    ; prepare new hash
     $ => E                        :MLOAD(lastHashKIdUsed)
     E + 1 => E                    :MSTORE(lastHashKIdUsed)
-    D => B
-    32 => D
     0 => HASHPOS
-    $                             :MLOAD(arithRes2), JMPZ(reverseHashValue)
-    $ => C                        :MLOAD(newGER)
+
+    ; decide left/right branch
+    B                             :JMPZ(hashLeft)
+
+    ;hashRight:
+    D => B ; save D in B for the next loop
+    32 => D
     A                             :HASHK(E)
-    C                             :HASHK(E), JMP(reverseHashValueEnd)
-reverseHashValue:
+    C                             :HASHK(E), JMP(hashBranchEnd)
+
+hashLeft:
+    D => B ; save D in B for the next loop
+    32 => D
     C                             :HASHK(E)
     A                             :HASHK(E)
-reverseHashValueEnd:
+
+hashBranchEnd:
     HASHPOS                       :HASHKLEN(E)
     $ => C                        :HASHKDIGEST(E)
-    B => D
+    B => D ; recover loop iteration
     D + 1 => D                    :JMP(verifyMerkleProofLoop)
 
 verifyMerkleProofEnd:
-    $ => A                        :MLOAD(historicGER)
+    $ => A                        :MLOAD(l1InfoRoot)
     C                             :ASSERT
+
 verifyMerkleProofReturn:
     $ => RR                       :MLOAD(tmpZkPCVerifyMerkleProof)
                                   :RETURN
-
 
 VAR GLOBAL tmpZkPCreadXFromOffset
 VAR GLOBAL readXFromCalldataOffset
