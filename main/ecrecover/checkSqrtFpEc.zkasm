@@ -8,13 +8,21 @@
 ;;         BLOCK:  1         2  3        4      5       6      7
 ;;             (*) 222 + initial initialization
 ;;
-;; return 1 => no sqrts  0 => has solutions
+;; PRE: C no alias-free
+;; POST: A in [0,1]
+;; return A: A = 1 ==> C = -1 ==> hasn't root
+;;           A = 0 ==> C != -1 ==> has root or MAP, proof fails.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 VAR GLOBAL checkSqrtFpEc_base
 VAR GLOBAL checkSqrtFpEc_RR
 
 checkSqrtFpEc:
+        ; RESOURCES:
+        ;   248 x (3 steps + 2 arith + 8 steps + 2 arith + 7 steps) = 992 ariths + 4464 steps
+        ;   6 x (1 step + 2 arith + 8 steps) = 12 ariths + 54 steps
+        ;   6 steps + 1 binary
+        ; TOTAL = 1004 ariths + 1 binary + 4524 steps
 
         RR          :MSTORE(checkSqrtFpEc_RR)
         C           :MSTORE(checkSqrtFpEc_base)
@@ -1539,7 +1547,12 @@ checkSqrtFpEc:
         C => B	:CALL(mulFpEc)
 
 
+        ; FPEC_MINUS_ONE hasn't alias of 256 bits
         C => B
         %FPEC_MINUS_ONE => A
         $ => RR     :MLOAD(checkSqrtFpEc_RR)
+
+        ; A = 1 ==> C = -1 ==> hasn't root
+        ; A = 0 ==> C != -1 ==> has root or MAP, proof fails.
+
         $ => A      :EQ,RETURN
