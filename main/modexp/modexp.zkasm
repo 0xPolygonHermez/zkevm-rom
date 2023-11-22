@@ -5,9 +5,9 @@
 ;; modexp:
 ;; ----------------------------------------
 ;;          input: 
-;;                  · Blen ∈ [1, 839], the len of B
-;;                  · Elen ∈ [1, 839], the len of E
-;;                  · Mlen ∈ [1, 839], the len of M
+;;                  · Blen ∈ [1, 1818], the len of B
+;;                  · Elen ∈ [1, 1818], the len of E
+;;                  · Mlen ∈ [1, 1818], the len of M
 ;;                  ·     B ∈ [0, 2²⁵⁶ - 1]^Blen, the base represented in little-endian
 ;;                  ·     E ∈ [0, 2²⁵⁶ - 1]^Elen, the exponent represented in little-endian
 ;;                  ·     M ∈ [0, 2²⁵⁶ - 1]^Mlen, the modulus represented in little-endian
@@ -51,11 +51,11 @@
 VAR GLOBAL modexp_Blen
 VAR GLOBAL modexp_Elen
 VAR GLOBAL modexp_Mlen
-VAR GLOBAL modexp_B[839]
-VAR GLOBAL modexp_E[839]
-VAR GLOBAL modexp_M[839]
+VAR GLOBAL modexp_B[1818]
+VAR GLOBAL modexp_E[1818]
+VAR GLOBAL modexp_M[1818]
 
-VAR GLOBAL modexp_out[839]
+VAR GLOBAL modexp_out[1818]
 VAR GLOBAL modexp_outlen
 
 VAR GLOBAL modexp_RR
@@ -67,56 +67,8 @@ modexp:
 
         RR              :MSTORE(modexp_RR)
 
-        ; Edge cases
-        ; 1] Is M = 0?
-        $ => A          :MLOAD(modexp_Mlen)
-        1 => B
-        $               :EQ, JMPNC(modexp_M_continue1)
-        $ => A          :MLOAD(modexp_M)
-        0 => B
-        $               :EQ, JMPC(modexp_M_is_zero)
-                        modexp_M_continue1:
-        ; From here, M > 0
-
-        ; 2] Is M = 1?
-        $ => A          :MLOAD(modexp_Mlen)
-        1 => B
-        $               :EQ, JMPNC(modexp_M_continue2)
-        $ => A          :MLOAD(modexp_M)
-        1 => B
-        $               :EQ, JMPC(modexp_M_is_one)
-                        modexp_M_continue2:
-        ; From here, M > 1
-
-        ; 3] Is B = 0?
-        $ => A          :MLOAD(modexp_Blen)
-        1 => B
-        $               :EQ, JMPNC(modexp_B_continue1)
-        $ => A          :MLOAD(modexp_B)
-        0 => B
-        $               :EQ, JMPC(modexp_B_is_zero)
-                        modexp_B_continue1:
-        ; From here, B > 0
-
-        ; 4] Is B = 1?
-        $ => A          :MLOAD(modexp_Blen)
-        1 => B
-        $               :EQ, JMPNC(modexp_B_continue2)
-        $ => A          :MLOAD(modexp_B)
-        1 => B
-        $               :EQ, JMPC(modexp_B_is_one)
-                        modexp_B_continue2:
-        ; From here, B > 1
-
-        ; 5] Is E = 0?
-        $ => A          :MLOAD(modexp_Elen)
-        1 => B
-        $               :EQ, JMPNC(modexp_E_continue1)
-        $ => A          :MLOAD(modexp_E)
-        0 => B
-        $               :EQ, JMPC(modexp_E_is_zero)
-                        modexp_E_continue1:
-        ; From here, E > 0
+        ; I do not need to cover edge cases here since they are covered in the pre-modexp file
+        ; Therefore, I can assume that M > 1, B > 1, E > 0
 
         1               :MSTORE(modexp_out)
         1               :MSTORE(modexp_outlen)
@@ -162,30 +114,10 @@ modexp_rem_from_divmod1:
 ; -------------------
 
 ; Begin of edge cases
-modexp_M_is_zero:
-        ; (B^E) % 0 = 0
-        1               :MSTORE(modexp_outlen)
-        0               :MSTORE(modexp_out), JMP(modexp_end)
-
-modexp_M_is_one:
-        ; (B^E) % 1 = 0
-        1               :MSTORE(modexp_outlen)
-        0               :MSTORE(modexp_out), JMP(modexp_end)
-
 modexp_B_is_zero:
-        ; (0^E) % M = 0. I define 0^0 = 0 for simplicity
+        ; (0^E) % M = 0.
         1               :MSTORE(modexp_outlen)
         0               :MSTORE(modexp_out), JMP(modexp_end)
-
-modexp_B_is_one:
-        ; (1^E) % M = 1
-        1               :MSTORE(modexp_outlen)
-        1               :MSTORE(modexp_out), JMP(modexp_end)
-
-modexp_E_is_zero:
-        ; (B^0) % M = 1
-        1               :MSTORE(modexp_outlen)
-        1               :MSTORE(modexp_out), JMP(modexp_end)
 ; End of edge cases
 
 ; Begin of branching
