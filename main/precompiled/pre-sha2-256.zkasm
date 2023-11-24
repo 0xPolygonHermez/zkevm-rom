@@ -13,10 +13,9 @@ VAR GLOBAL sha256HashPos
 VAR GLOBAL sha256Hash
 VAR GLOBAL tmpZkSHA256
 
-funcSHA2256:
+funcSHA256:
     %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 4    :JMPN(outOfCountersBinary)
-    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
+    %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
 
     ; Move balances if value > 0 just before executing the contract CALL
     $ => B          :MLOAD(txValue)
@@ -28,6 +27,7 @@ funcSHA2256:
     GAS - %SHA2_256_GAS => GAS :JMPN(outOfGas)
 
     $ => C          :MLOAD(txCalldataLen)
+
     ;words => A  === (C+31)/32 => A
     C + 31 => A
     A               :MSTORE(arithA)
@@ -37,12 +37,22 @@ funcSHA2256:
     ; GAS - dynamicGas
     GAS - %SHA2_256_WORD_GAS*A => GAS   :JMPN(outOfGas)
 
+    ; Compute necessary sha256 counters to finish the full hash
+    ; Divide the total data length + 1 by 64 to obtain the sha256 counter increment
+    ; 64 is the value used by the prover to increment sha256 counters
+    C + 1                            :MSTORE(arithA)
+    64                               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => A                           :MLOAD(arithRes1)
+
+    ; check enough sha256 counters left
+    %MAX_CNT_SHA256_F - CNT_SHA256_F - A    :JMPN(outOfCountersSha256)
+
     ; prepare retData
     0               :MSTORE(retDataOffset)
     32              :MSTORE(retDataLength)
     32              :MSTORE(readXFromCalldataLength)
     0 => HASHPOS
-                    :CALL(SHA2256data)
+                    :CALL(SHA256data)
     ; get & update sha256Data ID
     $ => E          :MLOAD(sha256DataId)
     E + 1           :MSTORE(sha256DataId)
@@ -51,11 +61,7 @@ funcSHA2256:
     0 => E
     A               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
 
-SHA2256dataReturn:
-    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 4    :JMPN(outOfCountersBinary)
-    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
-
+SHA256dataReturn:
     ; handle CTX
     $ => A          :MLOAD(originCTX), JMPZ(handleGas)
     ; set retDataCTX
@@ -75,17 +81,16 @@ SHA2256dataReturn:
     ; set currentCTX
     CTX             :MSTORE(currentCTX), JMP(preEnd)
 
-SHA2256data:
+SHA256data:
     RR              :MSTORE(tmpZkSHA256)
     0 => E          :MSTORE(sha256DataOffset)
 
-SHA2256dataLoop:
-    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 2    :JMPN(outOfCountersBinary)
+SHA256dataLoop:
+    %MAX_CNT_STEPS - STEP - 50         :JMPN(outOfCountersStep)
 
     ; Copy from calldata to hashS
-    C               :JMPZ(SHA2256)
-    C - 32          :JMPN(SHA2256dataFinal)
+    C               :JMPZ(computeSHA256)
+    C - 32          :JMPN(SHA256dataFinal)
     $ => E          :MLOAD(sha256DataOffset)
     E               :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
     $ => A          :MLOAD(readXFromCalldataResult)
@@ -94,12 +99,10 @@ SHA2256dataLoop:
     $ => E          :MLOAD(sha256DataId)
     32 => D
     A               :HASHS(E)
-    C - 32 => C     :JMP(SHA2256dataLoop)
+    C - 32 => C     :JMP(SHA256dataLoop)
 
-SHA2256dataFinal:
+SHA256dataFinal:
     %MAX_CNT_STEPS - STEP - 300         :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 15   :JMPN(outOfCountersBinary)
-    %MAX_CNT_ARITH - CNT_ARITH - 10     :JMPN(outOfCountersArith)
 
     $ => E          :MLOAD(sha256DataOffset)
     C               :MSTORE(readXFromCalldataLength)
@@ -111,9 +114,8 @@ SHA2256dataFinal:
     C => D
     A               :HASHS(E)
 
-SHA2256:
+computeSHA256:
     %MAX_CNT_STEPS - STEP - 20              :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_SHA256_F - 1      :JMPN(outOfCountersSha256)
 
     $ => E          :MLOAD(sha256DataId)
     HASHPOS         :HASHSLEN(E)
