@@ -23,8 +23,6 @@ const checkerDir = path.join(__dirname, 'checker.txt');
 const inputPath = '%%INPUT_PATH%%';
 const nameFile = path.basename(inputPath);
 const input = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
-const stepRetries = 3;
-let currentTries = 0;
 
 it(`${nameFile}`, async () => {
     if (fs.existsSync(checkerDir)) {
@@ -59,10 +57,8 @@ async function runTest(cmPols, steps) {
         await smMain.execute(cmPols.Main, input, rom, config);
     } catch (err) {
     // If fails for ooc, retry increasing stepsN up to three times
-        if (err.toString().includes('OOC') && currentTries < stepRetries) {
-            currentTries += 1;
-            counters = true;
-            await runTest(cmPols, steps * 2);
+        if (inputPath.includes('invalid-batch')) {
+            expect(input.oldStateRoot).to.be.equal(input.newStateRoot);
 
             return;
         }
