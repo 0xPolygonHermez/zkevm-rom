@@ -19,7 +19,12 @@ start: ; main zkROM entry point
         CTX                                 :MSTORE(forkID)
         CTX - %FORK_ID                      :JMPNZ(failAssert)
 
-        B                                   :MSTORE(oldStateRoot)
+        B => A                              :MSTORE(oldStateRoot)
+
+        ; safety check that the input root is indeed inside the range limit of 4 goldilocks fields elements
+        %FOUR_GOLDILOCKS => B
+        1                                   :LT4
+
         C                                   :MSTORE(oldAccInputHash)
         SP                                  :MSTORE(oldNumBatch)
         GAS                                 :MSTORE(chainID) ; assumed to be less than 32 bits
@@ -31,7 +36,7 @@ start: ; main zkROM entry point
         ${getForcedBlockHashL1()} => A      :MSTORE(forcedBlockHashL1)
 
         ;set initial state root
-        B => SR
+        $ => SR                             :MLOAD(oldStateRoot)
         SR                                  :MSTORE(batchSR)
         ; Increase batch number
         SP + 1                              :MSTORE(newNumBatch)
@@ -198,6 +203,11 @@ processTxsEnd:
 ;;;;;;;;;;;;;;;;;;
 ;; F - Finalize execution
 ;;;;;;;;;;;;;;;;;;
+        ; safety check that the output root is indeed inside the range limit of 4 goldilocks fields elements
+        SR => A
+        %FOUR_GOLDILOCKS => B
+        1                               :LT4
+
         ; Set output registers
         $ => D                          :MLOAD(newAccInputHash)
         $ => E                          :MLOAD(newLocalExitRoot)
