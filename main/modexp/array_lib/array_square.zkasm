@@ -2,13 +2,13 @@
 ;; POST: out is trimmed
 ;;
 ;; array_square:
-;;             in: 
+;;             in:
 ;;                  · C ∈ [1, 32], the len of in
 ;;                  · in ∈ [0, 2²⁵ ⁶- 1]^C, the input array
 ;;
-;;          output: 
+;;          output:
 ;;                  · out = in², with len(out) <= 2·C
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; function array_square(a: bigint[], B: bigint): bigint[] {
 ;     let len = a.length;
@@ -33,8 +33,8 @@
 ;     return result;
 ; }
 
-VAR GLOBAL array_square_in[32]
-VAR GLOBAL array_square_out[64]
+VAR GLOBAL array_square_in[%ARRAY_MAX_LEN]
+VAR GLOBAL array_square_out[%ARRAY_MAX_LEN_DOUBLED]
 VAR GLOBAL array_square_len_in
 VAR GLOBAL array_square_len_out
 
@@ -72,7 +72,7 @@ array_square:
         $ => A          :MLOAD(array_square_in)
         A => B
         0 => C
-        $${var _arraySquare_a02 = A*B}    
+        $${var _arraySquare_a02 = A*B}
         ${_arraySquare_a02 >> 256} => D
         ${_arraySquare_a02} => E :ARITH
         D               :MSTORE(array_square_carry_high)
@@ -167,7 +167,7 @@ array_square_loop_index_check:
         $ => A          :MLOAD(array_square_in + RR)
         A => B
         0 => C
-        $${var _arraySquare_aiai = A*B}    
+        $${var _arraySquare_aiai = A*B}
         ${_arraySquare_aiai >> 256} => D
         ${_arraySquare_aiai} => E :ARITH
         D               :MSTORE(array_square_carry_high)
@@ -181,12 +181,12 @@ array_square_loop_index_check:
 array_square_loopZero2inA:
         RCX => E
         ; product = 2·(a_i·a_j) + out[i + j] + carry
-        
+
         ; 1] a_i·a_j: This number cannot be GT (base - 2)·base + 1, two chunks
         $ => A          :MLOAD(array_square_in + E)
         $ => B          :MLOAD(array_square_in + RR)
         0 => C
-        $${var _arraySquare_aiaj = A*B}    
+        $${var _arraySquare_aiaj = A*B}
         ${_arraySquare_aiaj >> 256} => D
         ${_arraySquare_aiaj} => E :ARITH
         D              :MSTORE(array_square_aiaj_high)
@@ -196,14 +196,14 @@ array_square_loopZero2inA:
         $ => C          :ADD, JMPC(array_square_add_carry_1)
                         return_array_square_add_carry_1:
         $ => A          :MLOAD(array_square_aiaj_high)
-        D => B 
+        D => B
         $ => D          :ADD, JMPC(array_square_add_carry_carry_1)
                         return_array_square_add_carry_carry_1:
 
         ; The result is stored as array_square_highest_carry·base² + D·base + C
 
 
-        ; 3] 2·a_i·a_j + out[i + j]: 
+        ; 3] 2·a_i·a_j + out[i + j]:
         ;       a) j != len: This number cannot be GT base² + (base - 3)·base + 1, as out[i + j] < B
         ;       b) j == len: This number cannot be GT base² + (base - 3)·base + base - 1, as  out[i + j] <= B + (B - 3)
         ; In both cases, three chunks

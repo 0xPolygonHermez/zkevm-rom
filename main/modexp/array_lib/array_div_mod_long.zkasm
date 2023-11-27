@@ -3,15 +3,15 @@
 ;; POST: The remainder is trimmed.
 ;;
 ;; array_div_mod_long:
-;;             in: 
+;;             in:
 ;;                  · C ∈ [1, 32], the len of inA
 ;;                  · D ∈ [1, 32], the len of inB
 ;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
 ;;                  · inB ∈ [0, 2²⁵⁶ - 1]^D, the second input array
 ;;
-;;          output: 
+;;          output:
 ;;                  · [quo,rem] = [inA / inB, inA % inB], with len(quo) <= C - D + 1, len(rem) <= D
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; function array_div_mod_long(a: bigint[], b: bigint[], B: bigint): bigint[] {
 ;     if (a === [0n]) {
@@ -21,7 +21,7 @@
 ;         return [0n, 0n];
 ;     } else if (b === [0n]) {
 ;         throw new Error("Division by zero");
-;     } 
+;     }
 ;
 ;     if (a === b) {
 ;         return [1n, 0n];
@@ -33,10 +33,10 @@
 ; NOTE: This function receives the actual result from the helper (avoiding the need of computing divisions);
 ;       checks the correctness of the result and returns the result to the caller
 
-VAR GLOBAL array_div_mod_long_inA[32]
-VAR GLOBAL array_div_mod_long_inB[32]
-VAR GLOBAL array_div_mod_long_quo[32]
-VAR GLOBAL array_div_mod_long_rem[32]
+VAR GLOBAL array_div_mod_long_inA[%ARRAY_MAX_LEN]
+VAR GLOBAL array_div_mod_long_inB[%ARRAY_MAX_LEN]
+VAR GLOBAL array_div_mod_long_quo[%ARRAY_MAX_LEN]
+VAR GLOBAL array_div_mod_long_rem[%ARRAY_MAX_LEN]
 
 VAR GLOBAL array_div_mod_long_len_inA
 VAR GLOBAL array_div_mod_long_len_inB
@@ -98,10 +98,10 @@ array_div_mod_long_compare1:
         %MAX_CNT_STEPS - STEP        - 6        :JMPN(outOfCountersStep)
 
         $ => A          :MLOAD(array_compare_result), JMPZ(array_div_mod_long_prep_inALTinB)
-        1 => B     
+        1 => B
         $               :EQ, JMPC(array_div_mod_long_same_input)
         ; From here, inA > inB
-        
+
         $${MPdiv(addr.array_div_mod_long_inA,mem.array_div_mod_long_len_inA,addr.array_div_mod_long_inB,mem.array_div_mod_long_len_inB)}
 
                         :JMP(array_div_mod_long_prepare_trim_rem)
@@ -151,7 +151,7 @@ array_div_mod_long_inALTinB:
         C - 1 => C      :JMPNZ(array_div_mod_long_inALTinB)
 
 array_div_mod_long_inALTinB_before_end:
-        0               :MSTORE(array_div_mod_long_quo)        
+        0               :MSTORE(array_div_mod_long_quo)
         0 => B          :JMP(array_div_mod_long_end)
 ; End of edge cases
 
