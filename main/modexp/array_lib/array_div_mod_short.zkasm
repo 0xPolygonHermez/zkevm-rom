@@ -134,14 +134,16 @@ array_div_mod_short_inALTinB:
 ; End of edge cases
 
 array_div_mod_short_prepare_mul_quo_inB:
-        ${receiveLenQuotient_short()} => C
+        ; C = [c7, c6, ..., c0]
+        ; JMPN instruction assures c0 is within the range [0, 2**32 - 1]
+        ${receiveLenQuotient_short()} => C              :JMPN(failAssert)
 
-        ; The received length must be between 1 and %ARRAY_MAX_LEN
-        C => A
-        0 => B
-        0               :EQ
-        %ARRAY_MAX_LEN_PLUS_ONE => B
-        1               :LT
+        ; ensure C0 > 0
+        C - 1                              :JMPN(failAssert)
+        ; if C > %ARRAY_MAX_LEN --> does not jump to `continue_xx` label
+        C - %ARRAY_MAX_LEN_PLUS_ONE                 :JMPN(continue_array_div_mod_short_prepare_mul_quo_inB, failAssert)
+
+continue_array_div_mod_short_prepare_mul_quo_inB:
         ; From here, 1 <= C <= %ARRAY_MAX_LEN
 
         ; To avoid non-determinism, we must ensure that the quotient is trimmed
