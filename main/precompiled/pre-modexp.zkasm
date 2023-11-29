@@ -7,9 +7,12 @@
  * @process-precompiled
  *  - stack input: [x1, y1, x2, y2]
  *  - stack output: [x, y]
+ * @note We work with unbounded and unsigned integers represented in (little-endian) chunks of 256 bits.
  * @note After a few discussions, we decided to set the maximum input length of the base, modulus and exponent to 32.
  *       See [https://github.com/0xPolygonHermez/zkevm-rom-internal/issues/43] for more details.
  */
+INCLUDE "../modexp/constants.zkasm"
+
 INCLUDE "../modexp/modexp.zkasm"
 INCLUDE "../modexp/modexp_utils.zkasm"
 
@@ -190,11 +193,11 @@ lastChecks:
     ; B > 0 from here
     %MAX_SIZE_MODEXP => A
     $ => B                              :MLOAD(modexp_Bsize)
-    $                                   :LT, JMPC(endMODEXPFail) ; if Bsize > MAX_SIZE_MODEXP --> endMODEXPFail
+    $                                   :LT, JMPC(preEndFail) ; if Bsize > MAX_SIZE_MODEXP --> preEndFail
     $ => B                              :MLOAD(modexp_Esize)
-    $                                   :LT, JMPC(endMODEXPFail) ; if Esize > MAX_SIZE_MODEXP --> endMODEXPFail
+    $                                   :LT, JMPC(preEndFail) ; if Esize > MAX_SIZE_MODEXP --> preEndFail
     $ => B                              :MLOAD(modexp_Msize)
-    $                                   :LT, JMPC(endMODEXPFail) ; if Msize > MAX_SIZE_MODEXP --> endMODEXPFail
+    $                                   :LT, JMPC(preEndFail) ; if Msize > MAX_SIZE_MODEXP --> preEndFail
     ; get base value
     $ => E                              :MLOAD(modexp_offset) ; This is used in modexp_getBase, modexp_getExp and modexp_getMod
     $ => C                              :MLOAD(modexp_Bsize)
@@ -237,7 +240,7 @@ save1out:
 save0out:
     $ => B                              :MLOAD(modexp_Msize)
     %MAX_SIZE_MODEXP => A
-    $                                   :LT,JMPC(endMODEXPFail)
+    $                                   :LT,JMPC(preEndFail)
     0                                   :MSTORE(modexp_out), JMP(finalMODEXP)
 
 save0outMod0:
@@ -291,14 +294,6 @@ returnLoop:
     E => B
     $ => E                              :MLOAD(modexp_returnIndex)
     C - 32 => C                         :JMPZ(endMODEXP, returnLoop)
-
-
-endMODEXPFail:
-    $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
-    A => CTX
-    0                                   :MSTORE(retDataCTX)
-    0 => GAS
-    CTX                                 :MSTORE(currentCTX), JMP(preEndFail)
 
 preEndMODEXP:
     $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
