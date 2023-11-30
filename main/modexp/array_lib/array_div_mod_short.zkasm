@@ -134,26 +134,21 @@ array_div_mod_short_inALTinB:
 ; End of edge cases
 
 array_div_mod_short_prepare_mul_quo_inB:
-        ${receiveLenQuotient_short()} => C
+        $0{receiveLenQuotient_short()} => C
 
         ; The received length must be between 1 and %ARRAY_MAX_LEN
-        C => A
-        0 => B
-        0               :EQ
-        %ARRAY_MAX_LEN_PLUS_ONE => B
-        1               :LT
+        C - 1 => RR             :JMPN(failAssert) ; If C = 0, then fail
+        %ARRAY_MAX_LEN - C      :JMPN(failAssert) ; If C > %ARRAY_MAX_LEN, then fail
         ; From here, 1 <= C <= %ARRAY_MAX_LEN
 
         ; To avoid non-determinism, we must ensure that the quotient is trimmed
         ; i.e., that its last chunk is not 0
-        C - 1 => RR
         ${receiveQuotientChunk_short(RR)} => A
         0 => B
         0               :EQ
         ; From here, the quotient is trimmed
 
         C               :MSTORE(array_div_mod_short_len_quo)
-
         C => RR
 
         %MAX_CNT_STEPS - STEP - 5*%ARRAY_MAX_LEN - 4      :JMPN(outOfCountersStep)

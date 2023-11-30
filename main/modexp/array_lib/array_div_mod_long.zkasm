@@ -156,19 +156,15 @@ array_div_mod_long_inALTinB_before_end:
 ; End of edge cases
 
 array_div_mod_long_prepare_mul_quo_inB:
-        ${receiveLenQuotient()} => C
+        $0{receiveLenQuotient()} => C
 
         ; The received length must be between 1 and %ARRAY_MAX_LEN
-        C => A
-        0 => B
-        0               :EQ
-        %ARRAY_MAX_LEN_PLUS_ONE => B
-        1               :LT
+        C - 1 => RR             :JMPN(failAssert) ; If C = 0, then fail
+        %ARRAY_MAX_LEN - C      :JMPN(failAssert) ; If C > %ARRAY_MAX_LEN, then fail
         ; From here, 1 <= C <= %ARRAY_MAX_LEN
 
         ; To avoid non-determinism, we must ensure that the quotient is trimmed
         ; i.e., that its last chunk is not 0
-        C - 1 => RR
         ${receiveQuotientChunk(RR)} => A
         0 => B
         0               :EQ
@@ -201,19 +197,15 @@ array_div_mod_long_mul_quo_inB:
         %MAX_CNT_STEPS - STEP        - 14       :JMPN(outOfCountersStep)
 
         ; Check the remainder
-        ${receiveLenRemainder()} => D
+        $0{receiveLenRemainder()} => D
 
         ; 1] The received length must be between 1 and %ARRAY_MAX_LEN
-        D => A
-        0 => B
-        0               :EQ
-        %ARRAY_MAX_LEN_PLUS_ONE => B
-        1               :LT
-        ; From here, 1 <= C <= %ARRAY_MAX_LEN
+        D - 1 => E             :JMPN(failAssert) ; If D = 0, then fail
+        %ARRAY_MAX_LEN - D      :JMPN(failAssert) ; If D > %ARRAY_MAX_LEN, then fail
+        ; From here, 1 <= D <= %ARRAY_MAX_LEN
 
         ; 2] To avoid non-determinism, we must ensure that the remainder is trimmed
         ; i.e., that its last chunk is not 0
-        D - 1 => E
         ${receiveRemainderChunk(E)} => A
         0 => B
         0               :EQ
