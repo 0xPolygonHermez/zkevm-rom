@@ -1,4 +1,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; POST: The result is in the range [0,BN254_P) because if falls back to FP2 arithmetic
 ;;
 ;; decompressFp12BN254:
 ;;             in: [a2,a3,a4,a5] ∈ Fp2⁴, where ai ∈ Fp2
@@ -108,8 +109,8 @@ decompressFp12BN254_Ca2_is_zero:
         ; 2] Compute a0 = (2·a1² - 3·a3·a4)(9+u) + 1
         $ => A          :MLOAD(decompressFp12BN254_a1_x)
         $ => B          :MLOAD(decompressFp12BN254_a1_y), CALL(squareFp2BN254)
-        2n => A 
-        C => D 
+        2n => A
+        C => D
         E => C          :CALL(escalarMulFp2BN254)
         E               :MSTORE(decompressFp12BN254_twoCa1sq_x)
         C               :MSTORE(decompressFp12BN254_twoCa1sq_y)
@@ -130,10 +131,12 @@ decompressFp12BN254_Ca2_is_zero:
         E => C          :CALL(subFp2BN254)
         E => A
         C => B
-        9n => C 
+        9n => C
         1n => D         :CALL(mulFp2BN254)
-        E + 1n          :MSTORE(decompressFp12BN254_a0_x) ; TODO: Take care of this sum
         C               :MSTORE(decompressFp12BN254_a0_y)
+        E => A
+        1n => C         :CALL(addFpBN254)
+        C               :MSTORE(decompressFp12BN254_a0_x)
 
                         :JMP(decompressFp12BN254_end)
 
@@ -160,7 +163,7 @@ decompressFp12BN254_Ca2_is_not_zero:
         $ => A          :MLOAD(decompressFp12BN254_Ca4_x)
         $ => B          :MLOAD(decompressFp12BN254_Ca4_y), CALL(squareFp2BN254)
         3n => A
-        C => D 
+        C => D
         E => C          :CALL(escalarMulFp2BN254)
         E               :MSTORE(decompressFp12BN254_threeCa4sq_x)
         C               :MSTORE(decompressFp12BN254_threeCa4sq_y)
@@ -186,8 +189,8 @@ decompressFp12BN254_Ca2_is_not_zero:
         ; 2] Compute a0 = (2·a1² + a2·a5 - 3·a3·a4)(9+u) + 1
         $ => A          :MLOAD(decompressFp12BN254_a1_x)
         $ => B          :MLOAD(decompressFp12BN254_a1_y), CALL(squareFp2BN254)
-        2n => A 
-        C => D 
+        2n => A
+        C => D
         E => C          :CALL(escalarMulFp2BN254)
         E               :MSTORE(decompressFp12BN254_twoCa1sq2_x)
         C               :MSTORE(decompressFp12BN254_twoCa1sq2_y)
@@ -219,13 +222,13 @@ decompressFp12BN254_Ca2_is_not_zero:
         C => B
         9n => C
         1n => D         :CALL(mulFp2BN254)
-        E + 1n          :MSTORE(decompressFp12BN254_a0_x) ; TODO: Take care of this sum
         C               :MSTORE(decompressFp12BN254_a0_y)
+        E => A
+        1n => C         :CALL(addFpBN254)
+        C               :MSTORE(decompressFp12BN254_a0_x)
 
                         :JMP(decompressFp12BN254_end)
 
 decompressFp12BN254_end:
         $ => RR         :MLOAD(decompressFp12BN254_RR)
                         :RETURN
-
-                        
