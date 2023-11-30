@@ -62,7 +62,7 @@ continueProcessChangeL2Block:
     ;   - update timestamp only if currentTimestamp < limitTimestamp
     ;   - set blockHash to default
     $ => C                                  :MLOAD(forcedBlockHashL1)
-    C                                       :MSTORE(blockchashL1InfoTree)
+    C                                       :MSTORE(blockHashL1InfoTree)
     A                                       :MSTORE(timestamp)
     $                                       :LT, JMPNC(initSetGERL1InfoTree)
 
@@ -89,7 +89,7 @@ verifyTimestampAndL1InfoRoot:
     $                                       :MLOAD(indexL1InfoTree), JMPZ(skipSetGERL1InfoTree)
 
     ${getL1InfoGER(mem.indexL1InfoTree)} => A                      :MSTORE(gerL1InfoTree)
-    ${getL1InfoBlockHash(mem.indexL1InfoTree)} => B                :MSTORE(blockchashL1InfoTree)
+    ${getL1InfoBlockHash(mem.indexL1InfoTree)} => B                :MSTORE(blockHashL1InfoTree)
     ${getL1InfoTimestamp(mem.indexL1InfoTree)} => C                :MSTORE(timestampL1InfoTree)
                                                                    :CALL(verifyMerkleProof)
 
@@ -128,7 +128,7 @@ setGERL1InfoTree:
     HASHPOS                                 :HASHKLEN(E)
     $ => C                                  :HASHKDIGEST(E)
 
-    ; read blockchashL1InfoTree given the l1InfoRoot
+    ; read blockHashL1InfoTree given the l1InfoRoot
     ; skip overwrite blockHashL1 if it is different than 0 (already set)
     %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2 => A
     %SMT_KEY_SC_STORAGE => B
@@ -139,8 +139,8 @@ setGERL1InfoTree:
     ; write blockhashL1
     %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2 => A
     %SMT_KEY_SC_STORAGE => B
-    $ => D                                  :MLOAD(blockchashL1InfoTree)
-    $ => SR                                 :SSTORE ; Store 'blockchashL1InfoTree' in storage position 'keccak256(gerL1InfoTree, 0)'
+    $ => D                                  :MLOAD(blockHashL1InfoTree)
+    $ => SR                                 :SSTORE ; Store 'blockHashL1InfoTree' in storage position 'keccak256(gerL1InfoTree, 0)'
 
 skipSetGERL1InfoTree:
                                             :CALL(setupNewBlockInfoTree)

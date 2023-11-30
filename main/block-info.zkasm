@@ -1,4 +1,4 @@
-VAR GLOBAL tmpBlockInfoSR
+VAR GLOBAL tmpSR
 VAR GLOBAL currentLogIndex
 
 initBlockInfoTree:
@@ -22,9 +22,9 @@ revertBlockInfoTree:
 setupNewBlockInfoTree:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 50 :JMPN(outOfCountersStep)
-    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*6 :JMPN(outOfCountersPoseidon)
+    %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*7 :JMPN(outOfCountersPoseidon)
     ; save current state root & load block info root
-    SR              :MSTORE(tmpBlockInfoSR)
+    SR              :MSTORE(tmpSR)
     $ => SR         :MLOAD(blockInfoSR)
 
     ; Insert previous block hash
@@ -87,12 +87,12 @@ setupNewBlockInfoTree:
     %INDEX_BLOCK_HEADER_PARAM_BLOCK_HASH_L1 => A
     %SMT_KEY_BLOCK_HEADER_PARAM => B
     0 => C
-    $ => D          :MLOAD(blockchashL1InfoTree)
+    $ => D          :MLOAD(blockHashL1InfoTree)
     $ => SR         :SSTORE
 
     ; Restore current SR
     SR             :MSTORE(blockInfoSR)
-    $ => SR        :MLOAD(tmpBlockInfoSR), RETURN
+    $ => SR        :MLOAD(tmpSR), RETURN
 
 ; @info Fill Block Info tree with tx receipt values
 fillBlockInfoTreeWithTxReceipt:
@@ -100,7 +100,7 @@ fillBlockInfoTreeWithTxReceipt:
     %MAX_CNT_STEPS - STEP - 50 :JMPN(outOfCountersStep)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*3 :JMPN(outOfCountersPoseidon)
     ; save current state root & load block info root
-    SR              :MSTORE(tmpBlockInfoSR)
+    SR              :MSTORE(tmpSR)
     $ => SR         :MLOAD(blockInfoSR)
     ; Insert transaction hash
     ; key: H([txIndex[0:4], txIndex[4:8], txIndex[8:12], txIndex[12:16], txIndex[16:20], 0, SMT_KEY_BLOCK_HEADER_TRANSACTION_HASH, 0], [hk0[0], hk0[1], hk0[2], hk0[3]])
@@ -137,7 +137,7 @@ fillBlockInfoTreeWithTxReceipt:
 
     ; Restore current SR
     SR             :MSTORE(blockInfoSR)
-    $ => SR        :MLOAD(tmpBlockInfoSR), RETURN
+    $ => SR        :MLOAD(tmpSR), RETURN
 
 ; @info Fill Block Info tree with block gas used at the end of block processing and Store block Info Root in storage
 consolidateBlock:
@@ -145,7 +145,7 @@ consolidateBlock:
     %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*2 :JMPN(outOfCountersPoseidon)
     ; save current state root & load block info root
-    SR              :MSTORE(tmpBlockInfoSR)
+    SR              :MSTORE(tmpSR)
     $ => SR         :MLOAD(blockInfoSR)
 
     ; Insert transaction cumulativeGasUsed
@@ -159,7 +159,7 @@ consolidateBlock:
 
     ; Restore current SR
     SR             :MSTORE(blockInfoSR)
-    $ => SR        :MLOAD(tmpBlockInfoSR)
+    $ => SR        :MLOAD(tmpSR)
 
 finalConsolidateBlockInfoTree:
     ; Store block Info Root in storage
@@ -177,7 +177,7 @@ fillBlockInfoTreeWithLog:
     %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE :JMPN(outOfCountersPoseidon)
     ; save current state root & load block info root
-    SR              :MSTORE(tmpBlockInfoSR)
+    SR              :MSTORE(tmpSR)
     $ => SR         :MLOAD(blockInfoSR)
 
     ; Retrieve and update curentLogIndex
@@ -194,4 +194,4 @@ fillBlockInfoTreeWithLog:
 
     ; Restore current SR
     SR             :MSTORE(blockInfoSR)
-    $ => SR        :MLOAD(tmpBlockInfoSR), RETURN
+    $ => SR        :MLOAD(tmpSR), RETURN
