@@ -36,10 +36,7 @@ opSTOPend:
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     ; store stack output
-    D               :MSTORE(SP++)
-    ; decrease depth
-    $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth), JMP(readCode)
+    D               :MSTORE(SP++), JMP(readCode)
 
 /**
  * @link [https://www.evm.codes/#f0?fork=berlin]
@@ -60,10 +57,6 @@ opCREATE:
     ; check out-of-gas
     GAS - %CREATE_GAS => GAS  :JMPN(outOfGas)
     GAS                 :MSTORE(gasCall)
-
-    ; increase depth
-    $ => A              :MLOAD(depth)
-    A + 1               :MSTORE(depth)
 
     ; check stack underflow
     SP - 3              :JMPN(stackUnderflow)
@@ -154,10 +147,7 @@ opCREATE:
                         :JMP(txType)
 
 opCreateFail:
-    ; decrease depth
-    $ => A                          :MLOAD(depth)
-    A - 1                           :MSTORE(depth)
-
+    ; return 0 if create fails
     0                   :MSTORE(retDataCTX)
     0                   :MSTORE(SP++), JMP(readCode); [0 => SP]
 
@@ -175,9 +165,6 @@ opCALL:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCountersBinary)
-    ; increase depth
-    $ => A          :MLOAD(depth)
-    A + 1           :MSTORE(depth)
     ; check stack underflow
     SP - 7          :JMPN(stackUnderflow)
     SP - 1 => SP
@@ -297,9 +284,6 @@ opCALLCODE:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
-    ; increase depth
-    $ => A          :MLOAD(depth)
-    A + 1           :MSTORE(depth)
     ; check stack underflow
     SP - 7          :JMPN(stackUnderflow)
     SP - 1 => SP
@@ -482,10 +466,7 @@ opRETURNend:
     ; restore origin CTX values
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
-    1               :MSTORE(SP++); [1 => SP]
-    ; decrease depth
-    $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth), JMP(readCode)
+    1               :MSTORE(SP++), JMP(readCode); [1 => SP]
 
 opRETURNdeploy:
     ; code size limit = 0x6000
@@ -531,10 +512,7 @@ opRETURNcreateEnd:
     ; set SP and PC
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
-    A               :MSTORE(SP++); [createContractAddress(A) => SP]
-    ; decrease depth
-    $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth), JMP(readCode)
+    A               :MSTORE(SP++), JMP(readCode); [createContractAddress(A) => SP]
 
 /**
  * @link [https://www.evm.codes/#f4?fork=berlin]
@@ -547,9 +525,7 @@ opRETURNcreateEnd:
 opDELEGATECALL:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
-    ; increase depth
-    $ => A          :MLOAD(depth)
-    A + 1           :MSTORE(depth)
+
     ; check stack underflow
     SP - 6          :JMPN(stackUnderflow)
     SP - 1 => SP
@@ -648,10 +624,6 @@ opCREATE2:
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*2 :JMPN(outOfCountersPoseidon)
     ; check out-of-gas
     GAS - %CREATE_2_GAS => GAS  :JMPN(outOfGas)
-
-    ; increase depth
-    $ => A              :MLOAD(depth)
-    A + 1               :MSTORE(depth)
 
     ; check stack underflow
     SP - 4              :JMPN(stackUnderflow)
@@ -765,9 +737,6 @@ opCREATE2:
 opSTATICCALL:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 300 :JMPN(outOfCountersStep)
-    ; increase depth
-    $ => A          :MLOAD(depth)
-    A + 1           :MSTORE(depth)
     ; check stack underflow
     SP - 6          :JMPN(stackUnderflow)
     SP - 1 => SP
@@ -921,10 +890,7 @@ opREVERTend:
     CTX             :MSTORE(currentCTX)
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
-    0               :MSTORE(SP++); [0 => SP]
-    ; decrease depth
-    $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth), JMP(readCode)
+    0               :MSTORE(SP++), JMP(readCode); [0 => SP]
 
 VAR GLOBAL sendAllAddress
 ; SELFDESTRUCT is deprecated and EIP-4758 is implemented: https://eips.ethereum.org/EIPS/eip-4758
@@ -1030,10 +996,8 @@ opSENDALLendContinue:
     ; restore origin CTX values
     $ => SP                 :MLOAD(lastSP)
     $ => PC                 :MLOAD(lastPC)
-    D                       :MSTORE(SP++); [output => SP]
-    ; decrease depth
-    $ => A                  :MLOAD(depth)
-    A - 1                   :MSTORE(depth), JMP(readCode)
+    D                       :MSTORE(SP++), JMP(readCode); [output => SP]
+
 /**
  * @link [https://www.evm.codes/#fe?fork=berlin]
  * @zk-counters
