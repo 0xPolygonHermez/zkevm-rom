@@ -97,7 +97,7 @@ opCALLDATACOPY:
     $ => E          :MLOAD(lastMemOffset)
     ; Recover size at C
     $ => C          :MLOAD(lastMemLength)
-    ; If is a calldataCopy called from codeCopy, copy code from calldata alloccation, else if is a create contract, return 0
+    ; If is a calldataCopy called from codeCopy, copy code from calldata allocation, else if is a create contract, return 0
     $               :MLOAD(isCalldataCopyFromCodeCopy), JMPNZ(continueOpCalldatacopyFromCodeCopy)
     $               :MLOAD(isCreateContract), JMPNZ(opCALLDATACOPY0, continueOpCalldatacopy)
     continueOpCalldatacopyFromCodeCopy:
@@ -351,7 +351,7 @@ opEXTCODESIZE:
     $ => A          :MLOAD(SP), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
                     :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ; check out-of-gas
-    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS    :JMPN(outOfGas)
+    GAS - %WARM_STORAGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS    :JMPN(outOfGas)
     ; set key for smt smart contract length query
     %SMT_KEY_SC_LENGTH => B
     0 => C
@@ -386,7 +386,7 @@ opEXTCODECOPY:
                     :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
 
     ; check out-of-gas
-    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS            :JMPN(outOfGas)
+    GAS - %WARM_STORAGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS            :JMPN(outOfGas)
                     :CALL(opEXTCODECOPYLoadBytecode)
     $ => C          :MLOAD(SP+2); [destOffset => C]
     $ => D          :MLOAD(SP+1); [offset => D]
@@ -543,7 +543,7 @@ opRETURNDATACOPY:
     ; if retDataLength < offset + size -> OOG
     A - B - C       :JMPN(outOfGas)
 
-    ; E ret data offset (memory pointer) of last context, B offset in return data  that want to retrive
+    ; E ret data offset (memory pointer) of last context, B offset in return data  that want to retrieve
     E + B => B ; memory pointer where start to copy memory
     ;${3*((C+31)/32)}
     C+31 => A
@@ -615,7 +615,7 @@ opEXTCODEHASH:
     $ => A          :MLOAD(SP), CALL(maskAddress); [address => A]; in: [A: address] out: [A: masked address]
                     :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ; check out-of-gas
-    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS    :JMPN(outOfGas)
+    GAS - %WARM_STORAGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS    :JMPN(outOfGas)
     ; set key for smt smart contract code hash query
     %SMT_KEY_SC_CODE => B
     0 => C
