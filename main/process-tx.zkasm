@@ -30,9 +30,9 @@ processTx:
         CTX                             :MSTORE(currentCTX)
 
         ; Minimum of 100000 steps left to process a tx
-        %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCountersStep)
-        %MAX_CNT_BINARY - CNT_BINARY - 100   :JMPN(outOfCountersBinary)
-        %MAX_CNT_ARITH - CNT_ARITH - 2  :JMPN(outOfCountersArith)
+        %MAX_CNT_STEPS - STEP - 100000          :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY - 100      :JMPN(outOfCountersBinary)
+        %MAX_CNT_ARITH - CNT_ARITH - 2          :JMPN(outOfCountersArith)
 
         ; Check the signature
         0 => B
@@ -79,12 +79,12 @@ endCheckChainId:
         ; get value above 256 bits
         ${_effGasPriceShifted >> 256} => D
         ; compute ARITH
-        ${_effGasPriceShifted} => E              :ARITH
+        ${_effGasPriceShifted} => E             :ARITH
 
         ; txGasPrice = _effGasPriceShifted / 256
         256 => B
         ; (_effGasPriceShifted / 256)(A) * 256(B) + (_effGasPriceShifted % 256)(C) = D * 2**256 + op(E)
-        ${_effGasPriceShifted / 256} => A        :MSTORE(txGasPrice)
+        ${_effGasPriceShifted / 256} => A       :MSTORE(txGasPrice)
         ${_effGasPriceShifted % 256} => C
         ; compute ARITH
         E                                       :ARITH
@@ -137,7 +137,7 @@ addGas:
         0 => C                          :JMP(loopBytes)
 
 loopBytes:
-        %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 10      :JMPN(outOfCountersStep)
         A - C - 1                       :JMPN(endCalldataIntrinsicGas)
         E => B
         $ => E                          :MLOAD(batchHashDataId)
@@ -327,10 +327,10 @@ endContractAddress:
 
 ;; deploy contract in state-tree
 deploy:
-        %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 200                                             :JMPN(outOfCountersStep)
         %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*3 :JMPN(outOfCountersPoseidon)
-        %MAX_CNT_BINARY - CNT_BINARY - 3   :JMPN(outOfCountersBinary)
-                                :CALL(isColdAddress) ; add address to touched addresses
+        %MAX_CNT_BINARY - CNT_BINARY - 3                                        :JMPN(outOfCountersBinary)
+                                                                                :CALL(isColdAddress) ; add address to touched addresses
         ; check if address is deployable ( nonce == bytecode == 0)
         A => E
 
@@ -458,7 +458,7 @@ readCode:
 ;; Compute and save hash bytecode and bytecode length in the state-tree
 endDeploy:
         ; checks zk-counters
-        %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 400                                             :JMPN(outOfCountersStep)
         %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*2 :JMPN(outOfCountersPoseidon)
 
         ; called from `opRETURNDeploy` which has: C --> length, E --> offset
@@ -496,7 +496,7 @@ handleGasFromError:
     0               :MSTORE(txStatus)
 ;; compute maximum gas to refund
 handleGas:
-        %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 200                                             :JMPN(outOfCountersStep)
         %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*4 :JMPN(outOfCountersPoseidon)
         0 => A
         $ => B                          :MLOAD(gasRefund), JMPZ(refundGas)
@@ -557,30 +557,30 @@ sendGasSeq:
 
 ;; handle invalid transaction due to intrinsic checks
 invalidIntrinsicTxSignature:
-        $${eventLog(onError, intrinsic_invalid_signature)} :JMP(handleIntrinsicError)
+        $${eventLog(onError, intrinsic_invalid_signature)}      :JMP(handleIntrinsicError)
 
 invalidIntrinsicTxChainId:
-        $${eventLog(onError, intrinsic_invalid_chain_id)}  :JMP(handleIntrinsicError)
+        $${eventLog(onError, intrinsic_invalid_chain_id)}       :JMP(handleIntrinsicError)
 
 invalidIntrinsicTxNonce:
-        $${eventLog(onError, intrinsic_invalid_nonce)}     :JMP(handleIntrinsicError)
+        $${eventLog(onError, intrinsic_invalid_nonce)}          :JMP(handleIntrinsicError)
 
 invalidIntrinsicTxGasLimit:
-        $${eventLog(onError, intrinsic_invalid_gas_limit)}  :JMP(handleIntrinsicError)
+        $${eventLog(onError, intrinsic_invalid_gas_limit)}      :JMP(handleIntrinsicError)
 
 invalidIntrinsicTxGasOverflow:
-        $${eventLog(onError, intrinsic_invalid_gas_overflow)} :JMP(handleIntrinsicError)
+        $${eventLog(onError, intrinsic_invalid_gas_overflow)}   :JMP(handleIntrinsicError)
 
 invalidIntrinsicTxBalance:
-        $${eventLog(onError, intrinsic_invalid_balance)}    :JMP(handleIntrinsicError)
+        $${eventLog(onError, intrinsic_invalid_balance)}        :JMP(handleIntrinsicError)
 
 invalidIntrinsicBatchGasLimit:
-        $${eventLog(onError, intrinsic_invalid_batch_gas_limit)} :JMP(handleIntrinsicError)
+        $${eventLog(onError, intrinsic_invalid_batch_gas_limit)}:JMP(handleIntrinsicError)
 
 invalidIntrinsicTxSenderCode:
-        $${eventLog(onError, intrinsic_invalid_sender_code)} :JMP(handleIntrinsicError)
+        $${eventLog(onError, intrinsic_invalid_sender_code)}    :JMP(handleIntrinsicError)
 handleIntrinsicError:
-        $ => SR                         :MLOAD(originSR), JMP(processIntrinsicTxFinished)
+        $ => SR                                                 :MLOAD(originSR), JMP(processIntrinsicTxFinished)
 
 ;; handle error no more bytecode to read
 defaultOpCode:
