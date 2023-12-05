@@ -9,9 +9,9 @@ processChangeL2Block:
     %MAX_CNT_BINARY - CNT_BINARY - 4                                            :JMPN(outOfCountersBinary)
 
     ; If it is not the first transaction, we must consolidate previous block
-    $ => A          :MLOAD(currentTx)
-    A - 1           :JMPZ(continueProcessChangeL2Block)
-                    :CALL(consolidateBlock)
+    $ => A                              :MLOAD(currentTx)
+    A - 1                               :JMPZ(continueProcessChangeL2Block)
+                                        :CALL(consolidateBlock)
 
 continueProcessChangeL2Block:
     ; Reset tx index, logIndex and cumulative gas used
@@ -51,52 +51,52 @@ continueProcessChangeL2Block:
     %TIMESTAMP_STORAGE_POS => C
     %ADDRESS_SYSTEM => A
     %SMT_KEY_SC_STORAGE => B
-    $ => A                                         :SLOAD ; currentTimestamp => A
+    $ => A                              :SLOAD ; currentTimestamp => A
 
-    $ => B                                         :MLOAD(timestampLimit) ; timestampLimit => B
+    $ => B                              :MLOAD(timestampLimit) ; timestampLimit => B
 
     ; If it is NOT a forced tx ==> verify Timestamp & L1InfoRoot
-    $                                              :MLOAD(isForced), JMPZ(verifyTimestampAndL1InfoRoot)
+    $                                   :MLOAD(isForced), JMPZ(verifyTimestampAndL1InfoRoot)
 
     ; forced batch
     ;   - update timestamp only if currentTimestamp < limitTimestamp
     ;   - set blockHash to default
-    $ => C                                  :MLOAD(forcedBlockHashL1)
-    C                                       :MSTORE(blockHashL1InfoTree)
-    A                                       :MSTORE(timestamp)
-    $                                       :LT, JMPNC(initSetGERL1InfoTree)
+    $ => C                              :MLOAD(forcedBlockHashL1)
+    C                                   :MSTORE(blockHashL1InfoTree)
+    A                                   :MSTORE(timestamp)
+    $                                   :LT, JMPNC(initSetGERL1InfoTree)
 
 newForcedTimestamp:
-    B                                       :MSTORE(timestamp), JMP(setNewTimestamp)
+    B                                   :MSTORE(timestamp), JMP(setNewTimestamp)
 
 verifyTimestampAndL1InfoRoot:
-    $ => B                                  :MLOAD(deltaTimestamp)
+    $ => B                              :MLOAD(deltaTimestamp)
     ; Addition of two values of 8 bytes [B: currentTimestamp(A) + deltaTimestamp(B)]
-    $ => B                                  :ADD, MSTORE(timestamp)
+    $ => B                              :ADD, MSTORE(timestamp)
 
     ; Verify (currentTimestamp + deltaTimestamp) <= limitTimestamp
-    $ => A                                  :MLOAD(timestampLimit)
-    $                                       :LT, JMPC(invalidChangeL2Block)
+    $ => A                              :MLOAD(timestampLimit)
+    $                                   :LT, JMPC(invalidChangeL2Block)
 
     ; Set new timestamp
     %TIMESTAMP_STORAGE_POS => C
     %ADDRESS_SYSTEM => A
     %SMT_KEY_SC_STORAGE => B
-    $ => D                                  :MLOAD(timestamp)
-    $ => SR                                 :SSTORE
+    $ => D                              :MLOAD(timestamp)
+    $ => SR                             :SSTORE
 
     ; check indexL1InfoTree != 0 to verify data L1InfoTree
-    $                                       :MLOAD(indexL1InfoTree), JMPZ(skipSetGERL1InfoTree)
+    $                                               :MLOAD(indexL1InfoTree), JMPZ(skipSetGERL1InfoTree)
 
-    ${getL1InfoGER(mem.indexL1InfoTree)} => A                      :MSTORE(gerL1InfoTree)
-    ${getL1InfoBlockHash(mem.indexL1InfoTree)} => B                :MSTORE(blockHashL1InfoTree)
-    ${getL1InfoTimestamp(mem.indexL1InfoTree)} => C                :MSTORE(timestampL1InfoTree)
-                                                                   :CALL(verifyMerkleProof)
+${getL1InfoGER(mem.indexL1InfoTree)} => A           :MSTORE(gerL1InfoTree)
+${getL1InfoBlockHash(mem.indexL1InfoTree)} => B     :MSTORE(blockHashL1InfoTree)
+${getL1InfoTimestamp(mem.indexL1InfoTree)} => C     :MSTORE(timestampL1InfoTree)
+                                                    :CALL(verifyMerkleProof)
 
     ; Verify (currentTimestamp + deltaTimestamp) >= l1InfoRoot.timestamp
-    $ => A                                  :MLOAD(timestamp)
-    $ => B                                  :MLOAD(timestampL1InfoTree)
-    $                                       :LT, JMPC(invalidChangeL2Block, initSetGERL1InfoTree)
+    $ => A                                          :MLOAD(timestamp)
+    $ => B                                          :MLOAD(timestampL1InfoTree)
+    $                                               :LT, JMPC(invalidChangeL2Block, initSetGERL1InfoTree)
 
 setNewTimestamp:
     ; Set new timestamp

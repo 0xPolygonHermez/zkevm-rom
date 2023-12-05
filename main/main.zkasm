@@ -14,36 +14,36 @@ start: ; main zkROM entry point
 ;; A - Load input variables
 ;;;;;;;;;;;;;;;;;;
         STEP => A
-        0                                   :ASSERT ; Ensure it is the beginning of the execution
+        0                                       :ASSERT ; Ensure it is the beginning of the execution
 
-        CTX                                 :MSTORE(forkID)
-        CTX - %FORK_ID                      :JMPNZ(failAssert)
+        CTX                                     :MSTORE(forkID)
+        CTX - %FORK_ID                          :JMPNZ(failAssert)
 
-        B => A                              :MSTORE(oldStateRoot)
+        B => A                                  :MSTORE(oldStateRoot)
 
         ; safety check that the input root is indeed inside the range limit of 4 goldilocks fields elements
         %FOUR_GOLDILOCKS => B
-        1                                   :LT4
+        1                                       :LT4
 
-        C                                   :MSTORE(oldAccInputHash)
-        SP                                  :MSTORE(oldNumBatch)
-        GAS                                 :MSTORE(chainID) ; assumed to be less than 32 bits
+        C                                       :MSTORE(oldAccInputHash)
+        SP                                      :MSTORE(oldNumBatch)
+        GAS                                     :MSTORE(chainID) ; assumed to be less than 32 bits
 
-        ${getL1InfoRoot()}                  :MSTORE(l1InfoRoot)
-        ${getSequencerAddr()}               :MSTORE(sequencerAddr)
-        ${getTimestampLimit()}              :MSTORE(timestampLimit)
-        ${getTxsLen()}                      :MSTORE(batchL2DataLength) ; less than 300.000 bytes. Enforced by the smart contract
-        ${getForcedBlockHashL1()} => A      :MSTORE(forcedBlockHashL1)
+        ${getL1InfoRoot()}                      :MSTORE(l1InfoRoot)
+        ${getSequencerAddr()}                   :MSTORE(sequencerAddr)
+        ${getTimestampLimit()}                  :MSTORE(timestampLimit)
+        ${getTxsLen()}                          :MSTORE(batchL2DataLength) ; less than 300.000 bytes. Enforced by the smart contract
+        ${getForcedBlockHashL1()} => A          :MSTORE(forcedBlockHashL1)
 
         ;set initial state root
-        $ => SR                             :MLOAD(oldStateRoot)
-        SR                                  :MSTORE(batchSR)
+        $ => SR                                 :MLOAD(oldStateRoot)
+        SR                                      :MSTORE(batchSR)
         ; Increase batch number
-        SP + 1                              :MSTORE(newNumBatch)
+        SP + 1                                  :MSTORE(newNumBatch)
         ; compute isForced flag
         0 => B
-        $                                   :EQ, JMPC(computeKeccaks)
-        1                                   :MSTORE(isForced)
+        $                                       :EQ, JMPC(computeKeccaks)
+        1                                       :MSTORE(isForced)
 
 ;;;;;;;;;;;;;;;;;;
 ;; B - Compute keccaks needed to finish the batch
@@ -68,27 +68,27 @@ computeKeccaks:
 ;;      - If an error is found in any transaction, the batch will not process any transaction
 ;;;;;;;;;;;;;;;;;;
 
-        1 => E                              :MSTORE(lastHashKIdUsed)
-        0                                   :MSTORE(batchHashPos)
-        E                                   :MSTORE(batchHashDataId)
-        $ => A                              :MLOAD(lastCtxUsed)
-        A + %CALLDATA_RESERVED_CTX => A     :MSTORE(ctxTxToUse) ; Points at first context to be used when processing transactions. We reserve ctx = 1 for calldata
-        A                                   :MSTORE(lastCtxUsed)
+        1 => E                                  :MSTORE(lastHashKIdUsed)
+        0                                       :MSTORE(batchHashPos)
+        E                                       :MSTORE(batchHashDataId)
+        $ => A                                  :MLOAD(lastCtxUsed)
+        A + %CALLDATA_RESERVED_CTX => A         :MSTORE(ctxTxToUse) ; Points at first context to be used when processing transactions. We reserve ctx = 1 for calldata
+        A                                       :MSTORE(lastCtxUsed)
         $${var p = 0}
         ; set flag isLoadingRLP to 1
-        1               :MSTORE(isLoadingRLP)
+        1                                       :MSTORE(isLoadingRLP)
 
 txLoopRLP:
-        $ => A          :MLOAD(lastCtxUsed)
-        A+1 => CTX      :MSTORE(lastCtxUsed)
+        $ => A                                  :MLOAD(lastCtxUsed)
+        A+1 => CTX                              :MSTORE(lastCtxUsed)
 
-        $ => A          :MLOAD(batchL2DataLength)
-        $ => C          :MLOAD(batchL2DataParsed)
-        C - A           :JMPN(loadTx_rlp, endCheckRLP)
+        $ => A                                  :MLOAD(batchL2DataLength)
+        $ => C                                  :MLOAD(batchL2DataParsed)
+        C - A                                   :JMPN(loadTx_rlp, endCheckRLP)
 
 endCheckRLP:
         ; set flag isLoadingRLP to 0
-        0               :MSTORE(isLoadingRLP)
+        0                                       :MSTORE(isLoadingRLP)
 
 ;;;;;;;;;;;;;;;;;;
 ;; D - Load blockNum variable
@@ -100,42 +100,42 @@ setBlockNum:
         %LAST_BLOCK_STORAGE_POS => C
         %ADDRESS_SYSTEM => A
         %SMT_KEY_SC_STORAGE => B
-        $                               :SLOAD,MSTORE(blockNum)
+        $                                       :SLOAD,MSTORE(blockNum)
         ; If forced batch ==> process a forced changeL2BlockTx
-        $               :MLOAD(isForced), JMPZ(txLoop, handleForcedBatch)
+        $                                       :MLOAD(isForced), JMPZ(txLoop, handleForcedBatch)
 
 handleForcedBatch:
-        1               :MSTORE(currentTx), JMP(processChangeL2Block)
+        1                                       :MSTORE(currentTx), JMP(processChangeL2Block)
 
 txLoop:
-        $ => A          :MLOAD(pendingTxs)
-        A - 1           :MSTORE(pendingTxs), JMPN(processTxsEnd)
-        $ => A          :MLOAD(currentTx)
-        A + 1           :MSTORE(currentTx)
-        $ => A          :MLOAD(ctxTxToUse) ; Load first context used by transaction
-        A + 1 => CTX    :MSTORE(ctxTxToUse)
+        $ => A                                  :MLOAD(pendingTxs)
+        A - 1                                   :MSTORE(pendingTxs), JMPN(processTxsEnd)
+        $ => A                                  :MLOAD(currentTx)
+        A + 1                                   :MSTORE(currentTx)
+        $ => A                                  :MLOAD(ctxTxToUse) ; Load first context used by transaction
+        A + 1 => CTX                            :MSTORE(ctxTxToUse)
         ; Detect if transaction is a change L2 block tx
         ; Store initial state at the beginning of the transaction
-        SR              :MSTORE(originSR)
-        $ => A          :MLOAD(isChangeL2BlockTx)
-        A - 1           :JMPZ(processChangeL2Block, processTx)
+        SR                                      :MSTORE(originSR)
+        $ => A                                  :MLOAD(isChangeL2BlockTx)
+        A - 1                                   :JMPZ(processChangeL2Block, processTx)
 
 processTxFinished:
         ; Increase cumulativeGasUsed
-        $ => A          :MLOAD(txGasLimit)
+        $ => A                                  :MLOAD(txGasLimit)
         A - GAS => A
-        $ => B          :MLOAD(cumulativeGasUsed)
+        $ => B                                  :MLOAD(cumulativeGasUsed)
         ; Fill block info tree with tx receipt
-        A + B           :MSTORE(cumulativeGasUsed), CALL(fillBlockInfoTreeWithTxReceipt)
+        A + B                                   :MSTORE(cumulativeGasUsed), CALL(fillBlockInfoTreeWithTxReceipt)
         ; Increase txIndex
-        $ => A          :MLOAD(txIndex)
-        A + 1           :MSTORE(txIndex)
+        $ => A                                  :MLOAD(txIndex)
+        A + 1                                   :MSTORE(txIndex)
 processIntrinsicTxFinished:
-        $${eventLog(onFinishTx)}   :JMP(txLoop)
+        $${eventLog(onFinishTx)}                :JMP(txLoop)
 
 processTxsEnd:
         ;  Write values at storage at the end of block processing
-                        :CALL(consolidateBlock)
+                                                :CALL(consolidateBlock)
 finalizeBatch:
 
 ;;;;;;;;;;;;;;;;;;
@@ -152,22 +152,22 @@ finalizeBatch:
         %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2  => A
         %SMT_KEY_SC_STORAGE => B
         %LOCAL_EXIT_ROOT_STORAGE_POS => C
-        $ => A                                          :SLOAD
-        A                                               :MSTORE(newLocalExitRoot)
+        $ => A                                  :SLOAD
+        A                                       :MSTORE(newLocalExitRoot)
 
 ;; Transactions size verification
         ; Ensure bytes added to compute the 'batchHashData' matches the number of bytes loaded from input
-        $ => A                          :MLOAD(batchHashPos)
-        $                               :MLOAD(batchL2DataLength), ASSERT
+        $ => A                                  :MLOAD(batchHashPos)
+        $                                       :MLOAD(batchL2DataLength), ASSERT
 
 ;; Compute 'batchHashData'
         A => HASHPOS
-        $ => E                          :MLOAD(batchHashDataId)
+        $ => E                                  :MLOAD(batchHashDataId)
 
-        HASHPOS                         :HASHKLEN(E)
-        $ => A                          :HASHKDIGEST(E)
+        HASHPOS                                 :HASHKLEN(E)
+        $ => A                                  :HASHKDIGEST(E)
 
-        A                               :MSTORE(batchHashData)
+        A                                       :MSTORE(batchHashData)
 
 ;; Compute 'newAccInputHash'
         0 => HASHPOS
