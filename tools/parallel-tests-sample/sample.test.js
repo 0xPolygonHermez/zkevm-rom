@@ -56,12 +56,6 @@ async function runTest(cmPols, steps) {
 
         await smMain.execute(cmPols.Main, input, rom, config);
     } catch (err) {
-    // If fails for ooc, retry increasing stepsN up to three times
-        if (inputPath.includes('invalid-batch')) {
-            expect(input.oldStateRoot).to.be.equal(input.newStateRoot);
-
-            return;
-        }
         fs.writeFileSync(checkerDir, `Failed test ${inputPath} - ${err}}`);
         throw err;
     }
