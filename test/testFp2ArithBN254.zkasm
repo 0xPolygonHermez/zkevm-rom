@@ -8,7 +8,7 @@ CONST %MAX_CNT_KECCAK_F_LIMIT = %N
 CONST %MAX_CNT_PADDING_PG_LIMIT = %N
 CONST %MAX_CNT_POSEIDON_G_LIMIT = %N
 
-CONSTL %BN254_P = 21888242871839275222246405745257275088696311157297823662689037894645226208583n 
+CONSTL %BN254_P = 21888242871839275222246405745257275088696311157297823662689037894645226208583n
 
 VAR GLOBAL lastHashKId
 VAR GLOBAL lastHashPId
@@ -51,58 +51,87 @@ start:
         -1          :MSTORE(lastHashKId)
         -1          :MSTORE(lastHashPId)
 
+        ; 1] Addition
         1n => A
         2n => B
         3n => C
         4n => D
-                :CALL(addFp2BN254)
+                                                                                        :CALL(addFp2BN254)
         E => A
-        4n => B :ASSERT
+        4n                                                                              :ASSERT
         C => A
-        6n => B :ASSERT
+        6n                                                                              :ASSERT
 
+        ; 2] Subtraction
         1n => A
         4n => B
         3n => C
         2n => D
-                :CALL(subFp2BN254)
+                                                                                        :CALL(subFp2BN254)
         E => A
-        21888242871839275222246405745257275088696311157297823662689037894645226208581n => B :ASSERT
+        21888242871839275222246405745257275088696311157297823662689037894645226208581n  :ASSERT
         C => A
-        2n => B :ASSERT
+        2n                                                                              :ASSERT
+
+        ; 3] Inversion
+        0n => A
+        0n => B
+                                                                                        :CALL(invFp2BN254)
+        C => A
+        0                                                                               :ASSERT
+        D => A
+        0                                                                               :ASSERT
+
+        2n => A
+        0n => B
+                                                                                        :CALL(invFp2BN254)
+        C => A
+        10944121435919637611123202872628637544348155578648911831344518947322613104292n  :ASSERT
+        D => A
+        0                                                                               :ASSERT
+
+        0n => A
+        2n => B
+                                                                                        :CALL(invFp2BN254)
+        C => A
+        0                                                                               :ASSERT
+        D => A
+        10944121435919637611123202872628637544348155578648911831344518947322613104291n  :ASSERT
 
         1n => A
         2n => B
-                :CALL(invFp2BN254)
+                                                                                        :CALL(invFp2BN254)
         C => A
-        13132945723103565133347843447154365053217786694378694197613422736787135725150n => B :ASSERT
+        13132945723103565133347843447154365053217786694378694197613422736787135725150n  :ASSERT
         D => A
-        17510594297471420177797124596205820070957048925838258930151230315716180966866n => B :ASSERT
+        17510594297471420177797124596205820070957048925838258930151230315716180966866n  :ASSERT
 
         1n => A
         4n => B
-                :CALL(invFp2BN254)
+                                                                                        :CALL(invFp2BN254)
         C => A
-        5150174793373947111116801351825241197340308507599487920632714798740053225549n => B :ASSERT
+        5150174793373947111116801351825241197340308507599487920632714798740053225549n   :ASSERT
         D => A
-        1287543698343486777779200337956310299335077126899871980158178699685013306387n => B :ASSERT
+        1287543698343486777779200337956310299335077126899871980158178699685013306387n   :ASSERT
 
+        ; 4] Squaring
         1n => A
         4n => B
-                :CALL(squareFp2BN254)
+                                                                                        :CALL(squareFp2BN254)
         E => A
-        21888242871839275222246405745257275088696311157297823662689037894645226208568n => B :ASSERT
+        21888242871839275222246405745257275088696311157297823662689037894645226208568n  :ASSERT
         C => A
-        8n => B :ASSERT
+        8n                                                                              :ASSERT
 
+        ; 5] Escalar Multiplication
         3n => A
         6n => C
         4n => D
-                :CALL(escalarMulFp2BN254)
+                                                                                        :CALL(escalarMulFp2BN254)
         E => A
-        18n => B :ASSERT
+        18n                                                                             :ASSERT
         C => A
-        12n => B :ASSERT
+        12n                                                                             :ASSERT
 
 
 end:
@@ -130,6 +159,8 @@ opINVALID:
 ; label checkAndSaveFrom needed by executor C++
 checkAndSaveFrom:
                          :JMP(opINVALID)
+
+INCLUDE "../main/pairings/FPBN254/reduceFpBN254.zkasm"
 
 INCLUDE "../main/pairings/FP2BN254/addFp2BN254.zkasm"
 INCLUDE "../main/pairings/FP2BN254/subFp2BN254.zkasm"

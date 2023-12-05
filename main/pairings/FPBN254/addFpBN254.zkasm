@@ -1,4 +1,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; POST: The result is in the range [0,BN254_P)
 ;;
 ;; addFpBN254:
 ;;             in: A,C ∈ Fp
@@ -15,13 +16,14 @@ addFpBN254:
         ${_addFpBN254_AC} => E :ARITH
 
         ; 2] Check it over Fp, that is, it must be satisfied that:
-        ; [BN254_P]·[A+C] + [C] = D·2²⁵⁶ + E
+        ; [BN254_P]·[(A+C) / p] + [(A+C) % p] = D·2²⁵⁶ + E
         ; where C < BN254_P
         %BN254_P => A
         ${_addFpBN254_AC / const.BN254_P} => B        ; quotient  (256 bits)
         ${_addFpBN254_AC % const.BN254_P} => C        ; residue (256 bits)
         E :ARITH
-        
+
+        ; 3] Check that the result is lower than BN254_P
         A => B
         C => A
         1       :LT, RETURN
