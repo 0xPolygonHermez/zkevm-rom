@@ -12,7 +12,7 @@
 
 ; function array_square(a: bigint[], B: bigint): bigint[] {
 ;     let len = a.length;
-;     let result = new Array<bigint>(len).fill(0n);
+;     let out = new Array<bigint>(len).fill(0n);
 ;     let product: bigint;
 ;     let carry: bigint;
 ;     let a_i: bigint;
@@ -22,15 +22,15 @@
 ;         carry = 0n - a_i * a_i;
 ;         for (var j = i; j < len; j++) {
 ;             a_j = a[j];
-;             product = 2n * (a_i * a_j) + result[i + j] + carry;
+;             product = 2n * (a_i * a_j) + out[i + j] + carry;
 ;             carry = product / B;
 
-;             result[i + j] = product - carry * B;
+;             out[i + j] = product - carry * B;
 ;         }
-;         result[i + len] = carry;
+;         out[i + len] = carry;
 ;     }
-;     trim(result);
-;     return result;
+;     trim(out);
+;     return out;
 ; }
 
 VAR GLOBAL array_square_in[%ARRAY_MAX_LEN]
@@ -86,61 +86,72 @@ array_square_clean_out:
         RR              :JMPZ(array_square_loopZero2inA, array_square_clean_out)
 
 ; Begin of branching
-array_square_add_carry_1:
-        D + 1 => D      :JMP(return_array_square_add_carry_1)
-
-array_square_add_carry_2:
+array_square_add_low_carry_1:
+        ; Since here high ∈ [0, 2²⁵⁶ - 2], there cannot be carry in the following addition
         D => A
         1 => B
-        $ => D          :ADD, JMPC(array_square_add_carry_carry_2, return_array_square_add_carry_2)
+        $ => D          :ADD, JMP(return_array_square_add_low_carry_1)
 
-array_square_add_carry_3:
+array_square_add_low_carry_2:
+        ; Since here high ∈ [0, 2²⁵⁶ - 1], there can be carry in the following addition
         D => A
         1 => B
-        $ => D          :ADD, JMPC(array_square_add_carry_carry_4, return_array_square_add_carry_3)
+        $ => D          :ADD, JMPC(array_square_add_high_carry_2, return_array_square_add_low_carry_2)
 
-array_square_add_carry_carry_1:
+array_square_add_low_carry_3:
+        ; Since here high ∈ [0, 2²⁵⁶ - 1], there can be carry in the following addition
+        D => A
+        1 => B
+        $ => D          :ADD, JMPC(array_square_add_high_carry_4, return_array_square_add_low_carry_3)
+
+; In the add_high_carry_X branches, since highest = 0, there cannot be carry in the additions
+; Moreover, we can perform "plain" addition
+array_square_add_high_carry_1:
         $ => A          :MLOAD(array_square_highest_carry)
         A + 1           :MSTORE(array_square_highest_carry)
-                        :JMP(return_array_square_add_carry_carry_1)
+                        :JMP(return_array_square_add_high_carry_1)
 
-array_square_add_carry_carry_2:
+array_square_add_high_carry_2:
         $ => A          :MLOAD(array_square_highest_carry)
         A + 1           :MSTORE(array_square_highest_carry)
-                        :JMP(return_array_square_add_carry_2)
+                        :JMP(return_array_square_add_low_carry_2)
 
-array_square_add_carry_carry_3:
+array_square_add_high_carry_3:
         $ => A          :MLOAD(array_square_highest_carry)
         A + 1           :MSTORE(array_square_highest_carry)
-                        :JMP(return_array_square_add_carry_carry_3)
+                        :JMP(return_array_square_add_high_carry_3)
 
-array_square_add_carry_carry_4:
+array_square_add_high_carry_4:
         $ => A          :MLOAD(array_square_highest_carry)
         A + 1           :MSTORE(array_square_highest_carry)
-                        :JMP(return_array_square_add_carry_3)
+                        :JMP(return_array_square_add_low_carry_3)
 
-array_square_add_carry_carry_5:
+array_square_add_high_carry_5:
         $ => A          :MLOAD(array_square_highest_carry)
         A + 1           :MSTORE(array_square_highest_carry)
-                        :JMP(return_array_square_add_carry_carry_5)
+                        :JMP(return_array_square_add_high_carry_5)
 
+; In the is_negative_X branches, we perform subtraction of a value with three chunks
+; Therefore, the subtraction can produce carry until the highest chunk
 array_square_is_negative_1:
-        $ => C          :SUB, JMPC(array_square_sub_carry_2, return_array_square_is_negative_1)
+        $ => C          :SUB, JMPC(array_square_sub_low_carry_2, return_array_square_is_negative_1)
 
 array_square_is_negative_2:
-        $ => D          :SUB, JMPC(array_square_sub_carry_carry_2, return_array_square_is_negative_2)
+        $ => D          :SUB, JMPC(array_square_sub_high_carry_2, return_array_square_is_negative_2)
 
-array_square_sub_carry_2:
+array_square_sub_low_carry_2:
         D => A
         1 => B
-        $ => D          :SUB, JMPC(array_square_sub_carry_carry_1, return_array_square_is_negative_1)
+        $ => D          :SUB, JMPC(array_square_sub_high_carry_1, return_array_square_is_negative_1)
 
-array_square_sub_carry_carry_1:
+; Similarly, in the sub_high_carry_X branches, since highest = 1, there cannot be carry in the subtraction
+; Moreover, we can perform "plain" subtraction
+array_square_sub_high_carry_1:
         $ => A          :MLOAD(array_square_highest_carry)
         A - 1           :MSTORE(array_square_highest_carry)
                         :JMP(return_array_square_is_negative_1)
 
-array_square_sub_carry_carry_2:
+array_square_sub_high_carry_2:
         $ => A          :MLOAD(array_square_highest_carry)
         A - 1           :MSTORE(array_square_highest_carry)
                         :JMP(return_array_square_is_negative_2)
@@ -180,7 +191,8 @@ array_square_loop_index_check:
 
 array_square_loopZero2inA:
         RCX => E
-        ; product = 2·(a_i·a_j) + out[i + j] + carry
+        ; product = 2·(a_i·a_j) + out[i + j] + carry.
+        ; The result will be stored as array_square_highest_carry·base² + D·base + C
 
         ; 1] a_i·a_j: This number cannot be GT (base - 2)·base + 1, two chunks
         $ => A          :MLOAD(array_square_in + E)
@@ -193,47 +205,44 @@ array_square_loopZero2inA:
 
         ; 2] 2·a_i·a_j: This number cannot be GT base² + (base - 4)·base + 2, three chunks
         E => A,B
-        $ => C          :ADD, JMPC(array_square_add_carry_1)
-                        return_array_square_add_carry_1:
+        $ => C          :ADD, JMPC(array_square_add_low_carry_1)
+                        return_array_square_add_low_carry_1:
         $ => A          :MLOAD(array_square_aiaj_high)
         D => B
-        $ => D          :ADD, JMPC(array_square_add_carry_carry_1)
-                        return_array_square_add_carry_carry_1:
-
-        ; The result is stored as array_square_highest_carry·base² + D·base + C
-
+        $ => D          :ADD, JMPC(array_square_add_high_carry_1)
+                        return_array_square_add_high_carry_1:
 
         ; 3] 2·a_i·a_j + out[i + j]:
         ;       a) j != len: This number cannot be GT base² + (base - 3)·base + 1, as out[i + j] < B
-        ;       b) j == len: This number cannot be GT base² + (base - 3)·base + base - 1, as  out[i + j] <= B + (B - 3)
+        ;       b) j == len: This number cannot be GT base² + (base - 3)·base + base - 1, as  out[i + len] <= B + (B - 3)
         ; In both cases, three chunks
         RR + RCX => E
         $ => A          :MLOAD(array_square_out + E)
         C => B
-        $ => C          :ADD, JMPC(array_square_add_carry_2)
-                        return_array_square_add_carry_2:
+        $ => C          :ADD, JMPC(array_square_add_low_carry_2)
+                        return_array_square_add_low_carry_2:
 
         $ => A          :MLOAD(array_square_out_carry)
         D => B
-        $ => D          :ADD, JMPC(array_square_add_carry_carry_3)
-                        return_array_square_add_carry_carry_3:
+        $ => D          :ADD, JMPC(array_square_add_high_carry_3)
+                        return_array_square_add_high_carry_3:
 
-        ; 4] 2·a_i·a_j + out[i + j] + carry: This number cannot be GT (base - 2)·base + 1, two chunks
+        ; 4] 2·a_i·a_j + out[i + j] + carry: This number cannot be GT base² + (base - 2)·base, three chunks
         C => A
         $ => B          :MLOAD(array_square_carry_low)
         $               :MLOAD(array_square_carry_sign), JMPZ(array_square_is_negative_1)
-        $ => C          :ADD, JMPC(array_square_add_carry_3)
-                        return_array_square_add_carry_3:
+        $ => C          :ADD, JMPC(array_square_add_low_carry_3)
+                        return_array_square_add_low_carry_3:
                         return_array_square_is_negative_1:
 
         D => A
         $ => B          :MLOAD(array_square_carry_high)
         $               :MLOAD(array_square_carry_sign), JMPZ(array_square_is_negative_2)
-        $ => D          :ADD, JMPC(array_square_add_carry_carry_5)
-                        return_array_square_add_carry_carry_5:
+        $ => D          :ADD, JMPC(array_square_add_high_carry_5)
+                        return_array_square_add_high_carry_5:
                         return_array_square_is_negative_2:
 
-        ; carry = product / B; This number cannot be greater than base + (base - 3)
+        ; carry = product / B; This number cannot be greater than base + (base - 2)
         D               :MSTORE(array_square_carry_low)
         $ => A          :MLOAD(array_square_highest_carry)
         A               :MSTORE(array_square_carry_high)
@@ -247,7 +256,7 @@ array_square_loopZero2inA:
         0              :MSTORE(array_square_highest_carry)
         RR => A
         $ => B          :MLOAD(array_square_len_in)
-        $               :EQ, JMPC(array_square_loop_index_check) ; [Steps: 61]
+        $               :EQ, JMPC(array_square_loop_index_check)
                         return_array_square_loop_index_check:
                         :JMP(array_square_loopZero2inA)
 
