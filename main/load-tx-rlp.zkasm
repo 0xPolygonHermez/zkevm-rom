@@ -21,15 +21,14 @@ loadTx_rlp:
         $ => D                                          :MLOAD(cntKeccakPreProcess)
         %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1 - D        :JMPN(outOfCountersKeccak)
 
-        ; A new hash with position 0 is started
-        0 => HASHPOS
-
         ; Pointer to next RLP bytes to read
         0 => C
         ; Check it is a change L2 block transaction
-        1 => D
+        %TYPE_BYTES => D
         ${getTxs(p,D)} => A
-        A - %CHANGE_L2_BLOCK_TX_TYPE                     :JMPZ(decodeChangeL2BlockTx)
+        $${p = p + D}
+        C + D => C                      :CALL(addBatchHashData)
+        A - %CHANGE_L2_BLOCK_TX_TYPE    :JMPZ(decodeChangeL2BlockTx)
 checkFirstTxType:
         ; First transaction must be a change L2 block transaction if it is NOT a forced batch
         $                               :MLOAD(pendingTxs), JMPNZ(loadTx_rlp_continue)
@@ -48,9 +47,10 @@ loadTx_rlp_continue:
 ;;;;;;;;;;;;;;;;;;
 
 ;; Read RLP list length
-        ; Should be a list
-        1 => D                          :CALL(addHashTxBegin)
-                                        :CALL(addBatchHashData)
+        ; Add first byte to tx hash and batch hash
+        ; A new hash with position 0 is started
+        0 => HASHPOS
+        A                               :HASHK(E)
         A - 0xc0                        :JMPN(invalidTxRLP)
         A - 0xf8                        :JMPN(shortList)
         ; do not allow lists over 2**24 bytes length
