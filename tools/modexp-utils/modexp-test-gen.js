@@ -91,9 +91,9 @@ INCLUDE "../main/modexp/array_lib/array_add_short.zkasm"
 INCLUDE "../main/modexp/array_lib/array_mul.zkasm"
 INCLUDE "../main/modexp/array_lib/array_mul_long.zkasm"
 INCLUDE "../main/modexp/array_lib/array_mul_short.zkasm"
-INCLUDE "../main/modexp/array_lib/array_div_mod.zkasm"
-INCLUDE "../main/modexp/array_lib/array_div_mod_long.zkasm"
-INCLUDE "../main/modexp/array_lib/array_div_mod_short.zkasm"
+INCLUDE "../main/modexp/array_lib/array_div.zkasm"
+INCLUDE "../main/modexp/array_lib/array_div_long.zkasm"
+INCLUDE "../main/modexp/array_lib/array_div_short.zkasm"
 `;
 
 const counters = [];
@@ -117,17 +117,17 @@ for (let i = 1; i <= 5; i++) {
 
             const fileTest2 = `\t\t:CALL(array_mul)\n\t${i+j} => C\n\t${k} => D\n\t`
 
-            let fileTest3 =`$ => A          :MLOAD(array_mul_out)\n\tA               :MSTORE(array_div_mod_inA)\n\t115792089237316195423570985008687907853269984665640564039457584007913129639935n                 :MSTORE(array_div_mod_inB)\n\t`
+            let fileTest3 =`$ => A          :MLOAD(array_mul_out)\n\tA               :MSTORE(array_div_inA)\n\t115792089237316195423570985008687907853269984665640564039457584007913129639935n                 :MSTORE(array_div_inB)\n\t`
 
             for (let l = 1; l < k; l++) {
-                fileTest3 += `${l} => E\n\t$ => A          :MLOAD(array_mul_out + E)\n\tA               :MSTORE(array_div_mod_inA + E)\n\t115792089237316195423570985008687907853269984665640564039457584007913129639935n                 :MSTORE(array_div_mod_inB + E)\n\t`
+                fileTest3 += `${l} => E\n\t$ => A          :MLOAD(array_mul_out + E)\n\tA               :MSTORE(array_div_inA + E)\n\t115792089237316195423570985008687907853269984665640564039457584007913129639935n                 :MSTORE(array_div_inB + E)\n\t`
             }
 
             for (let l = k; l < i + j; l++) {
-                fileTest3 += `${l} => E\n\t$ => A          :MLOAD(array_mul_out + E)\n\tA               :MSTORE(array_div_mod_inA + E)\n\t`
+                fileTest3 += `${l} => E\n\t$ => A          :MLOAD(array_mul_out + E)\n\tA               :MSTORE(array_div_inA + E)\n\t`
             }
 
-            fileTest3 += `:CALL(array_div_mod)\n`;
+            fileTest3 += `:CALL(array_div)\n`;
 
             const fileTest = fileTest1 + fileTest2 + fileTest3;
 
