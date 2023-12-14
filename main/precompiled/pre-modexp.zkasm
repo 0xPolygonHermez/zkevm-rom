@@ -37,6 +37,8 @@ VAR GLOBAL modexp_Msize
 VAR GLOBAL modexp_Mend
 VAR GLOBAL modexp_offset
 VAR GLOBAL modexp_returnIndex
+VAR GLOBAL modexp_returnFirstIndex
+VAR GLOBAL modexp_returnIndexRem
 VAR GLOBAL expLenBits
 
 funcModexp:
@@ -71,9 +73,8 @@ funcModexp:
     E                                   :MSTORE(modexp_offset)
     ; get exp offset = 96 bytes (Bsize | Esize | Msize) + Bsize
     $ => A                              :MLOAD(modexp_Bsize)
-    A                                   :MSTORE(arithA)
-    96                                  :MSTORE(arithB), CALL(addARITH)
-    $ => A                              :MLOAD(arithRes1)
+    96 => B
+    $ => A                              :ADD
     $ => B                              :MLOAD(txCalldataLen)
     ; expLenBits = bit length of first 32 bytes of exp
     0                                   :MSTORE(expLenBits)
@@ -145,7 +146,9 @@ calculateGas:
     $ => A                              :MLOAD(arithRes1)
     $ => B                              :MLOAD(expLenBits)
     ; iteration_count = (8 * (Esize - 32)) + ((exponent & (2**256 - 1)).bit_length() - 1)
-    A + B => E                          :JMP(finalGas)
+    A                                   :MSTORE(arithA)
+    B                                   :MSTORE(arithB), CALL(addARITH)
+    $ => E                              :MLOAD(arithRes1), JMP(finalGas)
     ; E = iteration_count
 
 modexp_expLT32:
@@ -187,10 +190,10 @@ lastChecks:
     0 => A
     $ => B                              :MLOAD(modexp_Msize)
     $                                   :EQ, JMPC(save0outMod0)  ; if Msize = 0 --> save0outMod0
-    ; M > 0 from here
+    ; Msize > 0 from here
     $ => B                              :MLOAD(modexp_Bsize)
     $                                   :EQ, JMPC(save0out)      ; if Bsize = 0 --> save0out
-    ; B > 0 from here
+    ; Bsize > 0 from here
     %MAX_SIZE_MODEXP => A
     $ => B                              :MLOAD(modexp_Bsize)
     $                                   :LT, JMPC(preEndFail) ; if Bsize > MAX_SIZE_MODEXP --> preEndFail
@@ -211,7 +214,7 @@ lastChecks:
     1 => B
     ; if mod == 0 --> return 0
     $ => A                              :MLOAD(modexp_Mlen), JMPZ(save0out)
-    ; if Mlen != 1 --> checkBaseLen
+    ; if Mlen != 1 --> checkExpLen
     $                                   :EQ, JMPNC(checkExpLen)
     ; if Mlen == 1 && mod == 1 --> return 0
     $ => A                              :MLOAD(modexp_M)
@@ -224,7 +227,7 @@ checkExpLen:
 checkBaseLen:
     ; if base == 0 --> return 0
     $ => A                              :MLOAD(modexp_Blen), JMPZ(save0out)
-    ; if Blen != 1 --> checkExpLen
+    ; if Blen != 1 --> callMODEXP
     $                                   :EQ, JMPNC(callMODEXP)
     ; if Blen == 1 && base == 1 --> return 1
     $ => A                              :MLOAD(modexp_B)
@@ -247,17 +250,50 @@ save0outMod0:
     0                                   :MSTORE(modexp_out), JMP(preEndMODEXP)
 
 finalMODEXP:
-
-    %MAX_CNT_BINARY - CNT_BINARY - 3    :JMPN(outOfCountersBinary)
-    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
     %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
 
     ; write data into memory
-    0 => E
+    0 => B
     $ => C                              :MLOAD(modexp_Msize)
+
+    C                                   :MSTORE(arithA)
+    32                                  :MSTORE(arithB), CALL(divARITH)
+    $ => E                              :MLOAD(arithRes1)
+    E                                   :MSTORE(modexp_returnFirstIndex)
+    $ => A                              :MLOAD(arithRes2)
+    A                                   :MSTORE(modexp_returnIndexRem), JMPZ(memoryLoop)
+    ; if Msize % 32 > 0, copy last bytes, else --> memoryLoop
+    A => C
+    $ => A                              :MLOAD(modexp_out+E)
+    32 - C => D                         :CALL(SHLarith)
+    A                                   :MSTORE(bytesToStore)
+    B => E
+                                        :CALL(MSTOREX) ; in: [bytesToStore, E: offset, C: length] out: [E: new offset]
+    E => B
+    $ => A                              :MLOAD(modexp_Msize)
+    A - C => C                          :JMPZ(modexpReturn)
+    $ => E                              :MLOAD(modexp_returnFirstIndex)
+
+memoryLoop:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 2    :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 50          :JMPN(outOfCountersStep)
+
+    E - 1 => E                          :MSTORE(modexp_returnIndex)
+    $ => A                              :MLOAD(modexp_out+E)
+    A                                   :MSTORE(bytesToStore)
+    B => E
+                                        :CALL(MSTORE32) ; in: [bytesToStore, E: offset] out: [E: new offset]
+    E => B
+    $ => E                              :MLOAD(modexp_returnIndex)
+    C - 32 => C                         :JMPNZ(memoryLoop)
+
+modexpReturn:
+    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
 
     ; prepare return data
     0                                   :MSTORE(retDataOffset)
+    $ => C                              :MLOAD(modexp_Msize)
     C                                   :MSTORE(retDataLength)
     $ => B                              :MLOAD(retCallOffset)
     $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
@@ -266,21 +302,18 @@ finalMODEXP:
     A => CTX
     E                                   :MSTORE(retDataCTX)
 
-    C                                   :MSTORE(arithA)
-    32                                  :MSTORE(arithB), CALL(divARITH)
-    $ => E                              :MLOAD(arithRes1)
-    E                                   :MSTORE(modexp_returnIndex)
-    $ => A                              :MLOAD(arithRes2), JMPZ(returnLoop)
+    $ => E                              :MLOAD(modexp_returnFirstIndex)
+    $ => A                              :MLOAD(modexp_returnIndexRem), JMPZ(returnLoop)
     A => C
     $ => A                              :MLOAD(modexp_out+E)
     32 - C => D                         :CALL(SHLarith)
     A                                   :MSTORE(bytesToStore)
     B => E
-                                        :CALL(MSTOREX) ; in: [bytesToStore, E: offset] out: [E: new offset]
+                                        :CALL(MSTOREX) ; in: [bytesToStore, E: offset, C: length] out: [E: new offset]
     E => B
     $ => A                              :MLOAD(modexp_Msize)
     A - C => C                          :JMPZ(endMODEXP)
-    $ => E                              :MLOAD(modexp_returnIndex)
+    $ => E                              :MLOAD(modexp_returnFirstIndex)
 
 returnLoop:
     %MAX_CNT_BINARY - CNT_BINARY - 2    :JMPN(outOfCountersBinary)
@@ -290,7 +323,7 @@ returnLoop:
     $ => A                              :MLOAD(modexp_out+E)
     A                                   :MSTORE(bytesToStore)
     B => E
-                                        :CALL(MSTORE32)
+                                        :CALL(MSTORE32) ; in: [bytesToStore, E: offset] out: [E: new offset]
     E => B
     $ => E                              :MLOAD(modexp_returnIndex)
     C - 32 => C                         :JMPZ(endMODEXP, returnLoop)
