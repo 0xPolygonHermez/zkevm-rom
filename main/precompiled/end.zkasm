@@ -19,3 +19,21 @@ preEndFail:
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     0               :MSTORE(SP++), JMP(readCode)
+
+VAR GLOBAL preGAS
+
+preFailLength:
+    $ => SR         :MLOAD(initSR), CALL(revertTouched)
+                    :CALL(revertBlockInfoTree)
+    $ => A          :MLOAD(originCTX), JMPZ(errorAtFirstContext)
+    A => CTX
+    ; Add return data context value to origin context
+    ; Clear return data context
+    0               :MSTORE(retDataCTX)
+    CTX             :MSTORE(currentCTX)
+    $ => A          :MLOAD(gasCTX)
+    $ => B          :MLOAD(preGAS)
+    A + B => GAS
+    $ => SP         :MLOAD(lastSP)
+    $ => PC         :MLOAD(lastPC)
+    0               :MSTORE(SP++), JMP(readCode)
