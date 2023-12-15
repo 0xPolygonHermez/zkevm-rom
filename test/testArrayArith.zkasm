@@ -343,6 +343,38 @@ start:
         5 => E
         115792089237316195423570985008687907853269984665640564039457584007913129639934n :MLOAD(array_square_out + E)
         6                                                                               :MLOAD(array_square_len_out)
+
+        ; 8] [272043482145244634591109928786079352n,81877371507464127617551201542979628307507432471243237061821853600756754782485n,176318528146701254200802196825427983451687n]
+        ; this covers the edge case where carry is of the form -a_i·a_i
+        ; and it produces carry when added to the second chunk of 2·a_i·a_i + out[i + i]
+        ; e.g., when the subtraction is of the form (base² + y) - (y+1) = 0
+        ;----------------------
+        ; I obtained a (3-chunk) input by solving the system of inequalities:
+        ;       2·x² + z = base² + y
+        ;       x² > y
+        ;       0 < x,y,z < base
+        ;       (x,y ∈ ℕ and z ∈ 2ℕ)
+        ; where x = a_1 and z = out[2]. The solution ensures that 2·a_1·a_1 + out[2] > base², while 2·a_1·a_1 + out[2] - a_1·a_1 < base²
+        ; Then I simply found an appropriate pair of a_0,a_2 such that 2·a_0·a_2 = out[2]
+        3 => C
+        272043482145244634591109928786079352n                                           :MSTORE(array_square_in)
+        1 => E
+        81877371507464127617551201542979628307507432471243237061821853600756754782485n :MSTORE(array_square_in + E)
+        2 => E
+        176318528146701254200802196825427983451687n                                     :MSTORE(array_square_in + E)
+                                                                                        :CALL(array_square)
+        74007656177710036293062386420979166962778595461878138943934059640739904n        :MLOAD(array_square_out)
+        1 => E
+        107309681785116775741345228420276669267595434811710002878660662063722468151216n :MLOAD(array_square_out + E)
+        2 => E
+        47966306363752936198863311407838158502039511278988772633471074046272807492009n  :MLOAD(array_square_out + E)
+        3 => E
+        109177356221965282998310125805498648173787805805410017775027543248980737204326n :MLOAD(array_square_out + E)
+        4 => E
+        15873116718318493168742852298661062116740566009918431601066595319216311981693n  :MLOAD(array_square_out + E)
+        5 => E
+        268483n                                                                         :MLOAD(array_square_out + E)
+        6                                                                               :MLOAD(array_square_len_out)
         ; ---------------------------------------------------------------
 
         ; division
