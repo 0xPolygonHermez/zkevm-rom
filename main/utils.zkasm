@@ -1494,7 +1494,8 @@ verifyMerkleProof:
 
     ; 1 keccak for the leaf and 32 for the L1InfoTree
     %MAX_CNT_KECCAK_F - CNT_KECCAK_F - E - 33   :JMPN(outOfCountersKeccak)
-    %MAX_CNT_STEPS - STEP - 10 * 32             :JMPN(outOfCountersStep)     ; 301 steps
+    ; 7 steps at most per bit + 21 statics
+    %MAX_CNT_STEPS - STEP - 7 * 32 - 21             :JMPN(outOfCountersStep)
 
     RR                                          :MSTORE(tmpZkPCVerifyMerkleProof)
 
@@ -1523,10 +1524,10 @@ verifyMerkleProof:
     $ => C                                  :HASHKDIGEST(E) ; initial value
 
     ; initialization registers for smt verify
-    0 => D
+    0 => D, A
 
-    $ => A                                  :MLOAD(indexL1InfoTree)
-                                            :CALL(u32ToBits)
+    $ => B                                  :MLOAD(indexL1InfoTree)
+                                            ; :CALL(u32ToBits)
     ; prepare new hash
     $ => E                                  :MLOAD(lastHashKIdUsed)
     E + 1 => E                              :MSTORE(lastHashKIdUsed)
@@ -1538,30 +1539,32 @@ verifyMerkleProof:
 
     ; BIT 0
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft0), MLOAD(u32bits[0])
+    ${B & 0x00000001}   :JMPZ(hashLeft0)
 
 hashRight0:
-    ${getSmtProof(mem.indexL1InfoTree, 0)}  :HASHK(E)
-    C                                       :HASHK(E), JMP(hashBranchEnd0)
+    ${getSmtProof(mem.indexL1InfoTree, 0)}  :HASHK(E+0)
+    C                                        :HASHK(E+0)
+    A + 0x00000001 => A                      :JMP(hashBranchEnd0)
 
 hashLeft0:
-    C                                       :HASHK(E)
-    ${getSmtProof(mem.indexL1InfoTree, 0)}  :HASHK(E)
+    C                                           :HASHK(E+0)
+    ${getSmtProof(mem.indexL1InfoTree, 0)}  :HASHK(E+0)
 
 hashBranchEnd0:
-    HASHPOS                                 :HASHKLEN(E)
-    $ => C                                  :HASHKDIGEST(E)
+    HASHPOS                                 :HASHKLEN(E+0)
+    $ => C                                  :HASHKDIGEST(E+0)
 
     ; BIT 1
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft1), MLOAD(u32bits[1])
+    ${B & 0x00000002}   :JMPZ(hashLeft1)
 
 hashRight1:
     ${getSmtProof(mem.indexL1InfoTree, 1)}  :HASHK(E+1)
-    C                                       :HASHK(E+1), JMP(hashBranchEnd1)
+    C                                        :HASHK(E+1)
+    A + 0x00000002 => A                      :JMP(hashBranchEnd1)
 
 hashLeft1:
-    C                                       :HASHK(E+1)
+    C                                           :HASHK(E+1)
     ${getSmtProof(mem.indexL1InfoTree, 1)}  :HASHK(E+1)
 
 hashBranchEnd1:
@@ -1570,14 +1573,15 @@ hashBranchEnd1:
 
     ; BIT 2
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft2), MLOAD(u32bits[2])
+    ${B & 0x00000004}   :JMPZ(hashLeft2)
 
 hashRight2:
     ${getSmtProof(mem.indexL1InfoTree, 2)}  :HASHK(E+2)
-    C                                       :HASHK(E+2), JMP(hashBranchEnd2)
+    C                                        :HASHK(E+2)
+    A + 0x00000004 => A                      :JMP(hashBranchEnd2)
 
 hashLeft2:
-    C                                       :HASHK(E+2)
+    C                                           :HASHK(E+2)
     ${getSmtProof(mem.indexL1InfoTree, 2)}  :HASHK(E+2)
 
 hashBranchEnd2:
@@ -1586,14 +1590,15 @@ hashBranchEnd2:
 
     ; BIT 3
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft3), MLOAD(u32bits[3])
+    ${B & 0x00000008}   :JMPZ(hashLeft3)
 
 hashRight3:
     ${getSmtProof(mem.indexL1InfoTree, 3)}  :HASHK(E+3)
-    C                                       :HASHK(E+3), JMP(hashBranchEnd3)
+    C                                        :HASHK(E+3)
+    A + 0x00000008 => A                      :JMP(hashBranchEnd3)
 
 hashLeft3:
-    C                                       :HASHK(E+3)
+    C                                           :HASHK(E+3)
     ${getSmtProof(mem.indexL1InfoTree, 3)}  :HASHK(E+3)
 
 hashBranchEnd3:
@@ -1602,14 +1607,15 @@ hashBranchEnd3:
 
     ; BIT 4
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft4), MLOAD(u32bits[4])
+    ${B & 0x00000010}   :JMPZ(hashLeft4)
 
 hashRight4:
     ${getSmtProof(mem.indexL1InfoTree, 4)}  :HASHK(E+4)
-    C                                       :HASHK(E+4), JMP(hashBranchEnd4)
+    C                                        :HASHK(E+4)
+    A + 0x00000010 => A                      :JMP(hashBranchEnd4)
 
 hashLeft4:
-    C                                       :HASHK(E+4)
+    C                                           :HASHK(E+4)
     ${getSmtProof(mem.indexL1InfoTree, 4)}  :HASHK(E+4)
 
 hashBranchEnd4:
@@ -1618,14 +1624,15 @@ hashBranchEnd4:
 
     ; BIT 5
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft5), MLOAD(u32bits[5])
+    ${B & 0x00000020}   :JMPZ(hashLeft5)
 
 hashRight5:
     ${getSmtProof(mem.indexL1InfoTree, 5)}  :HASHK(E+5)
-    C                                       :HASHK(E+5), JMP(hashBranchEnd5)
+    C                                        :HASHK(E+5)
+    A + 0x00000020 => A                      :JMP(hashBranchEnd5)
 
 hashLeft5:
-    C                                       :HASHK(E+5)
+    C                                           :HASHK(E+5)
     ${getSmtProof(mem.indexL1InfoTree, 5)}  :HASHK(E+5)
 
 hashBranchEnd5:
@@ -1634,15 +1641,16 @@ hashBranchEnd5:
 
     ; BIT 6
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft6), MLOAD(u32bits[6])
+    ${B & 0x00000040}   :JMPZ(hashLeft6)
 
 hashRight6:
-    ${getSmtProof(mem.indexL1InfoTree, 6)} :HASHK(E+6)
-    C                                       :HASHK(E+6), JMP(hashBranchEnd6)
+    ${getSmtProof(mem.indexL1InfoTree, 6)}  :HASHK(E+6)
+    C                                        :HASHK(E+6)
+    A + 0x00000040 => A                      :JMP(hashBranchEnd6)
 
 hashLeft6:
-    C                                       :HASHK(E+6)
-    ${getSmtProof(mem.indexL1InfoTree, 6)} :HASHK(E+6)
+    C                                           :HASHK(E+6)
+    ${getSmtProof(mem.indexL1InfoTree, 6)}  :HASHK(E+6)
 
 hashBranchEnd6:
     HASHPOS                                 :HASHKLEN(E+6)
@@ -1650,14 +1658,15 @@ hashBranchEnd6:
 
     ; BIT 7
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft7), MLOAD(u32bits[7])
+    ${B & 0x00000080}   :JMPZ(hashLeft7)
 
 hashRight7:
-    ${getSmtProof(mem.indexL1InfoTree, 7)} :HASHK(E+7)
-    C                                       :HASHK(E+7), JMP(hashBranchEnd7)
+    ${getSmtProof(mem.indexL1InfoTree, 7)}  :HASHK(E+7)
+    C                                        :HASHK(E+7)
+    A + 0x00000080 => A                      :JMP(hashBranchEnd7)
 
 hashLeft7:
-    C                                       :HASHK(E+7)
+    C                                           :HASHK(E+7)
     ${getSmtProof(mem.indexL1InfoTree, 7)}  :HASHK(E+7)
 
 hashBranchEnd7:
@@ -1666,14 +1675,15 @@ hashBranchEnd7:
 
     ; BIT 8
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft8), MLOAD(u32bits[8])
+    ${B & 0x00000100}   :JMPZ(hashLeft8)
 
 hashRight8:
     ${getSmtProof(mem.indexL1InfoTree, 8)}  :HASHK(E+8)
-    C                                       :HASHK(E+8), JMP(hashBranchEnd8)
+    C                                        :HASHK(E+8)
+    A + 0x00000100 => A                      :JMP(hashBranchEnd8)
 
 hashLeft8:
-    C                                       :HASHK(E+8)
+    C                                           :HASHK(E+8)
     ${getSmtProof(mem.indexL1InfoTree, 8)}  :HASHK(E+8)
 
 hashBranchEnd8:
@@ -1682,14 +1692,15 @@ hashBranchEnd8:
 
     ; BIT 9
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft9), MLOAD(u32bits[9])
+    ${B & 0x00000200}   :JMPZ(hashLeft9)
 
 hashRight9:
     ${getSmtProof(mem.indexL1InfoTree, 9)}  :HASHK(E+9)
-    C                                       :HASHK(E+9), JMP(hashBranchEnd9)
+    C                                        :HASHK(E+9)
+    A + 0x00000200 => A                      :JMP(hashBranchEnd9)
 
 hashLeft9:
-    C                                       :HASHK(E+9)
+    C                                           :HASHK(E+9)
     ${getSmtProof(mem.indexL1InfoTree, 9)}  :HASHK(E+9)
 
 hashBranchEnd9:
@@ -1698,15 +1709,16 @@ hashBranchEnd9:
 
     ; BIT 10
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft10), MLOAD(u32bits[10])
+    ${B & 0x00000400}   :JMPZ(hashLeft10)
 
 hashRight10:
-    ${getSmtProof(mem.indexL1InfoTree, 10)} :HASHK(E+10)
-    C                                       :HASHK(E+10), JMP(hashBranchEnd10)
+    ${getSmtProof(mem.indexL1InfoTree, 10)}  :HASHK(E+10)
+    C                                        :HASHK(E+10)
+    A + 0x00000400 => A                      :JMP(hashBranchEnd10)
 
 hashLeft10:
-    C                                       :HASHK(E+10)
-    ${getSmtProof(mem.indexL1InfoTree, 10)} :HASHK(E+10)
+    C                                           :HASHK(E+10)
+    ${getSmtProof(mem.indexL1InfoTree, 10)}  :HASHK(E+10)
 
 hashBranchEnd10:
     HASHPOS                                 :HASHKLEN(E+10)
@@ -1714,31 +1726,34 @@ hashBranchEnd10:
 
     ; BIT 11
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft11), MLOAD(u32bits[11])
+    ${B & 0x00000800}   :JMPZ(hashLeft11)
 
 hashRight11:
-    ${getSmtProof(mem.indexL1InfoTree, 11)} :HASHK(E+11)
-    C                                       :HASHK(E+11), JMP(hashBranchEnd11)
+    ${getSmtProof(mem.indexL1InfoTree, 11)}  :HASHK(E+11)
+    C                                        :HASHK(E+11)
+    A + 0x00000800 => A                      :JMP(hashBranchEnd11)
 
 hashLeft11:
-    C                                       :HASHK(E+11)
-    ${getSmtProof(mem.indexL1InfoTree, 11)} :HASHK(E+11)
+    C                                           :HASHK(E+11)
+    ${getSmtProof(mem.indexL1InfoTree, 11)}  :HASHK(E+11)
 
 hashBranchEnd11:
     HASHPOS                                 :HASHKLEN(E+11)
     $ => C                                  :HASHKDIGEST(E+11)
 
+
     ; BIT 12
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft12), MLOAD(u32bits[12])
+    ${B & 0x00001000}   :JMPZ(hashLeft12)
 
 hashRight12:
-    ${getSmtProof(mem.indexL1InfoTree, 12)} :HASHK(E+12)
-    C                                       :HASHK(E+12), JMP(hashBranchEnd12)
+    ${getSmtProof(mem.indexL1InfoTree, 12)}  :HASHK(E+12)
+    C                                        :HASHK(E+12)
+    A + 0x00001000 => A                      :JMP(hashBranchEnd12)
 
 hashLeft12:
-    C                                       :HASHK(E+12)
-    ${getSmtProof(mem.indexL1InfoTree, 12)} :HASHK(E+12)
+    C                                           :HASHK(E+12)
+    ${getSmtProof(mem.indexL1InfoTree, 12)}  :HASHK(E+12)
 
 hashBranchEnd12:
     HASHPOS                                 :HASHKLEN(E+12)
@@ -1746,15 +1761,16 @@ hashBranchEnd12:
 
     ; BIT 13
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft13), MLOAD(u32bits[13])
+    ${B & 0x00002000}   :JMPZ(hashLeft13)
 
 hashRight13:
-    ${getSmtProof(mem.indexL1InfoTree, 13)} :HASHK(E+13)
-    C                                       :HASHK(E+13), JMP(hashBranchEnd13)
+    ${getSmtProof(mem.indexL1InfoTree, 13)}  :HASHK(E+13)
+    C                                        :HASHK(E+13)
+    A + 0x00002000 => A                      :JMP(hashBranchEnd13)
 
 hashLeft13:
-    C                                       :HASHK(E+13)
-    ${getSmtProof(mem.indexL1InfoTree, 13)} :HASHK(E+13)
+    C                                           :HASHK(E+13)
+    ${getSmtProof(mem.indexL1InfoTree, 13)}  :HASHK(E+13)
 
 hashBranchEnd13:
     HASHPOS                                 :HASHKLEN(E+13)
@@ -1762,15 +1778,16 @@ hashBranchEnd13:
 
     ; BIT 14
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft14), MLOAD(u32bits[14])
+    ${B & 0x00004000}   :JMPZ(hashLeft14)
 
 hashRight14:
-    ${getSmtProof(mem.indexL1InfoTree, 14)} :HASHK(E+14)
-    C                                       :HASHK(E+14), JMP(hashBranchEnd14)
+    ${getSmtProof(mem.indexL1InfoTree, 14)}  :HASHK(E+14)
+    C                                        :HASHK(E+14)
+    A + 0x00004000 => A                      :JMP(hashBranchEnd14)
 
 hashLeft14:
-    C                                       :HASHK(E+14)
-    ${getSmtProof(mem.indexL1InfoTree, 14)} :HASHK(E+14)
+    C                                           :HASHK(E+14)
+    ${getSmtProof(mem.indexL1InfoTree, 14)}  :HASHK(E+14)
 
 hashBranchEnd14:
     HASHPOS                                 :HASHKLEN(E+14)
@@ -1778,15 +1795,16 @@ hashBranchEnd14:
 
     ; BIT 15
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft15), MLOAD(u32bits[15])
+    ${B & 0x00008000}   :JMPZ(hashLeft15)
 
 hashRight15:
-    ${getSmtProof(mem.indexL1InfoTree, 15)} :HASHK(E+15)
-    C                                       :HASHK(E+15), JMP(hashBranchEnd15)
+    ${getSmtProof(mem.indexL1InfoTree, 15)}  :HASHK(E+15)
+    C                                        :HASHK(E+15)
+    A + 0x00008000 => A                      :JMP(hashBranchEnd15)
 
 hashLeft15:
-    C                                       :HASHK(E+15)
-    ${getSmtProof(mem.indexL1InfoTree, 15)} :HASHK(E+15)
+    C                                           :HASHK(E+15)
+    ${getSmtProof(mem.indexL1InfoTree, 15)}  :HASHK(E+15)
 
 hashBranchEnd15:
     HASHPOS                                 :HASHKLEN(E+15)
@@ -1794,15 +1812,16 @@ hashBranchEnd15:
 
     ; BIT 16
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft16), MLOAD(u32bits[16])
+    ${B & 0x00010000}   :JMPZ(hashLeft16)
 
 hashRight16:
-    ${getSmtProof(mem.indexL1InfoTree, 16)} :HASHK(E+16)
-    C                                       :HASHK(E+16), JMP(hashBranchEnd16)
+    ${getSmtProof(mem.indexL1InfoTree, 16)}  :HASHK(E+16)
+    C                                        :HASHK(E+16)
+    A + 0x00010000 => A                      :JMP(hashBranchEnd16)
 
 hashLeft16:
-    C                                       :HASHK(E+16)
-    ${getSmtProof(mem.indexL1InfoTree, 16)} :HASHK(E+16)
+    C                                           :HASHK(E+16)
+    ${getSmtProof(mem.indexL1InfoTree, 16)}  :HASHK(E+16)
 
 hashBranchEnd16:
     HASHPOS                                 :HASHKLEN(E+16)
@@ -1810,15 +1829,16 @@ hashBranchEnd16:
 
     ; BIT 17
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft17), MLOAD(u32bits[17])
+    ${B & 0x00020000}   :JMPZ(hashLeft17)
 
 hashRight17:
-    ${getSmtProof(mem.indexL1InfoTree, 17)} :HASHK(E+17)
-    C                                       :HASHK(E+17), JMP(hashBranchEnd17)
+    ${getSmtProof(mem.indexL1InfoTree, 17)}  :HASHK(E+17)
+    C                                        :HASHK(E+17)
+    A + 0x00020000 => A                      :JMP(hashBranchEnd17)
 
 hashLeft17:
-    C                                       :HASHK(E+17)
-    ${getSmtProof(mem.indexL1InfoTree, 17)} :HASHK(E+17)
+    C                                           :HASHK(E+17)
+    ${getSmtProof(mem.indexL1InfoTree, 17)}  :HASHK(E+17)
 
 hashBranchEnd17:
     HASHPOS                                 :HASHKLEN(E+17)
@@ -1826,15 +1846,16 @@ hashBranchEnd17:
 
     ; BIT 18
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft18), MLOAD(u32bits[18])
+    ${B & 0x00040000}   :JMPZ(hashLeft18)
 
 hashRight18:
-    ${getSmtProof(mem.indexL1InfoTree, 18)} :HASHK(E+18)
-    C                                       :HASHK(E+18), JMP(hashBranchEnd18)
+    ${getSmtProof(mem.indexL1InfoTree, 18)}  :HASHK(E+18)
+    C                                        :HASHK(E+18)
+    A + 0x00040000 => A                      :JMP(hashBranchEnd18)
 
 hashLeft18:
-    C                                       :HASHK(E+18)
-    ${getSmtProof(mem.indexL1InfoTree, 18)} :HASHK(E+18)
+    C                                           :HASHK(E+18)
+    ${getSmtProof(mem.indexL1InfoTree, 18)}  :HASHK(E+18)
 
 hashBranchEnd18:
     HASHPOS                                 :HASHKLEN(E+18)
@@ -1842,15 +1863,16 @@ hashBranchEnd18:
 
     ; BIT 19
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft19), MLOAD(u32bits[19])
+    ${B & 0x00080000}   :JMPZ(hashLeft19)
 
 hashRight19:
-    ${getSmtProof(mem.indexL1InfoTree, 19)} :HASHK(E+19)
-    C                                       :HASHK(E+19), JMP(hashBranchEnd19)
+    ${getSmtProof(mem.indexL1InfoTree, 19)}  :HASHK(E+19)
+    C                                        :HASHK(E+19)
+    A + 0x00080000 => A                      :JMP(hashBranchEnd19)
 
 hashLeft19:
-    C                                       :HASHK(E+19)
-    ${getSmtProof(mem.indexL1InfoTree, 19)} :HASHK(E+19)
+    C                                           :HASHK(E+19)
+    ${getSmtProof(mem.indexL1InfoTree, 19)}  :HASHK(E+19)
 
 hashBranchEnd19:
     HASHPOS                                 :HASHKLEN(E+19)
@@ -1858,15 +1880,16 @@ hashBranchEnd19:
 
     ; BIT 20
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft20), MLOAD(u32bits[20])
+    ${B & 0x00100000}   :JMPZ(hashLeft20)
 
 hashRight20:
-    ${getSmtProof(mem.indexL1InfoTree, 20)} :HASHK(E+20)
-    C                                       :HASHK(E+20), JMP(hashBranchEnd20)
+    ${getSmtProof(mem.indexL1InfoTree, 20)}  :HASHK(E+20)
+    C                                        :HASHK(E+20)
+    A + 0x00100000 => A                      :JMP(hashBranchEnd20)
 
 hashLeft20:
-    C                                       :HASHK(E+20)
-    ${getSmtProof(mem.indexL1InfoTree, 20)} :HASHK(E+20)
+    C                                           :HASHK(E+20)
+    ${getSmtProof(mem.indexL1InfoTree, 20)}  :HASHK(E+20)
 
 hashBranchEnd20:
     HASHPOS                                 :HASHKLEN(E+20)
@@ -1874,15 +1897,16 @@ hashBranchEnd20:
 
     ; BIT 21
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft21), MLOAD(u32bits[21])
+    ${B & 0x00200000}   :JMPZ(hashLeft21)
 
 hashRight21:
-    ${getSmtProof(mem.indexL1InfoTree, 21)} :HASHK(E+21)
-    C                                       :HASHK(E+21), JMP(hashBranchEnd21)
+    ${getSmtProof(mem.indexL1InfoTree, 21)}  :HASHK(E+21)
+    C                                        :HASHK(E+21)
+    A + 0x00200000 => A                      :JMP(hashBranchEnd21)
 
 hashLeft21:
-    C                                       :HASHK(E+21)
-    ${getSmtProof(mem.indexL1InfoTree, 21)} :HASHK(E+21)
+    C                                           :HASHK(E+21)
+    ${getSmtProof(mem.indexL1InfoTree, 21)}  :HASHK(E+21)
 
 hashBranchEnd21:
     HASHPOS                                 :HASHKLEN(E+21)
@@ -1890,15 +1914,16 @@ hashBranchEnd21:
 
     ; BIT 22
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft22), MLOAD(u32bits[22])
+    ${B & 0x00400000}   :JMPZ(hashLeft22)
 
 hashRight22:
-    ${getSmtProof(mem.indexL1InfoTree, 22)} :HASHK(E+22)
-    C                                       :HASHK(E+22), JMP(hashBranchEnd22)
+    ${getSmtProof(mem.indexL1InfoTree, 22)}  :HASHK(E+22)
+    C                                        :HASHK(E+22)
+    A + 0x00400000 => A                      :JMP(hashBranchEnd22)
 
 hashLeft22:
-    C                                       :HASHK(E+22)
-    ${getSmtProof(mem.indexL1InfoTree, 22)} :HASHK(E+22)
+    C                                           :HASHK(E+22)
+    ${getSmtProof(mem.indexL1InfoTree, 22)}  :HASHK(E+22)
 
 hashBranchEnd22:
     HASHPOS                                 :HASHKLEN(E+22)
@@ -1906,15 +1931,16 @@ hashBranchEnd22:
 
     ; BIT 23
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft23), MLOAD(u32bits[23])
+    ${B & 0x00800000}   :JMPZ(hashLeft23)
 
 hashRight23:
-    ${getSmtProof(mem.indexL1InfoTree, 23)} :HASHK(E+23)
-    C                                       :HASHK(E+23), JMP(hashBranchEnd23)
+    ${getSmtProof(mem.indexL1InfoTree, 23)}  :HASHK(E+23)
+    C                                        :HASHK(E+23)
+    A + 0x00800000 => A                      :JMP(hashBranchEnd23)
 
 hashLeft23:
-    C                                       :HASHK(E+23)
-    ${getSmtProof(mem.indexL1InfoTree, 23)} :HASHK(E+23)
+    C                                           :HASHK(E+23)
+    ${getSmtProof(mem.indexL1InfoTree, 23)}  :HASHK(E+23)
 
 hashBranchEnd23:
     HASHPOS                                 :HASHKLEN(E+23)
@@ -1922,15 +1948,16 @@ hashBranchEnd23:
 
     ; BIT 24
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft24), MLOAD(u32bits[24])
+    ${B & 0x01000000}   :JMPZ(hashLeft24)
 
 hashRight24:
-    ${getSmtProof(mem.indexL1InfoTree, 24)} :HASHK(E+24)
-    C                                       :HASHK(E+24), JMP(hashBranchEnd24)
+    ${getSmtProof(mem.indexL1InfoTree, 24)}  :HASHK(E+24)
+    C                                        :HASHK(E+24)
+    A + 0x01000000 => A                      :JMP(hashBranchEnd24)
 
 hashLeft24:
-    C                                       :HASHK(E+24)
-    ${getSmtProof(mem.indexL1InfoTree, 24)} :HASHK(E+24)
+    C                                           :HASHK(E+24)
+    ${getSmtProof(mem.indexL1InfoTree, 24)}  :HASHK(E+24)
 
 hashBranchEnd24:
     HASHPOS                                 :HASHKLEN(E+24)
@@ -1938,15 +1965,16 @@ hashBranchEnd24:
 
     ; BIT 25
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft25), MLOAD(u32bits[25])
+    ${B & 0x02000000}   :JMPZ(hashLeft25)
 
 hashRight25:
-    ${getSmtProof(mem.indexL1InfoTree, 25)} :HASHK(E+25)
-    C                                       :HASHK(E+25), JMP(hashBranchEnd25)
+    ${getSmtProof(mem.indexL1InfoTree, 25)}  :HASHK(E+25)
+    C                                        :HASHK(E+25)
+    A + 0x02000000 => A                      :JMP(hashBranchEnd25)
 
 hashLeft25:
-    C                                       :HASHK(E+25)
-    ${getSmtProof(mem.indexL1InfoTree, 25)} :HASHK(E+25)
+    C                                           :HASHK(E+25)
+    ${getSmtProof(mem.indexL1InfoTree, 25)}  :HASHK(E+25)
 
 hashBranchEnd25:
     HASHPOS                                 :HASHKLEN(E+25)
@@ -1954,15 +1982,16 @@ hashBranchEnd25:
 
     ; BIT 26
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft26), MLOAD(u32bits[26])
+    ${B & 0x04000000}   :JMPZ(hashLeft26)
 
 hashRight26:
-    ${getSmtProof(mem.indexL1InfoTree, 26)} :HASHK(E+26)
-    C                                       :HASHK(E+26), JMP(hashBranchEnd26)
+    ${getSmtProof(mem.indexL1InfoTree, 26)}  :HASHK(E+26)
+    C                                        :HASHK(E+26)
+    A + 0x04000000 => A                      :JMP(hashBranchEnd26)
 
 hashLeft26:
-    C                                       :HASHK(E+26)
-    ${getSmtProof(mem.indexL1InfoTree, 26)} :HASHK(E+26)
+    C                                           :HASHK(E+26)
+    ${getSmtProof(mem.indexL1InfoTree, 26)}  :HASHK(E+26)
 
 hashBranchEnd26:
     HASHPOS                                 :HASHKLEN(E+26)
@@ -1970,15 +1999,16 @@ hashBranchEnd26:
 
     ; BIT 27
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft27), MLOAD(u32bits[27])
+    ${B & 0x08000000}   :JMPZ(hashLeft27)
 
 hashRight27:
-    ${getSmtProof(mem.indexL1InfoTree, 27)} :HASHK(E+27)
-    C                                       :HASHK(E+27), JMP(hashBranchEnd27)
+    ${getSmtProof(mem.indexL1InfoTree, 27)}  :HASHK(E+27)
+    C                                        :HASHK(E+27)
+    A + 0x08000000 => A                      :JMP(hashBranchEnd27)
 
 hashLeft27:
-    C                                       :HASHK(E+27)
-    ${getSmtProof(mem.indexL1InfoTree, 27)} :HASHK(E+27)
+    C                                           :HASHK(E+27)
+    ${getSmtProof(mem.indexL1InfoTree, 27)}  :HASHK(E+27)
 
 hashBranchEnd27:
     HASHPOS                                 :HASHKLEN(E+27)
@@ -1986,15 +2016,16 @@ hashBranchEnd27:
 
     ; BIT 28
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft28), MLOAD(u32bits[28])
+    ${B & 0x10000000}   :JMPZ(hashLeft28)
 
 hashRight28:
-    ${getSmtProof(mem.indexL1InfoTree, 28)} :HASHK(E+28)
-    C                                       :HASHK(E+28), JMP(hashBranchEnd28)
+    ${getSmtProof(mem.indexL1InfoTree, 28)}  :HASHK(E+28)
+    C                                        :HASHK(E+28)
+    A + 0x10000000 => A                      :JMP(hashBranchEnd28)
 
 hashLeft28:
-    C                                       :HASHK(E+28)
-    ${getSmtProof(mem.indexL1InfoTree, 28)} :HASHK(E+28)
+    C                                           :HASHK(E+28)
+    ${getSmtProof(mem.indexL1InfoTree, 28)}  :HASHK(E+28)
 
 hashBranchEnd28:
     HASHPOS                                 :HASHKLEN(E+28)
@@ -2002,15 +2033,16 @@ hashBranchEnd28:
 
     ; BIT 29
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft29), MLOAD(u32bits[29])
+    ${B & 0x20000000}   :JMPZ(hashLeft29)
 
 hashRight29:
-    ${getSmtProof(mem.indexL1InfoTree, 29)} :HASHK(E+29)
-    C                                       :HASHK(E+29), JMP(hashBranchEnd29)
+    ${getSmtProof(mem.indexL1InfoTree, 29)}  :HASHK(E+29)
+    C                                        :HASHK(E+29)
+    A + 0x20000000 => A                      :JMP(hashBranchEnd29)
 
 hashLeft29:
-    C                                       :HASHK(E+29)
-    ${getSmtProof(mem.indexL1InfoTree, 29)} :HASHK(E+29)
+    C                                           :HASHK(E+29)
+    ${getSmtProof(mem.indexL1InfoTree, 29)}  :HASHK(E+29)
 
 hashBranchEnd29:
     HASHPOS                                 :HASHKLEN(E+29)
@@ -2018,15 +2050,16 @@ hashBranchEnd29:
 
     ; BIT 30
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft30), MLOAD(u32bits[30])
+    ${B & 0x40000000}   :JMPZ(hashLeft30)
 
 hashRight30:
-    ${getSmtProof(mem.indexL1InfoTree, 30)} :HASHK(E+30)
-    C                                       :HASHK(E+30), JMP(hashBranchEnd30)
+    ${getSmtProof(mem.indexL1InfoTree, 30)}  :HASHK(E+30)
+    C                                        :HASHK(E+30)
+    A + 0x40000000 => A                      :JMP(hashBranchEnd30)
 
 hashLeft30:
-    C                                       :HASHK(E+30)
-    ${getSmtProof(mem.indexL1InfoTree, 30)} :HASHK(E+30)
+    C                                           :HASHK(E+30)
+    ${getSmtProof(mem.indexL1InfoTree, 30)}  :HASHK(E+30)
 
 hashBranchEnd30:
     HASHPOS                                 :HASHKLEN(E+30)
@@ -2034,20 +2067,23 @@ hashBranchEnd30:
 
     ; BIT 31
     0 => HASHPOS
-    $                                       :JMPZ(hashLeft31), MLOAD(u32bits[31])
+    ${B & 0x80000000}   :JMPZ(hashLeft31)
 
 hashRight31:
-    ${getSmtProof(mem.indexL1InfoTree, 31)} :HASHK(E+31)
-    C                                       :HASHK(E+31), JMP(hashBranchEnd31)
+    ${getSmtProof(mem.indexL1InfoTree, 31)}  :HASHK(E+31)
+    C                                        :HASHK(E+31)
+    A + 0x80000000 => A                      :JMP(hashBranchEnd31)
 
 hashLeft31:
-    C                                       :HASHK(E+31)
-    ${getSmtProof(mem.indexL1InfoTree, 31)} :HASHK(E+31)
+    C                                           :HASHK(E+31)
+    ${getSmtProof(mem.indexL1InfoTree, 31)}  :HASHK(E+31)
 
 hashBranchEnd31:
     HASHPOS                                 :HASHKLEN(E+31)
     $ => C                                  :HASHKDIGEST(E+31)
 
+    ; verify linear combination in A
+    B                                       :ASSERT
     E + 31 => E                             :MSTORE(lastHashKIdUsed)
 
 
@@ -2058,340 +2094,6 @@ verifyMerkleProofEnd:
 verifyMerkleProofReturn:
     $ => RR                       :MLOAD(tmpZkPCVerifyMerkleProof)
                                   :RETURN
-
-
-;@info fill array u32bits with bits of A value, A must be a value of 32 bits.
-;@in A: value
-;@out u32bits[32]: bits
-
-VAR GLOBAL u32bits[32]
-VAR GLOBAL u32bits_tmpA
-VAR GLOBAL u32bits_tmpB
-
-u32ToBits:
-
-                  A                       :MSTORE(u32bits_tmpA)
-                  B                       :MSTORE(u32bits_tmpB)
-
-                  ; bit 31
-
-u32bits_31A:      A - 0x80000000 => B     :JMPN(u32bits_31A_0)
-u32bits_31B_1:    1                       :MSTORE(u32bits[31]), JMP(u32bits_30B)
-u32bits_31A_0:    0                       :MSTORE(u32bits[31]), JMP(u32bits_30A)
-
-                  ; bit 30
-
-u32bits_30A:      A - 0x40000000 => B     :JMPN(u32bits_30A_0)
-u32bits_30B_1:    1                       :MSTORE(u32bits[30]), JMP(u32bits_29B)
-u32bits_30A_0:    0                       :MSTORE(u32bits[30]), JMP(u32bits_29A)
-
-u32bits_30B:      B - 0x40000000 => A     :JMPN(u32bits_30B_0)
-u32bits_30A_1:    1                       :MSTORE(u32bits[30]), JMP(u32bits_29A)
-u32bits_30B_0:    0                       :MSTORE(u32bits[30]), JMP(u32bits_29B)
-
-                  ; bit 29
-
-u32bits_29A:      A - 0x20000000 => B     :JMPN(u32bits_29A_0)
-u32bits_29B_1:    1                       :MSTORE(u32bits[29]), JMP(u32bits_28B)
-u32bits_29A_0:    0                       :MSTORE(u32bits[29]), JMP(u32bits_28A)
-
-u32bits_29B:      B - 0x20000000 => A     :JMPN(u32bits_29B_0)
-u32bits_29A_1:    1                       :MSTORE(u32bits[29]), JMP(u32bits_28A)
-u32bits_29B_0:    0                       :MSTORE(u32bits[29]), JMP(u32bits_28B)
-
-                  ; bit 28
-
-u32bits_28A:      A - 0x10000000 => B     :JMPN(u32bits_28A_0)
-u32bits_28B_1:    1                       :MSTORE(u32bits[28]), JMP(u32bits_27B)
-u32bits_28A_0:    0                       :MSTORE(u32bits[28]), JMP(u32bits_27A)
-
-u32bits_28B:      B - 0x10000000 => A     :JMPN(u32bits_28B_0)
-u32bits_28A_1:    1                       :MSTORE(u32bits[28]), JMP(u32bits_27A)
-u32bits_28B_0:    0                       :MSTORE(u32bits[28]), JMP(u32bits_27B)
-
-                  ; bit 27
-
-u32bits_27A:      A - 0x08000000 => B     :JMPN(u32bits_27A_0)
-u32bits_27B_1:    1                       :MSTORE(u32bits[27]), JMP(u32bits_26B)
-u32bits_27A_0:    0                       :MSTORE(u32bits[27]), JMP(u32bits_26A)
-
-u32bits_27B:      B - 0x08000000 => A     :JMPN(u32bits_27B_0)
-u32bits_27A_1:    1                       :MSTORE(u32bits[27]), JMP(u32bits_26A)
-u32bits_27B_0:    0                       :MSTORE(u32bits[27]), JMP(u32bits_26B)
-
-                  ; bit 26
-
-u32bits_26A:      A - 0x04000000 => B     :JMPN(u32bits_26A_0)
-u32bits_26B_1:    1                       :MSTORE(u32bits[26]), JMP(u32bits_25B)
-u32bits_26A_0:    0                       :MSTORE(u32bits[26]), JMP(u32bits_25A)
-
-u32bits_26B:      B - 0x04000000 => A     :JMPN(u32bits_26B_0)
-u32bits_26A_1:    1                       :MSTORE(u32bits[26]), JMP(u32bits_25A)
-u32bits_26B_0:    0                       :MSTORE(u32bits[26]), JMP(u32bits_25B)
-
-                  ; bit 25
-
-u32bits_25A:      A - 0x02000000 => B     :JMPN(u32bits_25A_0)
-u32bits_25B_1:    1                       :MSTORE(u32bits[25]), JMP(u32bits_24B)
-u32bits_25A_0:    0                       :MSTORE(u32bits[25]), JMP(u32bits_24A)
-
-u32bits_25B:      B - 0x02000000 => A     :JMPN(u32bits_25B_0)
-u32bits_25A_1:    1                       :MSTORE(u32bits[25]), JMP(u32bits_24A)
-u32bits_25B_0:    0                       :MSTORE(u32bits[25]), JMP(u32bits_24B)
-
-                  ; bit 24
-
-u32bits_24A:      A - 0x01000000 => B     :JMPN(u32bits_24A_0)
-u32bits_24B_1:    1                       :MSTORE(u32bits[24]), JMP(u32bits_23B)
-u32bits_24A_0:    0                       :MSTORE(u32bits[24]), JMP(u32bits_23A)
-
-u32bits_24B:      B - 0x01000000 => A     :JMPN(u32bits_24B_0)
-u32bits_24A_1:    1                       :MSTORE(u32bits[24]), JMP(u32bits_23A)
-u32bits_24B_0:    0                       :MSTORE(u32bits[24]), JMP(u32bits_23B)
-
-                  ; bit 23
-
-u32bits_23A:      A - 0x00800000 => B     :JMPN(u32bits_23A_0)
-u32bits_23B_1:    1                       :MSTORE(u32bits[23]), JMP(u32bits_22B)
-u32bits_23A_0:    0                       :MSTORE(u32bits[23]), JMP(u32bits_22A)
-
-u32bits_23B:      B - 0x00800000 => A     :JMPN(u32bits_23B_0)
-u32bits_23A_1:    1                       :MSTORE(u32bits[23]), JMP(u32bits_22A)
-u32bits_23B_0:    0                       :MSTORE(u32bits[23]), JMP(u32bits_22B)
-
-                  ; bit 22
-
-u32bits_22A:      A - 0x00400000 => B     :JMPN(u32bits_22A_0)
-u32bits_22B_1:    1                       :MSTORE(u32bits[22]), JMP(u32bits_21B)
-u32bits_22A_0:    0                       :MSTORE(u32bits[22]), JMP(u32bits_21A)
-
-u32bits_22B:      B - 0x00400000 => A     :JMPN(u32bits_22B_0)
-u32bits_22A_1:    1                       :MSTORE(u32bits[22]), JMP(u32bits_21A)
-u32bits_22B_0:    0                       :MSTORE(u32bits[22]), JMP(u32bits_21B)
-
-                  ; bit 21
-
-u32bits_21A:      A - 0x00200000 => B     :JMPN(u32bits_21A_0)
-u32bits_21B_1:    1                       :MSTORE(u32bits[21]), JMP(u32bits_20B)
-u32bits_21A_0:    0                       :MSTORE(u32bits[21]), JMP(u32bits_20A)
-
-u32bits_21B:      B - 0x00200000 => A     :JMPN(u32bits_21B_0)
-u32bits_21A_1:    1                       :MSTORE(u32bits[21]), JMP(u32bits_20A)
-u32bits_21B_0:    0                       :MSTORE(u32bits[21]), JMP(u32bits_20B)
-
-                  ; bit 20
-
-u32bits_20A:      A - 0x00100000 => B     :JMPN(u32bits_20A_0)
-u32bits_20B_1:    1                       :MSTORE(u32bits[20]), JMP(u32bits_19B)
-u32bits_20A_0:    0                       :MSTORE(u32bits[20]), JMP(u32bits_19A)
-
-u32bits_20B:      B - 0x00100000 => A     :JMPN(u32bits_20B_0)
-u32bits_20A_1:    1                       :MSTORE(u32bits[20]), JMP(u32bits_19A)
-u32bits_20B_0:    0                       :MSTORE(u32bits[20]), JMP(u32bits_19B)
-
-                  ; bit 19
-
-u32bits_19A:      A - 0x00080000 => B     :JMPN(u32bits_19A_0)
-u32bits_19B_1:    1                       :MSTORE(u32bits[19]), JMP(u32bits_18B)
-u32bits_19A_0:    0                       :MSTORE(u32bits[19]), JMP(u32bits_18A)
-
-u32bits_19B:      B - 0x00080000 => A     :JMPN(u32bits_19B_0)
-u32bits_19A_1:    1                       :MSTORE(u32bits[19]), JMP(u32bits_18A)
-u32bits_19B_0:    0                       :MSTORE(u32bits[19]), JMP(u32bits_18B)
-
-                  ; bit 18
-
-u32bits_18A:      A - 0x00040000 => B     :JMPN(u32bits_18A_0)
-u32bits_18B_1:    1                       :MSTORE(u32bits[18]), JMP(u32bits_17B)
-u32bits_18A_0:    0                       :MSTORE(u32bits[18]), JMP(u32bits_17A)
-
-u32bits_18B:      B - 0x00040000 => A     :JMPN(u32bits_18B_0)
-u32bits_18A_1:    1                       :MSTORE(u32bits[18]), JMP(u32bits_17A)
-u32bits_18B_0:    0                       :MSTORE(u32bits[18]), JMP(u32bits_17B)
-
-                  ; bit 17
-
-u32bits_17A:      A - 0x00020000 => B     :JMPN(u32bits_17A_0)
-u32bits_17B_1:    1                       :MSTORE(u32bits[17]), JMP(u32bits_16B)
-u32bits_17A_0:    0                       :MSTORE(u32bits[17]), JMP(u32bits_16A)
-
-u32bits_17B:      B - 0x00020000 => A     :JMPN(u32bits_17B_0)
-u32bits_17A_1:    1                       :MSTORE(u32bits[17]), JMP(u32bits_16A)
-u32bits_17B_0:    0                       :MSTORE(u32bits[17]), JMP(u32bits_16B)
-
-                  ; bit 16
-
-u32bits_16A:      A - 0x00010000 => B     :JMPN(u32bits_16A_0)
-u32bits_16B_1:    1                       :MSTORE(u32bits[16]), JMP(u32bits_15B)
-u32bits_16A_0:    0                       :MSTORE(u32bits[16]), JMP(u32bits_15A)
-
-u32bits_16B:      B - 0x00010000 => A     :JMPN(u32bits_16B_0)
-u32bits_16A_1:    1                       :MSTORE(u32bits[16]), JMP(u32bits_15A)
-u32bits_16B_0:    0                       :MSTORE(u32bits[16]), JMP(u32bits_15B)
-
-                  ; bit 15
-
-u32bits_15A:      A - 0x00008000 => B     :JMPN(u32bits_15A_0)
-u32bits_15B_1:    1                       :MSTORE(u32bits[15]), JMP(u32bits_14B)
-u32bits_15A_0:    0                       :MSTORE(u32bits[15]), JMP(u32bits_14A)
-
-u32bits_15B:      B - 0x00008000 => A     :JMPN(u32bits_15B_0)
-u32bits_15A_1:    1                       :MSTORE(u32bits[15]), JMP(u32bits_14A)
-u32bits_15B_0:    0                       :MSTORE(u32bits[15]), JMP(u32bits_14B)
-
-                  ; bit 14
-
-u32bits_14A:      A - 0x00004000 => B     :JMPN(u32bits_14A_0)
-u32bits_14B_1:    1                       :MSTORE(u32bits[14]), JMP(u32bits_13B)
-u32bits_14A_0:    0                       :MSTORE(u32bits[14]), JMP(u32bits_13A)
-
-u32bits_14B:      B - 0x00004000 => A     :JMPN(u32bits_14B_0)
-u32bits_14A_1:    1                       :MSTORE(u32bits[14]), JMP(u32bits_13A)
-u32bits_14B_0:    0                       :MSTORE(u32bits[14]), JMP(u32bits_13B)
-
-                  ; bit 13
-
-u32bits_13A:      A - 0x00002000 => B     :JMPN(u32bits_13A_0)
-u32bits_13B_1:    1                       :MSTORE(u32bits[13]), JMP(u32bits_12B)
-u32bits_13A_0:    0                       :MSTORE(u32bits[13]), JMP(u32bits_12A)
-
-u32bits_13B:      B - 0x00002000 => A     :JMPN(u32bits_13B_0)
-u32bits_13A_1:    1                       :MSTORE(u32bits[13]), JMP(u32bits_12A)
-u32bits_13B_0:    0                       :MSTORE(u32bits[13]), JMP(u32bits_12B)
-
-                  ; bit 12
-
-u32bits_12A:      A - 0x00001000 => B     :JMPN(u32bits_12A_0)
-u32bits_12B_1:    1                       :MSTORE(u32bits[12]), JMP(u32bits_11B)
-u32bits_12A_0:    0                       :MSTORE(u32bits[12]), JMP(u32bits_11A)
-
-u32bits_12B:      B - 0x00001000 => A     :JMPN(u32bits_12B_0)
-u32bits_12A_1:    1                       :MSTORE(u32bits[12]), JMP(u32bits_11A)
-u32bits_12B_0:    0                       :MSTORE(u32bits[12]), JMP(u32bits_11B)
-
-                  ; bit 11
-
-u32bits_11A:      A - 0x00000800 => B     :JMPN(u32bits_11A_0)
-u32bits_11B_1:    1                       :MSTORE(u32bits[11]), JMP(u32bits_10B)
-u32bits_11A_0:    0                       :MSTORE(u32bits[11]), JMP(u32bits_10A)
-
-u32bits_11B:      B - 0x00000800 => A     :JMPN(u32bits_11B_0)
-u32bits_11A_1:    1                       :MSTORE(u32bits[11]), JMP(u32bits_10A)
-u32bits_11B_0:    0                       :MSTORE(u32bits[11]), JMP(u32bits_10B)
-
-                  ; bit 10
-
-u32bits_10A:      A - 0x00000400 => B     :JMPN(u32bits_10A_0)
-u32bits_10B_1:    1                       :MSTORE(u32bits[10]), JMP(u32bits_9B)
-u32bits_10A_0:    0                       :MSTORE(u32bits[10]), JMP(u32bits_9A)
-
-u32bits_10B:      B - 0x00000400 => A     :JMPN(u32bits_10B_0)
-u32bits_10A_1:    1                       :MSTORE(u32bits[10]), JMP(u32bits_9A)
-u32bits_10B_0:    0                       :MSTORE(u32bits[10]), JMP(u32bits_9B)
-
-                  ; bit 9
-
-u32bits_9A:      A - 0x00000200 => B     :JMPN(u32bits_9A_0)
-u32bits_9B_1:    1                       :MSTORE(u32bits[9]), JMP(u32bits_8B)
-u32bits_9A_0:    0                       :MSTORE(u32bits[9]), JMP(u32bits_8A)
-
-u32bits_9B:      B - 0x00000200 => A     :JMPN(u32bits_9B_0)
-u32bits_9A_1:    1                       :MSTORE(u32bits[9]), JMP(u32bits_8A)
-u32bits_9B_0:    0                       :MSTORE(u32bits[9]), JMP(u32bits_8B)
-
-                  ; bit 8
-
-u32bits_8A:      A - 0x00000100 => B     :JMPN(u32bits_8A_0)
-u32bits_8B_1:    1                       :MSTORE(u32bits[8]), JMP(u32bits_7B)
-u32bits_8A_0:    0                       :MSTORE(u32bits[8]), JMP(u32bits_7A)
-
-u32bits_8B:      B - 0x00000100 => A     :JMPN(u32bits_8B_0)
-u32bits_8A_1:    1                       :MSTORE(u32bits[8]), JMP(u32bits_7A)
-u32bits_8B_0:    0                       :MSTORE(u32bits[8]), JMP(u32bits_7B)
-
-                  ; bit 7
-
-u32bits_7A:      A - 0x00000080 => B     :JMPN(u32bits_7A_0)
-u32bits_7B_1:    1                       :MSTORE(u32bits[7]), JMP(u32bits_6B)
-u32bits_7A_0:    0                       :MSTORE(u32bits[7]), JMP(u32bits_6A)
-
-u32bits_7B:      B - 0x00000080 => A     :JMPN(u32bits_7B_0)
-u32bits_7A_1:    1                       :MSTORE(u32bits[7]), JMP(u32bits_6A)
-u32bits_7B_0:    0                       :MSTORE(u32bits[7]), JMP(u32bits_6B)
-
-                  ; bit 6
-
-u32bits_6A:      A - 0x00000040 => B     :JMPN(u32bits_6A_0)
-u32bits_6B_1:    1                       :MSTORE(u32bits[6]), JMP(u32bits_5B)
-u32bits_6A_0:    0                       :MSTORE(u32bits[6]), JMP(u32bits_5A)
-
-u32bits_6B:      B - 0x00000040 => A     :JMPN(u32bits_6B_0)
-u32bits_6A_1:    1                       :MSTORE(u32bits[6]), JMP(u32bits_5A)
-u32bits_6B_0:    0                       :MSTORE(u32bits[6]), JMP(u32bits_5B)
-
-                  ; bit 5
-
-u32bits_5A:      A - 0x00000020 => B     :JMPN(u32bits_5A_0)
-u32bits_5B_1:    1                       :MSTORE(u32bits[5]), JMP(u32bits_4B)
-u32bits_5A_0:    0                       :MSTORE(u32bits[5]), JMP(u32bits_4A)
-
-u32bits_5B:      B - 0x00000020 => A     :JMPN(u32bits_5B_0)
-u32bits_5A_1:    1                       :MSTORE(u32bits[5]), JMP(u32bits_4A)
-u32bits_5B_0:    0                       :MSTORE(u32bits[5]), JMP(u32bits_4B)
-
-                  ; bit 4
-
-u32bits_4A:      A - 0x00000010 => B     :JMPN(u32bits_4A_0)
-u32bits_4B_1:    1                       :MSTORE(u32bits[4]), JMP(u32bits_3B)
-u32bits_4A_0:    0                       :MSTORE(u32bits[4]), JMP(u32bits_3A)
-
-u32bits_4B:      B - 0x00000010 => A     :JMPN(u32bits_4B_0)
-u32bits_4A_1:    1                       :MSTORE(u32bits[4]), JMP(u32bits_3A)
-u32bits_4B_0:    0                       :MSTORE(u32bits[4]), JMP(u32bits_3B)
-
-                  ; bit 3
-
-u32bits_3A:      A - 0x00000008 => B     :JMPN(u32bits_3A_0)
-u32bits_3B_1:    1                       :MSTORE(u32bits[3]), JMP(u32bits_2B)
-u32bits_3A_0:    0                       :MSTORE(u32bits[3]), JMP(u32bits_2A)
-
-u32bits_3B:      B - 0x00000008 => A     :JMPN(u32bits_3B_0)
-u32bits_3A_1:    1                       :MSTORE(u32bits[3]), JMP(u32bits_2A)
-u32bits_3B_0:    0                       :MSTORE(u32bits[3]), JMP(u32bits_2B)
-
-                  ; bit 2
-
-u32bits_2A:      A - 0x00000004 => B     :JMPN(u32bits_2A_0)
-u32bits_2B_1:    1                       :MSTORE(u32bits[2]), JMP(u32bits_1B)
-u32bits_2A_0:    0                       :MSTORE(u32bits[2]), JMP(u32bits_1A)
-
-u32bits_2B:      B - 0x00000004 => A     :JMPN(u32bits_2B_0)
-u32bits_2A_1:    1                       :MSTORE(u32bits[2]), JMP(u32bits_1A)
-u32bits_2B_0:    0                       :MSTORE(u32bits[2]), JMP(u32bits_1B)
-
-                  ; bit 1
-
-u32bits_1A:      A - 0x00000002 => B     :JMPN(u32bits_1A_0)
-u32bits_1B_1:    1                       :MSTORE(u32bits[1]), JMP(u32bits_0B)
-u32bits_1A_0:    0                       :MSTORE(u32bits[1]), JMP(u32bits_0A)
-
-u32bits_1B:      B - 0x00000002 => A     :JMPN(u32bits_1B_0)
-u32bits_1A_1:    1                       :MSTORE(u32bits[1]), JMP(u32bits_0A)
-u32bits_1B_0:    0                       :MSTORE(u32bits[1]), JMP(u32bits_0B)
-
-                  ; bit 0
-
-u32bits_0A:      A - 0x00000001 => B     :JMPN(u32bits_0A_0)
-u32bits_0B_1:    1                       :MSTORE(u32bits[0]), JMP(u32bits_end)
-u32bits_0A_0:    0                       :MSTORE(u32bits[0]), JMP(u32bits_end)
-
-u32bits_0B:      B - 0x00000001 => A     :JMPN(u32bits_0B_0)
-u32bits_0A_1:    1                       :MSTORE(u32bits[0]), JMP(u32bits_end)
-u32bits_0B_0:    0                       :MSTORE(u32bits[0])
-
-                 $ => A                  :MLOAD(u32bits_tmpA)
-                 $ => B                  :MLOAD(u32bits_tmpB), RETURN
-u32bits_end:
 
 VAR GLOBAL tmpZkPCreadXFromOffset
 VAR GLOBAL readXFromCalldataOffset
