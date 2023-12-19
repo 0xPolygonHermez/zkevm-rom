@@ -1,5 +1,4 @@
 processChangeL2Block:
-    $${eventLog(onProcessTx)}
 
     ; checks zk-counters
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*6     :JMPN(outOfCountersPoseidon)
@@ -14,6 +13,7 @@ processChangeL2Block:
                                         :CALL(consolidateBlock)
 
 continueProcessChangeL2Block:
+    $${eventLog(onStartBlock)}
     ; Reset tx index, logIndex and cumulative gas used
     0                                   :MSTORE(txIndex)
     0                                   :MSTORE(cumulativeGasUsed)
@@ -76,7 +76,7 @@ verifyTimestampAndL1InfoRoot:
 
     ; Verify (currentTimestamp + deltaTimestamp) <= limitTimestamp
     $ => A                              :MLOAD(timestampLimit)
-    $                                   :LT, JMPC(invalidChangeL2Block)
+    $                                   :LT, JMPC(invalidChangeL2BlockLimitTimestamp)
 
     ; Set new timestamp
     %TIMESTAMP_STORAGE_POS => C
@@ -96,7 +96,7 @@ ${getL1InfoTimestamp(mem.indexL1InfoTree)} => C     :MSTORE(timestampL1InfoTree)
     ; Verify (currentTimestamp + deltaTimestamp) >= l1InfoRoot.timestamp
     $ => A                                          :MLOAD(timestamp)
     $ => B                                          :MLOAD(timestampL1InfoTree)
-    $                                               :LT, JMPC(invalidChangeL2Block, initSetGERL1InfoTree)
+    $                                               :LT, JMPC(invalidChangeL2BlockMinTimestamp, initSetGERL1InfoTree)
 
 setNewTimestamp:
     ; Set new timestamp
