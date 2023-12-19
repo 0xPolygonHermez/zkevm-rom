@@ -119,6 +119,8 @@ calculateGas:
 
     B                                   :MSTORE(arithA)
     7                                   :MSTORE(arithB), CALL(addARITH)
+    ; check arith overflow
+    $                                   :MLOAD(addArithOverflow), JMPNZ(outOfGas)
     $ => B                              :MLOAD(arithRes1)
     B                                   :MSTORE(arithA)
     8                                   :MSTORE(arithB), CALL(divARITH)
@@ -150,6 +152,8 @@ calculateGas:
     ; iteration_count = (8 * (Esize - 32)) + ((exponent & (2**256 - 1)).bit_length() - 1)
     A                                   :MSTORE(arithA)
     B                                   :MSTORE(arithB), CALL(addARITH)
+    ; check arith overflow
+    $                                   :MLOAD(addArithOverflow), JMPNZ(outOfGas)
     $ => E                              :MLOAD(arithRes1), JMP(finalGas)
     ; E = iteration_count
 
@@ -260,7 +264,6 @@ finalMODEXP:
     ; write data into memory
     0 => B
     $ => C                              :MLOAD(modexp_Msize)
-
     C                                   :MSTORE(arithA)
     32                                  :MSTORE(arithB), CALL(divARITH)
     $ => E                              :MLOAD(arithRes1)
