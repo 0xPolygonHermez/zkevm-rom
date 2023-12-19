@@ -13,23 +13,19 @@
 ;;                  · out = inA·inB, with len(out) <= C + D
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; function array_mul_long(a: bigint[], b: bigint[], B: bigint): bigint[] {
+; function array_mul_long(a: bigint[], b: bigint[], base: bigint): bigint[] {
 ;     const alen = a.length;
 ;     const blen = b.length;
 ;     const len = alen + blen;
 ;     const result = new Array<bigint>(len).fill(0n);
 ;     let product: bigint;
 ;     let carry: bigint;
-;     let ai: bigint;
-;     let bj: bigint;
 ;     for (let i = 0; i < alen; i++) {
-;         ai = a[i];
 ;         for (let j = 0; j < blen; j++) {
-;             bj = b[j];
-;             product = ai * bj + result[i + j];
-;             carry = product / B;
-;             result[i + j] = product - carry * B;
-;             result[i + j + 1] += carry;
+;             product = a[i] * b[j] + out[i+j];
+;             carry = product / base;
+;             out[i+j] = product - carry * base;
+;             out[i + j + 1] += carry;
 ;         }
 ;     }
 ;     trim(result);
@@ -43,7 +39,7 @@ VAR GLOBAL array_mul_long_len_inA
 VAR GLOBAL array_mul_long_len_inB
 VAR GLOBAL array_mul_long_len_out
 
-VAR GLOBAL array_mul_long_result_carry
+VAR GLOBAL array_mul_long_out_chunk_2
 
 VAR GLOBAL array_mul_long_RR
 
@@ -69,36 +65,28 @@ array_mul_long:
         D               :MSTORE(array_mul_long_len_inB)
         C + D           :MSTORE(array_mul_long_len_out)
 
-        C + D => E ; auxiliar index
+        C + D - 1 => E ; auxiliar index
         0 => RCX   ; first index in loops
         0 => RR    ; second index in loops
 
 array_mul_long_clean_out:
-        E - 1 => E
         0               :MSTORE(array_mul_long_out + E)
-        E               :JMPZ(array_mul_long_loopZero2inB, array_mul_long_clean_out)
+        E - 1 => E      :JMPN(array_mul_long_loopZero2inB, array_mul_long_clean_out)
 
 ; Begin of branching
-array_mul_long_add_carry:
-        D + 1 => D      :JMP(return_array_mul_long_add_carry)
-
-array_mul_long_add_result_carry:
-        1               :MSTORE(array_mul_long_result_carry)
-                        :JMP(return_array_mul_long_add_result_carry)
-
 array_mul_long_loop_index_check:
         RCX + 1 => RCX
-        RCX => A
         $ => B          :MLOAD(array_mul_long_len_inA)
-        $               :EQ, JMPC(array_mul_long_prep_trim_in)
+        B - RCX         :JMPZ(array_mul_long_prep_trim_in)
 
-        0 => RR
-                        :JMP(return_array_mul_long_loop_index_check)
+        0 => RR ; reset the second index
 ; End of branching
 
 array_mul_long_loopZero2inB:
+        ; The result will be stored as D·base + C
+
         RCX => E
-        ; product = a_i * b_j + out[i + j]
+        ; 1] a[i]·b[j], where a[i],a[j] ∈ [0,base-1]: This number cannot be GT (base - 2)·base + 1, two chunks
         $ => A          :MLOAD(array_mul_long_inA + E)
         $ => B          :MLOAD(array_mul_long_inB + RR)
         0 => C
@@ -106,46 +94,52 @@ array_mul_long_loopZero2inB:
         ${_arrayLongMul_AB >> 256} => D
         ${_arrayLongMul_AB} => E :ARITH
 
-        ; sum lower part
+        ; 2] proudct = a[i]·b[j] + out[i+j], where out[i+j] ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
         E => A
         RCX + RR => E
         $ => B          :MLOAD(array_mul_long_out + E)
-        $ => C          :ADD, JMPC(array_mul_long_add_carry)
-                        return_array_mul_long_add_carry:
-
-        ; sum higher part
+        $ => C          :ADD, JMPNC(__array_mul_long_no_carry_continue_1)
+        ;-----------------
+        ; Since here D ∈ [0, base - 2], there cannot be carry in the following addition
         D => A
-        $ => B          :MLOAD(array_mul_long_result_carry)
+        1 => B
         $ => D          :ADD
+        ;-----------------
+                        __array_mul_long_no_carry_continue_1:
+        $ => A          :MLOAD(array_mul_long_out_chunk_2)
+        D => B
+        $ => D          :ADD ; the number is of two chunks, no carry can be generated here
 
-        ; out[i + j] = product - carry·B
+        ; out[i+j] = product - carry·B
         C               :MSTORE(array_mul_long_out + E)
 
-        ; out[i + j + 1] += carry
+        ; out[i+j+1] += carry, where carry ∈ [0,base-1]: This number cannot be GT base + (base-3), two chunks
         E + 1 => E
         $ => A          :MLOAD(array_mul_long_out + E)
         D => B
-        $ => C          :ADD, JMPC(array_mul_long_add_result_carry)
-        0               :MSTORE(array_mul_long_result_carry)
-                        return_array_mul_long_add_result_carry:
+        $ => C          :ADD, JMPNC(__array_mul_long_no_carry_continue_2)
+        ;-----------------
+        1               :MSTORE(array_mul_long_out_chunk_2)
+                        :JMP(__array_mul_long_carry_continue)
+                        __array_mul_long_no_carry_continue_2:
+        0               :MSTORE(array_mul_long_out_chunk_2)
+                        __array_mul_long_carry_continue:
+        ;-----------------
+
         C               :MSTORE(array_mul_long_out + E)
 
         RR + 1 => RR
-        RR => A
         $ => B          :MLOAD(array_mul_long_len_inB)
-        $               :EQ, JMPC(array_mul_long_loop_index_check)
-                        return_array_mul_long_loop_index_check:
-                        :JMP(array_mul_long_loopZero2inB)
+        B - RR          :JMPZ(array_mul_long_loop_index_check, array_mul_long_loopZero2inB)
 
 array_mul_long_prep_trim_in:
         $ => C          :MLOAD(array_mul_long_len_out)
-        C => E
+        C - 1 => E
 
 array_mul_long_trim_in:
-        E - 1 => E
         $ => A          :MLOAD(array_mul_long_out + E)
         A               :MSTORE(array_trim_in + E)
-        E               :JMPZ(array_mul_long_trim, array_mul_long_trim_in)
+        E - 1 => E      :JMPN(array_mul_long_trim, array_mul_long_trim_in)
 
 array_mul_long_trim:
                         :CALL(array_trim)
