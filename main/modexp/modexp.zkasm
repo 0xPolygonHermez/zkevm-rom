@@ -78,7 +78,7 @@ modexp:
         C - 1 => RR
         D - 1 => E
 
-        %MAX_CNT_STEPS - STEP - 4*C - 4*D  - 1    :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 3*C - 3*D  - 1    :JMPN(outOfCountersStep)
 
 ; Compute B = B % M
 ; -------------------
@@ -95,13 +95,13 @@ modexp_M_to_div1:
 modexp_div_B_and_M:
                         :CALL(array_div)
 
-        %MAX_CNT_STEPS - STEP - 3         :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 4         :JMPN(outOfCountersStep)
 
         $ => C          :MLOAD(array_div_len_rem)
         C               :MSTORE(modexp_Blen)
         C - 1 => RR
 
-        %MAX_CNT_STEPS - STEP - 4*C        :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 3*C        :JMPN(outOfCountersStep)
 
 modexp_rem_from_div1:
         $ => A          :MLOAD(array_div_rem + RR)
@@ -123,7 +123,7 @@ modexp_loop_multiply:
         C - 1 => RR
         D - 1 => E
 
-        %MAX_CNT_STEPS - STEP - 4*C - 4*D - 1        :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 3*C - 3*D - 1        :JMPN(outOfCountersStep)
 
 ; Compute out * B
 ; -------------------
@@ -140,14 +140,14 @@ modexp_B_to_mul_long:
 modexp_mul_long_out_and_B:
                         :CALL(array_mul)
 
-        %MAX_CNT_STEPS - STEP - 4         :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 5         :JMPN(outOfCountersStep)
 
         $ => C          :MLOAD(array_mul_len_out)
         $ => D          :MLOAD(modexp_Mlen)
         C - 1 => RR
         D - 1 => E
 
-        %MAX_CNT_STEPS - STEP - 4*C - 4*D - 1        :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 3*C - 3*D - 1        :JMPN(outOfCountersStep)
 
 ; Compute out = (out * B) % M
 modexp_out_to_div1:
@@ -163,13 +163,13 @@ modexp_M_to_div:
 modexp_div_out_and_M2:
                         :CALL(array_div)
 
-        %MAX_CNT_STEPS - STEP - 3        :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 4        :JMPN(outOfCountersStep)
 
         $ => C          :MLOAD(array_div_len_rem)
         C               :MSTORE(modexp_outlen)
         C - 1 => RR
 
-        %MAX_CNT_STEPS - STEP - 4*C - 1        :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 3*C - 1        :JMPN(outOfCountersStep)
 
 modexp_rem_from_div2:
         $ => A          :MLOAD(array_div_rem + RR)
@@ -180,8 +180,8 @@ modexp_rem_from_div2:
 
 modexp_pre_loop:
 ;       In the worst case, the exponent is odd in each iteration
-        %MAX_CNT_BINARY - CNT_BINARY - 5          :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 21         :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY - 3          :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 13         :JMPN(outOfCountersStep)
 
         ; Is Elen = 1 and E = 0?
         1 => B
@@ -211,7 +211,7 @@ modexp_loop:
         $ => C          :MLOAD(modexp_Elen)
         C - 1 => RR
 
-        %MAX_CNT_STEPS - STEP - 4*C - 1        :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 3*C - 2        :JMPN(outOfCountersStep)
 
 ; Compute E = E // 2
 ; -------------------
@@ -224,13 +224,13 @@ modexp_div_E_and_2:
         2               :MSTORE(array_div_short_inB)
                         :CALL(array_div_short)
 
-        %MAX_CNT_STEPS - STEP - 3       :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 4       :JMPN(outOfCountersStep)
 
         $ => C          :MLOAD(array_div_short_len_quo)
         C               :MSTORE(modexp_Elen)
         C - 1 => RR
 
-        %MAX_CNT_STEPS - STEP - 4*C - 2       :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 3*C - 3       :JMPN(outOfCountersStep)
 
 modexp_quo_from_div_short:
         $ => A          :MLOAD(array_div_short_quo + RR)
@@ -244,7 +244,7 @@ modexp_pre_B_square:
         $ => C          :MLOAD(modexp_Blen)
         C - 1 => RR
 
-        %MAX_CNT_STEPS - STEP - 4*C - 1       :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 3*C - 1       :JMPN(outOfCountersStep)
 
 modexp_B_to_square1:
         $ => A          :MLOAD(modexp_B + RR)
@@ -254,14 +254,14 @@ modexp_B_to_square1:
 modexp_square_B:
                         :CALL(array_square)
 
-        %MAX_CNT_STEPS - STEP - 4       :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 5       :JMPN(outOfCountersStep)
 
         $ => C          :MLOAD(array_square_len_out)
         $ => D          :MLOAD(modexp_Mlen)
         C - 1 => RR
         D - 1 => E
 
-        %MAX_CNT_STEPS - STEP - 4*C - 4*D - 1       :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 3*C - 3*D - 1       :JMPN(outOfCountersStep)
 
 ; Compute B = (B^2) % M
 modexp_out_to_div2:
@@ -277,13 +277,13 @@ modexp_M_to_div2:
 modexp_div_out_and_M1:
                         :CALL(array_div)
 
-        %MAX_CNT_STEPS - STEP - 3       :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 4       :JMPN(outOfCountersStep)
 
         $ => C          :MLOAD(array_div_len_rem)
         C               :MSTORE(modexp_Blen)
         C - 1 => RR
 
-        %MAX_CNT_STEPS - STEP - 4*C - 1       :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 3*C - 2       :JMPN(outOfCountersStep)
 
 modexp_rem_from_div3:
         $ => A          :MLOAD(array_div_rem + RR)
