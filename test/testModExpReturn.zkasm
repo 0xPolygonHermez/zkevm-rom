@@ -1,0 +1,81 @@
+; constants needed by executor C++
+start:
+
+        STEP => A
+        0 :ASSERT
+
+        2 => CTX
+        1           :MSTORE(originCTX)
+        2           :MSTORE(currentCTX)
+        128         :MSTORE(retCallLength)
+        0           :MSTORE(retCallOffset)
+        4*32        :MSTORE(modexp_Bsize)
+        32          :MSTORE(modexp_Esize)
+        4*32        :MSTORE(modexp_Msize)
+
+        CTX => A
+
+        ; 256 BITS EXPONENT TESTS
+        ; ---------------------------------------------------------------------------------------------
+        ; 1] B = [100n, 2831023n, 0n, 73916234139162n], E = [2n**256n - 1n], M = [0n, 0n, 8238129386n, 23102318237n]
+        ; Hamming weight of E is 256
+        4                                                                               :MSTORE(modexp_Blen)
+        1                                                                               :MSTORE(modexp_Elen)
+        4                                                                               :MSTORE(modexp_Mlen)
+
+        100n                                                                            :MSTORE(modexp_B)
+        1 => E
+        2831023n                                                                        :MSTORE(modexp_B + E)
+        2 => E
+        0n                                                                              :MSTORE(modexp_B + E)
+        3 => E
+        73916234139162n                                                                 :MSTORE(modexp_B + E)
+        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(modexp_E)
+        0n                                                                              :MSTORE(modexp_M)
+        1 => E
+        0n                                                                              :MSTORE(modexp_M + E)
+        2 => E
+        8238129386n                                                                     :MSTORE(modexp_M + E)
+        3 => E
+        23102318237n                                                                    :MSTORE(modexp_M + E)
+                                                                                        :JMP(callMODEXP)
+
+INCLUDE "../main/main.zkasm"
+
+VAR GLOBAL testModexp1
+VAR GLOBAL testModexp2
+VAR GLOBAL testModexp3
+VAR GLOBAL testModexp4
+
+preEnd:
+        0n                                                                              :MLOAD(modexp_out)
+        1 => E
+        0n                                                                              :MLOAD(modexp_out + E)
+        2 => E
+        25636070175539943947777314844209202718110211581133019863886488575898865601868n  :MLOAD(modexp_out + E)
+        3 => E
+        4679155145n                                                                     :MLOAD(modexp_out + E)
+        4                                                                               :MLOAD(modexp_outlen)
+        ; get return data
+        1 => CTX
+        $ => E          :MLOAD(retCallOffset),CALL(MLOAD32)
+        A               :MSTORE(testModexp1)
+                        :CALL(MLOAD32)
+        A               :MSTORE(testModexp2)
+                        :CALL(MLOAD32)
+        A               :MSTORE(testModexp3)
+                        :CALL(MLOAD32)
+        A               :MSTORE(testModexp4)
+        ;assert return data === memory
+        2 => CTX
+        0 => E          :CALL(MLOAD32)
+        A               :MLOAD(testModexp1)
+                        :CALL(MLOAD32)
+        A               :MLOAD(testModexp2)
+                        :CALL(MLOAD32)
+        A               :MLOAD(testModexp3)
+                        :CALL(MLOAD32)
+        A               :MLOAD(testModexp4)
+
+0 => A,B,C,D,E,CTX, SP, PC, GAS,  SR, HASHPOS, RR ; Set all registers to 0
+                                                                        :JMP(finalizeExecution)
