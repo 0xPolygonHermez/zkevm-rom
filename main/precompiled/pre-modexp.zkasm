@@ -119,6 +119,8 @@ calculateGas:
 
     B                                   :MSTORE(arithA)
     7                                   :MSTORE(arithB), CALL(addARITH)
+    ; check arith overflow
+    $                                   :MLOAD(addArithOverflow), JMPNZ(outOfGas)
     $ => B                              :MLOAD(arithRes1)
     B                                   :MSTORE(arithA)
     8                                   :MSTORE(arithB), CALL(divARITH)
@@ -142,12 +144,16 @@ calculateGas:
     $ => A                              :MLOAD(arithRes1)
     A                                   :MSTORE(arithA)
     8                                   :MSTORE(arithB), CALL(mulARITH)
+    ; check arith overflow
+    $                                   :MLOAD(mulArithOverflowFlag), JMPNZ(outOfGas)
     ; A = 8 * (Esize - 32)
     $ => A                              :MLOAD(arithRes1)
     $ => B                              :MLOAD(expLenBits)
     ; iteration_count = (8 * (Esize - 32)) + ((exponent & (2**256 - 1)).bit_length() - 1)
     A                                   :MSTORE(arithA)
     B                                   :MSTORE(arithB), CALL(addARITH)
+    ; check arith overflow
+    $                                   :MLOAD(addArithOverflow), JMPNZ(outOfGas)
     $ => E                              :MLOAD(arithRes1), JMP(finalGas)
     ; E = iteration_count
 
@@ -172,6 +178,8 @@ dynamicGas:
     $ => A                              :MLOAD(multiplication_complexity)
     A                                   :MSTORE(arithA)
     E                                   :MSTORE(arithB), CALL(mulARITH)
+    ; check arith overflow
+    $                                   :MLOAD(mulArithOverflowFlag), JMPNZ(outOfGas)
     ; A = multiplication_complexity * iteration_count
     $ => A                              :MLOAD(arithRes1)
     A                                   :MSTORE(arithA)
@@ -185,8 +193,10 @@ dynamicGas:
     A => B
 
 lastChecks:
+    B                                   :MSTORE(preGAS)
     ; B = max(200, multiplication_complexity * iteration_count / 3)
     GAS - B => GAS                      :JMPN(outOfGas)
+    ; check first modulo size and base size to match ethereum specification
     0 => A
     $ => B                              :MLOAD(modexp_Msize)
     $                                   :EQ, JMPC(save0outMod0)  ; if Msize = 0 --> save0outMod0
@@ -194,13 +204,16 @@ lastChecks:
     $ => B                              :MLOAD(modexp_Bsize)
     $                                   :EQ, JMPC(save0out)      ; if Bsize = 0 --> save0out
     ; Bsize > 0 from here
+
+    ; Check maximum length allowed in the zkEVM reagrding the modExp
+    ; If parameters (length > %MAX_SIZE_MODEXP) --> zkEVM does a revert returning all the gas consumed
     %MAX_SIZE_MODEXP => A
     $ => B                              :MLOAD(modexp_Bsize)
-    $                                   :LT, JMPC(preEndFail) ; if Bsize > MAX_SIZE_MODEXP --> preEndFail
+    $                                   :LT, JMPC(preFailModExpLength) ; if Bsize > MAX_SIZE_MODEXP --> preFailModExpLength
     $ => B                              :MLOAD(modexp_Esize)
-    $                                   :LT, JMPC(preEndFail) ; if Esize > MAX_SIZE_MODEXP --> preEndFail
+    $                                   :LT, JMPC(preFailModExpLength) ; if Esize > MAX_SIZE_MODEXP --> preFailModExpLength
     $ => B                              :MLOAD(modexp_Msize)
-    $                                   :LT, JMPC(preEndFail) ; if Msize > MAX_SIZE_MODEXP --> preEndFail
+    $                                   :LT, JMPC(preFailModExpLength) ; if Msize > MAX_SIZE_MODEXP --> preFailModExpLength
     ; get base value
     $ => E                              :MLOAD(modexp_offset) ; This is used in modexp_getBase, modexp_getExp and modexp_getMod
     $ => C                              :MLOAD(modexp_Bsize)
@@ -243,7 +256,7 @@ save1out:
 save0out:
     $ => B                              :MLOAD(modexp_Msize)
     %MAX_SIZE_MODEXP => A
-    $                                   :LT,JMPC(preEndFail)
+    $                                   :LT,JMPC(preFailLength)
     0                                   :MSTORE(modexp_out), JMP(finalMODEXP)
 
 save0outMod0:
@@ -255,7 +268,6 @@ finalMODEXP:
     ; write data into memory
     0 => B
     $ => C                              :MLOAD(modexp_Msize)
-
     C                                   :MSTORE(arithA)
     32                                  :MSTORE(arithB), CALL(divARITH)
     $ => E                              :MLOAD(arithRes1)
