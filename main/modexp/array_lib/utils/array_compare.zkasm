@@ -45,22 +45,17 @@ VAR GLOBAL array_compare_result
 VAR GLOBAL array_compare_RR
 
 array_compare:
-        %MAX_CNT_BINARY - CNT_BINARY - 2 - 2*C          :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 8 - 8*C - 4      :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY     - 2*C          :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 4 - 7*C - 4      :JMPN(outOfCountersStep)
 
         RR              :MSTORE(array_compare_RR)
 
         ; Start by comparing the lengths of the arrays
-        C => A
-        D => B
-        $               :LT, JMPC(array_compare_ALTB)
-        C => B
-        D => A
-        $               :LT, JMPC(array_compare_AGTB)
+        C - D           :JMPN(array_compare_ALTB)
+        D - C           :JMPN(array_compare_AGTB)
 
-        C => E
+        C - 1 => E
 array_compare_same_len:
-        E - 1 => E
         $ => A          :MLOAD(array_compare_inA + E)
         $ => B          :MLOAD(array_compare_inB + E)
         $               :LT, JMPC(array_compare_ALTB)
@@ -69,7 +64,7 @@ array_compare_same_len:
         $ => B          :MLOAD(array_compare_inA + E)
         $               :LT, JMPC(array_compare_AGTB)
 
-        E      :JMPZ(array_compare_AEQB, array_compare_same_len)
+        E - 1 => E      :JMPN(array_compare_AEQB, array_compare_same_len)
 
 array_compare_AGTB:
         2               :MSTORE(array_compare_result)
@@ -81,7 +76,6 @@ array_compare_AEQB:
 
 array_compare_ALTB:
         0               :MSTORE(array_compare_result)
-                        :JMP(array_compare_end)
 
 array_compare_end:
         $ => RR         :MLOAD(array_compare_RR)

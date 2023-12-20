@@ -13,7 +13,7 @@
 ;;                  · out = inA + inB, with len(out) <= C + 1
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; function array_add_AGTB(a: bigint[], b: bigint[], B: bigint): bigint[] {
+; function array_add_AGTB(a: bigint[], b: bigint[], base: bigint): bigint[] {
 ;     const alen = a.length;
 ;     const blen = b.length;
 ;     let result = new Array<bigint>(alen);
@@ -21,13 +21,13 @@
 ;     let carry = 0n;
 ;     for (let i = 0; i < blen; i++) {
 ;         sum = a[i] + b[i] + carry;
-;         carry = sum >= B ? 1n : 0n;
-;         result[i] = sum - carry * B;
+;         carry = sum >= base ? 1n : 0n;
+;         out[i] = sum - carry * base;
 ;     }
 ;     for (let i = blen; i < alen; i++) {
 ;         sum = a[i] + carry;
-;         carry = sum == B ? 1n : 0n; // the past carry is at most 1n
-;         result[i] = sum - carry * B;
+;         carry = sum == base ? 1n : 0n; // the past carry is at most 1n
+;         out[i] = sum - carry * base;
 ;     }
 
 ;     if (carry === 1n) {
@@ -36,7 +36,7 @@
 ;     return result;
 ; }
 
-; NOTE: It's unoptimized for the case where len(inB) = 1. Use array_add_short instead if possible.
+; NOTE: It's unoptimized for the case where len(inB) = 1. Use array_add_short instead.
 
 VAR GLOBAL array_add_AGTB_inA[%ARRAY_MAX_LEN]
 VAR GLOBAL array_add_AGTB_inB[%ARRAY_MAX_LEN]
@@ -50,8 +50,8 @@ VAR GLOBAL array_add_AGTB_carry
 VAR GLOBAL array_add_AGTB_RR
 
 array_add_AGTB:
-        %MAX_CNT_BINARY - CNT_BINARY     - 3*D  - 1 -    C+   D - 1      :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 6 - 17*D - 4 - 11*C+11*D - 8      :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY     -  2*D     -   C+  D           :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 5 - 14*D - 3 - 9*C+9*D - 8       :JMPN(outOfCountersStep)
 
         RR              :MSTORE(array_add_AGTB_RR)
 
@@ -60,71 +60,61 @@ array_add_AGTB:
 
         0 => E ; index in loops
         0               :MSTORE(array_add_AGTB_carry)
-                        :JMP(array_add_AGTB_loopZero2inB)
-
-; Begin of branching
-array_add_AGTB_add_carry1:
-        D + 1 => D     :JMP(return_array_add_AGTB_add_carry1)
-
-array_add_AGTB_add_carry2:
-        D + 1 => D     :JMP(return_array_add_AGTB_add_carry2)
-
-array_add_AGTB_add_carry3:
-        D + 1 => D     :JMP(return_array_add_AGTB_add_carry3)
-; End of branching
 
 array_add_AGTB_loopZero2inB:
-        0 => D  ; for the carry
+        ; The result will be stored as D·base + C
 
-        ; a[i] + b[i]
+        0 => D  ; reset the carry chunk
+
+        ; a[i] + b[i], where a[i],b[i] ∈ [0,base-1]: This number cannot be GT base + (base - 2), two chunks
         $ => A          :MLOAD(array_add_AGTB_inA + E)
         $ => B          :MLOAD(array_add_AGTB_inB + E)
-        $ => C          :ADD, JMPC(array_add_AGTB_add_carry1)
-                        return_array_add_AGTB_add_carry1:
+        $ => C          :ADD, JMPNC(__array_add_AGTB_continue_1)
+        1 => D
+                        __array_add_AGTB_continue_1:
 
-        ; sum = (a[i] + b[i]) + carry
+        ; sum = (a[i] + b[i]) + carry: This number cannot be GT base + (base - 1), two chunks
         $ => A          :MLOAD(array_add_AGTB_carry)
         C => B
-        $ => C          :ADD, JMPC(array_add_AGTB_add_carry2)
-                        return_array_add_AGTB_add_carry2:
+        $ => C          :ADD, JMPNC(__array_add_AGTB_continue_2)
+        1 => D
+                        __array_add_AGTB_continue_2:
 
         C               :MSTORE(array_add_AGTB_out + E)
         D               :MSTORE(array_add_AGTB_carry)
 
-        E + 1 => E
-        E => A
+        E + 1 => E,A
         $ => B          :MLOAD(array_add_AGTB_len_inB)
-        $               :EQ, JMPC(array_add_AGTB_loop_index_check1, array_add_AGTB_loopZero2inB)
+        B - A           :JMPZ(array_add_AGTB_loop_index_check, array_add_AGTB_loopZero2inB)
 
-array_add_AGTB_loop_index_check1:
-        E => A
+array_add_AGTB_loop_index_check:
         $ => B          :MLOAD(array_add_AGTB_len_inA)
-        $               :EQ, JMPC(array_add_AGTB_check_carry)
+        B - A           :JMPZ(array_add_AGTB_check_carry)
+
         0 => D
 array_add_AGTB_loopInB2InA:
-        ; sum = a[i] + carry
+        ; sum = a[i] + carry: This number cannot be GT base, two chunks
         $ => A          :MLOAD(array_add_AGTB_inA + E)
         $ => B          :MLOAD(array_add_AGTB_carry)
-        $ => C          :ADD, JMPC(array_add_AGTB_add_carry3)
-                        return_array_add_AGTB_add_carry3:
+        $ => C          :ADD, JMPNC(__array_add_AGTB_continue_3)
+        1 => D
+                        __array_add_AGTB_continue_3:
 
         C               :MSTORE(array_add_AGTB_out + E)
         D               :MSTORE(array_add_AGTB_carry)
 
-        E + 1 => E
-        E => A
+        E + 1 => E,A
         $ => B          :MLOAD(array_add_AGTB_len_inA)
-        $               :EQ, JMPC(array_add_AGTB_check_carry, array_add_AGTB_loopInB2InA)
+        B - A           :JMPZ(array_add_AGTB_check_carry, array_add_AGTB_loopInB2InA)
 
 array_add_AGTB_check_carry:
-        $ => A          :MLOAD(array_add_AGTB_carry)
-        1 => B
-        $               :EQ, JMPNC(array_add_AGTB_len_out)
+        D => A
+        A               :JMPZ(__array_add_AGTB_continue_4)
+        ; In this case, the carry = 1 and we should append it to the result
         1               :MSTORE(array_add_AGTB_out + E)
         E + 1           :MSTORE(array_add_AGTB_len_out)
                         :JMP(array_add_AGTB_end)
-
-array_add_AGTB_len_out:
+                        __array_add_AGTB_continue_4:
         E               :MSTORE(array_add_AGTB_len_out)
 
 array_add_AGTB_end:

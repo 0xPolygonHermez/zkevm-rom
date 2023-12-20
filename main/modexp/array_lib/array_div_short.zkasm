@@ -12,7 +12,7 @@
 ;;                  · [quo,rem] = [inA / inB[0], inA % inB[0]], with len(quo) <= C, len(rem) = 1
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; function array_div_short(a: bigint[], b: bigint, B: bigint): bigint[] {
+; function array_div_short(a: bigint[], b: bigint, base: bigint): bigint[] {
 ;     if (a === [0n]) {
 ;         if (b === 0n) {
 ;             throw new Error("Division by zero");
@@ -47,37 +47,33 @@ VAR GLOBAL array_div_short_RR
 ; 1 - inB is zero
 
 array_div_short:
-
-        %MAX_CNT_BINARY - CNT_BINARY - 3             :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 15 - 4*C - 3  :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY - 2             :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 11 - 3*C - 3  :JMPN(outOfCountersStep)
 
         RR              :MSTORE(array_div_short_RR)
+
         C               :MSTORE(array_div_short_len_inA)
         C               :MSTORE(array_div_short_len_quo)
 
         ; Let's cover the edge cases
-        ; 1] Is inA == 0?
-        C => A
         1 => B
-        $               :EQ, JMPNC(array_div_short_inA_continue)
-        0 => B
+        ; 1] Is C == 1 and inA == 0?
+        C - B           :JMPNZ(__array_div_short_inA_continue)
         $ => A          :MLOAD(array_div_short_inA)
-        $               :EQ, JMPC(array_div_short_inA_is_zero)
-                        array_div_short_inA_continue:
+        $               :LT, JMPC(array_div_short_inA_is_zero)
+                        __array_div_short_inA_continue:
 
         ; 2] Is inB == 0?
-        0 => B
         $ => A          :MLOAD(array_div_short_inB)
-        $               :EQ, JMPC(array_div_short_inB_is_zero)
+        $               :LT, JMPC(array_div_short_inB_is_zero)
 
         ; Check whether inA = inB or inA < inB
-        C => RR
+        C - 1 => RR
         1 => D
 array_div_short_inA_to_compare1:
-        RR - 1 => RR
         $ => A          :MLOAD(array_div_short_inA + RR)
         A               :MSTORE(array_compare_inA + RR)
-        RR              :JMPZ(array_div_short_inB_to_compare, array_div_short_inA_to_compare1)
+        RR - 1 => RR    :JMPN(array_div_short_inB_to_compare, array_div_short_inA_to_compare1)
 
 array_div_short_inB_to_compare:
         $ => A          :MLOAD(array_div_short_inB)
@@ -86,14 +82,12 @@ array_div_short_inB_to_compare:
 array_div_short_compare_inA_inB:
                         :CALL(array_compare)
 
-        %MAX_CNT_BINARY - CNT_BINARY - 4     :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 18    :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY - 1     :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 13    :JMPN(outOfCountersStep)
 
         $ => A          :MLOAD(array_compare_result), JMPZ(array_div_short_inALTinB)
-        1 => B
-        $               :EQ, JMPC(array_div_short_same_input)
-
-        ; From here, it is known that inA > inB
+        A - 1           :JMPZ(array_div_short_same_input)
+        ; From here, inA > inB
 
         ; Strategy: Divide outside and check the result inside
         $${MPdiv_short(addr.array_div_short_inA,mem.array_div_short_len_inA,mem.array_div_short_inB)}
@@ -104,7 +98,7 @@ array_div_short_compare_inA_inB:
 array_div_short_inA_is_zero:
         ; Is inB == 0? 0/0 is undefined
         $ => A          :MLOAD(array_div_short_inB)
-        $               :EQ, JMPC(array_div_short_inB_is_zero)
+        $               :LT, JMPC(array_div_short_inB_is_zero)
         ; From here, inB != 0
 
         ; Return [q,r] = [0,0] and len(q) = 1, len(r) = 1
@@ -149,16 +143,16 @@ array_div_short_prepare_mul_quo_inB:
         ; From here, the quotient is trimmed
 
         C               :MSTORE(array_div_short_len_quo)
-        C => RR
 
-        %MAX_CNT_STEPS - STEP - 5*%ARRAY_MAX_LEN - 4      :JMPN(outOfCountersStep)
+        C - 1 => RR
+
+        %MAX_CNT_STEPS - STEP - 4*%ARRAY_MAX_LEN - 3      :JMPN(outOfCountersStep)
 
 array_div_short_quo_to_mul:
-        RR - 1 => RR
         ${receiveQuotientChunk_short(RR)} => A
         A               :MSTORE(array_div_short_quo + RR)
         A               :MSTORE(array_mul_short_inA + RR)
-        RR              :JMPZ(array_div_short_inB_to_mul, array_div_short_quo_to_mul)
+        RR - 1 => RR    :JMPN(array_div_short_inB_to_mul, array_div_short_quo_to_mul)
 
 array_div_short_inB_to_mul:
         $ => A          :MLOAD(array_div_short_inB)
@@ -171,16 +165,15 @@ array_div_short_mul_quo_inB:
 
         ; prepare next
         $ => C          :MLOAD(array_mul_short_len_out)
-        C => RR
+        C - 1 => RR
 
         %MAX_CNT_BINARY - CNT_BINARY - 1     :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP - 4*C - 6      :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 3*C - 6      :JMPN(outOfCountersStep)
 
 array_div_short_result_to_add:
-        RR - 1 => RR
         $ => A          :MLOAD(array_mul_short_out + RR)
         A               :MSTORE(array_add_short_inA + RR)
-        RR              :JMPZ(array_div_short_rem_to_add, array_div_short_result_to_add)
+        RR - 1 => RR    :JMPN(array_div_short_rem_to_add, array_div_short_result_to_add)
 
 array_div_short_rem_to_add:
         ${receiveRemainderChunk_short()} => A
@@ -200,22 +193,20 @@ array_div_short_add_result_rem:
         ; prepare next
         $ => C          :MLOAD(array_add_short_len_out)
         $ => D          :MLOAD(array_div_short_len_inA)
-        C => RR
-        D => E
+        C - 1 => RR
+        D - 1 => E
 
-        %MAX_CNT_STEPS - STEP - 4*C - 4*D - 1    :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 3*C - 3*D - 1    :JMPN(outOfCountersStep)
 
 array_div_short_result_to_compare:
-        RR - 1 => RR
         $ => A          :MLOAD(array_add_short_out + RR)
         A               :MSTORE(array_compare_inA + RR)
-        RR              :JMPZ(array_div_short_inA_to_compare2, array_div_short_result_to_compare)
+        RR - 1 => RR    :JMPN(array_div_short_inA_to_compare2, array_div_short_result_to_compare)
 
 array_div_short_inA_to_compare2:
-        E - 1 => E
         $ => A          :MLOAD(array_div_short_inA + E)
         A               :MSTORE(array_compare_inB + E)
-        E               :JMPZ(array_div_short_compare_result_inA, array_div_short_inA_to_compare2)
+        E - 1 => E      :JMPN(array_div_short_compare_result_inA, array_div_short_inA_to_compare2)
 
 array_div_short_compare_result_inA:
                         :CALL(array_compare)
@@ -223,7 +214,8 @@ array_div_short_compare_result_inA:
         %MAX_CNT_STEPS - STEP - 4      :JMPN(outOfCountersStep)
 
         1               :MLOAD(array_compare_result)
-        0 => B
+
+        0 => B ; error code
 
 array_div_short_end:
         $ => RR         :MLOAD(array_div_short_RR)
