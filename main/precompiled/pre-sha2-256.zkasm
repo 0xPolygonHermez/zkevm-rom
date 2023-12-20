@@ -9,7 +9,6 @@
  */
 VAR GLOBAL sha256DataOffset
 VAR GLOBAL sha256DataId
-VAR GLOBAL sha256HashPos
 VAR GLOBAL sha256Hash
 VAR GLOBAL tmpZkSHA256
 
@@ -57,7 +56,7 @@ funcSHA256:
     $ => E          :MLOAD(sha256DataId)
     E + 1           :MSTORE(sha256DataId)
 
-    ; copy sha256 to retData (hash 32 bytes)
+    ; copy sha256 to memory (hash 32 bytes)
     0 => E
     A               :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
 
@@ -69,15 +68,17 @@ SHA256dataReturn:
     A => CTX
     B               :MSTORE(retDataCTX)
     B => CTX
-    ; Copy from memory current CTX to memory origin CTX
-    0 => E
+    ; copy sha256 to retData (hash 32 bytes)
     $ => C          :MLOAD(retCallLength)
-    ; MLOAD memory current CTX
-                    :CALL(MLOADX)
     $ => E          :MLOAD(retCallOffset)
     $ => CTX        :MLOAD(originCTX)
+    C - 32          :JMPN(continueSHA256dataReturn)
+    32 => C
+
+continueSHA256dataReturn:
+    $ => A          :MLOAD(sha256Hash)
     ; MSTORE memory origin CTX
-    A               :MSTORE(bytesToStore), CALL(MSTOREX)
+    A               :MSTORE(bytesToStore), CALL(MSTOREX) ; in: [bytesToStore, E: offset, C: length] out: [E: new offset]
     ; set currentCTX
     CTX             :MSTORE(currentCTX), JMP(preEnd)
 
@@ -108,8 +109,7 @@ SHA256dataFinal:
     C               :MSTORE(readXFromCalldataLength)
     E               :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
     $ => A          :MLOAD(readXFromCalldataResult)
-    32 - C => D
-    zkPC+1 => RR    :JMP(SHRarith)
+    32 - C => D     :CALL(SHRarith)
     $ => E          :MLOAD(sha256DataId)
     C => D
     A               :HASHS(E)
