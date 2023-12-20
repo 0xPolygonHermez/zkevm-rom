@@ -24,26 +24,26 @@
 ;;     if (array_is_zero(e)) return [1n];
 ;;
 ;;     let r = [1n];
-;;     let base = array_div_mod(b, mod, B)[1];
+;;     let base = array_div(b, mod, B)[1];
 ;;     while (!array_is_zero(exp)) {
 ;;         if (array_is_zero(base)) return [0n];
 ;;         if (isOdd(exp)) {
-;;             r = array_div_mod(array_mul(r, base, B),mod,B)[1];
+;;             r = array_div(array_mul(r, base, B),mod,B)[1];
 ;;         }
-;;         exp = array_div_mod_short(exp, 2n, B)[0];
-;;         base = array_div_mod(array_square(base, B),mod,B)[1];
+;;         exp = array_div_short(exp, 2n, B)[0];
+;;         base = array_div(array_square(base, B),mod,B)[1];
 ;;     }
 ;;     return r;
 ;; };
 
 ;; RESOURCES (assuming a worst case scenario):
 ;; -------------------------------------------
-;; cost(pre_loop) = 3·cost(isZero) + 2·cost(isOne) + cost(array_div_mod)
+;; cost(pre_loop) = 3·cost(isZero) + 2·cost(isOne) + cost(array_div)
 ;; nIterations    = ⌊log₂(E)⌋ + 1
 ;; nTimesEIsOdd   = HammingWeight(E) (i.e., number of 1s in the binary representation of E)
 ;; nTimesEIsEven  = nIterations - nTimesEIsOdd
-;; cost(iteration1) (if E is odd)  = cost(isZero) + cost(isOdd) + 2·cost(array_div_mod) + cost(array_mul) + cost(array_div_mod_short) + cost(array_square)
-;; cost(iteration2) (if E is even) = cost(isZero) + cost(isOdd) + cost(array_div_mod) + cost(array_div_mod_short) + cost(array_square)
+;; cost(iteration1) (if E is odd)  = cost(isZero) + cost(isOdd) + 2·cost(array_div) + cost(array_mul) + cost(array_div_short) + cost(array_square)
+;; cost(iteration2) (if E is even) = cost(isZero) + cost(isOdd) + cost(array_div) + cost(array_div_short) + cost(array_square)
 ;; ------------
 ;; cost(total) = cost(pre_loop) + nTimesEIsOdd·cost(iteration1) + nTimesEIsEven·cost(iteration2)
 ;; ------------
@@ -82,34 +82,34 @@ modexp:
 
 ; Compute B = B % M
 ; -------------------
-modexp_B_to_divmod:
+modexp_B_to_div:
         RR - 1 => RR
         $ => A          :MLOAD(modexp_B + RR)
-        A               :MSTORE(array_div_mod_inA + RR)
-        RR              :JMPZ(modexp_M_to_divmod1, modexp_B_to_divmod)
+        A               :MSTORE(array_div_inA + RR)
+        RR              :JMPZ(modexp_M_to_div1, modexp_B_to_div)
 
-modexp_M_to_divmod1:
+modexp_M_to_div1:
         E - 1 => E
         $ => A          :MLOAD(modexp_M + E)
-        A               :MSTORE(array_div_mod_inB + E)
-        E               :JMPZ(modexp_divmod_B_and_M, modexp_M_to_divmod1)
+        A               :MSTORE(array_div_inB + E)
+        E               :JMPZ(modexp_div_B_and_M, modexp_M_to_div1)
 
-modexp_divmod_B_and_M:
-                        :CALL(array_div_mod)
+modexp_div_B_and_M:
+                        :CALL(array_div)
 
         %MAX_CNT_STEPS - STEP - 3         :JMPN(outOfCountersStep)
 
-        $ => C          :MLOAD(array_div_mod_len_rem)
+        $ => C          :MLOAD(array_div_len_rem)
         C               :MSTORE(modexp_Blen)
         C => RR
 
         %MAX_CNT_STEPS - STEP - 4*C        :JMPN(outOfCountersStep)
 
-modexp_rem_from_divmod1:
+modexp_rem_from_div1:
         RR - 1 => RR
-        $ => A          :MLOAD(array_div_mod_rem + RR)
+        $ => A          :MLOAD(array_div_rem + RR)
         A               :MSTORE(modexp_B + RR)
-        RR              :JMPZ(modexp_pre_loop, modexp_rem_from_divmod1)
+        RR              :JMPZ(modexp_pre_loop, modexp_rem_from_div1)
 ; -------------------
 
 ; Begin of edge cases
@@ -155,34 +155,34 @@ modexp_mul_long_out_and_B:
         %MAX_CNT_STEPS - STEP - 4*C - 4*D - 1        :JMPN(outOfCountersStep)
 
 ; Compute out = (out * B) % M
-modexp_out_to_divmod1:
+modexp_out_to_div1:
         RR - 1 => RR
         $ => A          :MLOAD(array_mul_out + RR)
-        A               :MSTORE(array_div_mod_inA + RR)
-        RR              :JMPZ(modexp_M_to_divmod, modexp_out_to_divmod1)
+        A               :MSTORE(array_div_inA + RR)
+        RR              :JMPZ(modexp_M_to_div, modexp_out_to_div1)
 
-modexp_M_to_divmod:
+modexp_M_to_div:
         E - 1 => E
         $ => A          :MLOAD(modexp_M + E)
-        A               :MSTORE(array_div_mod_inB + E)
-        E               :JMPZ(modexp_divmod_out_and_M2, modexp_M_to_divmod)
+        A               :MSTORE(array_div_inB + E)
+        E               :JMPZ(modexp_div_out_and_M2, modexp_M_to_div)
 
-modexp_divmod_out_and_M2:
-                        :CALL(array_div_mod)
+modexp_div_out_and_M2:
+                        :CALL(array_div)
 
         %MAX_CNT_STEPS - STEP - 3        :JMPN(outOfCountersStep)
 
-        $ => C          :MLOAD(array_div_mod_len_rem)
+        $ => C          :MLOAD(array_div_len_rem)
         C               :MSTORE(modexp_outlen)
         C => RR
 
         %MAX_CNT_STEPS - STEP - 4*C - 1        :JMPN(outOfCountersStep)
 
-modexp_rem_from_divmod2:
+modexp_rem_from_div2:
         RR - 1 => RR
-        $ => A          :MLOAD(array_div_mod_rem + RR)
+        $ => A          :MLOAD(array_div_rem + RR)
         A               :MSTORE(modexp_out + RR)
-        RR              :JMPZ(return_modexp_loop_multiply, modexp_rem_from_divmod2)
+        RR              :JMPZ(return_modexp_loop_multiply, modexp_rem_from_div2)
 ; -------------------
 ; End of branching
 
@@ -220,35 +220,35 @@ modexp_loop:
         %MAX_CNT_STEPS - STEP - 3        :JMPN(outOfCountersStep)
 
         $ => C          :MLOAD(modexp_Elen)
-        2               :MSTORE(array_div_mod_short_inB)
+        2               :MSTORE(array_div_short_inB)
         C => RR
 
         %MAX_CNT_STEPS - STEP - 4*C - 1        :JMPN(outOfCountersStep)
 
 ; Compute E = E // 2
 ; -------------------
-modexp_E_to_divmod_short:
+modexp_E_to_div_short:
         RR - 1 => RR
         $ => A          :MLOAD(modexp_E + RR)
-        A               :MSTORE(array_div_mod_short_inA + RR)
-        RR              :JMPZ(modexp_divmod_E_and_2, modexp_E_to_divmod_short)
+        A               :MSTORE(array_div_short_inA + RR)
+        RR              :JMPZ(modexp_div_E_and_2, modexp_E_to_div_short)
 
-modexp_divmod_E_and_2:
-                        :CALL(array_div_mod_short)
+modexp_div_E_and_2:
+                        :CALL(array_div_short)
 
         %MAX_CNT_STEPS - STEP - 3       :JMPN(outOfCountersStep)
 
-        $ => C          :MLOAD(array_div_mod_short_len_quo)
+        $ => C          :MLOAD(array_div_short_len_quo)
         C               :MSTORE(modexp_Elen)
         C => RR
 
         %MAX_CNT_STEPS - STEP - 4*C - 2       :JMPN(outOfCountersStep)
 
-modexp_quo_from_divmod_short:
+modexp_quo_from_div_short:
         RR - 1 => RR
-        $ => A          :MLOAD(array_div_mod_short_quo + RR)
+        $ => A          :MLOAD(array_div_short_quo + RR)
         A               :MSTORE(modexp_E + RR)
-        RR              :JMPZ(modexp_pre_B_square, modexp_quo_from_divmod_short)
+        RR              :JMPZ(modexp_pre_B_square, modexp_quo_from_div_short)
 ; -------------------
 
 ; Compute B^2
@@ -278,34 +278,34 @@ modexp_square_B:
         %MAX_CNT_STEPS - STEP - 4*C - 4*D - 1       :JMPN(outOfCountersStep)
 
 ; Compute B = (B^2) % M
-modexp_out_to_divmod2:
+modexp_out_to_div2:
         RR - 1 => RR
         $ => A          :MLOAD(array_square_out + RR)
-        A               :MSTORE(array_div_mod_inA + RR)
-        RR              :JMPZ(modexp_M_to_divmod2, modexp_out_to_divmod2)
+        A               :MSTORE(array_div_inA + RR)
+        RR              :JMPZ(modexp_M_to_div2, modexp_out_to_div2)
 
-modexp_M_to_divmod2:
+modexp_M_to_div2:
         E - 1 => E
         $ => A          :MLOAD(modexp_M + E)
-        A               :MSTORE(array_div_mod_inB + E)
-        E               :JMPZ(modexp_divmod_out_and_M1, modexp_M_to_divmod2)
+        A               :MSTORE(array_div_inB + E)
+        E               :JMPZ(modexp_div_out_and_M1, modexp_M_to_div2)
 
-modexp_divmod_out_and_M1:
-                        :CALL(array_div_mod)
+modexp_div_out_and_M1:
+                        :CALL(array_div)
 
         %MAX_CNT_STEPS - STEP - 3       :JMPN(outOfCountersStep)
 
-        $ => C          :MLOAD(array_div_mod_len_rem)
+        $ => C          :MLOAD(array_div_len_rem)
         C               :MSTORE(modexp_Blen)
         C => RR
 
         %MAX_CNT_STEPS - STEP - 4*C - 1       :JMPN(outOfCountersStep)
 
-modexp_rem_from_divmod3:
+modexp_rem_from_div3:
         RR - 1 => RR
-        $ => A          :MLOAD(array_div_mod_rem + RR)
+        $ => A          :MLOAD(array_div_rem + RR)
         A               :MSTORE(modexp_B + RR)
-        RR              :JMPZ(modexp_pre_loop, modexp_rem_from_divmod3)
+        RR              :JMPZ(modexp_pre_loop, modexp_rem_from_div3)
 ; -------------------
 
 modexp_end:
