@@ -196,6 +196,7 @@ lastChecks:
     B                                   :MSTORE(preGAS)
     ; B = max(200, multiplication_complexity * iteration_count / 3)
     GAS - B => GAS                      :JMPN(outOfGas)
+    ; check first modulo size and base size to match ethereum specification
     0 => A
     $ => B                              :MLOAD(modexp_Msize)
     $                                   :EQ, JMPC(save0outMod0)  ; if Msize = 0 --> save0outMod0
@@ -203,13 +204,16 @@ lastChecks:
     $ => B                              :MLOAD(modexp_Bsize)
     $                                   :EQ, JMPC(save0out)      ; if Bsize = 0 --> save0out
     ; Bsize > 0 from here
+
+    ; Check maximum length allowed in the zkEVM reagrding the modExp
+    ; If parameters (length > %MAX_SIZE_MODEXP) --> zkEVM does a revert returning all the gas consumed
     %MAX_SIZE_MODEXP => A
     $ => B                              :MLOAD(modexp_Bsize)
-    $                                   :LT, JMPC(preFailLength) ; if Bsize > MAX_SIZE_MODEXP --> preFailLength
+    $                                   :LT, JMPC(preFailModExpLength) ; if Bsize > MAX_SIZE_MODEXP --> preFailModExpLength
     $ => B                              :MLOAD(modexp_Esize)
-    $                                   :LT, JMPC(preFailLength) ; if Esize > MAX_SIZE_MODEXP --> preFailLength
+    $                                   :LT, JMPC(preFailModExpLength) ; if Esize > MAX_SIZE_MODEXP --> preFailModExpLength
     $ => B                              :MLOAD(modexp_Msize)
-    $                                   :LT, JMPC(preFailLength) ; if Msize > MAX_SIZE_MODEXP --> preFailLength
+    $                                   :LT, JMPC(preFailModExpLength) ; if Msize > MAX_SIZE_MODEXP --> preFailModExpLength
     ; get base value
     $ => E                              :MLOAD(modexp_offset) ; This is used in modexp_getBase, modexp_getExp and modexp_getMod
     $ => C                              :MLOAD(modexp_Bsize)

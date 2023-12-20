@@ -20,9 +20,10 @@ preEndFail:
     $ => PC         :MLOAD(lastPC)
     0               :MSTORE(SP++), JMP(readCode)
 
+; 'preGAS' is the gas on the modExp precompiled before extracting the gas consumed
 VAR GLOBAL preGAS
 
-preFailLength:
+preFailModExpLength:
     $ => SR         :MLOAD(initSR), CALL(revertTouched)
                     :CALL(revertBlockInfoTree)
     $ => A          :MLOAD(originCTX), JMPZ(errorAtFirstContext)
@@ -34,6 +35,8 @@ preFailLength:
     $ => A          :MLOAD(gasCTX)
     $ => B          :MLOAD(preGAS)
     A + B + GAS => GAS
+    ; set 0 to preGAS for the next iteration
+    0               :MSTORE(preGAS)
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     0               :MSTORE(SP++), JMP(readCode)
