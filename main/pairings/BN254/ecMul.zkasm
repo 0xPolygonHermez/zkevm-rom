@@ -18,6 +18,8 @@ VAR GLOBAL ecMul_P_y
 VAR GLOBAL ecMul_Q_x
 VAR GLOBAL ecMul_Q_y
 
+VAR GLOBAL ecMul_acummulator
+
 VAR GLOBAL ecMul_RR
 
 ; ERROR CODES (B)
@@ -74,12 +76,17 @@ ecMul:
         $           :EQ, JMPC(ecMul_k_is_zero)
         ; k ∈ [1,r-1] from here
 
-        257 => RCX ; TODO: Can I go from 257 to 254? DO IT DINAMICALLY!!!!
+        $${uintToBin(mem.ecMul_k)}                      ; convert k to binary
+        $0{receiveLenK()} => RCX,E                      ; receive the length of the binary representation of k
+
+        ; start the acummulator with the MSB of k
+        0 => A  :CALL(@bitwiseReconstruction + E)
+        A       :MSTORE(ecMul_acummulator)
 
         $ => A  :MLOAD(ecMul_P_x)
         $ => C  :MLOAD(ecMul_P_y)
         A       :MSTORE(ecMul_Q_x)
-        C       :MSTORE(ecMul_Q_y), JMP(ecMul_find_MSB_k)
+        C       :MSTORE(ecMul_Q_y), JMP(ecMul_loop)
 
 ; Begin of branching
 ecMul_P_is_zero:
@@ -93,15 +100,8 @@ ecMul_k_is_zero:
         0n      :MSTORE(ecMul_Q_y), JMP(ecMul_correct)
 ; End of branching
 
-ecMul_find_MSB_k:
-        RCX - 1 => RCX
-        $ => A,B        :MLOAD(ecMul_k)
-        ; E = 2A
-        $ => E          :ADD, MSTORE(ecMul_k), JMPNC(ecMul_find_MSB_k)
-
-
 ecMul_loop:
-        RCX - 1 => RCX    :JMPZ(ecMul_correct)
+        RCX - 1 => RCX    :JMPN(ecMul_check)
 
         ; We always double
         $ => A  :MLOAD(ecMul_Q_x)
@@ -114,11 +114,8 @@ ecMul_loop:
         B       :MSTORE(ecMul_Q_y)
         ; Q = Q + Q
 
-        ; We check if the MSB b of k is either 1 or 0. If b==1, we should add P to Q.
-        ; Then, update the value of k.
-        $ => A,B        :MLOAD(ecMul_k)
-        ; E = 2A
-        $ => E          :ADD, MSTORE(ecMul_k), JMPNC(ecMul_loop)
+        ; Receive the next MSB b of k. If b == 1, we should add P to Q, otherwise start the next iteration
+        $0{receiveNextBitK()}           :JMPZ(ecMul_loop)
 
 ecMul_add:
         ; We add
@@ -134,9 +131,13 @@ ecMul_add:
         $ => A  :MLOAD(ecAdd_P3_x)
         $ => B  :MLOAD(ecAdd_P3_y)
         A       :MSTORE(ecMul_Q_x)
-        B       :MSTORE(ecMul_Q_y), JMP(ecMul_loop)
+        B       :MSTORE(ecMul_Q_y)
         ; Q = Q + P
 
+        $ => A          :MLOAD(ecMul_acummulator)
+        RCX => E
+                        :CALL(@bitwiseReconstruction + E)
+        A               :MSTORE(ecMul_acummulator), JMP(ecMul_loop)
 
 ; ERRORS
 ecMul_Px_too_big:
@@ -147,6 +148,11 @@ ecMul_Py_too_big:
 
 ecMul_P_is_not_in_E:
         3 => B      :JMP(ecMul_error)
+
+ecMul_check:
+        $ => A      :MLOAD(ecMul_k)
+        $ => B      :MLOAD(ecMul_acummulator)
+        1           :EQ
 
 ecMul_correct:
         0 => B      :JMP(ecMul_end)
