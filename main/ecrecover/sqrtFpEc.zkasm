@@ -25,21 +25,21 @@ sqrtFpEc:
 
         ; [A] * [A] + 0 = [D] * 2 ** 256 + [E]
 
-        ; set C because if jmp to sqrtFpEc C must have return value (FPEC_NON_SQRT)
+        ; set C because if jmp to sqrtFpEc C must have return value (SECP256K1_P_NON_SQRT)
         ${var _sqrtFpEc_sqrt = sqrtFpEcParity(C,A) } => A,C :MSTORE(sqrtFpC_res)
 
-        ; In this point we check if C is LT than FPEC because if not:
-        ;    a) A = FPEC_NON_SQRT, check hasn't sqrt.
+        ; In this point we check if C is LT than SECP256K1_P because if not:
+        ;    a) A = SECP256K1_P_NON_SQRT, check hasn't sqrt.
         ;    b) A is an alias, it's a MAP, we check hasn't sqrt, but has => no proof generated
 
         ; A and C has same value
 
-        %FPEC => B
+        %SECP256K1_P => B
 
         ; A
         $ => B                                           :LT,JMPNC(sqrtFpEc_End)
 
-        ; A,C < FPEC (alias free)
+        ; A,C < SECP256K1_P (alias free)
         A => B
         0 => C
 
@@ -56,15 +56,15 @@ sqrtFpEc:
         ;
 
         $ => C          :MLOAD(sqrtFpC_tmp)
-        ${_sqrtFpEc_sq / const.FPEC} => B
-        %FPEC => A
+        ${_sqrtFpEc_sq / const.SECP256K1_P} => B
+        %SECP256K1_P => A
         E :ARITH
 
-        ; sqrtFpC_res hasn't alias because in this path sqrtFpC_res < FPEC
+        ; sqrtFpC_res hasn't alias because in this path sqrtFpC_res < SECP256K1_P
 
         1 => B
         $ => C          :MLOAD(sqrtFpC_res),RETURN
 
 sqrtFpEc_End:
-        ; B is 0, because C >= FPEC
+        ; B is 0, because C >= SECP256K1_P
         :RETURN
