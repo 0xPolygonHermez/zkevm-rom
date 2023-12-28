@@ -81,7 +81,7 @@ ecrecover_store_args:
 
         ; compute r inverse
         ; [steps: 23, bin: 4]
-        $ => A      :MLOAD(ecrecover_r),CALL(invFnEc)
+        $ => A      :MLOAD(ecrecover_r),CALL(invFnSecp256k1)
         B           :MSTORE(ecrecover_r_inv)
 
         ; [steps: 37, bin: 6, arith: 2]
@@ -107,20 +107,20 @@ ecrecover_v_ok:
         ; A*B*A + 7 = calculate y from x
         ;
         ; [steps: 44, bin: 8, arith: 2]
-        $ => A,B    :MLOAD(ecrecover_r),CALL(mulFpEc)
+        $ => A,B    :MLOAD(ecrecover_r),CALL(mulFpSecp256k1)
 
         C => A
-        $ => B      :MLOAD(ecrecover_r),CALL(mulFpEc)
+        $ => B      :MLOAD(ecrecover_r),CALL(mulFpSecp256k1)
 
         7 => A      :CALL(addFpSecp256k1)
 
         ; load on A parity expected
         ; [steps: 69, bin: 8, arith: 8]
         $ => A      :MLOAD(ecrecover_v_parity)
-        C           :MSTORE(ecrecover_y2),CALL(sqrtFpEc)
+        C           :MSTORE(ecrecover_y2),CALL(sqrtFpSecp256k1)
 
         ; If has root B = 1 else B = 0
-        ; If B = 1 => C is alias-free (see sqrtFpEc)
+        ; If B = 1 => C is alias-free (see sqrtFpSecp256k1)
 
         ; [steps: 85, bin: 9, arith: 10]
         B           :JMPNZ(ecrecover_has_sqrt)
@@ -156,7 +156,7 @@ ecrecover_has_sqrt:
         ; calculate C as (hash * inv_r) % SECP256K1_N
         $ => A      :MLOAD(ecrecover_hash)
         ; [steps: 92, bin: 10, arith: 10]
-        $ => B      :MLOAD(ecrecover_r_inv),CALL(mulFnEc)
+        $ => B      :MLOAD(ecrecover_r_inv),CALL(mulFnSecp256k1)
 
         ; calculate k1 as (SECP256K1_N - hash * inv_r) % SECP256K1_N
         ; C = (hash * inv_r) % SECP256K1_N no alias free (MAP)
@@ -190,7 +190,7 @@ k1_calculated:
         $ => A      :MLOAD(ecrecover_s)
 
         ; [steps: 105, bin: 9, arith: 13]
-        $ => B      :MLOAD(ecrecover_r_inv),CALL(mulFnEc)
+        $ => B      :MLOAD(ecrecover_r_inv),CALL(mulFnSecp256k1)
 
         ;   C = (s * inv_r) % SECP256K1_N => k2
         ; [steps: 113, bin: 9, arith: 15]
@@ -269,12 +269,14 @@ ecrecover_end:
         $ => RR     :MLOAD(ecrecover_RR)
         :RETURN
 
-INCLUDE "addFpSecp256k1.zkasm"
-INCLUDE "sqFpEc.zkasm"
-INCLUDE "mulFpEc.zkasm"
-INCLUDE "mulFnEc.zkasm"
-INCLUDE "invFpEc.zkasm"
-INCLUDE "invFnEc.zkasm"
-INCLUDE "sqrtFpEc.zkasm"
+INCLUDE "./FPSECP256K1/addFpSecp256k1.zkasm"
+INCLUDE "./FPSECP256K1/mulFpSecp256k1.zkasm"
+INCLUDE "./FPSECP256K1/squareFpSecp256k1.zkasm"
+INCLUDE "./FPSECP256K1/invFpSecp256k1.zkasm"
+INCLUDE "./FPSECP256K1/sqrtFpSecp256k1.zkasm"
+
+INCLUDE "./FNSECP256K1/mulFnSecp256k1.zkasm"
+INCLUDE "./FNSECP256K1/invFnSecp256k1.zkasm"
+
 INCLUDE "checkSqrtFpEc.zkasm"
 INCLUDE "mulPointEc.zkasm"
