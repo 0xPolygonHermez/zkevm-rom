@@ -27,9 +27,13 @@ VAR GLOBAL dblScalarMulSecp256k1_p3_y
 VAR GLOBAL dblScalarMulSecp256k1_p12_x
 VAR GLOBAL dblScalarMulSecp256k1_p12_y
 
-; dblScalarMulSecp256k1_p12_empty = 1 ==> p12 is the point at infinity
-; dblScalarMulSecp256k1_p12_empty = 0 ==> p12 isn't the point at infinity
-VAR GLOBAL dblScalarMulSecp256k1_p12_empty
+; dblScalarMulSecp256k1_p12_zero = 1 ==> p12 is the point at infinity
+; dblScalarMulSecp256k1_p12_zero = 0 ==> p12 isn't the point at infinity
+VAR GLOBAL dblScalarMulSecp256k1_p12_zero
+
+; acummulators
+VAR GLOBAL dblScalarMulSecp256k1_acum_k1
+VAR GLOBAL dblScalarMulSecp256k1_acum_k2
 
 ; backups
 VAR GLOBAL dblScalarMulSecp256k1_RR
@@ -39,11 +43,11 @@ VAR GLOBAL dblScalarMulSecp256k1_RCX
 ;                1 arith + 18 steps                            // setup, calculation p12
 ;              + 2 binaries  * 256                             // get bits of k1,k2 (steps evaluated inside loop)
 ;              + number_of_bits_1(k1|k2) * arith               // additions
-;              + (256 - left_bits_zero(k1|k2) * arith          // squares
-;              + 24 * 256 steps                                // get bits k1,k2 + additions + squares (steps, regular)
-;              - (24 - 8) * left_bits_zero(k1|k2) * steps      // get bits k1,k2 + additions + squares (steps first bits = 0)
-;              - (24 - 12) * number_of_bits_1(k1|k2) * steps   // get bits k1,k2 + additions + squares (k1,k2 bits = 0)
-;              + (3 - 5) steps                                 // last part - last part square no done
+;              + (256 - left_bits_zero(k1|k2) * arith          // doubles
+;              + 24 * 256 steps                                // get bits k1,k2 + additions + doubles (steps, regular)
+;              - (24 - 8) * left_bits_zero(k1|k2) * steps      // get bits k1,k2 + additions + doubles (steps first bits = 0)
+;              - (24 - 12) * number_of_bits_1(k1|k2) * steps   // get bits k1,k2 + additions + doubles (k1,k2 bits = 0)
+;              + (3 - 5) steps                                 // last part - last part double no done
 ;              - 1 arith                                       // first assignation
 ;
 ;
@@ -51,9 +55,23 @@ VAR GLOBAL dblScalarMulSecp256k1_RCX
 
 dblScalarMulSecp256k1:
         RR      :MSTORE(dblScalarMulSecp256k1_RR)
+
         RCX     :MSTORE(dblScalarMulSecp256k1_RCX)
 
-        256 => RCX
+        $${uintToBin2(mem.dblScalarMulSecp256k1_k1,mem.dblScalarMulSecp256k1_k2)}       ; convert k1 and k2 to binary
+        $0{receiveLen(mem.dblScalarMulSecp256k1_k1)} => C     ; receive the length of the binary representation of k1
+        $0{receiveLen(mem.dblScalarMulSecp256k1_k2)} => D     ; receive the length of the binary representation of k2
+
+        ; assign to the loop counter RCX the length of the largest of k1 and k2
+        C - D           :JMPN(__dblScalarMulSecp256k1_assign_len_k2)
+        C => RCX        :JMP(__dblScalarMulSecp256k1_len_k1_assigned)
+        __dblScalarMulSecp256k1_assign_len_k2:
+        D => RCX
+        __dblScalarMulSecp256k1_len_k1_assigned:
+
+        ; start the acummulator of k1 and k2
+        0       :MSTORE(dblScalarMulSecp256k1_acum_k1)
+        0       :MSTORE(dblScalarMulSecp256k1_acum_k2)
 
         ; Initialize p3 = 𝒪
         0n => HASHPOS :MSTORE(dblScalarMulSecp256k1_p3_x)
@@ -91,7 +109,7 @@ dblScalarMulSecp256k1:
 
         ; p12 = p1 - p1 = 𝒪, therefore is the point at infinity
         ; [steps: 18]
-        1n            :MSTORE(dblScalarMulSecp256k1_p12_empty), JMP(dblScalarMulSecp256k1_loop)
+        1n            :MSTORE(dblScalarMulSecp256k1_p12_zero), JMP(dblScalarMulSecp256k1_loop)
 
 
 dblScalarMulSecp256k1SameInitialPoints:
@@ -100,7 +118,7 @@ dblScalarMulSecp256k1SameInitialPoints:
         ; [MAP] if p1 != p2 => arith fails because p1 != p2
 
         ; p12 = p1 + p1, therefore isn't the point at infinity
-        0n                        :MSTORE(dblScalarMulSecp256k1_p12_empty)
+        0n                        :MSTORE(dblScalarMulSecp256k1_p12_zero)
 
         ; Compute and check the doubling p1 + p1
         ; A == p1_x
@@ -116,7 +134,7 @@ dblScalarMulSecp256k1DiffInitialPoints:
         ; [MAP] if p1 == p2 => arith fails because p1 = p2
 
         ; p12 = p1 + p2, therefore isn't the point at infinity
-        0n                            :MSTORE(dblScalarMulSecp256k1_p12_empty)
+        0n                            :MSTORE(dblScalarMulSecp256k1_p12_zero)
 
         ; Compute and check the addition p1 + p2
         ; (A, B) + (C, D) = (E, op)
@@ -126,22 +144,7 @@ dblScalarMulSecp256k1DiffInitialPoints:
 
 ; Goes forward in different branches of code depending on the values of the
 ; most significant bits of k1 and k2.
-; First branch was determined by k1 most significant bit.
 
-;
-; Most Significant bit was calculated ki + ki,
-;
-;    A b255 b254 b253 ... b1   b0
-;    A b255 b254 b253 ... b1   b0
-;   ---------------------------
-;    E b254 b253 b252 ... b0    0
-;
-;   if b255 == 1 then carry = 1
-;   if b255 == 0 then carry = 0
-;
-;   E = A << 1  (equivalent A + A)
-;
-;   store E to be used in next round
 ;
 ; [steps.before (worst case): 18]
 ;
@@ -150,62 +153,81 @@ dblScalarMulSecp256k1DiffInitialPoints:
 ; [steps.byloop (worst case): 7 + 17 = 24]
 
 dblScalarMulSecp256k1_loop:
-        $ => A,B  :MLOAD(dblScalarMulSecp256k1_k1)
-        ; E = A*2 [carry] => bit 255 = 1
-        $ => E    :ADD, MSTORE(dblScalarMulSecp256k1_k1), JMPC(dblScalarMulSecp256k1_k11)
+        ; Receive the next MSB b of k1.
+        $0{receiveNextBit(mem.dblScalarMulSecp256k1_k1)}        :JMPNZ(dblScalarMulSecp256k1_k11)
 
 ; high_bit(k1) == 0 high_bit(k2) == ??
 dblScalarMulSecp256k1_k10:
-        ; store E on multipointEc_k1, E was A*2 equivalent SHL and 255 bit on carry.
-        $ => A,B  :MLOAD(dblScalarMulSecp256k1_k2)
-        ; E = A*2 [carry] => bit 255 = 1
-        $ => E    :ADD,MSTORE(dblScalarMulSecp256k1_k2),JMPC(dblScalarMulSecp256k1_k10_k21)
+        ; Receive the next MSB b of k2.
+        $0{receiveNextBit(mem.dblScalarMulSecp256k1_k2)}        :JMPNZ(dblScalarMulSecp256k1_k10_k21)
 
 ; high_bit(k1) == 0 high_bit(k2) == 0
 dblScalarMulSecp256k1_k10_k20:
         $ => A  :MLOAD(dblScalarMulSecp256k1_p3_x)
-        $ => B  :MLOAD(dblScalarMulSecp256k1_p3_y), JMP(dblScalarMulSecp256k1_square)
+        $ => B  :MLOAD(dblScalarMulSecp256k1_p3_y), JMP(dblScalarMulSecp256k1_double)
 
 ; high_bit(k1) == 1 high_bit(k2) == ??
 dblScalarMulSecp256k1_k11:
-        $ => A,B  :MLOAD(dblScalarMulSecp256k1_k2)
-        $ => E    :ADD,MSTORE(dblScalarMulSecp256k1_k2),JMPC(dblScalarMulSecp256k1_k11_k21)
+        ; Receive the next MSB b of k2.
+        $0{receiveNextBit(mem.dblScalarMulSecp256k1_k2)}        :JMPNZ(dblScalarMulSecp256k1_k11_k21)
 
 ; high_bit(k1) == 1 high_bit(k2) == 0
 dblScalarMulSecp256k1_k11_k20:
+        ; Keep reconstructing the scalar k1
+        RCX - 1 => E
+        $ => A          :MLOAD(dblScalarMulSecp256k1_acum_k1)
+                        :CALL(@bitwiseReconstruction + E)
+        A               :MSTORE(dblScalarMulSecp256k1_acum_k1)
+
         $ => C  :MLOAD(dblScalarMulSecp256k1_p1_x)
-        $ => D  :MLOAD(dblScalarMulSecp256k1_p1_y), JMP(dblScalarMulSecp256k1_p2_loaded)
+        $ => D  :MLOAD(dblScalarMulSecp256k1_p1_y), JMP(dblScalarMulSecp256k1_add)
 
 ; high_bit(k1) == 1 high_bit(k2) == 1
 dblScalarMulSecp256k1_k11_k21:
-        ; if (dblScalarMulSecp256k1_p12_empty) k11_k21 same as k10_k20
-        $       :MLOAD(dblScalarMulSecp256k1_p12_empty),JMPNZ(dblScalarMulSecp256k1_k10_k20)
+        ; Keep reconstructing the scalars k1,k2
+        RCX - 1 => E
+        $ => A          :MLOAD(dblScalarMulSecp256k1_acum_k1)
+                        :CALL(@bitwiseReconstruction + E)
+        A               :MSTORE(dblScalarMulSecp256k1_acum_k1)
+        RCX - 1 => E
+        $ => A          :MLOAD(dblScalarMulSecp256k1_acum_k2)
+                        :CALL(@bitwiseReconstruction + E)
+        A               :MSTORE(dblScalarMulSecp256k1_acum_k2)
+
+        ; if (dblScalarMulSecp256k1_p12_zero) k11_k21 is the same as k10_k20
+        ; because adding the point at infinity to a point is the point itself
+        $       :MLOAD(dblScalarMulSecp256k1_p12_zero), JMPNZ(dblScalarMulSecp256k1_k10_k20)
 
         $ => C  :MLOAD(dblScalarMulSecp256k1_p12_x)
-        $ => D  :MLOAD(dblScalarMulSecp256k1_p12_y), JMP(dblScalarMulSecp256k1_p2_loaded)
+        $ => D  :MLOAD(dblScalarMulSecp256k1_p12_y), JMP(dblScalarMulSecp256k1_add)
 
 ; high_bit(k1) == 0 high_bit(k2) == 1
 dblScalarMulSecp256k1_k10_k21:
+        ; Keep reconstructing the scalar k2
+        RCX - 1 => E
+        $ => A          :MLOAD(dblScalarMulSecp256k1_acum_k2)
+                        :CALL(@bitwiseReconstruction + E)
+        A               :MSTORE(dblScalarMulSecp256k1_acum_k2)
+
         $ => C  :MLOAD(dblScalarMulSecp256k1_p2_x)
-        $ => D  :MLOAD(dblScalarMulSecp256k1_p2_y), JMP(dblScalarMulSecp256k1_p2_loaded)
+        $ => D  :MLOAD(dblScalarMulSecp256k1_p2_y), JMP(dblScalarMulSecp256k1_add)
 
 ; [steps.loadp2 (worst case): 7 (regular case 6)
 
 ; in this point C,D have point to be add
-dblScalarMulSecp256k1_p2_loaded:
+dblScalarMulSecp256k1_add:
         ; [steps.p3empty.nolast: 10]
         ; [steps.p3empty.last: 5]
-        ; [steps.xeq.yeq: 10 + steps.square = 16]
-        ; [steps.xeq.yneq: 11 + steps.square = 17]
-        ; [steps.xneq.nolast: 7 + steps.square = 13]
-        ; [steps.xneq.last: 7 + steps.square = 13]
+        ; [steps.xeq.yeq: 10 + steps.double = 16]
+        ; [steps.xeq.yneq: 11 + steps.double = 17]
+        ; [steps.xneq.nolast: 7 + steps.double = 13]
+        ; [steps.xneq.last: 7 + steps.double = 13]
         ; [steps.block: 17]
 
-        ; check if p3 has a value, isn't point at infinity (Origin point)
+        ; if p3 is the point at infinity do not add, just assign, since 𝒪 + P = P
         HASHPOS   :JMPZ(dblScalarMulSecp256k1_p3_assignment)
 
-
-        ; check C == p3.x
+        ; check whether p.x == p3.x
         ${ C == mem.dblScalarMulSecp256k1_p3_x } :JMPNZ(dblScalarMulSecp256k1_x_equals_before_add)
 
         ; [MAP] if C == mem.dblScalarMulSecp256k1_p3_x ==> fails arithmetic because check
@@ -218,22 +240,19 @@ dblScalarMulSecp256k1_p2_loaded:
         ; p3 = p3 + (C,D)
         ; (C, D) is point to add (p1 or p2 or p12)
         ; (A, B) + (C, D) = (E, op)
-
         ${xAddPointEc(A,B,C,D)} => E :MSTORE(dblScalarMulSecp256k1_p3_x)
         ${yAddPointEc(A,B,C,D)} => B :ARITH_ECADD_DIFFERENT, MSTORE(dblScalarMulSecp256k1_p3_y)
 
 dblScalarMulSecp256k1_after_add:
-
-        E => A  :JMP(dblScalarMulSecp256k1_square)
+        E => A  :JMP(dblScalarMulSecp256k1_double)
 
 dblScalarMulSecp256k1_p3_assignment:
-
         ; p3 = (C,D)
         1 => HASHPOS    ; flag, dblScalarMulSecp256k1_p3 has a value, no-empty
         C => A   :MSTORE(dblScalarMulSecp256k1_p3_x)
         D => B   :MSTORE(dblScalarMulSecp256k1_p3_y)
 
-dblScalarMulSecp256k1_square:
+dblScalarMulSecp256k1_double:
         ; [steps.last: 1]
         ; [steps.nolast.p3empty: 2]
         ; [steps.nolast.p3: 6]
@@ -242,7 +261,7 @@ dblScalarMulSecp256k1_square:
         ; E,A = p3_x  B = p3_y
         RCX - 1 => RCX    :JMPZ(dblScalarMulSecp256k1_end_loop)
 
-        ; if p3 was empty, no square, because O = O + O
+        ; if p3 is the point at infinity do not double, since 𝒪 + 𝒪 = 𝒪
         HASHPOS           :JMPZ(dblScalarMulSecp256k1_loop)
 
         $ => A  :MLOAD(dblScalarMulSecp256k1_p3_x)
@@ -250,7 +269,7 @@ dblScalarMulSecp256k1_square:
 
         ; (A, B) * 2 = (E, op)
         ${xDblPointEc(A,B)} => E  :MSTORE(dblScalarMulSecp256k1_p3_x)
-        ${yDblPointEc(A,B)} :ARITH_ECADD_SAME, MSTORE(dblScalarMulSecp256k1_p3_y), JMP(dblScalarMulSecp256k1_loop)
+        ${yDblPointEc(A,B)}       :ARITH_ECADD_SAME, MSTORE(dblScalarMulSecp256k1_p3_y), JMP(dblScalarMulSecp256k1_loop)
 
 dblScalarMulSecp256k1_x_equals_before_add:
         ; [MAP] if C != mem.dblScalarMulSecp256k1_p3_x ==> fails, MLOAD fails because read something different
@@ -282,11 +301,11 @@ dblScalarMulSecp256k1_x_equals_before_add:
         ; p2_y * 1 + p3_y = 2^256 * 0 + SECP256K1_P
         %SECP256K1_P :ARITH
 
-        ; NOTE: all points are free of alias because arithmetic guaranties it
+        ; NOTE: all points are free of alias because arithmetic guarantees it
 
         ; HASHPOS flag = 0, dblScalarMulSecp256k1_p3 was empty, need addition must be an assignation
         0n => HASHPOS   :MSTORE(dblScalarMulSecp256k1_p3_x)
-        0n              :MSTORE(dblScalarMulSecp256k1_p3_y), JMP(dblScalarMulSecp256k1_square)
+        0n              :MSTORE(dblScalarMulSecp256k1_p3_y), JMP(dblScalarMulSecp256k1_double)
 
 dblScalarMulSecp256k1_same_point_to_add:
         ; [steps.block: 5]
@@ -302,6 +321,14 @@ dblScalarMulSecp256k1_same_point_to_add:
         ${yDblPointEc(A,B)} => B  :ARITH_ECADD_SAME, MSTORE(dblScalarMulSecp256k1_p3_y), JMP(dblScalarMulSecp256k1_after_add)
 
 dblScalarMulSecp256k1_end_loop:
+        ; Check that the accumulated scalars coincide with the original ones
+        $ => A      :MLOAD(dblScalarMulSecp256k1_k1)
+        $ => B      :MLOAD(dblScalarMulSecp256k1_acum_k1)
+        1           :EQ
+        $ => A      :MLOAD(dblScalarMulSecp256k1_k2)
+        $ => B      :MLOAD(dblScalarMulSecp256k1_acum_k2)
+        1           :EQ
+
         ; [steps.block: 3]
 
         $ => RR         :MLOAD(dblScalarMulSecp256k1_RR)
