@@ -169,7 +169,7 @@ ecrecover_has_sqrt:
 
 k1_c_is_zero:
         ; k1 = 0 is alias-free
-        0   :MSTORE(mulPointEc_k1), JMP(k1_calculated)
+        0   :MSTORE(dblScalarMulSecp256k1_k1), JMP(k1_calculated)
 
 
 k1_c_is_not_zero:
@@ -181,9 +181,9 @@ k1_c_is_not_zero:
         ; SECP256K1_N - A = SECP256K1_N - (hash * inv_r) % SECP256K1_N
         A => B
         %SECP256K1_N => A
-        ; B != 0 ==> mulPointEc_k1 = SECP256K1_N - B
+        ; B != 0 ==> dblScalarMulSecp256k1_k1 = SECP256K1_N - B
         ; k1 is alias-free
-        $   :SUB, MSTORE(mulPointEc_k1)
+        $   :SUB, MSTORE(dblScalarMulSecp256k1_k1)
 
 k1_calculated:
 
@@ -194,26 +194,26 @@ k1_calculated:
 
         ;   C = (s * inv_r) % SECP256K1_N => k2
         ; [steps: 113, bin: 9, arith: 15]
-        C => A      :MSTORE(mulPointEc_k2)
+        C => A      :MSTORE(dblScalarMulSecp256k1_k2)
         %SECP256K1_N => B
 
         ; ASSERT(k2 is alias free)
         1           :LT
 
-        %SECP256K1_GX       :MSTORE(mulPointEc_p1_x)
-        %SECP256K1_GY       :MSTORE(mulPointEc_p1_y)
+        %SECP256K1_GX       :MSTORE(dblScalarMulSecp256k1_p1_x)
+        %SECP256K1_GY       :MSTORE(dblScalarMulSecp256k1_p1_y)
 
         ; r isn't an alias because the range has been checked at beginning
         $ => A      :MLOAD(ecrecover_r)
-        A           :MSTORE(mulPointEc_p2_x)
+        A           :MSTORE(dblScalarMulSecp256k1_p2_x)
 
         ; y isn't an alias because was checked before
         ; (r,y) is a point of curve because it satisfies the curve equation
         $ => A      :MLOAD(ecrecover_y)
         ; [steps: 120, bin: 10, arith: 15]
-        A           :MSTORE(mulPointEc_p2_y),CALL(mulPointEc)
+        A           :MSTORE(dblScalarMulSecp256k1_p2_y),CALL(dblScalarMulSecp256k1)
 
-        ; check if result of mulPointEc is point at infinity
+        ; check if result of dblScalarMulSecp256k1 is point at infinity
         HASHPOS     :JMPZ(ecrecover_p3_point_at_infinity)
 
         ; [steps: 6280, bin: 522, arith: 527]
@@ -224,9 +224,9 @@ k1_calculated:
         32 => D
 
         ; p3_x, p3_y are alias free because arithmetic guarantees it
-        $ => A         :MLOAD(mulPointEc_p3_x)
+        $ => A         :MLOAD(dblScalarMulSecp256k1_p3_x)
         A              :HASHK(E)
-        $ => A         :MLOAD(mulPointEc_p3_y)
+        $ => A         :MLOAD(dblScalarMulSecp256k1_p3_y)
         A              :HASHK(E)
 
         64             :HASHKLEN(E)
@@ -279,4 +279,4 @@ INCLUDE "./FNSECP256K1/mulFnSecp256k1.zkasm"
 INCLUDE "./FNSECP256K1/invFnSecp256k1.zkasm"
 
 INCLUDE "checkSqrtFpEc.zkasm"
-INCLUDE "mulPointEc.zkasm"
+INCLUDE "dblScalarMulSecp256k1.zkasm"
