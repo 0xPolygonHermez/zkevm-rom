@@ -991,122 +991,306 @@ invalidCall:
     0                               :MSTORE(SP++), JMP(readCode)
 
 VAR GLOBAL pushBytes
-VAR GLOBAL numBlocks
-VAR GLOBAL leftBytes
-VAR GLOBAL accumulator
+VAR GLOBAL pushBytes_RR
 ; @info Read bytes opcode PUSHX
 ; @internalParam {numBlocks} 4 bytes blocks to read
 ; @internalParam {leftBytes} remaining bytes
-; @in D => bytes to read
+; @in D,E => bytes to read (1..32)
 ; @out E => value read
+
 readPush:
-    %MAX_CNT_STEPS - STEP - 20          :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
-    D                           :MSTORE(pushBytes)
-    D => A
-    0                           :MSTORE(accumulator)
-    PC + D - 1 => HASHPOS
+                            :JMP(@readPush+E)    ;0
+readPush1:
+    PC => HASHPOS           :JMP(_readPush1)     ;1
+readPush2:
+    PC => HASHPOS           :JMP(_readPush2)     ;2
+readPush3:
+    PC => HASHPOS           :JMP(_readPush3)     ;3
+readPush4:
+    PC => HASHPOS           :JMP(_readPush4)     ;4
+readPush5:
+    PC => HASHPOS           :JMP(_readPushX)     ;5
+readPush6:
+    PC => HASHPOS           :JMP(_readPushX)     ;6
+readPush7:
+    PC => HASHPOS           :JMP(_readPushX)     ;7
+readPush8:
+    PC => HASHPOS           :JMP(_readPushX)     ;8
+readPush9:
+    PC => HASHPOS           :JMP(_readPushX)     ;9
+readPush10:
+    PC => HASHPOS           :JMP(_readPushX)     ;10
+readPush11:
+    PC => HASHPOS           :JMP(_readPushX)     ;11
+readPush12:
+    PC => HASHPOS           :JMP(_readPushX)     ;12
+readPush13:
+    PC => HASHPOS           :JMP(_readPushX)     ;13
+readPush14:
+    PC => HASHPOS           :JMP(_readPushX)     ;14
+readPush15:
+    PC => HASHPOS           :JMP(_readPushX)     ;15
+readPush16:
+    PC => HASHPOS           :JMP(_readPushX)     ;16
+readPush17:
+    PC => HASHPOS           :JMP(_readPushX)     ;17
+readPush18:
+    PC => HASHPOS           :JMP(_readPushX)     ;18
+readPush19:
+    PC => HASHPOS           :JMP(_readPushX)     ;19
+readPush20:
+    PC => HASHPOS           :JMP(_readPushX)     ;20
+readPush21:
+    PC => HASHPOS           :JMP(_readPushX)     ;21
+readPush22:
+    PC => HASHPOS           :JMP(_readPushX)     ;22
+readPush23:
+    PC => HASHPOS           :JMP(_readPushX)     ;23
+readPush24:
+    PC => HASHPOS           :JMP(_readPushX)     ;24
+readPush25:
+    PC => HASHPOS           :JMP(_readPushX)     ;25
+readPush26:
+    PC => HASHPOS           :JMP(_readPushX)     ;26
+readPush27:
+    PC => HASHPOS           :JMP(_readPushX)     ;27
+readPush28:
+    PC => HASHPOS           :JMP(_readPushX)     ;28
+readPush29:
+    PC => HASHPOS           :JMP(_readPushX)     ;29
+readPush30:
+    PC => HASHPOS           :JMP(_readPushX)     ;30
+readPush31:
+    PC => HASHPOS           :JMP(_readPushX)     ;31
+readPush32:
+    PC => HASHPOS           :JMP(_readPush32)    ;32
 
-    ; B = [b7, b6, ..., b0]
-    ; JMPN instruction assures b0 is within the range [0, 2**32 - 1]
-    ${A >> 2} => B              :JMPN(failAssert)
-    B                           :MSTORE(numBlocks)
-    ${A & 0x03} => D
-    D                           :MSTORE(leftBytes)
+_readPush1:
+    %MAX_CNT_STEPS - STEP - 2   :JMPN(outOfCountersStep)
 
-    ; since D is assured to be less than 0x04
-    ; it is enforced that [b7, b6, ..., b1] are 0 since there is no value multiplied by 4
-    ; that equals the field
-    ; Since b0 is assured to be less than 32 bits, b0 * 4 + d0 could not overflow the field
-    B * 4 + D                   :ASSERT
-    D => A
-    0x04 => B
-    $                           :LT,JMPNC(failAssert)
-    0 => B
-
-readPushBlock:
-    %MAX_CNT_STEPS - STEP - 20          :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
-    ; load hash contract identifier
     $ => E                      :MLOAD(contractHashId)
-    $ => A                      :MLOAD(numBlocks)
-    $                           :EQ, JMPC(endPushInit)
-    ; read bytes
+    $ => E                      :HASHP1(E),RETURN
+
+_readPush2:
+    %MAX_CNT_STEPS - STEP - 4   :JMPN(outOfCountersStep)
+
+    $ => E                      :MLOAD(contractHashId)
     $ => C                      :HASHP1(E)
-    HASHPOS - 2 => HASHPOS
+    $ => E                      :HASHP1(E)
+    C * 256 + E => E            :RETURN
 
+_readPush3:
+    %MAX_CNT_STEPS - STEP - 5   :JMPN(outOfCountersStep)
+
+    $ => E                      :MLOAD(contractHashId)
     $ => A                      :HASHP1(E)
-    HASHPOS - 2 => HASHPOS
-    A*256 + C => C
+    $ => C                      :HASHP1(E)
+    $ => E                      :HASHP1(E)
+    A * 2**16 + C * 2**8 + E => E   :RETURN
 
+_readPush4:
+    %MAX_CNT_STEPS - STEP - 6   :JMPN(outOfCountersStep)
+
+    $ => E                      :MLOAD(contractHashId)
     $ => A                      :HASHP1(E)
-    HASHPOS - 2 => HASHPOS
-    A*65536 + C => C
+    $ => B                      :HASHP1(E)
+    $ => C                      :HASHP1(E)
+    $ => E                      :HASHP1(E)
+    A * 2**24 + B * 2**16 + C * 2**8 + E => E :RETURN
 
+
+_readPush32:
+    %MAX_CNT_STEPS - STEP - 50  :JMPN(outOfCountersStep)
+
+    $ => E                      :MLOAD(contractHashId)
+
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
     $ => A                      :HASHP1(E)
-    HASHPOS - 2 => HASHPOS
-    A*16777216 + C => C
+    2**24 * B + 2**16 * RCX + 2**8 * D + A => C
 
-doRotate:
-    B - 1 => A
+    ; 28 bytes
 
-doRotateLoop:
-    %MAX_CNT_STEPS - STEP - 20  :JMPN(outOfCountersStep)
-    A                           :JMPN(endRotate)
-    ROTL_C => C
-    A - 1 => A                  :JMP(doRotateLoop)
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
 
-endRotate:
-    $ => D                      :MLOAD(accumulator)
-    C + D => D
-    D                           :MSTORE(accumulator)
-    B + 1 => B                  :JMP(readPushBlock)
+    ; 24 bytes
 
-endPushInit:
-    $ => A                      :MLOAD(leftBytes), JMPZ(finalPush)
-    0 => C
-    0 => B                      :JMP(endPushLoop)
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
 
-endPushLoop:
-    %MAX_CNT_STEPS - STEP - 20          :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 4    :JMPN(outOfCountersBinary)
+    ; 20 bytes
 
-    $ => A                          :MLOAD(leftBytes)
-    $                               :EQ, JMPC(endPushFinal)
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
 
-    $ => D                          :HASHP1(E)
-    HASHPOS - 2 => HASHPOS
-    B - 1 => A                      :JMP(computeFactorLoop)
+    ; 16 bytes
 
-computeFactorLoop:
-    %MAX_CNT_STEPS - STEP - 10      :JMPN(outOfCountersStep)
-    A                               :JMPN(computeFactorEnd)
-    256*D => D
-    A - 1 => A                      :JMP(computeFactorLoop)
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
 
-computeFactorEnd:
-    B + 1 => B
-    D + C => C                      :JMP(endPushLoop)
+    ; 12 bytes
 
-endPushFinal:
-    $ => B                          :MLOAD(numBlocks), JMP(doRotate2)
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
 
-doRotate2:
-    B - 1 => A                      :JMP(doRotateLoop2)
+    ; 8 bytes
 
-doRotateLoop2:
-    %MAX_CNT_STEPS - STEP - 10  :JMPN(outOfCountersStep)
-    A                           :JMPN(endRotate2)
-    ROTL_C => C
-    A - 1 => A                  :JMP(doRotateLoop2)
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
 
-endRotate2:
-    $ => D                      :MLOAD(accumulator)
-    C + D => D
-    D                           :MSTORE(accumulator), JMP(finalPush)
+    ; 4 bytes
 
-finalPush:
-    $ => E                      :MLOAD(accumulator)
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => E
+
+    32 => D                     :RETURN
+
+_readPushX:
+    %MAX_CNT_STEPS - STEP - 20 - D :JMPN(outOfCountersStep)
+    D => A,E                    :MSTORE(pushBytes)
+
+    $ => B                      :MLOAD(contractHashId)
+
+readPushBytes:
+    B => E                     :JMP(@readPushBytes + E)
+
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_1)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_2)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_3)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_4)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_5)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_6)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_7)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_8)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_9)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_10)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_11)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_12)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_13)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_14)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_15)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_16)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_17)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_18)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_19)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_20)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_21)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_22)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_23)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_24)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_25)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_26)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_27)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_28)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_29)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_30)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_31)
+    0 => RCX, B, D, A, C       :JMP(readPushBytes_32)
+
+
+readPushBytes_32:
+    $ => B                      :HASHP1(E)
+readPushBytes_31:
+    $ => RCX                    :HASHP1(E)
+readPushBytes_30:
+    $ => D                      :HASHP1(E)
+readPushBytes_29:
+    $ => A                      :HASHP1(E)
+    2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+readPushBytes_28:
+    $ => B                      :HASHP1(E)
+readPushBytes_27:
+    $ => RCX                    :HASHP1(E)
+readPushBytes_26:
+    $ => D                      :HASHP1(E)
+readPushBytes_25:
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+readPushBytes_24:
+    $ => B                      :HASHP1(E)
+readPushBytes_23:
+    $ => RCX                    :HASHP1(E)
+readPushBytes_22:
+    $ => D                      :HASHP1(E)
+readPushBytes_21:
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+readPushBytes_20:
+    $ => B                      :HASHP1(E)
+readPushBytes_19:
+    $ => RCX                    :HASHP1(E)
+readPushBytes_18:
+    $ => D                      :HASHP1(E)
+readPushBytes_17:
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+readPushBytes_16:
+    $ => B                      :HASHP1(E)
+readPushBytes_15:
+    $ => RCX                    :HASHP1(E)
+readPushBytes_14:
+    $ => D                      :HASHP1(E)
+readPushBytes_13:
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+readPushBytes_12:
+    $ => B                      :HASHP1(E)
+readPushBytes_11:
+    $ => RCX                    :HASHP1(E)
+readPushBytes_10:
+    $ => D                      :HASHP1(E)
+readPushBytes_9:
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+readPushBytes_8:
+    $ => B                      :HASHP1(E)
+readPushBytes_7:
+    $ => RCX                    :HASHP1(E)
+readPushBytes_6:
+    $ => D                      :HASHP1(E)
+readPushBytes_5:
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+readPushBytes_4:
+    $ => B                      :HASHP1(E)
+readPushBytes_3:
+    $ => RCX                    :HASHP1(E)
+readPushBytes_2:
+    $ => D                      :HASHP1(E)
+readPushBytes_1:
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => E
+
     $ => D                      :MLOAD(pushBytes), RETURN
 
 VAR GLOBAL tmpVarDaddB
