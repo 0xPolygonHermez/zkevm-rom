@@ -54,6 +54,7 @@ ecrecover_store_args:
 
         %MAX_CNT_BINARY - CNT_BINARY - 20       :JMPN(outOfCountersBinary)
         %MAX_CNT_ARITH - CNT_ARITH - 1100       :JMPN(outOfCountersArith)
+        ${dump(const.MAX_CNT_STEPS,STEP)}
         %MAX_CNT_STEPS - STEP - 7600            :JMPN(outOfCountersStep)
 
         $ => A         :MLOAD(cntKeccakPreProcess)
@@ -67,7 +68,7 @@ ecrecover_store_args:
         $ => B      :MLOAD(ecrecover_r)
         $           :EQ, JMPC(ecrecover_r_is_zero)
         %SECP256K1_N_MINUS_ONE => A
-        $           :LT,JMPC(ecrecover_r_is_too_big)
+        $           :LT, JMPC(ecrecover_r_is_too_big)
 
         ; s in [1, ecrecover_s_upperlimit]
         0 => A
@@ -87,7 +88,7 @@ ecrecover_store_args:
 ecrecover_v_not_eq_1b:
         0x1Cn => B
         ; [steps: 39, bin: 7, arith: 2]
-        $ => E      :EQ,JMPNC(ecrecover_v_not_eq_1b1c)
+        $ => E      :EQ, JMPNC(ecrecover_v_not_eq_1b1c)
 
         ; ecrecover_v_eq_1c:
         1n          :MSTORE(ecrecover_v_parity)
@@ -99,7 +100,7 @@ ecrecover_v_ok:
         ; A·B·A + 7 = calculate y from x
         ;
         ; [steps: 41, bin: 8, arith: 2]
-        $ => A,B    :MLOAD(ecrecover_r),CALL(mulFpSecp256k1)
+        $ => A,B    :MLOAD(ecrecover_r), CALL(mulFpSecp256k1)
 
         C => A
         $ => B      :MLOAD(ecrecover_r), CALL(mulFpSecp256k1)
@@ -123,7 +124,7 @@ ecrecover_v_ok:
         ; check must return on A register 1, because the root has no solution
 
         ; [steps: 4609, bin: 10, arith: 1014]
-        1           :ASSERT,JMP(ecrecover_not_exists_sqrt_of_y)
+        1           :ASSERT, JMP(ecrecover_not_exists_sqrt_of_y)
 
 ecrecover_has_sqrt:
         ; (v == 1b) ecrecover_y_parity = 0x00
@@ -155,7 +156,7 @@ ecrecover_has_sqrt:
         C => A
         0 => B
         ; C is zero, special case
-        $   :EQ,JMPNC(k1_c_is_not_zero)
+        $   :EQ, JMPNC(k1_c_is_not_zero)
 
         ; [steps: 100, bin: 11, arith: 12]
 
@@ -181,7 +182,7 @@ k1_calculated:
         $ => A      :MLOAD(ecrecover_s)
 
         ; [steps: 106, bin: 13, arith: 13]
-        $ => B      :MLOAD(ecrecover_r_inv),CALL(mulFnSecp256k1)
+        $ => B      :MLOAD(ecrecover_r_inv), CALL(mulFnSecp256k1)
 
         ;   C = (s * inv_r) % SECP256K1_N => k2
         ; [steps: 114, bin: 13, arith: 15]
@@ -202,7 +203,7 @@ k1_calculated:
         ; (r,y) is a point of curve because it satisfies the curve equation
         $ => A      :MLOAD(ecrecover_y)
         ; [steps: 122, bin: 14, arith: 15]
-        A           :MSTORE(dblScalarMulSecp256k1_p2_y),CALL(dblScalarMulSecp256k1)
+        A           :MSTORE(dblScalarMulSecp256k1_p2_y), CALL(dblScalarMulSecp256k1)
 
         ; check if result of dblScalarMulSecp256k1 is point at infinity
         HASHPOS     :JMPZ(ecrecover_p3_point_at_infinity)
@@ -259,7 +260,6 @@ ecrecover_error:
 ecrecover_end:
         $ => RR     :MLOAD(ecrecover_RR)
         :RETURN
-
 
 INCLUDE "./FPSECP256K1/addFpSecp256k1.zkasm"
 INCLUDE "./FPSECP256K1/mulFpSecp256k1.zkasm"
