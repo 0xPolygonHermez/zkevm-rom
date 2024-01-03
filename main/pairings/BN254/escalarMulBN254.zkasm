@@ -31,15 +31,15 @@ VAR GLOBAL escalarMulBN254_RR
 ; RESOURCES (not considering error paths):
 ; -------------------------------------------
 ; PATH 1.1 P == 𝒪:            [steps: 16, bin: 4]
-; PATH 1.2 k == 0 and P != 𝒪: [steps: 85, bin: 12, arith: 13]
+; PATH 1.2 k == 0 and P != 𝒪: [steps: 32, bin: 7, arith: 1]
 ; PATH 1.3 k > r and P != 𝒪:  <--- w.c.
-;                [steps: 90, bin: 13, arith: 13]                               // setup
-;                 + max_bin_len(k) * [steps: 184, bin: 14, arith: 24]          // doubles
-;                 + number_of_bits_1(k) * [steps: 182, bin: 12, arith: 20]     // additions
-;                 + [steps: 7, bin: 1]                                         // last iteration + k reconstruction check
-;               total (w.c.): [steps: 92513 bin: 6580, arith: 11125]           // [90 + 253*184 + 252*182 + 7,
-;                                                                                  13 + 253*14  + 252*12  + 1,
-;                                                                                  13 + 253*24  + 252*20]
+;                [steps: 38, bin: 7, arith: 1]                                 // setup
+;                 + max_bin_len(k) * [steps: 153, bin: 16, arith: 11]          // doubles
+;                 + number_of_bits_1(k) * [steps: 150, bin: 14, arith: 10]     // additions
+;                 + [steps: 6, bin: 1]                                         // last iteration + k reconstruction check
+;               total (w.c.): [steps: 76543 bin: 7584, arith: 5304]            // [38 + 253*153 + 252*150 + 6,
+;                                                                                  7  + 253*16  + 252*14  + 1,
+;                                                                                  1  + 253*11  + 252*10]
 ; -------------------------------------------
 
 escalarMulBN254:
@@ -67,7 +67,7 @@ escalarMulBN254:
         0 => B
         $               :EQ, JMPC(escalarMulBN254_k_is_zero)
         A               :MSTORE(escalarMulBN254_k)
-        ; [steps: 83, bin: 13, arith: 13]
+        ; [steps: 26, bin: 7, arith: 1]
         ; k ∈ [1,r-1] from here
 
         $${uintToBin(mem.escalarMulBN254_k)}                     ; convert k to binary
@@ -85,22 +85,37 @@ escalarMulBN254:
         B       :MSTORE(escalarMulBN254_Q_x2)
         C       :MSTORE(escalarMulBN254_Q_y1)
         D       :MSTORE(escalarMulBN254_Q_y2), JMP(escalarMulBN254_loop)
+        ; [steps: 38, bin: 7, arith: 1]
 
+; Begin of branching
 escalarMulBN254_P_is_zero:
+        ; before (w.c.) -> [steps: 10, bin: 4]
+
         ; Q = 𝒪
         0n      :MSTORE(escalarMulBN254_Q_x1)
         0n      :MSTORE(escalarMulBN254_Q_x2)
         0n      :MSTORE(escalarMulBN254_Q_y1)
         0n      :MSTORE(escalarMulBN254_Q_y2), JMP(escalarMulBN254_end)
+
+        ; till the end -> [steps: 16, bin: 4]
 
 escalarMulBN254_k_is_zero:
+        ; before (w.c.) -> [steps: 26, bin: 7, arith: 1]
+
         ; Q = 𝒪
         0n      :MSTORE(escalarMulBN254_Q_x1)
         0n      :MSTORE(escalarMulBN254_Q_x2)
         0n      :MSTORE(escalarMulBN254_Q_y1)
         0n      :MSTORE(escalarMulBN254_Q_y2), JMP(escalarMulBN254_end)
 
+        ; till the end -> [steps: 32, bin: 7, arith: 1]
+; End of branching
+
 escalarMulBN254_loop:
+        ; block costs:
+        ;       no_last: [steps: 153, bin: 16, arith: 11]
+        ;       last:    [steps: 1]
+
         RCX - 1 => RCX    :JMPN(escalarMulBN254_check)
 
         ; We always double
@@ -131,6 +146,8 @@ escalarMulBN254_loop:
         $0{receiveNextBit(mem.escalarMulBN254_k)}         :JMPZ(escalarMulBN254_loop)
 
 escalarMulBN254_add:
+        ; block costs: [steps: 150, bin: 14, arith: 10]
+
         ; We add
         $ => A  :MLOAD(escalarMulBN254_Q_x1)
         $ => B  :MLOAD(escalarMulBN254_Q_x2)
@@ -168,7 +185,7 @@ escalarMulBN254_add:
 
 
 escalarMulBN254_check:
-        ; till the end -> [steps: 6, bin: 1]
+        ; till the end -> [steps: 5, bin: 1]
         $ => A      :MLOAD(escalarMulBN254_k)
         $ => B      :MLOAD(escalarMulBN254_acummulator)
         1           :EQ
