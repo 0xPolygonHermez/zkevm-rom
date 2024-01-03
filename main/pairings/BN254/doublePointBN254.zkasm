@@ -19,21 +19,29 @@ VAR GLOBAL doublePointBN254_lambda
 
 VAR GLOBAL doublePointBN254_RR
 
+; RESOURCES:
+; -----------------------------
+; [steps: 174, bin: 14, arith: 24]
+; -----------------------------
+
 doublePointBN254:
         RR      :MSTORE(doublePointBN254_RR)
 
         $ => A  :MLOAD(doublePointBN254_P_y)
         $ => C  :MLOAD(doublePointBN254_P_y), CALL(addFpBN254)
         ; C = 2y
+        ; [steps: 14, bin: 1, arith: 2]
 
         C => A  :CALL(invFpBN254)
         ; B = 1 / 2y
         B       :MSTORE(doublePointBN254_P_y_inv)
+        ; [steps: 36, bin: 4, arith: 4]
 
         B => A,C :CALL(addFpBN254)
         C => A
         $ => C  :MLOAD(doublePointBN254_P_y_inv), CALL(addFpBN254)
         ; C = 3/2y
+        ; [steps: 61, bin: 6, arith: 8]
 
         C => A
         $ => B  :MLOAD(doublePointBN254_P_x), CALL(mulFpBN254)
@@ -42,12 +50,14 @@ doublePointBN254:
         C => A
         $ => B  :MLOAD(doublePointBN254_P_x), CALL(mulFpBN254)
         ; C = lambda = 3x²/2y
+        ; [steps: 87, bin: 8, arith: 12]
 
         C       :MSTORE(doublePointBN254_lambda)
         ; C = lambda
 
         C => A  :CALL(squareFpBN254)
         ; B = lambda²
+        ; [steps: 102, bin: 9, arith: 14]
 
         B => A
         $ => C  :MLOAD(doublePointBN254_P_x), CALL(subFpBN254)
@@ -62,10 +72,12 @@ doublePointBN254:
 
         $ => A  :MLOAD(doublePointBN254_P_x), CALL(subFpBN254)
         ; C = P.x - P3.x
+        ; [steps: 144, bin: 12, arith: 20]
 
         $ => A  :MLOAD(doublePointBN254_lambda)
         C => B  :CALL(mulFpBN254)
         ; C = lambda·(P.x - P3.x)
+        ; [steps: 157, bin: 13, arith: 22]
 
         C => A
         $ => C  :MLOAD(doublePointBN254_P_y), CALL(subFpBN254)
@@ -77,3 +89,5 @@ doublePointBN254:
 doublePointBN254_end:
         $ => RR         :MLOAD(doublePointBN254_RR)
                         :RETURN
+
+        ; [steps: 174, bin: 14, arith: 24]
