@@ -2,7 +2,7 @@
 ;;  PRE: Both P and 2·P are in E(Fp)\{𝒪} and its coordinates are in the range [0,BN254_P)
 ;; POST: The resulting coordinates are in the range [0,BN254_P) because if falls back to FP arithmetic
 ;;
-;; doublePointBN254:
+;; doublePointFPBN254:
 ;;             in: P = (P.x, P.y) ∈ E(Fp)
 ;;             out: 2·P = (Q.x, Q.y) ∈ E(Fp)
 ;;
@@ -10,49 +10,49 @@
 
 ; Since the curve is E/Fp: y² = x³ + 3, there is no issue in representing the point at infinity as (0, 0).
 
-VAR GLOBAL doublePointBN254_P_x
-VAR GLOBAL doublePointBN254_P_y
-VAR GLOBAL doublePointBN254_P_y_inv
-VAR GLOBAL doublePointBN254_Q_x
-VAR GLOBAL doublePointBN254_Q_y
-VAR GLOBAL doublePointBN254_lambda
+VAR GLOBAL doublePointFPBN254_P_x
+VAR GLOBAL doublePointFPBN254_P_y
+VAR GLOBAL doublePointFPBN254_P_y_inv
+VAR GLOBAL doublePointFPBN254_Q_x
+VAR GLOBAL doublePointFPBN254_Q_y
+VAR GLOBAL doublePointFPBN254_lambda
 
-VAR GLOBAL doublePointBN254_RR
+VAR GLOBAL doublePointFPBN254_RR
 
 ; RESOURCES:
 ; -----------------------------
 ; [steps: 174, bin: 14, arith: 24]
 ; -----------------------------
 
-doublePointBN254:
-        RR      :MSTORE(doublePointBN254_RR)
+doublePointFPBN254:
+        RR      :MSTORE(doublePointFPBN254_RR)
 
-        $ => A  :MLOAD(doublePointBN254_P_y)
-        $ => C  :MLOAD(doublePointBN254_P_y), CALL(addFpBN254)
+        $ => A  :MLOAD(doublePointFPBN254_P_y)
+        $ => C  :MLOAD(doublePointFPBN254_P_y), CALL(addFpBN254)
         ; C = 2y
         ; [steps: 14, bin: 1, arith: 2]
 
         C => A  :CALL(invFpBN254)
         ; B = 1 / 2y
-        B       :MSTORE(doublePointBN254_P_y_inv)
+        B       :MSTORE(doublePointFPBN254_P_y_inv)
         ; [steps: 36, bin: 4, arith: 4]
 
         B => A,C :CALL(addFpBN254)
         C => A
-        $ => C  :MLOAD(doublePointBN254_P_y_inv), CALL(addFpBN254)
+        $ => C  :MLOAD(doublePointFPBN254_P_y_inv), CALL(addFpBN254)
         ; C = 3/2y
         ; [steps: 61, bin: 6, arith: 8]
 
         C => A
-        $ => B  :MLOAD(doublePointBN254_P_x), CALL(mulFpBN254)
+        $ => B  :MLOAD(doublePointFPBN254_P_x), CALL(mulFpBN254)
         ; C = 3x/2y
 
         C => A
-        $ => B  :MLOAD(doublePointBN254_P_x), CALL(mulFpBN254)
+        $ => B  :MLOAD(doublePointFPBN254_P_x), CALL(mulFpBN254)
         ; C = lambda = 3x²/2y
         ; [steps: 87, bin: 8, arith: 12]
 
-        C       :MSTORE(doublePointBN254_lambda)
+        C       :MSTORE(doublePointFPBN254_lambda)
         ; C = lambda
 
         C => A  :CALL(squareFpBN254)
@@ -60,34 +60,34 @@ doublePointBN254:
         ; [steps: 102, bin: 9, arith: 14]
 
         B => A
-        $ => C  :MLOAD(doublePointBN254_P_x), CALL(subFpBN254)
+        $ => C  :MLOAD(doublePointFPBN254_P_x), CALL(subFpBN254)
         ; C = lambda² - P.x
 
         C => A
-        $ => C  :MLOAD(doublePointBN254_P_x), CALL(subFpBN254)
+        $ => C  :MLOAD(doublePointFPBN254_P_x), CALL(subFpBN254)
         ; C = lambda² - P.x - P.x
 
-        C           :MSTORE(doublePointBN254_Q_x)
+        C           :MSTORE(doublePointFPBN254_Q_x)
         ; P3.x = lambda² - P.x - P.x
 
-        $ => A  :MLOAD(doublePointBN254_P_x), CALL(subFpBN254)
+        $ => A  :MLOAD(doublePointFPBN254_P_x), CALL(subFpBN254)
         ; C = P.x - P3.x
         ; [steps: 144, bin: 12, arith: 20]
 
-        $ => A  :MLOAD(doublePointBN254_lambda)
+        $ => A  :MLOAD(doublePointFPBN254_lambda)
         C => B  :CALL(mulFpBN254)
         ; C = lambda·(P.x - P3.x)
         ; [steps: 157, bin: 13, arith: 22]
 
         C => A
-        $ => C  :MLOAD(doublePointBN254_P_y), CALL(subFpBN254)
+        $ => C  :MLOAD(doublePointFPBN254_P_y), CALL(subFpBN254)
         ; C = lambda·(P.x - P3.x) - P.y
 
-        C       :MSTORE(doublePointBN254_Q_y)
+        C       :MSTORE(doublePointFPBN254_Q_y)
         ; P3.y = lambda·(P.x - P3.x) - P.y
 
-doublePointBN254_end:
-        $ => RR         :MLOAD(doublePointBN254_RR)
+doublePointFPBN254_end:
+        $ => RR         :MLOAD(doublePointFPBN254_RR)
                         :RETURN
 
         ; [steps: 174, bin: 14, arith: 24]
