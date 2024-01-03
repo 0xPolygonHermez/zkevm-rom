@@ -24,8 +24,23 @@ VAR GLOBAL escalarMulBN254_Q_x2
 VAR GLOBAL escalarMulBN254_Q_y1
 VAR GLOBAL escalarMulBN254_Q_y2
 
+VAR GLOBAL escalarMulBN254_acummulator
+
 VAR GLOBAL escalarMulBN254_RR
 
+; RESOURCES (not considering error paths):
+; -------------------------------------------
+; PATH 1.1 P == 𝒪:            [steps: 16, bin: 4]
+; PATH 1.2 k == 0 and P != 𝒪: [steps: 85, bin: 12, arith: 13]
+; PATH 1.3 k > r and P != 𝒪:  <--- w.c.
+;                [steps: 90, bin: 13, arith: 13]                               // setup
+;                 + max_bin_len(k) * [steps: 184, bin: 14, arith: 24]          // doubles
+;                 + number_of_bits_1(k) * [steps: 182, bin: 12, arith: 20]     // additions
+;                 + [steps: 7, bin: 1]                                         // last iteration + k reconstruction check
+;               total (w.c.): [steps: 92513 bin: 6580, arith: 11125]           // [90 + 253*184 + 252*182 + 7,
+;                                                                                  13 + 253*14  + 252*12  + 1,
+;                                                                                  13 + 253*24  + 252*20]
+; -------------------------------------------
 
 escalarMulBN254:
         RR      :MSTORE(escalarMulBN254_RR)
@@ -41,14 +56,26 @@ escalarMulBN254:
         $ => A  :MLOAD(escalarMulBN254_P_y2)
         $       :EQ, JMPC(escalarMulBN254_P_is_zero)
                 __escalarMulBN254_P_continue:
+        ; [steps: 10, bin: 4]
 
-        ; Is k = 0?
-        $ => B      :MLOAD(escalarMulBN254_k), CALL(reduceFrBN254)
-        A           :MSTORE(escalarMulBN254_k)
-        0n => B
-        $           :EQ, JMPC(escalarMulBN254_k_is_zero)
+        ; Is k ∈ [0,r-1]?
+        $ => A          :MLOAD(escalarMulBN254_k)
+        %BN254_R => B
+        $               :LT, JMPC(__escalarMulBN254_continue)
+        A => B          :CALL(reduceFrBN254)
+                        __escalarMulBN254_continue:
+        0 => B
+        $               :EQ, JMPC(escalarMulBN254_k_is_zero)
+        A               :MSTORE(escalarMulBN254_k)
+        ; [steps: 83, bin: 13, arith: 13]
+        ; k ∈ [1,r-1] from here
 
-        257 => RCX
+        $${uintToBin(mem.escalarMulBN254_k)}                     ; convert k to binary
+        $0{receiveLen(mem.escalarMulBN254_k)} => RCX,E           ; receive the length of the binary representation of k
+
+        ; start the acummulator with the MSB of k
+        0 => A  :CALL(@bitwiseReconstruction + E)
+        A       :MSTORE(escalarMulBN254_acummulator)
 
         $ => A  :MLOAD(escalarMulBN254_P_x1)
         $ => B  :MLOAD(escalarMulBN254_P_x2)
@@ -57,37 +84,24 @@ escalarMulBN254:
         A       :MSTORE(escalarMulBN254_Q_x1)
         B       :MSTORE(escalarMulBN254_Q_x2)
         C       :MSTORE(escalarMulBN254_Q_y1)
-        D       :MSTORE(escalarMulBN254_Q_y2)
-
-                :JMP(escalarMulBN254_find_MSB_k)
+        D       :MSTORE(escalarMulBN254_Q_y2), JMP(escalarMulBN254_loop)
 
 escalarMulBN254_P_is_zero:
         ; Q = 𝒪
         0n      :MSTORE(escalarMulBN254_Q_x1)
         0n      :MSTORE(escalarMulBN254_Q_x2)
         0n      :MSTORE(escalarMulBN254_Q_y1)
-        0n      :MSTORE(escalarMulBN254_Q_y2)
-
-                :JMP(escalarMulBN254_end)
+        0n      :MSTORE(escalarMulBN254_Q_y2), JMP(escalarMulBN254_end)
 
 escalarMulBN254_k_is_zero:
         ; Q = 𝒪
         0n      :MSTORE(escalarMulBN254_Q_x1)
         0n      :MSTORE(escalarMulBN254_Q_x2)
         0n      :MSTORE(escalarMulBN254_Q_y1)
-        0n      :MSTORE(escalarMulBN254_Q_y2)
-
-                :JMP(escalarMulBN254_end)
-
-escalarMulBN254_find_MSB_k:
-        RCX - 1 => RCX
-        $ => A,B        :MLOAD(escalarMulBN254_k)
-        ; E = 2A
-        $ => E          :ADD,MSTORE(escalarMulBN254_k), JMPNC(escalarMulBN254_find_MSB_k)
-
+        0n      :MSTORE(escalarMulBN254_Q_y2), JMP(escalarMulBN254_end)
 
 escalarMulBN254_loop:
-        RCX - 1 => RCX    :JMPZ(escalarMulBN254_end)
+        RCX - 1 => RCX    :JMPN(escalarMulBN254_check)
 
         ; We always double
         $ => A  :MLOAD(escalarMulBN254_Q_x1)
@@ -101,7 +115,7 @@ escalarMulBN254_loop:
         A       :MSTORE(addPointBN254_P2_x1)
         B       :MSTORE(addPointBN254_P2_x2)
         C       :MSTORE(addPointBN254_P2_y1)
-        D       :MSTORE(addPointBN254_P2_y2), CALL(addPointBN254)
+        D       :MSTORE(addPointBN254_P2_y2), CALL(addPointBN254) ; TODO: I can do a double funcion here as in ecMul
         ; Q = Q + Q
 
         $ => A  :MLOAD(addPointBN254_P3_x1)
@@ -113,11 +127,8 @@ escalarMulBN254_loop:
         C       :MSTORE(escalarMulBN254_Q_y1)
         D       :MSTORE(escalarMulBN254_Q_y2)
 
-        ; We check if the MSB b of k is either 1 or 0. If b==1, we should add P to Q.
-        ; Then, update the value of k.
-        $ => A,B        :MLOAD(escalarMulBN254_k)
-        ; E = 2A
-        $ => E          :ADD,MSTORE(escalarMulBN254_k), JMPNC(escalarMulBN254_loop)
+        ; Receive the next MSB b of k. If b == 1, we should add P to Q, otherwise start the next iteration
+        $0{receiveNextBit(mem.escalarMulBN254_k)}         :JMPZ(escalarMulBN254_loop)
 
 escalarMulBN254_add:
         ; We add
@@ -137,7 +148,7 @@ escalarMulBN254_add:
         A       :MSTORE(addPointBN254_P2_x1)
         B       :MSTORE(addPointBN254_P2_x2)
         C       :MSTORE(addPointBN254_P2_y1)
-        D       :MSTORE(addPointBN254_P2_y2), CALL(addPointBN254)
+        D       :MSTORE(addPointBN254_P2_y2), CALL(addPointBN254) ; TODO: Add a flag as in ecMul to avoid unnecessary checks in addPointBn254
         ; Q = Q + P
 
         $ => A  :MLOAD(addPointBN254_P3_x1)
@@ -147,9 +158,21 @@ escalarMulBN254_add:
         A       :MSTORE(escalarMulBN254_Q_x1)
         B       :MSTORE(escalarMulBN254_Q_x2)
         C       :MSTORE(escalarMulBN254_Q_y1)
-        D       :MSTORE(escalarMulBN254_Q_y2), JMP(escalarMulBN254_loop)
+        D       :MSTORE(escalarMulBN254_Q_y2)
 
+        ; We keep reconstruction the scalar k
+        $ => A          :MLOAD(escalarMulBN254_acummulator)
+        RCX => E
+                        :CALL(@bitwiseReconstruction + E)
+        A               :MSTORE(escalarMulBN254_acummulator), JMP(escalarMulBN254_loop)
+
+
+escalarMulBN254_check:
+        ; till the end -> [steps: 6, bin: 1]
+        $ => A      :MLOAD(escalarMulBN254_k)
+        $ => B      :MLOAD(escalarMulBN254_acummulator)
+        1           :EQ
 
 escalarMulBN254_end:
-        $ => RR :MLOAD(escalarMulBN254_RR)
-                :RETURN
+        $ => RR         :MLOAD(escalarMulBN254_RR)
+                        :RETURN
