@@ -1,0 +1,114 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PRE: Both P and 2·P are in E'(Fp2)\{𝒪} and its coordinates are in the range [0,BN254_P)
+;; POST: The resulting coordinates are in the range [0,BN254_P) because if falls back to FP2 arithmetic
+;;
+;; doublePointFP2BN254:
+;;             in: P = (P.x1 + P.x2·u, P.y1 + P.y2·u) ∈ E'(Fp2)
+;;             out: 2·P = (Q.x1 + Q.x2·u, Q.y1 + Q.y2·u) ∈ E'(Fp2)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Since the curve is E'/Fp2: y² = x³ + 3/(9+u), there is no issue in representing the point at infinity as (0, 0).
+
+VAR GLOBAL doublePointFP2BN254_P_x1
+VAR GLOBAL doublePointFP2BN254_P_x2
+VAR GLOBAL doublePointFP2BN254_P_y1
+VAR GLOBAL doublePointFP2BN254_P_y2
+VAR GLOBAL doublePointFP2BN254_Q_x1
+VAR GLOBAL doublePointFP2BN254_Q_x2
+VAR GLOBAL doublePointFP2BN254_Q_y1
+VAR GLOBAL doublePointFP2BN254_Q_y2
+VAR GLOBAL doublePointFP2BN254_lambda_x
+VAR GLOBAL doublePointFP2BN254_lambda_y
+VAR GLOBAL doublePointFP2BN254_RR
+
+; RESOURCES:
+; -----------------------------
+; [steps: 102, bin: 4, arith: 11]
+; -----------------------------
+
+doublePointFP2BN254:
+        RR      :MSTORE(doublePointFP2BN254_RR)
+
+        $ => A  :MLOAD(doublePointFP2BN254_P_y1)
+        $ => B  :MLOAD(doublePointFP2BN254_P_y2)
+        $ => C  :MLOAD(doublePointFP2BN254_P_y1)
+        $ => D  :MLOAD(doublePointFP2BN254_P_y2), CALL(addFp2BN254)
+        ; E + C·u = 2y
+        ; [steps: 8, bin: 0, arith: 1]
+
+        E => A
+        C => B  :CALL(invFp2BN254)
+        ; C + D·u = 1 / 2y
+        ; [steps: 33, bin: 4, arith: 2]
+
+        3n => A :CALL(scalarMulFp2BN254)
+        ; E + C·u = 3/2y
+        ; [steps: 38, bin: 4, arith: 3]
+
+        $ => A  :MLOAD(doublePointFP2BN254_P_x1)
+        $ => B  :MLOAD(doublePointFP2BN254_P_x2)
+        C => D
+        E => C  :CALL(mulFp2BN254)
+        ; E + C·u = 3x/2y
+
+        $ => A  :MLOAD(doublePointFP2BN254_P_x1)
+        $ => B  :MLOAD(doublePointFP2BN254_P_x2)
+        C => D
+        E => C  :CALL(mulFp2BN254)
+        ; E + C·u = lambda = 3x²/2y
+        ; [steps: 52, bin: 4, arith: 5]
+
+        E       :MSTORE(doublePointFP2BN254_lambda_x)
+        C       :MSTORE(doublePointFP2BN254_lambda_y)
+        ; E + C·u = lambda
+
+        E => A
+        C => B  :CALL(squareFp2BN254)
+        ; E + C·u = lambda²
+        ; [steps: 61, bin: 4, arith: 6]
+
+        E => A
+        C => B
+        $ => C  :MLOAD(doublePointFP2BN254_P_x1)
+        $ => D  :MLOAD(doublePointFP2BN254_P_x2), CALL(subFp2BN254)
+        ; E + C·u = lambda² - x
+
+        E => A
+        C => B
+        $ => C  :MLOAD(doublePointFP2BN254_P_x1)
+        $ => D  :MLOAD(doublePointFP2BN254_P_x2), CALL(subFp2BN254)
+        ; E + C·u = lambda² - x - x
+
+        E           :MSTORE(doublePointFP2BN254_Q_x1)
+        C           :MSTORE(doublePointFP2BN254_Q_x2)
+        ; Q.x = lambda² - P.x - P2.x
+
+        $ => A  :MLOAD(doublePointFP2BN254_P_x1)
+        $ => B  :MLOAD(doublePointFP2BN254_P_x2)
+        C => D
+        E => C  :CALL(subFp2BN254)
+        ; E + C·u = P.x - Q.x
+        ; [steps: 84, bin: 4, arith: 9]
+
+        $ => A  :MLOAD(doublePointFP2BN254_lambda_x)
+        $ => B  :MLOAD(doublePointFP2BN254_lambda_y)
+        C => D
+        E => C  :CALL(mulFp2BN254)
+        ; E + C·u = lambda·(P.x - Q.x)
+        ; [steps: 91, bin: 4, arith: 10]
+
+        E => A
+        C => B
+        $ => C  :MLOAD(doublePointFP2BN254_P_y1)
+        $ => D  :MLOAD(doublePointFP2BN254_P_y2), CALL(subFp2BN254)
+        ; E + C·u = lambda·(P.x - Q.x) - P.y
+
+        E           :MSTORE(doublePointFP2BN254_Q_y1)
+        C           :MSTORE(doublePointFP2BN254_Q_y2)
+
+        ; till the end -> [steps: 102, bin: 4, arith: 11]
+
+doublePointFP2BN254_end:
+        $ => RR         :MLOAD(doublePointFP2BN254_RR)
+                        :RETURN

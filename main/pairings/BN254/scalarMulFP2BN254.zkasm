@@ -28,17 +28,17 @@ VAR GLOBAL scalarMulFP2BN254_acummulator
 
 VAR GLOBAL scalarMulFP2BN254_RR
 
-; RESOURCES (not considering error paths):
+; RESOURCES:
 ; -------------------------------------------
 ; PATH 1.1 P == 𝒪:            [steps: 16, bin: 4]
 ; PATH 1.2 k == 0 and P != 𝒪: [steps: 32, bin: 7, arith: 1]
 ; PATH 1.3 k > r and P != 𝒪:  <--- w.c.
 ;                [steps: 38, bin: 7, arith: 1]                                 // setup
-;                 + max_bin_len(k) * [steps: 153, bin: 16, arith: 11]          // doubles
-;                 + number_of_bits_1(k) * [steps: 150, bin: 14, arith: 10]     // additions
+;                 + max_bin_len(k) * [steps: 120, bin: 4, arith: 11]           // doubles
+;                 + number_of_bits_1(k) * [steps: 131, bin: 4, arith: 10]      // additions
 ;                 + [steps: 6, bin: 1]                                         // last iteration + k reconstruction check
-;               total (w.c.): [steps: 76543 bin: 7584, arith: 5304]            // [38 + 253*153 + 252*150 + 6,
-;                                                                                  7  + 253*16  + 252*14  + 1,
+;               total (w.c.): [steps: 63416 bin: 2028, arith: 5304]            // [38 + 253*120 + 252*131 + 6,
+;                                                                                  7  + 253*4   + 252*4   + 1,
 ;                                                                                  1  + 253*11  + 252*10]
 ; -------------------------------------------
 
@@ -113,7 +113,7 @@ scalarMulFP2BN254_k_is_zero:
 
 scalarMulFP2BN254_loop:
         ; block costs:
-        ;       no_last: [steps: 153, bin: 16, arith: 11]
+        ;       no_last: [steps: 120, bin: 4, arith: 11]
         ;       last:    [steps: 1]
 
         RCX - 1 => RCX    :JMPN(scalarMulFP2BN254_check)
@@ -123,20 +123,16 @@ scalarMulFP2BN254_loop:
         $ => B  :MLOAD(scalarMulFP2BN254_Q_x2)
         $ => C  :MLOAD(scalarMulFP2BN254_Q_y1)
         $ => D  :MLOAD(scalarMulFP2BN254_Q_y2)
-        A       :MSTORE(addPointFP2BN254_P1_x1)
-        B       :MSTORE(addPointFP2BN254_P1_x2)
-        C       :MSTORE(addPointFP2BN254_P1_y1)
-        D       :MSTORE(addPointFP2BN254_P1_y2)
-        A       :MSTORE(addPointFP2BN254_P2_x1)
-        B       :MSTORE(addPointFP2BN254_P2_x2)
-        C       :MSTORE(addPointFP2BN254_P2_y1)
-        D       :MSTORE(addPointFP2BN254_P2_y2), CALL(addPointFP2BN254) ; TODO: I can do a double funcion here as in ecMul
+        A       :MSTORE(doublePointFP2BN254_P_x1)
+        B       :MSTORE(doublePointFP2BN254_P_x2)
+        C       :MSTORE(doublePointFP2BN254_P_y1)
+        D       :MSTORE(doublePointFP2BN254_P_y2), CALL(doublePointFP2BN254)
         ; Q = Q + Q
 
-        $ => A  :MLOAD(addPointFP2BN254_P3_x1)
-        $ => B  :MLOAD(addPointFP2BN254_P3_x2)
-        $ => C  :MLOAD(addPointFP2BN254_P3_y1)
-        $ => D  :MLOAD(addPointFP2BN254_P3_y2)
+        $ => A  :MLOAD(doublePointFP2BN254_Q_x1)
+        $ => B  :MLOAD(doublePointFP2BN254_Q_x2)
+        $ => C  :MLOAD(doublePointFP2BN254_Q_y1)
+        $ => D  :MLOAD(doublePointFP2BN254_Q_y2)
         A       :MSTORE(scalarMulFP2BN254_Q_x1)
         B       :MSTORE(scalarMulFP2BN254_Q_x2)
         C       :MSTORE(scalarMulFP2BN254_Q_y1)
@@ -146,7 +142,7 @@ scalarMulFP2BN254_loop:
         $0{receiveNextBit(mem.scalarMulFP2BN254_k)}         :JMPZ(scalarMulFP2BN254_loop)
 
 scalarMulFP2BN254_add:
-        ; block costs: [steps: 150, bin: 14, arith: 10]
+        ; block costs: [steps: 131, bin: 4, arith: 10]
 
         ; We add
         $ => A  :MLOAD(scalarMulFP2BN254_Q_x1)
@@ -165,7 +161,8 @@ scalarMulFP2BN254_add:
         A       :MSTORE(addPointFP2BN254_P2_x1)
         B       :MSTORE(addPointFP2BN254_P2_x2)
         C       :MSTORE(addPointFP2BN254_P2_y1)
-        D       :MSTORE(addPointFP2BN254_P2_y2), CALL(addPointFP2BN254) ; TODO: Add a flag as in ecMul to avoid unnecessary checks in addPointFP2BN254
+        D       :MSTORE(addPointFP2BN254_P2_y2)
+        1       :MSTORE(addPointFP2BN254_diff), CALL(addPointFP2BN254)
         ; Q = Q + P
 
         $ => A  :MLOAD(addPointFP2BN254_P3_x1)
