@@ -24,19 +24,20 @@ VAR GLOBAL scalarMulPointBy6X2FP2BN254_RR
 
 ; RESOURCES:
 ; -------------------------------------------
-;  [steps: 38, bin: 7, arith: 1]                                 // setup
-;   + max_bin_len(k) * [steps: 120, bin: 4, arith: 11]           // doubles
-;   + number_of_bits_1(k) * [steps: 131, bin: 4, arith: 10]      // additions
-;   + [steps: 6, bin: 1]                                         // last iteration + k reconstruction check
-; total (w.c.): [steps: 63416 bin: 2028, arith: 5304]            // [38 + 253*120 + 252*131 + 6,
-;                                                                    7  + 253*4   + 252*4   + 1,
-;                                                                    1  + 253*11  + 252*10]
+;  [steps: 10]                                          // setup
+;   + 128 * [steps: 124, bin: 3, arith: 11]             // doubles
+;   + 19 * [steps: 126, bin: 3, arith: 10]              // additions
+;   + 20 * [steps: 127, bin: 5, arith: 10]              // subtractions
+;   + [steps: 3]                                        // last iteration + end
+; total (w.c.): [steps: 20819 bin: 541, arith: 1798]    // [10 + 128*124 + 19*126 + 20*127 + 3,
+;                                                                128*3   + 19*3   + 20*5,
+;                                                                128*11  + 19*10  + 20*10]
 ; -------------------------------------------
 
 scalarMulPointBy6X2FP2BN254:
         RR      :MSTORE(scalarMulPointBy6X2FP2BN254_RR)
 
-        128 => RCX,E           ; receive the length of the binary representation of k
+        128 => RCX
 
         $ => A  :MLOAD(scalarMulPointBy6X2FP2BN254_P_x1)
         $ => B  :MLOAD(scalarMulPointBy6X2FP2BN254_P_x2)
@@ -46,11 +47,11 @@ scalarMulPointBy6X2FP2BN254:
         B       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_x2)
         C       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_y1)
         D       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_y2)
-        ; [steps: 38, bin: 7, arith: 1]
+        ; [steps: 10, bin: 0, arith: 0]
 
 scalarMulPointBy6X2FP2BN254_loop:
         ; block costs:
-        ;       no_last: [steps: 120, bin: 4, arith: 11]
+        ;       no_last: [steps: 124, bin: 3, arith: 11]
         ;       last:    [steps: 1]
 
         RCX - 1 => RCX    :JMPZ(scalarMulPointBy6X2FP2BN254_end)
@@ -81,16 +82,12 @@ scalarMulPointBy6X2FP2BN254_loop:
 
         ; if bit = -1, then sub
         B           :JMPN(scalarMulPointBy6X2FP2BN254_sub)
-        ; [steps: 1936, bin: 4, arith: 149]
-
         ; if bit = 0, then repeat
         B           :JMPZ(scalarMulPointBy6X2FP2BN254_loop)
-        ; [steps: 1937, bin: 4, arith: 149]
-
         ; if bit = 1, then add
 
 scalarMulPointBy6X2FP2BN254_add:
-        ; block costs: [steps: 131, bin: 4, arith: 10]
+        ; block costs: [steps: 126, bin: 3, arith: 10]
 
         ; We add
         $ => A  :MLOAD(scalarMulPointBy6X2FP2BN254_Q_x1)
@@ -123,7 +120,7 @@ scalarMulPointBy6X2FP2BN254_add:
         D       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_y2), JMP(scalarMulPointBy6X2FP2BN254_loop)
 
 scalarMulPointBy6X2FP2BN254_sub:
-        ; block costs: [steps: 131, bin: 4, arith: 10]
+        ; block costs: [steps: 127, bin: 5, arith: 10]
 
         ; We subtract Q = Q - P
         $ => A  :MLOAD(scalarMulPointBy6X2FP2BN254_Q_x1)
