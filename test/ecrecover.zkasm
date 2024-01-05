@@ -16,19 +16,20 @@ start:
                 :JMP(edge_cases)
 
 INCLUDE "../main/ecrecover/ecrecover.zkasm"
+INCLUDE "../main/tables/bitwiseReconstruction.zkasm"
 
 repeat_ecrecover_test:
         ; A:ecrecover_hash B:ecrecover_r C:ecrecover_s D:ecrecover_v
 
         0xd9eba16ed0ecae432b71fe008c98cc872bb4cc214d3220a36f365326cf807d68n => A
-        0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n => B ; ECGX
+        0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n => B ; SECP256K1_GX
         0x265e99e47ad31bb2cab9646c504576b3abc6939a1710afc08cbf3034d73214b8n => C
         0x1cn => D
         :CALL(ecrecover_tx)
         0xBC44674AD5868F642EAD3FDF94E2D9C9185EAFB7n :ASSERT
 
         0xd9eba16ed0ecae432b71fe008c98cc872bb4cc214d3220a36f365326cf807d68n => A
-        0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n => B ; ECGX
+        0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n => B ; SECP256K1_GX
         0x265e99e47ad31bb2cab9646c504576b3abc6939a1710afc08cbf3034d73214b8n => C
         0x1bn => D
         :CALL(ecrecover_tx)
@@ -443,7 +444,7 @@ edge_cases:
         ; #40 EGX
 
         0x3cc4cb050478c49877188e4fbd022f35ccb41cee02d9d4417194cbf7ebc1eeben => A
-        %ECGX => B
+        %SECP256K1_GX => B
         0x2bcf13b5e4f34a04a77344d5943e0228ba2e787583036325450c889d597a16c4n => C
         0x1bn => D
         :CALL(ecrecover_tx)
@@ -452,7 +453,7 @@ edge_cases:
         ; #41 -EGX
 
         0x3cc4cb050478c49877188e4fbd022f35ccb41cee02d9d4417194cbf7ebc1eeben => A
-        %ECGX => B
+        %SECP256K1_GX => B
         0x2bcf13b5e4f34a04a77344d5943e0228ba2e787583036325450c889d597a16c4n => C
         0x1cn => D
         :CALL(ecrecover_tx)
@@ -493,7 +494,7 @@ edge_cases:
         B => A
         7 :ASSERT
 
-CONSTL %P2_C0_EGX = %ECGX & 0xFFFF
+CONSTL %P2_C0_EGX = %SECP256K1_GX & 0xFFFF
 
         ; # p2 & 0xFFFF == EGX & 0xFFFF
 
@@ -508,7 +509,7 @@ CONSTL %P2_C0_EGX = %ECGX & 0xFFFF
 
         ; # p2 & 0x001FFFF....FFFF == EGX & 0x001FFFF....FFFF
 
-CONSTL %P2_CH_EGX = %ECGX & 0x001FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn
+CONSTL %P2_CH_EGX = %SECP256K1_GX & 0x001FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn
 
         0x3cc4cb050478c49877188e4fbd022f35ccb41cee02d9d4417194cbf7ebc1eeben => A
         %P2_CH_EGX => B
@@ -516,7 +517,6 @@ CONSTL %P2_CH_EGX = %ECGX & 0x001FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
         0x1bn => D
         :CALL(ecrecover_tx)
         0x4c90563674ab8de6f7731475a01a2bd09fd7b4b1n :ASSERT
-        $${dump(STEP)}
 
         :JMP(end)
 
