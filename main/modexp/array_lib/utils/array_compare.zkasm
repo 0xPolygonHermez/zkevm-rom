@@ -28,21 +28,22 @@
 ;     return 0;
 ; }
 
-; ----------------------------------
-; Five possible paths:
-;      · inA > inB and lenA > lenB.
-;      · inA > inB and lenA = lenB.
-;      · inA = inB. (worst case)
-;      · inA < inB and lenA < lenB.
-;      · inA < inB and lenA = lenB.
-; ----------------------------------
-
 VAR GLOBAL array_compare_inA[%ARRAY_MAX_LEN]
 VAR GLOBAL array_compare_inB[%ARRAY_MAX_LEN]
 
 VAR GLOBAL array_compare_result
 
 VAR GLOBAL array_compare_RR
+
+; RESOURCES:
+; -------------------------------------------
+; PATH 1 lenA < lenB: [steps: 7]
+; PATH 2 lenA > lenB: [steps: 9]
+; PATH 3 lenA == lenB and inA == inB:
+;       · PATH 3.1 inA > inB:  [steps: 10 + 7*(C - diff_chunk) + 6, bin: 2*(C - diff_chunk) + 2]
+;       · PATH 3.2 inA < inB:  [steps: 10 + 7*(C - diff_chunk) + 3, bin: 2*(C - diff_chunk) + 1]
+;       · PATH 3.3 inA == inB: [steps: 10 + 7*C,                    bin: 2*C] <--- w.c.
+; -----------------------------
 
 array_compare:
         %MAX_CNT_BINARY - CNT_BINARY     - 2*C          :JMPN(outOfCountersBinary)
@@ -51,8 +52,8 @@ array_compare:
         RR              :MSTORE(array_compare_RR)
 
         ; Start by comparing the lengths of the arrays
-        C - D           :JMPN(array_compare_ALTB)
-        D - C           :JMPN(array_compare_AGTB)
+        C - D           :JMPN(array_compare_ALTB) ; till end -> [steps: 7]
+        D - C           :JMPN(array_compare_AGTB) ; till end -> [steps: 9]
 
         C - 1 => E
 array_compare_same_len:
