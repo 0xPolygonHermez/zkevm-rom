@@ -45,6 +45,17 @@ VAR GLOBAL array_square_out_chunk_2
 
 VAR GLOBAL array_square_RR
 
+; RESOURCES:
+; -----------------------------
+;        [steps: 14 + 2*lenA, bin: 0, arith: 1] // setup
+;        [steps: 3 + 7*lenA + 61*(lenA*(lenA+1)/2), bin: 9*(lenA*(lenA+1)/2), arith: lenA + (lenA*(lenA+1)/2)] // loop
+;        [steps: 11 + 5*(2*lenA - non_zero_chunk_result) + 5, bin: 2*lenA - non_zero_chunk_result + 1] // trim + end
+;        =============================================================
+; total: [steps: 33 + 9*lenA + 5*(2*lenA - non_zero_chunk_result) + 61*(lenA*(lenA+1)/2),
+;           bin: 1 + 2*lenA - non_zero_chunk_result + 9*(lenA*(lenA+1)/2),
+;         arith: 1 + lenA + (lenA*(lenA+1)/2)]
+; -----------------------------
+
 array_square:
         %MAX_CNT_ARITH - CNT_ARITH - 1        :JMPN(outOfCountersArith)
         %MAX_CNT_STEPS - STEP      - 7        :JMPN(outOfCountersStep)
@@ -66,6 +77,7 @@ array_square:
 
         0 => RCX,RR     ; first and second indexes in loops
         C + C - 1 => E
+        ; [steps: 14, bin: 0, arith: 1]
 array_square_clean_out:
         0               :MSTORE(array_square_out + E)
         E - 1 => E      :JMPN(array_square_ai_times_ai, array_square_clean_out)
@@ -106,6 +118,7 @@ array_square_loop_index_check:
         B - A           :JMPZ(array_square_prep_trim_in) ; This subtraction is safe
 ; End of branching
 
+; before (w.c.) -> [steps: 14 + 2*lenA, bin: 0, arith: 1]
 array_square_ai_times_ai:
         ; carry = 0 - a[i]·a[i]
         ; a[i]·a[i], where a[i] ∈ [0,base-1]: This number cannot be GT (base - 2)·base + 1, two chunks

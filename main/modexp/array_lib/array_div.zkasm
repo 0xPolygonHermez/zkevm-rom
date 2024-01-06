@@ -13,6 +13,8 @@
 ;;                  · [quo,rem] = [inA / inB, inA % inB], with len(quo) <= C - D + 1, len(rem) <= D
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; TODO: It can be optimized, it is doubling double 0 checks, both here and in the div_long and div_short
+
 ; function array_div(a: bigint[], b: bigint[], base: bigint): bigint[] {
 ;     if (a === [0n]) {
 ;         if (b === [0n]) {
@@ -51,6 +53,23 @@ VAR GLOBAL array_div_RR
 ; 0 - no error
 ; 1 - inB is zero
 
+; RESOURCES:
+; -----------------------------
+; PATH 1 inA == 0 and inB == 0: [steps: 15, bin: 2]
+; PATH 2 inA == 0 and inB != 0: [steps: 19, bin: 2]
+; PATH 3 inA != 0 and inB == 0: [steps: 15, bin: 2]
+; PATH 4 inA,inB != 0:
+;       · PATH 4.1 inA == inB: [steps: 34 + 10*lenA + 3*lenB, bin: 2 + 2*lenA]
+;       · PATH 4.2 inA < inB:  [steps: 38 + 6*lenA + 7*(lenA - diff_chunk_inA_inB) + 3*lenB, bin: 3 + 2*(lenA - diff_chunk_inA_inB)]
+;       · PATH 4.3 inA > inB:
+;               · PATH 4.3.1 Long Div:
+;                       [steps: 204 + 22*lenA + 14*(lenA - diff_chunk_inA_inB) + 7*(lenB - diff_chunk_inB_rem) + 35*lenB + 30*lenQ + 14*lenR + 33*lenQ*lenB,
+;                           bin: 12 + 2*lenA + 4*(lenA - diff_chunk_inA_inB) + lenQ + lenB + lenR + 2*(lenB - diff_chunk_inB_rem) + 4*lenQ*lenB
+;                         arith: 1 + lenQ*lenB]
+;               · PATH 4.3.1 Short Div:
+;                       [steps: 170 + 29*lenA + 44*lenQ, bin: 9 + 4*lenA + 3*lenQ, arith: lenQ]
+; -------------------------------------------
+
 array_div:
         %MAX_CNT_BINARY - CNT_BINARY - 2                    :JMPN(outOfCountersBinary)
         %MAX_CNT_STEPS - STEP        - 12 - 3*C - 3*D - 1   :JMPN(outOfCountersStep)
@@ -67,12 +86,14 @@ array_div:
         $ => A          :MLOAD(array_div_inA)
         $               :LT, JMPC(array_div_inA_is_zero)
                         __array_div_inA_continue:
+        ; [steps: 9, bin: 1]
 
         ; 2] Is D == 1 and inB == 0?
         D - B           :JMPNZ(__array_div_inB_continue_1)
         $ => A          :MLOAD(array_div_inB)
         $               :LT, JMPC(array_div_inB_is_zero)
                         __array_div_inB_continue_1:
+        ; [steps: 12, bin: 2]
 
         ; 3] Check if inA = inB or inA < inB
         C - 1 => RR
@@ -88,20 +109,28 @@ array_div_compare_inB:
         E - 1 => E      :JMPN(array_div_compare, array_div_compare_inB)
 
 array_div_compare:
+        ; [steps: 14 + 3*lenA + 3*lenB, bin: 2]
                         :CALL(array_compare)
+        ; PATH 1 inA > inB:  [steps: 10 + 7*(lenA - diff_chunk_inA_inB) + 6, bin: 2*(lenA - diff_chunk_inA_inB) + 2]
+        ; PATH 2 inA < inB:  [steps: 10 + 7*(lenA - diff_chunk_inA_inB) + 3, bin: 2*(lenA - diff_chunk_inA_inB) + 1]
+        ; PATH 3 inA == inB: [steps: 10 + 7*lenA,                    bin: 2*lenA] <--- w.c.
 
         %MAX_CNT_STEPS - STEP        - 5 - 3*C - 3*D - 1  :JMPN(outOfCountersStep)
 
         $ => A          :MLOAD(array_compare_result), JMPZ(array_div_prep_inALTinB)
         A - 1           :JMPZ(array_div_same_input)
+        ; [steps: 35 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 3*lenB, bin: 4 + 2*(lenA - diff_chunk_inA_inB)]
         ; From here, inA > inB
 
         C - 1 => RR
         D - 1 => E
         D - 1           :JMPZ(array_div_inA_to_div_short, array_div_inA_to_div_long); worst case is div long
+        ; [steps: 38 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 3*lenB, bin: 4 + 2*(lenA - diff_chunk_inA_inB)]
 
 ; Begin of edge cases
 array_div_inA_is_zero:
+        ; before (w.c.) -> [steps: 9, bin: 1, arith: 0]
+
         ;Is D == 1 and inB == 0? 0/0 is undefined
         D - B           :JMPNZ(__array_div_inB_continue_2)
         $ => A          :MLOAD(array_div_inB)
@@ -115,19 +144,32 @@ array_div_inA_is_zero:
         1               :MSTORE(array_div_len_quo)
         1               :MSTORE(array_div_len_rem)
         0 => B          :JMP(array_div_end)
+        ; till the end -> [steps: 19, bin: 2, arith: 0]
 
 array_div_inB_is_zero:
+        ; before (w.c.) -> [steps: 12, bin: 2, arith: 0]
+
         ; Error, you cannot divide by 0
         1 => B          :JMP(array_div_end)
 
+        ; till the end (inA_is_zero) -> [steps: 15, bin: 2, arith: 0]
+
 array_div_same_input:
+        ; before (w.c.) -> [steps: 29 + 10*lenA + 3*lenB, bin: 2 + 2*lenA]
+
+        ; if inA = inB, then return [1, 0] and len(q) = 1, len(r) = 1
         1               :MSTORE(array_div_quo)
         0               :MSTORE(array_div_rem)
         1               :MSTORE(array_div_len_quo)
         1               :MSTORE(array_div_len_rem)
         0 => B          :JMP(array_div_end)
 
+        ; till the end -> [steps: 34 + 10*lenA + 3*lenB, bin: 2 + 2*lenA]
+
 array_div_prep_inALTinB:
+        ; before (w.c.) -> [steps: 31 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 3*lenB, bin: 3 + 2*(lenA - diff_chunk_inA_inB)]
+
+        ; if inA < inB, then return [0, inA] and len(q) = 1, len(r) = C
         C               :MSTORE(array_div_len_rem)
         1               :MSTORE(array_div_len_quo)
 
@@ -142,6 +184,7 @@ array_div_inALTinB:
 array_div_inALTinB_before_end:
         0               :MSTORE(array_div_quo)
         0 => B          :JMP(array_div_end)
+        ; till the end -> [steps: 38 + 6*lenA + 7*(lenA - diff_chunk_inA_inB) + 3*lenB, bin: 3 + 2*(lenA - diff_chunk_inA_inB)]
 ; End of edge cases
 
 ; Long
@@ -156,7 +199,13 @@ array_div_inB_to_div_long:
         E - 1 => E      :JMPN(array_div_compute_long, array_div_inB_to_div_long)
 
 array_div_compute_long:
+        ; [steps: 38 + 6*lenA + 7*(lenA - diff_chunk_inA_inB) + 6*lenB, bin: 4 + 2*(lenA - diff_chunk_inA_inB)]
                         :CALL(array_div_long)
+
+        ; till end:
+        ; [steps: 204 + 22*lenA + 14*(lenA - diff_chunk_inA_inB) + 7*(lenB - diff_chunk_inB_rem) + 35*lenB + 30*lenQ + 14*lenR + 33*lenQ*lenB,
+        ;     bin: 12 + 2*lenA + 4*(lenA - diff_chunk_inA_inB) + lenQ + lenB + lenR + 2*(lenB - diff_chunk_inB_rem) + 4*lenQ*lenB
+        ;   arith: 1 + lenQ*lenB]
 
         %MAX_CNT_STEPS - STEP - 7      :JMPN(outOfCountersStep)
 
@@ -190,7 +239,11 @@ array_div_inB_to_div_short:
         A               :MSTORE(array_div_short_inB)
 
 array_div_compute_short:
+        ; [steps: 36 + 13*lenA, bin: 2 + 2*lenA]
                         :CALL(array_div_short)
+
+        ; till end:
+        ; [steps: 170 + 29*lenA + 44*lenQ, bin: 9 + 4*lenA + 3*lenQ, arith: lenQ]
 
         %MAX_CNT_STEPS - STEP - 5      :JMPN(outOfCountersStep)
 
