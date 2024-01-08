@@ -36,18 +36,6 @@
 ;;     return r;
 ;; };
 
-;; RESOURCES (assuming a worst case scenario):
-;; -------------------------------------------
-;; cost(pre_loop) = 3·cost(isZero) + 2·cost(isOne) + cost(array_div)
-;; nIterations    = ⌊log₂(E)⌋ + 1
-;; nTimesEIsOdd   = HammingWeight(E) (i.e., number of 1s in the binary representation of E)
-;; nTimesEIsEven  = nIterations - nTimesEIsOdd
-;; cost(iteration1) (if E is odd)  = cost(isZero) + cost(isOdd) + 2·cost(array_div) + cost(array_mul) + cost(array_div_short) + cost(array_square)
-;; cost(iteration2) (if E is even) = cost(isZero) + cost(isOdd) + cost(array_div) + cost(array_div_short) + cost(array_square)
-;; ------------
-;; cost(total) = cost(pre_loop) + nTimesEIsOdd·cost(iteration1) + nTimesEIsEven·cost(iteration2)
-;; ------------
-
 VAR GLOBAL modexp_Blen
 VAR GLOBAL modexp_Elen
 VAR GLOBAL modexp_Mlen
@@ -60,8 +48,50 @@ VAR GLOBAL modexp_outlen
 
 VAR GLOBAL modexp_RR
 
-modexp:
+; Theoretical resources:
+; -------------------------------------------
+; cost(pre_loop) = cost(setup) + cost(array_div)
+; nIterations    = ⌊log₂(E)⌋ + 1
+; nTimesEIsOdd   = HammingWeight(E) (i.e., number of 1s in the binary representation of E)
+; nTimesEIsEven  = nIterations - nTimesEIsOdd
+; cost(iteration1) (if E is odd)  = cost(isZero) + cost(isOdd) + 2·cost(array_div) + cost(array_mul) + cost(array_div_short) + cost(array_square)
+; cost(iteration2) (if E is even) = cost(isZero) + cost(isOdd) + cost(array_div_short) + cost(array_square) + cost(array_div)
+; ------------
+; cost(total) = cost(pre_loop) + nTimesEIsOdd·cost(iteration1) + nTimesEIsEven·cost(iteration2)
+; ------------
 
+/*
+ * RESOURCES (assuming B != 0 (mod M)):
+ * -----------------------------
+ * 1] Setup + first division of B by M:
+ *    [steps: 218 + 39*lenB + 45*lenM + lenQ(B,M)*(30 + 33*lenM) + 17*lenR(B,M) - 14*DC₁(B,M) - 7*DC₁(M,R(B,M)),
+ *       bin:  12 +  6*lenB +  3*lenM +   lenQ(B,M)*(1 + 4*lenM) +    lenR(B,M) -  4*DC₁(B,M) - 2*DC₁(M,R(B,M))),
+ *     arith:   1 +                       lenQ(B,M)*lenM]
+ *
+ * 2.1] One half iteration of the loop, i.e., div_short + square + div:
+ *    [steps: 394 + 100*lenB + 61*(lenB*(lenB+1)/2) + 45*lenM + 19*lenE + 44*(lenE//2) + 30*lenQ(B²,M) + 17*lenR(B²,M) + 33*lenQ(B²,M)*lenM - 14*DC₁(B²,M) - 7*DC₁(M,R(B²,M)) - NZ₁(B²),
+ *       bin: 22  +  14*lenB +  9*(lenB*(lenB+1)/2) +  3*lenM +  2*lenE +  3*(lenE//2) +    lenQ(B²,M) +    lenR(B²,M) +  4*lenQ(B²,M)*lenM -  4*DC₁(B²,M) - 2*DC₁(M,R(B²,M)  - NZ₁(B²),
+ *     arith: 2 + lenB + (lenB*(lenB+1)/2) + (lenE//2) + lenQ(B²,M)*lenM]
+ *
+ * 2.2] One full iteration of the loop, i.e.,  mul + div + div_short + square + div:
+ *    [steps: 656 + 150*lenB + 61*(lenB*(lenB+1)/2) + 143*lenM + 19*lenE + 44*(lenE//2) + 30*lenQ(out·B,M) + 17*lenR(out·B,M) + 33*lenQ(out·B,M)*lenM + 30*lenQ(B²,M) + 17*lenR(B²,M) + 33*lenM*lenB + 33*lenQ(B²,M)*lenM - 14*DC₁(out·B,M) - 14*DC₁(B²,M) - 7*DC₁(M,R(out·B,M)) - 7*DC₁(M,R(B²,M)) - NZ₁(B²),
+ *       bin: 34  +  20*lenB +  9*(lenB*(lenB+1)/2) +  12*lenM +  2*lenE +  3*(lenE//2) +    lenQ(out·B,M) +    lenR(out·B,M) +  4*lenQ(out·B,M)*lenM +    lenQ(B²,M) +    lenR(B²,M) +  4*lenM*lenB +  4*lenQ(B²,M)*lenM -  4*DC₁(out·B,M) -  4*DC₁(B²,M) - 2*DC₁(M,R(out·B,M)) - 2*DC₁(M,R(B²,M)  - NZ₁(B²),
+ *     arith: 4 + lenB + (lenB*(lenB+1)/2) + (lenE//2) + lenQ(out·B,M)*lenM + lenQ(B²,M)*lenM + lenM*lenB]
+ *
+ * 3] End: [steps: 2]
+ * -------------------------------------------
+ * total: [setup + first division of B by M] + nTimesEIsEven·[cost of 2.1] + nTimesEIsOdd·[cost of 2.2] + [end]
+ *
+ * total (assuming w.c., i.e., E = 0b11....1): [setup + first division of B by M] + len(bin(E))·[cost of 2.2] + [end] <---
+ * -------------------------------------------
+ * Acronyms:
+ *       DC₁(X,Y) = First chunk that is different between X and Y, from most significant to least significant
+ *         NZ₁(X) = First non-zero chunk of X, from most significant to least significant
+ *         R(X,Y) = Remainder of X / Y
+ *         Q(X,Y) = Quotient of X / Y
+ */
+
+modexp:
         %MAX_CNT_STEPS - STEP - 8  :JMPN(outOfCountersStep)
 
         RR              :MSTORE(modexp_RR)
@@ -79,6 +109,7 @@ modexp:
         D - 1 => E
 
         %MAX_CNT_STEPS - STEP - 3*C - 3*D  - 1    :JMPN(outOfCountersStep)
+        ;  [steps: 9]
 
 ; Compute B = B % M
 ; -------------------
@@ -93,7 +124,12 @@ modexp_M_to_div1:
         E - 1 => E      :JMPN(modexp_div_B_and_M, modexp_M_to_div1)
 
 modexp_div_B_and_M:
+        ;  [steps: 9 + 3*lenB + 3*lenM]
                         :CALL(array_div)
+        ; (Assuming long division) till modexp_pre_loop:
+        ; [steps: 218 + 39*lenB + 45*lenM + lenQ(B,M)*(30 + 33*lenM) + 17*lenR(B,M) - 14*DC₁(B,M) - 7*DC₁(M,R(B,M)),
+        ;    bin: 12 +  6*lenB +  3*lenM +   lenQ(B,M)*(1 + 4*lenM) +    lenR(B,M) -  4*DC₁(B,M) - 2*DC₁(M,R(B,M))),
+        ;  arith:  1 +                       lenQ(B,M)*lenM]
 
         %MAX_CNT_STEPS - STEP - 4         :JMPN(outOfCountersStep)
 
@@ -118,12 +154,18 @@ modexp_B_is_zero:
 
 ; Begin of branching
 modexp_loop_multiply:
+        ; block costs:
+        ; [steps: 262 + 50*lenB + 98*lenM + 30*lenQ(out·B,M) + 17*lenR(out·B,M) + 33*lenQ(out·B,M)*lenM + 33*lenM*lenB - 14*DC₁(out·B,M) - 7*DC₁(M,R(out·B,M)),
+        ;     bin: 12 +  6*lenB +  9*lenM +    lenQ(out·B,M) +    lenR(out·B,M) +  4*lenQ(out·B,M)*lenM +  4*lenM*lenB -  4*DC₁(out·B,M) - 2*DC₁(M,R(out·B,M)),
+        ;   arith: 2 + lenQ(out·B,M)*lenM + lenM*lenB]
+
         $ => C          :MLOAD(modexp_outlen)
         $ => D          :MLOAD(modexp_Blen)
         C - 1 => RR
         D - 1 => E
 
         %MAX_CNT_STEPS - STEP - 3*C - 3*D - 1        :JMPN(outOfCountersStep)
+        ; [steps: 5]
 
 ; Compute out * B
 ; -------------------
@@ -138,7 +180,11 @@ modexp_B_to_mul_long:
         E - 1 => E      :JMPN(modexp_mul_long_out_and_B, modexp_B_to_mul_long)
 
 modexp_mul_long_out_and_B:
-                        :CALL(array_mul)
+        ; (Assuming out is always as long as M)
+        ; [steps: 5 + 3*lenM + 3*lenB]
+                        :CALL(array_mul) ; [steps: 40 + 11*lenM + 8*lenB + 33*lenM*lenB, bin: 4*lenM*lenB, arith: 1 + lenM*lenB]
+        ; (Assuming long multiplication):
+        ; [steps: 46 + 14*lenM + 11*lenB + 33*lenM*lenB, bin: 4*lenM*lenB, arith: 1 + lenM*lenB]
 
         %MAX_CNT_STEPS - STEP - 5         :JMPN(outOfCountersStep)
 
@@ -161,7 +207,13 @@ modexp_M_to_div:
         E - 1 => E      :JMPN(modexp_div_out_and_M2, modexp_M_to_div)
 
 modexp_div_out_and_M2:
+        ; (+ 3*(lenM + lenB) + 3*lenM)
+        ; [steps: 52 + 20*lenM + 14*lenB + 33*lenM*lenB, bin: 4*lenM*lenB, arith: 1 + lenM*lenB]
                         :CALL(array_div)
+        ; (Assuming long division and out·B > M) till end block:
+        ; [steps: 262 + 50*lenB + 98*lenM + 30*lenQ(out·B,M) + 17*lenR(out·B,M) + 33*lenQ(out·B,M)*lenM + 33*lenM*lenB - 14*DC₁(out·B,M) - 7*DC₁(M,R(out·B,M)),
+        ;     bin: 12 +  6*lenB +  9*lenM +    lenQ(out·B,M) +    lenR(out·B,M) +  4*lenQ(out·B,M)*lenM +  4*lenM*lenB -  4*DC₁(out·B,M) - 2*DC₁(M,R(out·B,M)),
+        ;   arith: 2 + lenQ(out·B,M)*lenM + lenM*lenB]
 
         %MAX_CNT_STEPS - STEP - 4        :JMPN(outOfCountersStep)
 
@@ -179,7 +231,12 @@ modexp_rem_from_div2:
 ; End of branching
 
 modexp_pre_loop:
-;       In the worst case, the exponent is odd in each iteration
+        ; loop costs (w.c.):
+        ; [steps: 659 + 5*(2*lenB - NZ₁(B²)) + 14*((lenM + lenB) - DC₁(out·B,M) + 14*((2*lenB) - DC₁(B²,M)) + 7*(lenM - DC₁(M,R(out·B,M))) + 7*(lenM - DC₁(M,R(B²,M)) + 98*lenB + 61*(lenB*(lenB+1)/2) + 118*lenM + 19*lenE + 44*(lenE//2) + 30*lenQ(out·B,M) + 30*lenQ(B²,M) + 14*lenR(out·B,M) + 17*lenR(B²,M) + 66*lenQ(out·B,M)*lenM + 33*lenQ(B²,M)*lenM,
+        ;     bin: 34 + 6*lenB - NZ₁(B²) + 9*(lenB*(lenB+1)/2) + 2*(lenM + lenB) + 4*((lenM + lenB) - DC₁(out·B,M) + 4*((2*lenB) - DC₁(B²,M)) + lenQ(out·B,M) + lenQ(B²,M) + 2*lenM + 2*lenE + 3*(lenE//2) + lenR(out·B,M) + lenR(B²,M) + 2*(lenM - DC₁(M,R(out·B,M))) + 2*(lenM - DC₁(M,R(B²,M)) + 4*lenQ(out·B,M)*lenM + 4*lenQ(B²,M)*lenM + 4*lenM*lenB,
+        ;   arith: 4 + lenB + (lenB*(lenB+1)/2) + lenQ(out·B,M)*lenM + lenQ(B²,M)*lenM + lenM*lenB + (lenE//2)]
+
+        ; In the worst case, the exponent is odd in each iteration
         %MAX_CNT_BINARY - CNT_BINARY - 3          :JMPN(outOfCountersBinary)
         %MAX_CNT_STEPS - STEP        - 13         :JMPN(outOfCountersStep)
 
@@ -204,7 +261,11 @@ modexp_loop:
         $ => A          :MLOAD(modexp_E)
         1 => B
         $               :AND, JMPNZ(modexp_loop_multiply)
+        ; [steps: 7, bin: 2]
                         return_modexp_loop_multiply:
+        ; [steps: 269 + 50*lenB + 98*lenM + 30*lenQ(out·B,M) + 17*lenR(out·B,M) + 33*lenQ(out·B,M)*lenM + 33*lenM*lenB - 14*DC₁(out·B,M) - 7*DC₁(M,R(out·B,M)),
+        ;     bin: 14 +  6*lenB +  9*lenM +    lenQ(out·B,M) +    lenR(out·B,M) +  4*lenQ(out·B,M)*lenM +  4*lenM*lenB -  4*DC₁(out·B,M) - 2*DC₁(M,R(out·B,M)),
+        ;   arith: 2 + lenQ(out·B,M)*lenM + lenM*lenB]
 
         %MAX_CNT_STEPS - STEP - 3        :JMPN(outOfCountersStep)
 
@@ -214,6 +275,7 @@ modexp_loop:
         %MAX_CNT_STEPS - STEP - 3*C - 2        :JMPN(outOfCountersStep)
 
 ; Compute E = E // 2
+; Note: The length of E is halved in each iteration
 ; -------------------
 modexp_E_to_div_short:
         $ => A          :MLOAD(modexp_E + RR)
@@ -222,7 +284,13 @@ modexp_E_to_div_short:
 
 modexp_div_E_and_2:
         2               :MSTORE(array_div_short_inB)
-                        :CALL(array_div_short)
+        ; [steps: 274 + 50*lenB + 98*lenM + 3*lenE + 30*lenQ(out·B,M) + 17*lenR(out·B,M) + 33*lenQ(out·B,M)*lenM + 33*lenM*lenB - 14*DC₁(out·B,M) - 7*DC₁(M,R(out·B,M)),
+        ;     bin: 14 +  6*lenB +  9*lenM +    lenQ(out·B,M) +    lenR(out·B,M) +  4*lenQ(out·B,M)*lenM +  4*lenM*lenB -  4*DC₁(out·B,M) - 2*DC₁(M,R(out·B,M)),
+        ;   arith: 2 + lenQ(out·B,M)*lenM + lenM*lenB]
+                        :CALL(array_div_short) ; [steps: 124 + 16*lenE + 41*(lenE//2), bin: 7 + 2*lenE + 3*(lenE//2), arith: (lenE//2)]
+        ; [steps: 399 + 50*lenB + 98*lenM + 19*lenE + 41*(lenE//2) + 30*lenQ(out·B,M) + 17*lenR(out·B,M) + 33*lenQ(out·B,M)*lenM + 33*lenM*lenB - 14*DC₁(out·B,M) - 7*DC₁(M,R(out·B,M)),
+        ;     bin: 21 +  6*lenB +  9*lenM +  2*lenE +  3*(lenE//2) +    lenQ(out·B,M) +    lenR(out·B,M) +  4*lenQ(out·B,M)*lenM +  4*lenM*lenB -  4*DC₁(out·B,M) - 2*DC₁(M,R(out·B,M)),
+        ;   arith: 2 + (lenE//2) + lenQ(out·B,M)*lenM + lenM*lenB]
 
         %MAX_CNT_STEPS - STEP - 4       :JMPN(outOfCountersStep)
 
@@ -241,6 +309,10 @@ modexp_quo_from_div_short:
 ; Compute B^2
 ; -------------------
 modexp_pre_B_square:
+        ; [steps: 403 + 50*lenB + 98*lenM + 19*lenE + 44*(lenE//2) + 30*lenQ(out·B,M) + 17*lenR(out·B,M) + 33*lenQ(out·B,M)*lenM + 33*lenM*lenB - 14*DC₁(out·B,M) - 7*DC₁(M,R(out·B,M)),
+        ;     bin: 21 +  6*lenB +  9*lenM +  2*lenE +  3*(lenE//2) +    lenQ(out·B,M) +    lenR(out·B,M) +  4*lenQ(out·B,M)*lenM +  4*lenM*lenB -  4*DC₁(out·B,M) - 2*DC₁(M,R(out·B,M)),
+        ;   arith: 2 + (lenE//2) + lenQ(out·B,M)*lenM + lenM*lenB]
+
         $ => C          :MLOAD(modexp_Blen)
         C - 1 => RR
 
@@ -252,7 +324,13 @@ modexp_B_to_square1:
         RR - 1 => RR    :JMPN(modexp_square_B, modexp_B_to_square1)
 
 modexp_square_B:
+        ; [steps: 406 + 53*lenB + 98*lenM + 19*lenE + 44*(lenE//2) + 30*lenQ(out·B,M) + 17*lenR(out·B,M) + 33*lenQ(out·B,M)*lenM + 33*lenM*lenB - 14*DC₁(out·B,M) - 7*DC₁(M,R(out·B,M)),
+        ;     bin: 21 +  6*lenB +  9*lenM +  2*lenE +  3*(lenE//2) +    lenQ(out·B,M) +    lenR(out·B,M) +  4*lenQ(out·B,M)*lenM +  4*lenM*lenB -  4*DC₁(out·B,M) - 2*DC₁(M,R(out·B,M)),
+        ;   arith: 2 + (lenE//2) + lenQ(out·B,M)*lenM + lenM*lenB]
                         :CALL(array_square)
+        ; [steps: 440 + 72*lenB + 61*(lenB*(lenB+1)/2) + 98*lenM + 19*lenE + 44*(lenE//2) + 30*lenQ(out·B,M) + 17*lenR(out·B,M) + 33*lenQ(out·B,M)*lenM + 33*lenM*lenB - 14*DC₁(out·B,M) - 7*DC₁(M,R(out·B,M)) - NZ₁(B²),
+        ;     bin: 22 +  8*lenB +  9*(lenB*(lenB+1)/2) +  9*lenM +  2*lenE +  3*(lenE//2) +    lenQ(out·B,M) +    lenR(out·B,M) +  4*lenQ(out·B,M)*lenM +  4*lenM*lenB -  4*DC₁(out·B,M) - 2*DC₁(M,R(out·B,M)) - NZ₁(B²),
+        ;   arith: 3 + lenB + (lenB*(lenB+1)/2) + (lenE//2) + lenQ(out·B,M)*lenM + lenM*lenB]
 
         %MAX_CNT_STEPS - STEP - 5       :JMPN(outOfCountersStep)
 
@@ -275,7 +353,15 @@ modexp_M_to_div2:
         E - 1 => E      :JMPN(modexp_div_out_and_M1, modexp_M_to_div2)
 
 modexp_div_out_and_M1:
+        ; (+ 6*lenB + 3*lenM)
+        ; [steps: 446 + 78*lenB + 61*(lenB*(lenB+1)/2) + 101*lenM + 19*lenE + 44*(lenE//2) + 30*lenQ(out·B,M) + 17*lenR(out·B,M) + 33*lenQ(out·B,M)*lenM + 33*lenM*lenB - 14*DC₁(out·B,M) - 7*DC₁(M,R(out·B,M)) - NZ₁(B²),
+        ;     bin: 22 +  8*lenB +  9*(lenB*(lenB+1)/2) +  9*lenM +  2*lenE +  3*(lenE//2) +    lenQ(out·B,M) +    lenR(out·B,M) +  4*lenQ(out·B,M)*lenM +  4*lenM*lenB -  4*DC₁(out·B,M) - 2*DC₁(M,R(out·B,M)) - NZ₁(B²),
+        ;   arith: 3 + lenB + (lenB*(lenB+1)/2) + (lenE//2) + lenQ(out·B,M)*lenM + lenM*lenB]
                         :CALL(array_div)
+        ; (Assuming long division and B^2 > M) till end block:
+        ; [steps: 656 + 150*lenB + 61*(lenB*(lenB+1)/2) + 143*lenM + 19*lenE + 44*(lenE//2) + 30*lenQ(out·B,M) + 17*lenR(out·B,M) + 33*lenQ(out·B,M)*lenM + 30*lenQ(B²,M) + 17*lenR(B²,M) + 33*lenM*lenB + 33*lenQ(B²,M)*lenM - 14*DC₁(out·B,M) - 14*DC₁(B²,M) - 7*DC₁(M,R(out·B,M)) - 7*DC₁(M,R(B²,M)) - NZ₁(B²),
+        ;     bin: 34 +  20*lenB +  9*(lenB*(lenB+1)/2) +  12*lenM +  2*lenE +  3*(lenE//2) +    lenQ(out·B,M) +    lenR(out·B,M) +  4*lenQ(out·B,M)*lenM +    lenQ(B²,M) +    lenR(B²,M) +  4*lenM*lenB +  4*lenQ(B²,M)*lenM -  4*DC₁(out·B,M) -  4*DC₁(B²,M) - 2*DC₁(M,R(out·B,M)) - 2*DC₁(M,R(B²,M)  - NZ₁(B²),
+        ;   arith: 4 + lenB + (lenB*(lenB+1)/2) + (lenE//2) + lenQ(out·B,M)*lenM + lenQ(B²,M)*lenM + lenM*lenB]
 
         %MAX_CNT_STEPS - STEP - 4       :JMPN(outOfCountersStep)
 
