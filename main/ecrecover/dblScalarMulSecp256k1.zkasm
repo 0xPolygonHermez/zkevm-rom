@@ -10,6 +10,36 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; TODO: Optimizations 1
+; -----------------------------
+; RR*2 + 1 => RR
+; HASHPOS*2 + 1 => HASHPOS
+
+; $ => C            :MLOAD(dblScalarMulSecp256k1_acum_k1)
+; ROTL_C + RR       :MSTORE(dblScalarMulSecp256k1_acum_k1)
+; ; :O
+; $ => C            :MLOAD(dblScalarMulSecp256k1_acum_k2)
+; ROTL_C + HASHPOS:MSTORE(dblScalarMulSecp256k1_acum_k2)
+
+; 0 => RR,HASHPOS
+
+; TODO: Optimizations 2
+;         RR - 1 => RR      :JMP(table + RR);
+
+; table:
+;                                 :JMP(dblScalarMulSecp256k1_save_k1k2)   ; RR = 0
+;         HASHPOS                 :JMPZ(dblScalarMulSecp256k1_loop,l1)    ; RR = 1
+;         HASHPOS                 :JMPZ(dblScalarMulSecp256k1_loop,l1)    ; RR = 2
+;         HASHPOS                 :JMPZ(dblScalarMulSecp256k1_loop,l1)    ; RR = 3
+;         HASHPOS                 :JMPZ(dblScalarMulSecp256k1_loop,l1)    ; RR = 4
+;         HASHPOS                 :JMPZ(dblScalarMulSecp256k1_loop,l1)    ; RR = 5
+;         HASHPOS                 :JMPZ(dblScalarMulSecp256k1_loop,l1)    ; RR = 6
+;         :JMP(dblScalarMulSecp256k1_l1)    ; RR = 0
+;                 :
+;         :JMP(dblScalarMulSecp256k1_save)    ; RR = 0
+;         HASHPOS                 :JMPZ(dblScalarMulSecp256k1_loop,l1)    ; RR = 256
+; -----------------------------
+
 ; Since the curve is E: y² = x³ + 7, there is no issue in representing the point at infinity as (0, 0).
 
 VAR GLOBAL dblScalarMulSecp256k1_p1_x
@@ -56,6 +86,8 @@ dblScalarMulSecp256k1:
         RCX     :MSTORE(dblScalarMulSecp256k1_RCX)
 
         $${uintToBin2(mem.dblScalarMulSecp256k1_k1,mem.dblScalarMulSecp256k1_k2)}       ; convert k1 and k2 to binary
+
+        ; TODO: I can directly say what C or D assign to RCX, I do not need this path
         $0{receiveLen(mem.dblScalarMulSecp256k1_k1)} => C     ; receive the length of the binary representation of k1
         $0{receiveLen(mem.dblScalarMulSecp256k1_k2)} => D     ; receive the length of the binary representation of k2
 
@@ -108,11 +140,11 @@ dblScalarMulSecp256k1:
         ; [steps: 23]
         1n            :MSTORE(dblScalarMulSecp256k1_p12_zero), JMP(dblScalarMulSecp256k1_loop)
 
-
 dblScalarMulSecp256k1SameInitialPoints:
         ; [steps.before: 16]
-        ; verify path p1_y == p2_y
-        ; [MAP] if p1 != p2 => arith fails because p1 != p2
+        ; verify path p1_y (B) == p2_y (D)
+        ; as an ASSERT(B == mulPointEc_p2_y)
+        B             :MLOAD(dblScalarMulSecp256k1_p2_y)
 
         ; p12 = p1 + p1, therefore isn't the point at infinity
         0n                        :MSTORE(dblScalarMulSecp256k1_p12_zero)
@@ -184,12 +216,11 @@ dblScalarMulSecp256k1_k11_k20:
 dblScalarMulSecp256k1_k11_k21:
         ; Keep reconstructing the scalars k1,k2
         RCX - 1 => E
-        $ => A          :MLOAD(dblScalarMulSecp256k1_acum_k1)
-                        :CALL(@bitwiseReconstruction + E)
-        A               :MSTORE(dblScalarMulSecp256k1_acum_k1)
-        $ => A          :MLOAD(dblScalarMulSecp256k1_acum_k2)
-                        :CALL(@bitwiseReconstruction + E)
-        A               :MSTORE(dblScalarMulSecp256k1_acum_k2)
+        0 => A          :CALL(@bitwiseReconstruction + E)
+        $ => B          :MLOAD(dblScalarMulSecp256k1_acum_k1)
+        A + B           :MSTORE(dblScalarMulSecp256k1_acum_k1)
+        $ => B          :MLOAD(dblScalarMulSecp256k1_acum_k2)
+        A + B           :MSTORE(dblScalarMulSecp256k1_acum_k2)
 
         ; if (dblScalarMulSecp256k1_p12_zero) k11_k21 is the same as k10_k20
         ; because adding the point at infinity to a point is the point itself
