@@ -13,6 +13,20 @@ VAR GLOBAL invFp2BN254_y
 
 VAR GLOBAL invFp2BN254_RR
 
+; RESOURCES:
+; -------------------------------------------
+; PATH 1 A,B < p: [steps: 4, bin: 1] + [steps: 5, bin: 1] +
+; PATH 2 A < p, B > p: [steps: 4, bin: 1] + [steps: 15, bin: 2, arith: 1] +
+; PATH 3 A > p, B < p: [steps: 14, bin: 2, arith: 1] + [steps: 5, bin: 1] +
+; PATH 4 A,B > p: [steps: 14, bin: 2, arith: 1] + [steps: 15, bin: 2, arith: 1] +
+;       PATH A == 0 (p): [steps: 5, bin: 2] +
+;               PATH B == 0 (p): [steps: 3]
+;               PATH B != 0 (p): [steps: 11, bin: 2, arith: 1] + [steps: 2] <--
+;       PATH A != 0 (p): [steps: 3, bin: 1] + [steps: 11, bin: 2, arith: 1] + [steps: 2]
+; -------------------------------------------
+; total (w.c.): PATH 4 + PATH B != 0 (p) = [steps: 47, bin: 8, arith: 3]
+; -------------------------------------------
+
 invFp2BN254:
         RR              :MSTORE(invFp2BN254_RR)
 
@@ -50,7 +64,13 @@ invFp2BN254_normalized:
         ${fp2InvBN254_y(mem.invFp2BN254_x,mem.invFp2BN254_y)} => D
         1n => E
         0n                      :ARITH_BN254_MULFP2
-                                :JMP(invFp2BN254_end)
+
+        ; Check that the resulting elements are lower than BN254_P
+        %BN254_P => B
+        C => A
+        1               :LT
+        D => A
+        1               :LT, JMP(invFp2BN254_end)
 
 invFp2BN254_input_is_zero:
         0 => C,D
