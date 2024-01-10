@@ -48,53 +48,45 @@ VAR GLOBAL invFp2BN254_RR
 ;               PATH 4.2.2 B != 0 (p): [steps: 8, bin: 0, arith: 1] + [steps: 3]
 ; -------------------------------------------
 
+; TODO: Add flag in reduceFp to reduce that xiva if the result is 0 or not
+
+VAR GLOBAL invFp2BN254_x
+VAR GLOBAL invFp2BN254_y
+
+VAR GLOBAL invFp2BN254_RR
+
 invFp2BN254:
         RR              :MSTORE(invFp2BN254_RR)
 
+        A               :MSTORE(invFp2BN254_x)
         B               :MSTORE(invFp2BN254_y)
 
-        ; [steps: 2]
-
-; Normalization of A,B
-invFp2BN254_norm_A:
-        ; block counters:
-        ; A > p -> [steps: 13, bin: 2, arith: 1]
-        ; A < p -> [steps: 3,  bin: 1]
-
+        ; Normalization of A
         %BN254_P => B
         $               :LT, JMPC(__invFp2BN254_reduce_A_continue)
                         :CALL(reduceFpBN254)
-                        __invFp2BN254_reduce_A_continue:
         A               :MSTORE(invFp2BN254_x)
+                        __invFp2BN254_reduce_A_continue:
 
-invFp2BN254_norm_B:
-        ; block counters:
-        ; B > p -> [steps: 14, bin: 2, arith: 1]
-        ; B < p -> [steps: 4,  bin: 1]
-
+        ; Normalization of B
         $ => A          :MLOAD(invFp2BN254_y)
         %BN254_P => B
         $               :LT, JMPC(__invFp2BN254_reduce_B_continue)
                         :CALL(reduceFpBN254)
-                        __invFp2BN254_reduce_B_continue:
         A               :MSTORE(invFp2BN254_y)
+                        __invFp2BN254_reduce_B_continue:
         ; From here, it is guaranteed that A,B ∈ [0,BN254_P)
 
 invFp2BN254_zero_check:
-        ; block counters:
-        ; A == 0 -> [steps: 5, bin: 2]
-        ; A != 0 -> [steps: 3, bin: 1]
-
         ; Check if A = B = 0, and if so, return 0
         $ => B          :MLOAD(invFp2BN254_x)
         0 => A
         $               :EQ, JMPNC(invFp2BN254_normalized)
         $ => B          :MLOAD(invFp2BN254_y)
         $               :EQ, JMPC(invFp2BN254_input_is_zero)
+        ; From here, either A != 0 or B != 0
 
 invFp2BN254_normalized:
-        ; block counters till end: [steps: 8, bin: 0, arith: 1]
-
         $ => A          :MLOAD(invFp2BN254_x)
         $ => B          :MLOAD(invFp2BN254_y)
         ; Remember that an element y ∈ Fp2 is the inverse of x ∈ Fp2 if and only if x·y = 1 in Fp2
@@ -104,7 +96,14 @@ invFp2BN254_normalized:
         ${fp2InvBN254_x(mem.invFp2BN254_x,mem.invFp2BN254_y)} => C
         ${fp2InvBN254_y(mem.invFp2BN254_x,mem.invFp2BN254_y)} => D
         1n => E
-        0n                      :ARITH_BN254_MULFP2, JMP(invFp2BN254_end)
+        0n                      :ARITH_BN254_MULFP2
+
+        ; Check that the resulting elements are lower than BN254_P
+        %BN254_P => B
+        C => A
+        1               :LT
+        D => A
+        1               :LT, JMP(invFp2BN254_end)
 
 invFp2BN254_input_is_zero:
         0 => C,D
