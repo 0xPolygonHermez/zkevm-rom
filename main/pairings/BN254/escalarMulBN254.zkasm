@@ -26,6 +26,20 @@ VAR GLOBAL escalarMulBN254_Q_y2
 
 VAR GLOBAL escalarMulBN254_RR
 
+; RESOURCES:
+; -------------------------------------------
+; PATH 1 P == 𝒪:            [steps: 17, bin: 4]
+; PATH 2 k == 0 and P != 𝒪: [steps: 24, bin: 3, arith: 1]-[steps: 30, bin: 6, arith: 1]
+; PATH 3 k != 0 and P != 𝒪:  <--- w.c.
+;                [steps: 33, bin: 6, arith: 1]                                 // setup
+;                 + (257 - pos_1st_nz_bit(k)) * [steps: 3, bin: 1]             // find MSB of k
+;                 + max_bin_len(k) * [steps: 162, bin: 19, arith: 11]          // doubles
+;                 + number_of_bits_1(k) * [steps: 152, bin: 16, arith: 10]     // additions
+;                 + [steps: 3]                                                 // last iteration + end
+;               total (w.c.): [steps: 79176 bin: 8830, arith: 5293]            // [33 + 4*3 + 252*162 + 252*152 + 3,
+;                                                                                   6 + 4*1 + 252*19  + 252*16,
+;                                                                                   1       + 252*11  + 252*10]
+; -------------------------------------------
 
 escalarMulBN254:
         RR      :MSTORE(escalarMulBN254_RR)
@@ -41,12 +55,14 @@ escalarMulBN254:
         $ => A  :MLOAD(escalarMulBN254_P_y2)
         $       :EQ, JMPC(escalarMulBN254_P_is_zero)
                 __escalarMulBN254_P_continue:
+        ; [steps: 10, bin: 4]
 
         ; Is k = 0?
         $ => B      :MLOAD(escalarMulBN254_k), CALL(reduceFrBN254)
         A           :MSTORE(escalarMulBN254_k)
         0n => B
         $           :EQ, JMPC(escalarMulBN254_k_is_zero)
+        ; [steps: 23, bin: 6, arith: 1]
 
         257 => RCX
 
@@ -60,8 +76,12 @@ escalarMulBN254:
         D       :MSTORE(escalarMulBN254_Q_y2)
 
                 :JMP(escalarMulBN254_find_MSB_k)
+        ; [steps: 33, bin: 6, arith: 1]
 
+; Begin of branching
 escalarMulBN254_P_is_zero:
+        ; before (w.c.) -> [steps: 10, bin: 4]
+
         ; Q = O
         0n      :MSTORE(escalarMulBN254_Q_x1)
         0n      :MSTORE(escalarMulBN254_Q_x2)
@@ -69,8 +89,12 @@ escalarMulBN254_P_is_zero:
         0n      :MSTORE(escalarMulBN254_Q_y2)
 
                 :JMP(escalarMulBN254_end)
+
+        ; till the end -> [steps: 17, bin: 4]
 
 escalarMulBN254_k_is_zero:
+        ; before (w.c.) -> [steps: 23, bin: 6, arith: 1]
+
         ; Q = O
         0n      :MSTORE(escalarMulBN254_Q_x1)
         0n      :MSTORE(escalarMulBN254_Q_x2)
@@ -79,14 +103,22 @@ escalarMulBN254_k_is_zero:
 
                 :JMP(escalarMulBN254_end)
 
+        ; till the end -> [steps: 30, bin: 6, arith: 1]
+; End of branching
+
 escalarMulBN254_find_MSB_k:
+        ; block costs: [steps: 3, bin: 1]
         RCX - 1 => RCX
         $ => A,B        :MLOAD(escalarMulBN254_k)
         ; E = 2A
-        $ => E          :ADD,MSTORE(escalarMulBN254_k), JMPNC(escalarMulBN254_find_MSB_k)
+        $ => E          :ADD, MSTORE(escalarMulBN254_k), JMPNC(escalarMulBN254_find_MSB_k)
 
 
 escalarMulBN254_loop:
+        ; block costs:
+        ;       no_last: [steps: 162, bin: 19, arith: 11]
+        ;       last:    [steps: 1]
+
         RCX - 1 => RCX    :JMPZ(escalarMulBN254_end)
 
         ; We always double
@@ -117,9 +149,11 @@ escalarMulBN254_loop:
         ; Then, update the value of k.
         $ => A,B        :MLOAD(escalarMulBN254_k)
         ; E = 2A
-        $ => E          :ADD,MSTORE(escalarMulBN254_k), JMPNC(escalarMulBN254_loop)
+        $ => E          :ADD, MSTORE(escalarMulBN254_k), JMPNC(escalarMulBN254_loop)
 
 escalarMulBN254_add:
+        ; block costs: [steps: 152, bin: 16, arith: 10]
+
         ; We add
         $ => A  :MLOAD(escalarMulBN254_Q_x1)
         $ => B  :MLOAD(escalarMulBN254_Q_x2)

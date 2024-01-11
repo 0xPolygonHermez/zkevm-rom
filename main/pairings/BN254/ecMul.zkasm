@@ -23,7 +23,23 @@ VAR GLOBAL ecMul_RR
 ; 2 - P_y is too big
 ; 3 - P is not in E(Fp)
 
+; RESOURCES (not considering error paths):
+; -------------------------------------------
+; PATH 1 P == 𝒪:            [steps: 17, bin: 4]
+; PATH 2 k == 0 and P != 𝒪: [steps: 80-82, bin: 10-11, arith: 9]
+; PATH 3 k != 0 and P != 𝒪:  <--- w.c.
+;                [steps: 80-82, bin: 10-11, arith: 9]                                   // setup
+;                 + (257 - pos_1st_nz_bit(k)) * [steps: 3, bin: 1]                      // find MSB of k
+;                 + max_bin_len(k) * [steps: 304-336, bin: 32-34, arith: 40]            // doubles
+;                 + number_of_bits_1(k) * [steps: 277-310, bin: 30-31, arith: 36]       // additions
+;                 + [steps: 4]                                                          // last iteration + end
+;                total (w.c.): [steps: 162890 bin: 16395, arith: 19161]                 // [82 + 4*3 + 252*336 + 252*310 + 4,
+;                                                                                           11 + 4*1 + 252*34  + 252*31,
+;                                                                                           9        + 252*40  + 252*36]
+; -------------------------------------------
+
 ecMul:
+        $${dump(STEP)}
         RR      :MSTORE(ecMul_RR)
 
         %BN254_P_MINUS_ONE => A
@@ -31,6 +47,7 @@ ecMul:
         $           :LT, JMPC(ecMul_Px_too_big)
         $ => B      :MLOAD(ecMul_P_y)
         $           :LT, JMPC(ecMul_Py_too_big)
+        ; [steps: 6, bin: 2]
 
         ; Is P = O?
         0n => B
@@ -39,6 +56,7 @@ ecMul:
         $ => A  :MLOAD(ecMul_P_y)
         $       :EQ, JMPC(ecMul_P_is_zero)
                 __ecMul_P_continue:
+        ; [steps: 11, bin: 4]
 
         ; 1] Check if P is in E(Fp)
         ; P in E iff (P.y)² == (P.x)³ + 3 (mod p)
@@ -60,12 +78,14 @@ ecMul:
         B => A
         $ => B      :MLOAD(ecMul_Q_x)
         $           :EQ, JMPNC(ecMul_P_is_not_in_E)
+        ; [steps: 63, bin: 9, arith: 8]
 
         ; Is k ∈ [1,r-1]?
         $ => B      :MLOAD(ecMul_k), CALL(reduceFrBN254)
         A           :MSTORE(ecMul_k)
         0n => B
         $           :EQ, JMPC(ecMul_k_is_zero)
+        ; [steps: 76, bin: 11, arith: 9]
 
         257 => RCX
 
@@ -75,22 +95,34 @@ ecMul:
         C       :MSTORE(ecMul_Q_y)
 
                 :JMP(ecMul_find_MSB_k)
+        ; [steps: 82, bin: 11, arith: 9]
 
+; Begin of branching
 ecMul_P_is_zero:
+        ; before (w.c.) -> [steps: 11, bin: 4]
+
         ; Q = O
         0n      :MSTORE(ecMul_Q_x)
         0n      :MSTORE(ecMul_Q_y)
 
                 :JMP(ecMul_correct)
+
+        ; till the end -> [steps: 17, bin: 4]
 
 ecMul_k_is_zero:
+        ; before (w.c.) -> [steps: 76, bin: 11, arith: 9]
+
         ; Q = O
         0n      :MSTORE(ecMul_Q_x)
         0n      :MSTORE(ecMul_Q_y)
 
                 :JMP(ecMul_correct)
 
+        ; till the end -> [steps: 82, bin: 11, arith: 9]
+; End of branching
+
 ecMul_find_MSB_k:
+        ; block costs: [steps: 3, bin: 1]
         RCX - 1 => RCX
         $ => A,B        :MLOAD(ecMul_k)
         ; E = 2A
@@ -98,6 +130,10 @@ ecMul_find_MSB_k:
 
 
 ecMul_loop:
+        ; block costs:
+        ;       no_last: [steps: 304-336, bin: 32-34, arith: 40]
+        ;       last:    [steps: 1]
+
         RCX - 1 => RCX    :JMPZ(ecMul_correct)
 
         ; We always double
@@ -121,6 +157,8 @@ ecMul_loop:
         $ => E          :ADD, MSTORE(ecMul_k), JMPNC(ecMul_loop)
 
 ecMul_add:
+        ; block costs: [steps: 277-310, bin: 29-31, arith: 36]
+
         ; We add
         $ => A  :MLOAD(ecMul_Q_x)
         $ => B  :MLOAD(ecMul_Q_y)
@@ -156,4 +194,5 @@ ecMul_error:
 
 ecMul_end:
         $ => RR         :MLOAD(ecMul_RR)
+        $${dump(STEP)}
                         :RETURN

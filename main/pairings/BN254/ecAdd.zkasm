@@ -29,6 +29,16 @@ VAR GLOBAL ecAdd_RR
 ; 5 - P1 is not in E(Fp)
 ; 6 - P2 is not in E(Fp)
 
+; RESOURCES (not considering error paths):
+; -------------------------------------------
+; PATH 1 P1 == 𝒪 and P2 == 𝒪:         [steps: 26, bin: 8]
+; PATH 2 P1 == 𝒪 and P2 != 𝒪:         [steps: 78-84,  bin: 12-13, arith: 8]
+; PATH 3 P1 != 𝒪 and P2 == 𝒪:         [steps: 78-84,  bin: 12-13, arith: 8]
+; PATH 4 P1,P2 != 𝒪 and P1 == -P2:    [steps: 132-145, bin: 18-20, arith: 16]
+; PATH 5 P1,P2 != 𝒪 and P1 == P2:     [steps: 291-323, bin: 31-33, arith: 40] <--- w.c.
+; PATH 6 P1,P2 != 𝒪 and P1 != P2,-P2: [steps: 265-298, bin: 29-31, arith: 36]
+; -------------------------------------------
+
 ecAdd:
         RR      :MSTORE(ecAdd_RR)
 
@@ -41,6 +51,7 @@ ecAdd:
         $           :LT, JMPC(ecAdd_P2x_too_big)
         $ => B      :MLOAD(ecAdd_P2_y)
         $           :LT, JMPC(ecAdd_P2y_too_big)
+        ; [steps: 10, bin: 4]
 
         ; Is P1 = O?
         0n => B
@@ -49,6 +60,7 @@ ecAdd:
         $ => A  :MLOAD(ecAdd_P1_y)
         $       :EQ, JMPC(ecAdd_P1_is_zero)
                 __ecAdd_P1_continue:
+        ; [steps: 15, bin: 6]
 
         ; Is P2 = O?
         0n => B
@@ -57,6 +69,7 @@ ecAdd:
         $ => A  :MLOAD(ecAdd_P2_y)
         $       :EQ, JMPC(ecAdd_P2_is_zero)
                 __ecAdd_P2_continue1:
+        ; [steps: 20, bin: 8]
 
         ; 1] Check if P1 is in E(Fp)
         ; P1 in E iff (P1.y)² == (P1.x)³ + 3 (mod p)
@@ -106,6 +119,7 @@ ecAdd:
 
         ; Is P1.x == P2.x?
         $               :EQ, JMPNC(ecAdd_different)
+        ; [steps: 136, bin: 19, arith: 16]
 
         $ => A          :MLOAD(ecAdd_P1_y)
         $ => B          :MLOAD(ecAdd_P2_y)
@@ -115,8 +129,12 @@ ecAdd:
 
         ; P1 == P2
                         :JMP(ecAdd_same)
+        ; [steps: 139, bin: 20, arith: 16]
 
+; Begin of branching
 ecAdd_P1_is_zero:
+        ; before (w.c.) -> [steps: 15, bin: 6]
+
         ; Is P2 = 0?
         0n => B
         $ => A  :MLOAD(ecAdd_P2_x)
@@ -124,6 +142,7 @@ ecAdd_P1_is_zero:
         $ => A  :MLOAD(ecAdd_P2_y)
         $       :EQ, JMPC(ecAdd_P1_and_P2_are_zero)
                 __ecAdd_P2_continue2:
+        ; [steps: 20, bin: 8]
 
         ; P2 in E iff (P2.y)² == (P2.x)³ + 3 (mod p)
         ; 1] Compute LHS and RHS
@@ -153,7 +172,11 @@ ecAdd_P1_is_zero:
 
                 :JMP(ecAdd_correct)
 
+        ; till the end -> [steps: 84, bin: 13, arith: 8]
+
 ecAdd_P2_is_zero:
+        ; before (w.c.) -> [steps: 20, bin: 8]
+
         ; P1 in E iff (P1.y)² == (P1.x)³ + 3 (mod p)
         ; 1] Compute LHS and RHS
         $ => A    :MLOAD(ecAdd_P1_x), CALL(squareFpBN254)
@@ -182,19 +205,29 @@ ecAdd_P2_is_zero:
 
                 :JMP(ecAdd_correct)
 
+        ; till the end -> [steps: 84, bin: 13, arith: 8]
+
 ecAdd_P1_and_P2_are_zero:
+        ; before (w.c.) -> [steps: 20, bin: 8]
+
         ; P3 = 0
         0n      :MSTORE(ecAdd_P3_x)
         0n      :MSTORE(ecAdd_P3_y)
 
                 :JMP(ecAdd_correct)
 
+        ; till the end -> [steps: 26, bin: 8]
+
 ecAdd_P1_and_P2_are_inverted:
+        ; before (w.c.) -> [steps: 139, bin: 20, arith: 16]
+
         ; P3 = 0
         0n              :MSTORE(ecAdd_P3_x)
         0n              :MSTORE(ecAdd_P3_y)
 
                         :JMP(ecAdd_correct)
+        ; till the end -> [steps: 145, bin: 20, arith: 16]
+; End of branching
 
 ecAdd_same:
         $ => A  :MLOAD(ecAdd_P1_y)

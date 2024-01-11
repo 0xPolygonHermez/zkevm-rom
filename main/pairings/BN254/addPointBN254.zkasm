@@ -29,6 +29,15 @@ VAR GLOBAL addPointBN254_lambda_x
 VAR GLOBAL addPointBN254_lambda_y
 VAR GLOBAL addPointBN254_RR
 
+; RESOURCES:
+; -------------------------------------------
+; PATH 1 P1 == 𝒪:                     [steps: 22, bin: 4]
+; PATH 2 P1 != 𝒪 and P2 == 𝒪:         [steps: 31, bin: 8]
+; PATH 3 P1,P2 != 𝒪 and P1 == -P2:    [steps: 48, bin: 14]
+; PATH 4 P1,P2 != 𝒪 and P1 == P2:     [steps: 131, bin: 11, arith: 11]-[steps: 139, bin: 18, arith: 11] <--- w.c.
+; PATH 5 P1,P2 != 𝒪 and P1 != P2,-P2: [steps: 120, bin: 8,  arith: 10]-[steps: 128, bin: 16, arith: 10]
+; -------------------------------------------
+
 addPointBN254:
         RR      :MSTORE(addPointBN254_RR)
 
@@ -43,6 +52,7 @@ addPointBN254:
         $ => A  :MLOAD(addPointBN254_P1_y2)
         $       :EQ, JMPC(addPointBN254_P1_is_zero)
                 __addPointBN254_P1_continue:
+        ; [steps: 11, bin: 4]
 
         ; Is P2 = 0?
         0n => B
@@ -55,6 +65,7 @@ addPointBN254:
         $ => A  :MLOAD(addPointBN254_P2_y2)
         $       :EQ, JMPC(addPointBN254_P2_is_zero)
                 __addPointBN254_P2_continue:
+        ; [steps: 20, bin: 8]
 
         ; P1 and P2 are not 0, let's check whether they are different points, the same point or inverses of each other
         ; Is P1.x == P2.x?
@@ -64,6 +75,7 @@ addPointBN254:
         $ => A  :MLOAD(addPointBN254_P1_x2)
         $ => B  :MLOAD(addPointBN254_P2_x2)
         $       :EQ, JMPNC(addPointBN254_different)
+        ; [steps: 26, bin: 10]
 
         ; Is P1.y == P2.y?
         $ => A  :MLOAD(addPointBN254_P1_y1)
@@ -75,8 +87,12 @@ addPointBN254:
 
         ; P1 == P2
                                     :JMP(addPointBN254_same)
+        ; [steps: 33, bin: 12]
 
+; Begin of branching
 addPointBN254_P1_is_zero:
+        ; before (w.c.) -> [steps: 11, bin: 4]
+
         ; P3 = P2
         $ => A  :MLOAD(addPointBN254_P2_x1)
         $ => B  :MLOAD(addPointBN254_P2_x2)
@@ -88,8 +104,11 @@ addPointBN254_P1_is_zero:
         D       :MSTORE(addPointBN254_P3_y2)
 
                 :JMP(addPointBN254_end)
+        ; till the end -> [steps: 22, bin: 4]
 
 addPointBN254_P2_is_zero:
+        ; before (w.c.) -> [steps: 20, bin: 8]
+
         ; P3 = P1
         $ => A  :MLOAD(addPointBN254_P1_x1)
         $ => B  :MLOAD(addPointBN254_P1_x2)
@@ -101,8 +120,11 @@ addPointBN254_P2_is_zero:
         D       :MSTORE(addPointBN254_P3_y2)
 
                 :JMP(addPointBN254_end)
+        ; till the end -> [steps: 31, bin: 8]
 
 addPointBN254_P1_and_P2_are_inverted:
+        ; before (w.c.) -> [steps: 32, bin: 12]
+
         ; Check -P1.y == P2.y
         %BN254_P => A
         $ => B          :MLOAD(addPointBN254_P1_y1)
@@ -123,19 +145,27 @@ addPointBN254_P1_and_P2_are_inverted:
 
                 :JMP(addPointBN254_end)
 
+        ; till the end -> [steps: 48, bin: 14]
+; End of branching
+
 addPointBN254_same:
+        ; before (w.c.) -> [steps: 33, bin: 12]
+
         $ => A  :MLOAD(addPointBN254_P1_y1)
         $ => B  :MLOAD(addPointBN254_P1_y2)
         $ => C  :MLOAD(addPointBN254_P1_y1)
         $ => D  :MLOAD(addPointBN254_P1_y2), CALL(addFp2BN254)
         ; E + C·u = 2y
+        ; [steps: 40, bin: 12, arith: 1]
 
         E => A
         C => B  :CALL(invFp2BN254)
         ; C + D·u = 1 / 2y
+        ; [steps: 69, bin: 18, arith: 2]
 
         3n => A :CALL(escalarMulFp2BN254)
         ; E + C·u = 3/2y
+        ; [steps: 74, bin: 18, arith: 3]
 
         $ => A  :MLOAD(addPointBN254_P1_x1)
         $ => B  :MLOAD(addPointBN254_P1_x2)
@@ -151,11 +181,13 @@ addPointBN254_same:
 
         E       :MSTORE(addPointBN254_lambda_x)
         C       :MSTORE(addPointBN254_lambda_y)
+        ; [steps: 90, bin: 18, arith: 5]
         ; E + C·u = lambda
 
         E => A
         C => B  :CALL(squareFp2BN254)
         ; E + C·u = lambda²
+        ; [steps: 97, bin: 18, arith: 6]
 
         E => A
         C => B
@@ -170,25 +202,31 @@ addPointBN254_same:
         ; E + C·u = lambda² - x - x
 
                 :JMP(addPointBN254_common_calculate)
+        ; [steps: 112, bin: 18, arith: 8]
 
 addPointBN254_different:
+        ; before (w.c.) -> [steps: 26, bin: 10]
+
         $ => A  :MLOAD(addPointBN254_P2_x1)
         $ => B  :MLOAD(addPointBN254_P2_x2)
         $ => C  :MLOAD(addPointBN254_P1_x1)
         $ => D  :MLOAD(addPointBN254_P1_x2), CALL(subFp2BN254)
         ; E + C·u = P2.x - P1.x
+        ; [steps: 33, bin: 10, arith: 1]
 
         E => A
-        C => B  :CALL(invFp2BN254)
+        C => B  :CALL(invFp2BN254) ; [steps: 27, bin: 6, arith: 1]
         ; C + D·u = 1 / (P2_x - P1_x)
         C       :MSTORE(addPointBN254_lambda_x)
         D       :MSTORE(addPointBN254_lambda_y)
+        ; [steps: 64, bin: 16, arith: 2]
 
         $ => A  :MLOAD(addPointBN254_P2_y1)
         $ => B  :MLOAD(addPointBN254_P2_y2)
         $ => C  :MLOAD(addPointBN254_P1_y1)
         $ => D  :MLOAD(addPointBN254_P1_y2), CALL(subFp2BN254)
         ; E + C·u = P2.y - P1.y
+        ; [steps: 71, bin: 16, arith: 3]
 
         $ => A  :MLOAD(addPointBN254_lambda_x)
         $ => B  :MLOAD(addPointBN254_lambda_y)
@@ -197,10 +235,12 @@ addPointBN254_different:
         ; E + C·u = lambda = (P2_y - P1_y) / (P2_x - P1_x)
         E       :MSTORE(addPointBN254_lambda_x)
         C       :MSTORE(addPointBN254_lambda_y)
+        ; [steps: 80, bin: 16, arith: 4]
 
         E => A
         C => B  :CALL(squareFp2BN254)
         ; E + C·u = lambda²
+        ; [steps: 87, bin: 16, arith: 5]
 
         E => A
         C => B
@@ -213,8 +253,13 @@ addPointBN254_different:
         $ => C  :MLOAD(addPointBN254_P2_x1)
         $ => D  :MLOAD(addPointBN254_P2_x2), CALL(subFp2BN254)
         ; E + C·u = lambda² - P1.x - P2.x
+        ; [steps: 101, bin: 16, arith: 7]
 
 addPointBN254_common_calculate:
+        ; before (w.c.):
+        ; 1] same [steps: 112, bin: 18, arith: 8]
+        ; 2] different [steps: 101, bin: 16, arith: 7]
+
         E           :MSTORE(addPointBN254_P3_x1)
         C           :MSTORE(addPointBN254_P3_x2)
         ; P3.x = lambda² - P1.x - P2.x
@@ -224,12 +269,16 @@ addPointBN254_common_calculate:
         C => D
         E => C  :CALL(subFp2BN254)
         ; E + C·u = P1.x - P3.x
+        ; 1] same [steps: 121, bin: 18, arith: 9]
+        ; 2] different [steps: 110, bin: 16, arith: 8]
 
         $ => A  :MLOAD(addPointBN254_lambda_x)
         $ => B  :MLOAD(addPointBN254_lambda_y)
         C => D
         E => C  :CALL(mulFp2BN254)
         ; E + C·u = lambda·(P1.x - P3.x)
+        ; 1] same [steps: 128, bin: 18, arith: 10]
+        ; 2] different [steps: 117, bin: 16, arith: 9]
 
         E => A
         C => B
@@ -239,6 +288,9 @@ addPointBN254_common_calculate:
 
         E           :MSTORE(addPointBN254_P3_y1)
         C           :MSTORE(addPointBN254_P3_y2)
+        ; till end
+        ; 1] same [steps: 139, bin: 18, arith: 11]
+        ; 2] different [steps: 128, bin: 16, arith: 10]
 
 addPointBN254_end:
         $ => RR         :MLOAD(addPointBN254_RR)
