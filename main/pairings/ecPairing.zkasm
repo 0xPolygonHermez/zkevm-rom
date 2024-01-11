@@ -32,6 +32,22 @@ VAR GLOBAL ecPairing_RR
 ; 0 - no error
 ; 1 - error found in some input
 
+; RESOURCES (not considering error or trivial paths):
+; -------------------------------------------
+;  [steps: 16]                                            // setup
+;   + niputs * [steps: 184017,  bin: 3986, arith: 13694]  // half_paring
+;   + [steps: 171253, bin: 650, arith: 15411]             // final_exponentiation + end
+; total (w.c.): [steps: 16 + niputs*184017 + 171253,
+;                  bin:      niputs*3986   + 650,
+;                arith:      niputs*13694  + 15411]
+;
+; Examples:
+;       · ninputs = 2: [539303, 8622, 42799]
+;       · ninputs = 3: [723320, 12608, 56493]
+;       · ninputs = 4: [907337, 16594, 70187]
+; -------------------------------------------
+; NOTE: These resources are upper bounds, the actual costs are a bit lower
+
 ecPairing:
         RR              :MSTORE(ecPairing_RR)
 
@@ -55,12 +71,18 @@ ecPairing:
         0n              :MSTORE(ecPairing_mul_f23_y)
 
                         :JMP(ecPairing_Miller_loop)
+        ; [steps: 16,  bin: 0, arith: 0]
 
 ecPairing_0_inputs:
         1               :MSTORE(ecPairing_result)
                         :JMP(ecPairing_correct)
 
 ecPairing_Miller_loop:
+        ; block costs:
+        ;       ·    last: [steps: 184015,  bin: 3986, arith: 13694]
+        ;       · no_last: [steps: 184017,  bin: 3986, arith: 13694]
+        ; readFromCalldataOffset costs: [steps: 60,  bin: 2, arith: 0]
+
         $ => E          :MLOAD(readXFromCalldataOffset)
         32              :MSTORE(readXFromCalldataLength)
         E + 32 => E     :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
@@ -80,7 +102,8 @@ ecPairing_Miller_loop:
         A               :MSTORE(halfPairingBN254_Q_y2)
         E + 32 => E     :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
         $ => A          :MLOAD(readXFromCalldataResult)
-        A               :MSTORE(halfPairingBN254_Q_y1), CALL(halfPairingBN254)
+        A               :MSTORE(halfPairingBN254_Q_y1), CALL(halfPairingBN254) ; [steps: 182510 bin: 3974, arith: 13606]
+        ; [steps: 182890,  bin: 3986, arith: 13606]
 
         ; Check if the error code (B) of halfPairingBN254 is not 0, meaning there is an error in some of the inputs
         B               :JMPNZ(ecPairing_input_error)
@@ -133,7 +156,8 @@ ecPairing_Miller_loop:
         A               :MSTORE(mulFp12BN254_b22_x)
         B               :MSTORE(mulFp12BN254_b22_y)
         C               :MSTORE(mulFp12BN254_b23_x)
-        D               :MSTORE(mulFp12BN254_b23_y), CALL(mulFp12BN254)
+        D               :MSTORE(mulFp12BN254_b23_y), CALL(mulFp12BN254) ; [steps: 1050, bin: 0, arith: 88]
+        ; [steps: 183989,  bin: 3986, arith: 13694]
 
         $ => A          :MLOAD(mulFp12BN254_c11_x)
         $ => B          :MLOAD(mulFp12BN254_c11_y)
@@ -164,8 +188,11 @@ ecPairing_Miller_loop:
         A - 1 => A      :JMPZ(ecPairing_final_exponentiation)
         A               :MSTORE(ecPairing_ninputs)
                         :JMP(ecPairing_Miller_loop)
+        ; [steps: 184017,  bin: 3986, arith: 13694]
 
 ecPairing_final_exponentiation:
+        ; block costs: [steps: 171253, bin: 650, arith: 15411]
+
         $ => A          :MLOAD(mulFp12BN254_c11_x)
         $ => B          :MLOAD(mulFp12BN254_c11_y)
         $ => C          :MLOAD(mulFp12BN254_c12_x)
@@ -189,7 +216,8 @@ ecPairing_final_exponentiation:
         A               :MSTORE(finalExpBN254_f22_x)
         B               :MSTORE(finalExpBN254_f22_y)
         C               :MSTORE(finalExpBN254_f23_x)
-        D               :MSTORE(finalExpBN254_f23_y), CALL(finalExpBN254)
+        D               :MSTORE(finalExpBN254_f23_y), CALL(finalExpBN254) ; [steps: 171198, bin: 650, arith: 15411]
+        ; [steps: 171222, bin: 650, arith: 15411]
 
         ; Check whether the result is 1 or not
         1n => B
@@ -223,6 +251,7 @@ ecPairing_final_exponentiation:
         ; the pairing equation is not satisfied, then output 0
         0               :MSTORE(ecPairing_result)
                         :JMP(ecPairing_correct)
+        ; till the end -> [steps: 171253, bin: 650, arith: 15411]
 
 ecPairing_equation_is_satisfied:
         ; the pairing equation is satisfied, then output 1

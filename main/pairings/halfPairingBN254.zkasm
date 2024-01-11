@@ -47,6 +47,15 @@ VAR GLOBAL halfPairingBN254_psi_y2
 ; 7 - P is not in G1
 ; 8 - Q is not in G2
 
+; RESOURCES (not considering error paths):
+; -------------------------------------------
+; PATH 1 P == 𝒪 and Q == 𝒪:     [steps: 42, bin: 12, arith: 0]
+; PATH 2 P == 𝒪 and Q != 𝒪:     [steps: 28340, bin: 2217, arith: 2083]
+; PATH 3 P != 𝒪 and Q == 𝒪:     [steps: 90, bin: 17, arith: 8]
+; PATH 4 P,Q != 𝒪:              [steps: 182510 bin: 3974, arith: 13606]  <--- w.c.
+; -------------------------------------------
+; NOTE: These resources are upper bounds, the actual costs are a bit lower
+
 halfPairingBN254:
     RR          :MSTORE(halfPairingBN254_RR)
 
@@ -63,6 +72,7 @@ halfPairingBN254:
     $           :LT, JMPC(halfPairingBN254_Qy1_too_big)
     $ => B      :MLOAD(halfPairingBN254_Q_y2)
     $           :LT, JMPC(halfPairingBN254_Qy2_too_big)
+    ; [steps: 14, bin: 6, arith: 0]
 
     ; Is P = O?
     0n => B
@@ -71,6 +81,7 @@ halfPairingBN254:
     $ => A  :MLOAD(halfPairingBN254_P_y)
     $       :EQ, JMPC(halfPairingBN254_P_is_zero)
             __halfPairingBN254_P_continue:
+    ; [steps: 19, bin: 8, arith: 0]
 
     ; Is Q = O?
     $ => A  :MLOAD(halfPairingBN254_Q_x1)
@@ -82,10 +93,16 @@ halfPairingBN254:
     $ => A  :MLOAD(halfPairingBN254_Q_y2)
     $       :EQ, JMPC(halfPairingBN254_Q_is_zero)
             __halfPairingBN254_Q_continue1:
+    ; [steps: 28, bin: 12, arith: 0]
 
                 :JMP(halfPairingBN254_P_subgroup_check)
 
+; Begin of branching
 halfPairingBN254_P_is_zero:
+    ; block costs: [steps: 19, bin: 8, arith: 0]
+
+    ; before (w.c.) -> [steps: 19, bin: 8, arith: 0]
+
     ; Is Q = O?
     $ => A  :MLOAD(halfPairingBN254_Q_x1)
     $       :EQ, JMPNC(__halfPairingBN254_Q_continue2)
@@ -96,6 +113,7 @@ halfPairingBN254_P_is_zero:
     $ => A  :MLOAD(halfPairingBN254_Q_y2)
     $       :EQ, JMPC(halfPairingBN254_P_and_Q_are_zero)
             __halfPairingBN254_Q_continue2:
+    ; [steps: 27, bin: 12, arith: 0]
 
     ; Check that Q is in G2
     ; Q in G2 iff Q in E' and psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
@@ -104,26 +122,28 @@ halfPairingBN254_P_is_zero:
     ; Q in E' iff (Q.y1 + Q.y2·u)² == (Q.x1 + Q.x2·u)³ + 3/(9+u)
     ; 1.1] Compute LHS and RHS
     $ => A  :MLOAD(halfPairingBN254_Q_x1)
-    $ => B  :MLOAD(halfPairingBN254_Q_x2), CALL(squareFp2BN254)
+    $ => B  :MLOAD(halfPairingBN254_Q_x2), CALL(squareFp2BN254) ; [steps: 5, bin: 0, arith: 1]
     ; E + C·u = (Q.x1 + Q.x2·u)²
 
     E => A
     C => B
     $ => C  :MLOAD(halfPairingBN254_Q_x1)
-    $ => D  :MLOAD(halfPairingBN254_Q_x2), CALL(mulFp2BN254)
+    $ => D  :MLOAD(halfPairingBN254_Q_x2), CALL(mulFp2BN254) ; [steps: 3, bin: 0, arith: 1]
     ; E + C·u = (Q.x1 + Q.x2·u)³
+    ; [steps: 71, bin: 12, arith: 2]
 
     E => A
     C => B
     %BN254_ETWISTED_B_X => C
-    %BN254_ETWISTED_B_Y => D     :CALL(addFp2BN254)
+    %BN254_ETWISTED_B_Y => D     :CALL(addFp2BN254) ; [steps: 3, bin: 0, arith: 1]
     ; E + C·u = (Q.x1 + Q.x2·u)³ + 3/(9+u)
     E           :MSTORE(halfPairingBN254_Q_RHS_x)
     C           :MSTORE(halfPairingBN254_Q_RHS_y)
 
     $ => A  :MLOAD(halfPairingBN254_Q_y1)
-    $ => B  :MLOAD(halfPairingBN254_Q_y2), CALL(squareFp2BN254)
+    $ => B  :MLOAD(halfPairingBN254_Q_y2), CALL(squareFp2BN254) ; [steps: 5, bin: 0, arith: 1]
     ; E + C·u = (Q.y1 + Q.y2·u)²
+    ; [steps: 87, bin: 12, arith: 4]
 
     ; 1.2] Check if LHS == RHS
     E => A
@@ -141,7 +161,7 @@ halfPairingBN254_P_is_zero:
     $ => D      :SUB                                ; D = -Qx2
     %FROBENIUS_GAMMA121 => A
     %FROBENIUS_GAMMA122 => B
-    $ => C      :MLOAD(halfPairingBN254_Q_x1), CALL(mulFp2BN254)
+    $ => C      :MLOAD(halfPairingBN254_Q_x1), CALL(mulFp2BN254) ; [steps: 3, bin: 0, arith: 1]
     E           :MSTORE(halfPairingBN254_psi_x1)
     C           :MSTORE(halfPairingBN254_psi_x2)
 
@@ -150,9 +170,10 @@ halfPairingBN254_P_is_zero:
     $ => D      :SUB                                ; D = -Qy2
     %FROBENIUS_GAMMA131 => A
     %FROBENIUS_GAMMA132 => B
-    $ => C      :MLOAD(halfPairingBN254_Q_y1), CALL(mulFp2BN254)
+    $ => C      :MLOAD(halfPairingBN254_Q_y1), CALL(mulFp2BN254) ; [steps: 3, bin: 0, arith: 1]
     E           :MSTORE(halfPairingBN254_psi_y1)
     C           :MSTORE(halfPairingBN254_psi_y2)
+    ; [steps: 115, bin: 16, arith: 6]
 
     ; 2.2] Compute [6x²]Q
     $ => A      :MLOAD(halfPairingBN254_Q_x1)
@@ -163,7 +184,8 @@ halfPairingBN254_P_is_zero:
     B           :MSTORE(escalarMulBN254_P_x2)
     C           :MSTORE(escalarMulBN254_P_y1)
     D           :MSTORE(escalarMulBN254_P_y2)
-    %BN254_SIX_TIMES_X_SQ :MSTORE(escalarMulBN254_k), CALL(escalarMulBN254)
+    %BN254_SIX_TIMES_X_SQ :MSTORE(escalarMulBN254_k), CALL(escalarMulBN254) ; [steps: 28188, bin: 2197, arith: 2077]
+    ; [steps: 28312, bin: 2213, arith: 2083]
 
 
     ; 2.3] Check if psi(Q) == [6x²]Q
@@ -199,7 +221,11 @@ halfPairingBN254_P_is_zero:
 
     0 => B     :JMP(halfPairingBN254_end)
 
+    ; till the end -> [steps: 28340, bin: 2217, arith: 2083]
+
 halfPairingBN254_Q_is_zero:
+    ; before (w.c.) -> [steps: 28, bin: 12, arith: 0]
+
     ; Check that P is in G1
     ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
     ; 1] Compute LHS and RHS
@@ -211,6 +237,7 @@ halfPairingBN254_Q_is_zero:
     C           :MSTORE(halfPairingBN254_P_x3)               ; halfPairingBN254_P_x3 = (Px)³ + 3
 
     $ => A,B    :MLOAD(halfPairingBN254_P_y), CALL(mulFpBN254); C = (Py)²
+    ; [steps: 74, bin: 16, arith: 8]
 
     ; 2] Check if LHS == RHS
     C => A
@@ -233,7 +260,11 @@ halfPairingBN254_Q_is_zero:
 
     0 => B     :JMP(halfPairingBN254_end)
 
+    ; till the end -> [steps: 90, bin: 17, arith: 8]
+
 halfPairingBN254_P_and_Q_are_zero:
+    ; before (w.c.) -> [steps: 27, bin: 12, arith: 0]
+
     ; e(O,O) = 1
     1n      :MSTORE(halfPairingBN254_f11_x)
     0n      :MSTORE(halfPairingBN254_f11_y)
@@ -250,7 +281,12 @@ halfPairingBN254_P_and_Q_are_zero:
 
     0 => B     :JMP(halfPairingBN254_end)
 
+    ; till the end -> [steps: 40, bin: 12, arith: 0]
+; End of branching
+
 halfPairingBN254_P_subgroup_check:
+    ; block costs: [steps: 49, bin: 5, arith: 8]
+
     ; Check that P is in G1
     ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
     ; 1] Compute LHS and RHS
@@ -269,6 +305,8 @@ halfPairingBN254_P_subgroup_check:
     $           :EQ, JMPNC(halfPairingBN254_P_is_not_in_G1)
 
 halfPairingBN254_Q_subgroup_check:
+    ; block cost: [steps: 28300, bin: 2205, arith: 2083]
+
     ; Check that Q is in G2
     ; Q in G2 iff Q in E' and psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
 
@@ -356,6 +394,8 @@ halfPairingBN254_Q_subgroup_check:
     $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
 
 halfPairingBN254_Miller_loop:
+    ; block costs: [steps: 154133 bin: 1752, arith: 11515]
+
     $ => A      :MLOAD(halfPairingBN254_P_x)
     $ => B      :MLOAD(halfPairingBN254_P_y)
     A           :MSTORE(millerLoopBN254_P_x)
