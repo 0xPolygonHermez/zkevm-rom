@@ -35,15 +35,19 @@ VAR GLOBAL array_compare_result
 
 VAR GLOBAL array_compare_RR
 
-; RESOURCES:
-; -------------------------------------------
-; PATH 1 lenA < lenB: [steps: 7]
-; PATH 2 lenA > lenB: [steps: 9]
-; PATH 3 lenA == lenB:
-;       · PATH 3.1 inA > inB:  [steps: 10 + 7*(lenA - diff_chunk) + 6, bin: 2*(lenA - diff_chunk) + 2]
-;       · PATH 3.2 inA < inB:  [steps: 10 + 7*(lenA - diff_chunk) + 3, bin: 2*(lenA - diff_chunk) + 1]
-;       · PATH 3.3 inA == inB: [steps: 10 + 7*lenA,                    bin: 2*lenA] <--- w.c.
-; -----------------------------
+/*
+ * RESOURCES:
+ * -------------------------------------------
+ * PATH 1 lenA < lenB: [steps: 7]
+ * PATH 2 lenA > lenB: [steps: 9]
+ * PATH 3 lenA == lenB:
+ *       · PATH 3.1 inA > inB:  [steps: 16 + 7*lenA - 7*DC₁(A,B), bin: 2 + 2*lenA - 2*DC₁(A,B)]
+ *       · PATH 3.2 inA < inB:  [steps: 12 + 7*lenA - 7*DC₁(A,B), bin: 1 + 2*lenA - 2*DC₁(A,B)]
+ *       · PATH 3.3 inA == inB: [steps: 10 + 7*lenA,              bin:     2*lenA] <--- w.c.
+ * -----------------------------
+ * where:
+ *       DC₁(X,Y) = First chunk that is different between X and Y, from most significant to least significant
+ */
 
 array_compare:
         %MAX_CNT_BINARY - CNT_BINARY     - 2*C          :JMPN(outOfCountersBinary)

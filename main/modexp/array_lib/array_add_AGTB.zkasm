@@ -1,6 +1,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; PRE: len(inA) >= len(inB)
-;;
+;; PRE: len(inA) >= len(inB) >= 2
 ;;
 ;; array_add_AGTB:
 ;;             in:
@@ -11,6 +10,8 @@
 ;;
 ;;          output:
 ;;                  · out = inA + inB, with len(out) <= C + 1
+;;
+;; NOTE: It's unoptimized for the case where len(inB) = 1. Use array_add_short instead.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; function array_add_AGTB(a: bigint[], b: bigint[], base: bigint): bigint[] {
@@ -36,8 +37,6 @@
 ;     return result;
 ; }
 
-; NOTE: It's unoptimized for the case where len(inB) = 1. Use array_add_short instead.
-
 VAR GLOBAL array_add_AGTB_inA[%ARRAY_MAX_LEN]
 VAR GLOBAL array_add_AGTB_inB[%ARRAY_MAX_LEN]
 VAR GLOBAL array_add_AGTB_out[%ARRAY_MAX_LEN_PLUS_ONE]
@@ -49,10 +48,13 @@ VAR GLOBAL array_add_AGTB_carry
 
 VAR GLOBAL array_add_AGTB_RR
 
-; RESOURCES:
-; -----------------------------
-; [steps: 16 + 9*lenA + 5*lenB, bin: lenA + lenB]
-; -----------------------------
+/*
+ * RESOURCES:
+ * -----------------------------
+ * (worst case) [steps: 7] + lenB*[steps: 14, bin: 2] + [steps: 3] + (lenA - lenB)*[steps: 9, bin: 1] + [steps: 7]
+ * total: [steps: 17 + 9*lenA + 5*lenB, bin: lenA + lenB]
+ * -----------------------------
+ */
 
 array_add_AGTB:
         %MAX_CNT_BINARY - CNT_BINARY     -  2*D     -   C+  D           :JMPN(outOfCountersBinary)
@@ -65,8 +67,11 @@ array_add_AGTB:
 
         0 => E ; index in loops
         0               :MSTORE(array_add_AGTB_carry)
+        ; [steps: 7]
 
 array_add_AGTB_loopZero2inB:
+        ; block costs -> [steps: 14, bin: 2]
+
         ; The result will be stored as D·base + C
 
         0 => D  ; reset the carry chunk
@@ -96,8 +101,10 @@ array_add_AGTB_loop_index_check:
         $ => B          :MLOAD(array_add_AGTB_len_inA)
         B - A           :JMPZ(array_add_AGTB_check_carry)
 
-        0 => D
+        0 => D  ; reset the carry chunk
 array_add_AGTB_loopInB2InA:
+        ; block costs -> [steps: 9, bin: 1]
+
         ; sum = a[i] + carry: This number cannot be GT base, two chunks
         $ => A          :MLOAD(array_add_AGTB_inA + E)
         $ => B          :MLOAD(array_add_AGTB_carry)

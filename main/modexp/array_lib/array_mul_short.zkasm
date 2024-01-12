@@ -42,10 +42,15 @@ VAR GLOBAL array_mul_short_carry
 
 VAR GLOBAL array_mul_short_RR
 
-; RESOURCES:
-; -----------------------------
-; (worst case) [steps: 25 + 24*lenA, bin: 2*lenA, arith: lenA]
-; -----------------------------
+/*
+ * RESOURCES:
+ * -----------------------------
+ * (worst case)
+ * total: [steps: 25 + 24*lenA, bin: 2*lenA, arith: lenA]
+ * -----------------------------
+ * where:
+ *         NZ₁(X) = First non-zero chunk of X, from most significant to least significant
+ */
 
 array_mul_short:
         %MAX_CNT_BINARY - CNT_BINARY               - 2*C        :JMPN(outOfCountersBinary)
@@ -75,7 +80,7 @@ array_mul_short_loopZero2inA:
         0 => C
         $${var _arrayShortMul_AB = A*B}
         ${_arrayShortMul_AB >> 256} => D
-        ${_arrayShortMul_AB} => E :ARITH
+        ${_arrayShortMul_AB & ((1 << 256) - 1)} => E :ARITH
 
         ; 2] product = a[i] * b + carry, where carry ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
         E => A

@@ -17,21 +17,21 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; function modexp(b: bigint[], exp: bigint[], mod: bigint[], base: bigint): bigint[] {
-;;     if (array_is_zero(mod) || array_is_one(mod)) return [0n];
+;; function modexp(b: bigint[], e: bigint[], m: bigint[], base: bigint): bigint[] {
+;;     if (array_is_zero(m) || array_is_one(m)) return [0n];
 ;;     if (array_is_zero(b)) return [0n];
 ;;     if (array_is_one(b)) return [1n];
 ;;     if (array_is_zero(e)) return [1n];
 ;;
 ;;     let r = [1n];
-;;     let base = array_div(b, mod, base)[1];
-;;     while (!array_is_zero(exp)) {
-;;         if (array_is_zero(base)) return [0n];
-;;         if (isOdd(exp)) {
-;;             r = array_div(array_mul(r, base, base),mod,base)[1];
+;;     let b = array_div(b, m, base)[1];
+;;     while (!array_is_zero(e)) {
+;;         if (array_is_zero(b)) return [0n];
+;;         if (isOdd(e)) {
+;;             r = array_div(array_mul(r, b, base),m,base)[1];
 ;;         }
-;;         exp = array_div_short(exp, 2n, base)[0];
-;;         base = array_div(array_square(base, base),mod,base)[1];
+;;         e = array_div_short(e, 2n, base)[0];
+;;         b = array_div(array_square(b, base),m,base)[1];
 ;;     }
 ;;     return r;
 ;; };
@@ -61,21 +61,21 @@ VAR GLOBAL modexp_RR
 ; ------------
 
 /*
- * RESOURCES (assuming B != 0 (mod M)):
+ * RESOURCES (assuming B != 0 (mod M) and lenB == lenM):
  * -----------------------------
  * 1] Setup + first division of B by M:
  *    [steps: 218 + 39*lenB + 45*lenM + lenQ(B,M)*(30 + 33*lenM) + 17*lenR(B,M) - 14*DC₁(B,M) - 7*DC₁(M,R(B,M)),
- *       bin:  12 +  6*lenB +  3*lenM +   lenQ(B,M)*(1 + 4*lenM) +    lenR(B,M) -  4*DC₁(B,M) - 2*DC₁(M,R(B,M))),
+ *       bin:  12 +  6*lenB +  3*lenM +   lenQ(B,M)*(1 + 4*lenM) +    lenR(B,M) -  4*DC₁(B,M) - 2*DC₁(M,R(B,M)),
  *     arith:   1 +                       lenQ(B,M)*lenM]
  *
  * 2.1] One half iteration of the loop, i.e., div_short + square + div:
  *    [steps: 394 + 100*lenB + 61*(lenB*(lenB+1)/2) + 45*lenM + 19*lenE + 44*(lenE//2) + 30*lenQ(B²,M) + 17*lenR(B²,M) + 33*lenQ(B²,M)*lenM - 14*DC₁(B²,M) - 7*DC₁(M,R(B²,M)) - NZ₁(B²),
- *       bin: 22  +  14*lenB +  9*(lenB*(lenB+1)/2) +  3*lenM +  2*lenE +  3*(lenE//2) +    lenQ(B²,M) +    lenR(B²,M) +  4*lenQ(B²,M)*lenM -  4*DC₁(B²,M) - 2*DC₁(M,R(B²,M)  - NZ₁(B²),
+ *       bin: 22  +  14*lenB +  9*(lenB*(lenB+1)/2) +  3*lenM +  2*lenE +  3*(lenE//2) +    lenQ(B²,M) +    lenR(B²,M) +  4*lenQ(B²,M)*lenM -  4*DC₁(B²,M) - 2*DC₁(M,R(B²,M)) - NZ₁(B²),
  *     arith: 2 + lenB + (lenB*(lenB+1)/2) + (lenE//2) + lenQ(B²,M)*lenM]
  *
  * 2.2] One full iteration of the loop, i.e.,  mul + div + div_short + square + div:
- *    [steps: 656 + 150*lenB + 61*(lenB*(lenB+1)/2) + 143*lenM + 19*lenE + 44*(lenE//2) + 30*lenQ(out·B,M) + 17*lenR(out·B,M) + 33*lenQ(out·B,M)*lenM + 30*lenQ(B²,M) + 17*lenR(B²,M) + 33*lenM*lenB + 33*lenQ(B²,M)*lenM - 14*DC₁(out·B,M) - 14*DC₁(B²,M) - 7*DC₁(M,R(out·B,M)) - 7*DC₁(M,R(B²,M)) - NZ₁(B²),
- *       bin: 34  +  20*lenB +  9*(lenB*(lenB+1)/2) +  12*lenM +  2*lenE +  3*(lenE//2) +    lenQ(out·B,M) +    lenR(out·B,M) +  4*lenQ(out·B,M)*lenM +    lenQ(B²,M) +    lenR(B²,M) +  4*lenM*lenB +  4*lenQ(B²,M)*lenM -  4*DC₁(out·B,M) -  4*DC₁(B²,M) - 2*DC₁(M,R(out·B,M)) - 2*DC₁(M,R(B²,M)  - NZ₁(B²),
+ *    [steps: 656 + 150*lenB + 61*(lenB*(lenB+1)/2) + 143*lenM + 19*lenE + 44*(lenE//2) + 30*lenQ(B²,M) + 17*lenR(B²,M) + 33*lenQ(B²,M)*lenM + 30*lenQ(out·B,M) + 17*lenR(out·B,M) + 33*lenQ(out·B,M)*lenM + 33*lenM*lenB - 14*DC₁(out·B,M) - 14*DC₁(B²,M) - 7*DC₁(M,R(out·B,M)) - 7*DC₁(M,R(B²,M)) - NZ₁(B²),
+ *       bin: 34  +  20*lenB +  9*(lenB*(lenB+1)/2) +  12*lenM +  2*lenE +  3*(lenE//2) +    lenQ(B²,M) +    lenR(B²,M) +  4*lenQ(B²,M)*lenM +    lenQ(out·B,M) +    lenR(out·B,M) +  4*lenQ(out·B,M)*lenM +  4*lenM*lenB -  4*DC₁(out·B,M) -  4*DC₁(B²,M) - 2*DC₁(M,R(out·B,M)) - 2*DC₁(M,R(B²,M)) - NZ₁(B²),
  *     arith: 4 + lenB + (lenB*(lenB+1)/2) + (lenE//2) + lenQ(out·B,M)*lenM + lenQ(B²,M)*lenM + lenM*lenB]
  *
  * 3] End: [steps: 2]
@@ -84,6 +84,9 @@ VAR GLOBAL modexp_RR
  *
  * total (assuming w.c., i.e., E = 0b11....1): [setup + first division of B by M] + len(bin(E))·[cost of 2.2] + [end] <---
  * -------------------------------------------
+ *
+ * NOTE: One can assume that out ≈ M in the above formulas, as this is the worst case after the first full iteration.
+ *
  * Acronyms:
  *       DC₁(X,Y) = First chunk that is different between X and Y, from most significant to least significant
  *         NZ₁(X) = First non-zero chunk of X, from most significant to least significant
@@ -210,7 +213,7 @@ modexp_div_out_and_M2:
         ; (+ 3*(lenM + lenB) + 3*lenM)
         ; [steps: 52 + 20*lenM + 14*lenB + 33*lenM*lenB, bin: 4*lenM*lenB, arith: 1 + lenM*lenB]
                         :CALL(array_div)
-        ; (Assuming long division and out·B > M) till end block:
+        ; (Assuming long division, out≈M and out·B > M) till end block:
         ; [steps: 262 + 50*lenB + 98*lenM + 30*lenQ(out·B,M) + 17*lenR(out·B,M) + 33*lenQ(out·B,M)*lenM + 33*lenM*lenB - 14*DC₁(out·B,M) - 7*DC₁(M,R(out·B,M)),
         ;     bin: 12 +  6*lenB +  9*lenM +    lenQ(out·B,M) +    lenR(out·B,M) +  4*lenQ(out·B,M)*lenM +  4*lenM*lenB -  4*DC₁(out·B,M) - 2*DC₁(M,R(out·B,M)),
         ;   arith: 2 + lenQ(out·B,M)*lenM + lenM*lenB]

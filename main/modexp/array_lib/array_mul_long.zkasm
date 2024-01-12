@@ -43,10 +43,16 @@ VAR GLOBAL array_mul_long_out_chunk_2
 
 VAR GLOBAL array_mul_long_RR
 
-; RESOURCES:
-; -----------------------------
-; (worst case) [steps: 25 + 5*lenA + 2*lenB + 33*lenA*lenB, bin: 4*lenA*lenB, arith: 1 + lenA*lenB]
-; -----------------------------
+/*
+ * RESOURCES:
+ * -----------------------------
+ * (worst case) [steps: 18 + lenA + lenB, arith: 1] + lenA*lenB*[steps: 31, bin: 4, arith: 1] + [steps: 18 + 8*lenA + 8*lenB - 5*NZ₁(A·B), bin: 1 + lenA + lenB - NZ₁(A·B)]
+ * total: [steps: 36 + 9*lenA + 9*lenB + 31*lenA*lenB - 5*NZ₁(A·B), bin: 1 + lenA + lenB + 4*lenA*lenB - NZ₁(A·B), arith: 1 + lenA*lenB]
+ * -----------------------------
+ * where:
+ *         NZ₁(X) = First non-zero chunk of X, from most significant to least significant
+ */
+
 
 array_mul_long:
         %MAX_CNT_ARITH - CNT_ARITH - 1        :JMPN(outOfCountersArith)
@@ -74,6 +80,8 @@ array_mul_long:
         0 => RCX   ; first index in loops
         0 => RR    ; second index in loops
 
+        ; till loopZero2inB -> [steps: 18 + lenA + lenB, bin: 0, arith: 1]
+
 array_mul_long_clean_out:
         0               :MSTORE(array_mul_long_out + E)
         E - 1 => E      :JMPN(array_mul_long_loopZero2inB, array_mul_long_clean_out)
@@ -88,18 +96,20 @@ array_mul_long_loop_index_check:
 ; End of branching
 
 array_mul_long_loopZero2inB:
+        ; block costs: [steps: 31, bin: 4, arith: 1]
+
         ; The result will be stored as D·base + C
 
         RCX => E
-        ; 1] a[i]·b[j], where a[i],a[j] ∈ [0,base-1]: This number cannot be GT (base - 2)·base + 1, two chunks
+        ; 1] a[i]·b[j], where a[i],b[j] ∈ [0,base-1]: This number cannot be GT (base - 2)·base + 1, two chunks
         $ => A          :MLOAD(array_mul_long_inA + E)
         $ => B          :MLOAD(array_mul_long_inB + RR)
         0 => C
         $${var _arrayLongMul_AB = A*B}
         ${_arrayLongMul_AB >> 256} => D
-        ${_arrayLongMul_AB} => E :ARITH
+        ${_arrayLongMul_AB & ((1 << 256) - 1)} => E :ARITH
 
-        ; 2] proudct = a[i]·b[j] + out[i+j], where out[i+j] ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
+        ; 2] product = a[i]·b[j] + out[i+j], where out[i+j] ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
         E => A
         RCX + RR => E
         $ => B          :MLOAD(array_mul_long_out + E)
@@ -111,9 +121,11 @@ array_mul_long_loopZero2inB:
         $ => D          :ADD
         ;-----------------
                         __array_mul_long_no_carry_continue_1:
-        $ => A          :MLOAD(array_mul_long_out_chunk_2)
+        $ => A          :MLOAD(array_mul_long_out_chunk_2) ; out_chunk_2 ∈ [0, 1]
         D => B
         $ => D          :ADD ; the number is of two chunks, no carry can be generated here
+
+        ; NOTE: It cannot happen that a[i]·b[j] + out[i+j] produces carry and out_chunk_2 is 1.
 
         ; out[i+j] = product - carry·B
         C               :MSTORE(array_mul_long_out + E)
@@ -138,6 +150,8 @@ array_mul_long_loopZero2inB:
         B - RR          :JMPZ(array_mul_long_loop_index_check, array_mul_long_loopZero2inB)
 
 array_mul_long_prep_trim_in:
+        ; from here till end -> [steps: 18 + 8*lenA + 8*lenB - 5*NZ₁(A·B), bin: 1 + lenA + lenB - NZ₁(A·B)]
+
         $ => C          :MLOAD(array_mul_long_len_out)
         C - 1 => E
 
@@ -147,7 +161,9 @@ array_mul_long_trim_in:
         E - 1 => E      :JMPN(array_mul_long_trim, array_mul_long_trim_in)
 
 array_mul_long_trim:
-                        :CALL(array_trim)
+        ; [steps: 2 + 3*lenA + 3*lenB]
+                        :CALL(array_trim) ; [steps: 12 + 5*(lenA + lenB) - 5*NZ₁(A·B), bin: 1 + lenA + lenB - NZ₁(A·B)]
+        ; [steps: 14 + 8*lenA + 8*lenB - 5*NZ₁(A·B), bin: 1 + lenA + lenB - NZ₁(A·B)]
 
         %MAX_CNT_STEPS - STEP - 3   :JMPN(outOfCountersStep)
 

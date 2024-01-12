@@ -8,6 +8,8 @@
 ;;
 ;;          output:
 ;;                  · out = inA + inB, with len(out) <= C + 1
+;;
+;; NOTE: len(inB) == 1
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; function array_add_short(a: bigint[], b: bigint, base: bigint): bigint[] {
@@ -37,10 +39,13 @@ VAR GLOBAL array_add_short_carry
 
 VAR GLOBAL array_add_short_RR
 
-; RESOURCES:
-; -----------------------------
-; [steps: 13 + 10*lenA, bin: lenA]
-; -----------------------------
+/*
+ * RESOURCES:
+ * -----------------------------
+ * (worst case) [steps: 7] + lenA*[steps: 10, bin: 1] + [steps: 7]
+ * total: [steps: 14 + 10*lenA, bin: lenA]
+ * -----------------------------
+ */
 
 array_add_short:
         %MAX_CNT_BINARY - CNT_BINARY     -    C           :JMPN(outOfCountersBinary)
@@ -53,8 +58,11 @@ array_add_short:
         0 => E ; index in loops
         $ => A          :MLOAD(array_add_short_inB)
         A               :MSTORE(array_add_short_carry)
+        ; [steps: 7]
 
 array_add_short_loopZero2inA:
+        ; block costs: [steps: 10, bin: 1]
+
         ; The result will be stored as D·base + C
 
         0 => D  ; reset the carry chunk
