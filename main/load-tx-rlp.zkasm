@@ -267,10 +267,10 @@ readDataFinal:
                                         :CALL(checkShortDataRLP)
 
 endData:
-        ; Check all bytes read to detect pre EIP-155 tx
-        C => A
+        ; Check all bytes read to detect pre EIP-155 tx, if bytes read are the same as txLength, we reached the end, so it's a pre EIP-155 tx
+        ; txRLPLength and C is at most 300.000 bytes, no need to use a binary for comparison
         $ => B                          :MLOAD(txRLPLength)
-        $                               :EQ,JMPC(setPreEIP155Flag)
+        C - B                           :JMPZ(setPreEIP155Flag)
 
 ;; Read RLP 'chainId'
         ; 64 bits max
@@ -297,17 +297,17 @@ endChainId:
 ;; Read RLP last two values (0, 0)
         2 => D                          :CALL(addHashTx)
                                         :CALL(addBatchHashData)
-        0x8080 => B
-        $                               :EQ,JMPC(sizeVerification, invalidTxRLP)
+        ; We compare the last two bytes of the RLP with 0x8080, no need to use a binary
+        A - 0x8080                      :JMPZ(sizeVerification, invalidTxRLP)
 
 setPreEIP155Flag:
         1                               :MSTORE(isPreEIP155)
 ;; size verification
         ; checks RLP length read at the RLP header with bytes read during RLP parsing
 sizeVerification:
-        C => A
+        ; txRLPLength and C is at most 300.000 bytes, no need to use a binary for comparison
         $ => B                          :MLOAD(txRLPLength)
-        $                               :EQ,JMPC(sizeVerificationSuccess, invalidTxRLP)
+        C - B                           :JMPZ(sizeVerificationSuccess, invalidTxRLP)
 sizeVerificationSuccess:
         HASHPOS                         :HASHKLEN(E)
 
