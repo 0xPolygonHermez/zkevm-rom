@@ -10,8 +10,13 @@ INCLUDE "load-change-l2-block.zkasm"
 
 ;;;;;;;;;;;;;;;;;;
 ;; A - Initialization
-;;     - Data to parse: [rlp(nonce, gasprice, gaslimit, to, value, data, chainId, 0, 0)|r|s|v]
-;;     - Signed Ethereum transaction: H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data, chainId, 0, 0))
+;;     - Data to parse
+;;         - legaxy transaction: [rlp(nonce, gasprice, gaslimit, to, value, data, chainId, 0, 0)|r|s|v|effectivePercentage]
+;;         - pre EIP-155 transaction (https://eips.ethereum.org/EIPS/eip-155): [rlp(nonce, gasprice, gaslimit, to, value, data)|r|s|v|effectivePercentage]
+;;         - internal transaction changeL2Block: [txType, deltaTimestamp, indexL1InfoTree]
+;;      - Signed Ethereum transaction
+;;         - legacy transaction: H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data, chainId, 0, 0))
+;;         - pre EIP-155 transaction: H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data))
 ;;     - RLP encoding information: https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp
 ;;     - Entire batch is discarded (no transaction is processed) if any error is found
 ;;;;;;;;;;;;;;;;;;
@@ -55,7 +60,7 @@ loadTx_rlp_continue:
         A - 0xc0                        :JMPN(invalidTxRLP)
         A - 0xf8                        :JMPN(shortList)
         ; do not allow lists over 2**24 bytes length
-        ; Transaction could not have more than 300.000 due to smart contract limitation (keccaks counters)
+        ; Transaction could not have more than 120.000 due to smart contract limitation (keccaks counters)
         ; meaning that the RLP encoding is wrong
         A - 0xfb                        :JMPN(longList, invalidTxRLP)
 
@@ -202,7 +207,7 @@ dataREAD:
         A - 0x81                        :JMPN(endData)
         A - 0xb8                        :JMPN(shortData)
         ; do not allow string over 2**24 bytes length
-        ; Transaction could not have more than 300.000 due to smart contract limitation (keccaks counters)
+        ; Transaction could not have more than 120.000 due to smart contract limitation (keccaks counters)
         ; meaning that the RLP encoding is wrong
         A - 0xbb                        :JMPN(longData, invalidTxRLP)
 
@@ -268,7 +273,7 @@ readDataFinal:
 
 endData:
         ; Check all bytes read to detect pre EIP-155 tx, if bytes read are the same as txLength, we reached the end, so it's a pre EIP-155 tx
-        ; txRLPLength and C is at most 300.000 bytes, no need to use a binary for comparison
+        ; txRLPLength and C is at most 120.000 bytes, no need to use a binary for comparison
         $ => B                          :MLOAD(txRLPLength)
         C - B                           :JMPZ(setPreEIP155Flag)
 
@@ -305,7 +310,7 @@ setPreEIP155Flag:
 ;; size verification
         ; checks RLP length read at the RLP header with bytes read during RLP parsing
 sizeVerification:
-        ; txRLPLength and C is at most 300.000 bytes, no need to use a binary for comparison
+        ; txRLPLength and C is at most 120.000 bytes, no need to use a binary for comparison
         $ => B                          :MLOAD(txRLPLength)
         C - B                           :JMPZ(sizeVerificationSuccess, invalidTxRLP)
 sizeVerificationSuccess:
