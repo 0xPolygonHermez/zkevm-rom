@@ -49,29 +49,35 @@ VAR GLOBAL array_div_long_RR
 ; 0 - no error
 ; 1 - inB is zero
 
-; RESOURCES:
-; -------------------------------------------
-; PATH 1 inA == 0 and inB == 0: [steps: 15, bin: 2]
-; PATH 2 inA == 0 and inB != 0: [steps: 19, bin: 2]
-; PATH 3 inA != 0 and inB == 0: [steps: 15, bin: 2]
-; PATH 4 inA,inB != 0:
-;       · PATH 4.1 inA == inB: [steps: 34 + 10*lenA + 3*lenB, bin: 2 + 2*lenA]
-;       · PATH 4.2 inA < inB:  [steps: 38 + 6*lenA + 7*(lenA - diff_chunk_inA_inB) + 3*lenB, bin: 3 + 2*(lenA - diff_chunk_inA_inB)]
-;       · PATH 4.3 inA > inB:
-;              [steps: 35 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 3*lenB, bin: 4 + 2*(lenA - diff_chunk_inA_inB)]                                    // setup and compare inA and inB
-;              [steps: 86 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 14*lenB + 15*lenQ + 33*lenQ*lenB,                                                  // mul quo by inB
-;                 bin: 5 + 2*(lenA - diff_chunk_inA_inB) + 4*lenQ*lenB,
-;               arith: 1 + lenQ*lenB]
-;               [steps: 114 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 7*(lenB - diff_chunk_inB_rem) + 17*lenB + 15*lenQ + 3*lenR + 33*lenQ*lenB,       // compare inB and rem
-;                  bin: 8 + 2*(lenA - diff_chunk_inA_inB) + 2*(lenB - diff_chunk_inB_rem) + 4*lenQ*lenB,
-;                arith: 1 + lenQ*lenB]
-;               [steps: 137 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 7*(lenB - diff_chunk_inB_rem) + 29*lenB + 27*lenQ + 11*lenR + 33*lenQ*lenB,      // add quo·inB and rem
-;                  bin: 8 + lenQ + lenB + lenR + 2*(lenA - diff_chunk_inA_inB) + 2*(lenB - diff_chunk_inB_rem) + 4*lenQ*lenB,
-;                arith: 1 + lenQ*lenB]
-;               [steps: 158 + 16*lenA + 7*(lenA - diff_chunk_inA_inB) + 7*(lenB - diff_chunk_inB_rem) + 29*lenB + 27*lenQ + 11*lenR + 33*lenQ*lenB,     // compare quo·inB+rem and inA till end
-;                  bin: 8 + 2*lenA + lenQ + lenB + lenR + 2*(lenA - diff_chunk_inA_inB) + 2*(lenB - diff_chunk_inB_rem) + 4*lenQ*lenB,
-;                arith: 1 + lenQ*lenB]
-; -------------------------------------------
+/*
+ * RESOURCES:
+ * -------------------------------------------
+ * PATH 1 inA == 0 and inB == 0: [steps: 15, bin: 2]
+ * PATH 2 inA == 0 and inB != 0: [steps: 19, bin: 2]
+ * PATH 3 inA != 0 and inB == 0: [steps: 15, bin: 2]
+ * PATH 4 inA,inB != 0:
+ *       · PATH 4.1 inA == inB: [steps: 34 + 10*lenA + 3*lenB, bin: 2 + 2*lenA]
+ *       · PATH 4.2 inA < inB:  [steps: 38 + 6*lenA + 7*(lenA - DC₁(A,B)) + 3*lenB, bin: 3 + 2*(lenA - DC₁(A,B))]
+ *       · PATH 4.3 inA > inB:
+ *              [steps: 35 + 3*lenA + 7*(lenA - DC₁(A,B)) + 3*lenB, bin: 4 + 2*(lenA - DC₁(A,B))]                                                        // setup and compare inA and inB
+ *              [steps: 86 + 3*lenA + 7*(lenA - DC₁(A,B)) + 14*lenB + 15*lenQ(A,B) + 33*lenQ(A,B)*lenB,                                                  // mul quo by inB
+ *                 bin: 5 + 2*(lenA - DC₁(A,B)) + 4*lenQ(A,B)*lenB,
+ *               arith: 1 + lenQ(A,B)*lenB]
+ *               [steps: 114 + 3*lenA + 7*(lenA - DC₁(A,B)) + 7*(lenB - DC₁(B,R(A,B))) + 17*lenB + 15*lenQ(A,B) + 3*lenR(A,B) + 33*lenQ(A,B)*lenB,       // compare inB and rem
+ *                  bin: 8 + 2*(lenA - DC₁(A,B)) + 2*(lenB - DC₁(B,R(A,B))) + 4*lenQ(A,B)*lenB,
+ *                arith: 1 + lenQ(A,B)*lenB]
+ *               [steps: 137 + 3*lenA + 7*(lenA - DC₁(A,B)) + 7*(lenB - DC₁(B,R(A,B))) + 29*lenB + 27*lenQ(A,B) + 11*lenR(A,B) + 33*lenQ(A,B)*lenB,      // add quo·inB and rem
+ *                  bin: 8 + lenQ(A,B) + lenB + lenR(A,B) + 2*(lenA - DC₁(A,B)) + 2*(lenB - DC₁(B,R(A,B))) + 4*lenQ(A,B)*lenB,
+ *                arith: 1 + lenQ(A,B)*lenB]
+ *               [steps: 158 + 16*lenA + 7*(lenA - DC₁(A,B)) + 7*(lenB - DC₁(B,R(A,B))) + 29*lenB + 27*lenQ(A,B) + 11*lenR(A,B) + 33*lenQ(A,B)*lenB,     // compare quo·inB+rem and inA till end
+ *                  bin: 8 + 2*lenA + lenQ(A,B) + lenB + lenR(A,B) + 2*(lenA - DC₁(A,B)) + 2*(lenB - DC₁(B,R(A,B))) + 4*lenQ(A,B)*lenB,
+ *                arith: 1 + lenQ(A,B)*lenB]
+ * -------------------------------------------
+ * where:
+ *       DC₁(X,Y) = First chunk that is different between X and Y, from most significant to least significant
+ *         R(X,Y) = Remainder of X / Y
+ *         Q(X,Y) = Quotient of X / Y
+ */
 
 array_div_long:
         %MAX_CNT_BINARY - CNT_BINARY - 2                  :JMPN(outOfCountersBinary)
@@ -114,8 +120,8 @@ array_div_long_compare_inB1:
 array_div_long_compare1:
         ; [steps: 14 + 3*lenA + 3*lenB, bin: 2]
                         :CALL(array_compare)
-        ; PATH 1 inA > inB:  [steps: 10 + 7*(lenA - diff_chunk_inA_inB) + 6, bin: 2*(lenA - diff_chunk_inA_inB) + 2]
-        ; PATH 2 inA < inB:  [steps: 10 + 7*(lenA - diff_chunk_inA_inB) + 3, bin: 2*(lenA - diff_chunk_inA_inB) + 1]
+        ; PATH 1 inA > inB:  [steps: 10 + 7*(lenA - DC₁(A,B)) + 6, bin: 2*(lenA - DC₁(A,B)) + 2]
+        ; PATH 2 inA < inB:  [steps: 10 + 7*(lenA - DC₁(A,B)) + 3, bin: 2*(lenA - DC₁(A,B)) + 1]
         ; PATH 3 inA == inB: [steps: 10 + 7*lenA,                    bin: 2*lenA] <--- w.c.
 
         %MAX_CNT_BINARY - CNT_BINARY - 1         :JMPN(outOfCountersBinary)
@@ -123,7 +129,7 @@ array_div_long_compare1:
 
         $ => A          :MLOAD(array_compare_result), JMPZ(array_div_long_prep_inALTinB)
         A - 1           :JMPZ(array_div_long_same_input)
-        ; [steps: 35 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 3*lenB, bin: 4 + 2*(lenA - diff_chunk_inA_inB)]
+        ; [steps: 35 + 3*lenA + 7*(lenA - DC₁(A,B)) + 3*lenB, bin: 4 + 2*(lenA - DC₁(A,B))]
         ; From here, inA > inB
 
         ; Strategy: Divide outside and check the result inside
@@ -172,7 +178,7 @@ array_div_long_same_input:
         ; till the end -> [steps: 34 + 10*lenA + 3*lenB, bin: 2 + 2*lenA]
 
 array_div_long_prep_inALTinB:
-        ; before (w.c.) -> [steps: 31 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 3*lenB, bin: 3 + 2*(lenA - diff_chunk_inA_inB)]
+        ; before (w.c.) -> [steps: 31 + 3*lenA + 7*(lenA - DC₁(A,B)) + 3*lenB, bin: 3 + 2*(lenA - DC₁(A,B))]
 
         ; if inA < inB, then return [0, inA] and len(q) = 1, len(r) = C
         1               :MSTORE(array_div_long_len_quo)
@@ -189,11 +195,11 @@ array_div_long_inALTinB:
 array_div_long_inALTinB_before_end:
         0               :MSTORE(array_div_long_quo)
         0 => B          :JMP(array_div_long_end)
-        ; till the end -> [steps: 38 + 6*lenA + 7*(lenA - diff_chunk_inA_inB) + 3*lenB, bin: 3 + 2*(lenA - diff_chunk_inA_inB)]
+        ; till the end -> [steps: 38 + 6*lenA + 7*(lenA - DC₁(A,B)) + 3*lenB, bin: 3 + 2*(lenA - DC₁(A,B))]
 ; End of edge cases
 
 array_div_long_prepare_mul_quo_inB:
-        ; before (w.c.) [steps: 35 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 3*lenB, bin: 4 + 2*(lenA - diff_chunk_inA_inB)]
+        ; before (w.c.) [steps: 35 + 3*lenA + 7*(lenA - DC₁(A,B)) + 3*lenB, bin: 4 + 2*(lenA - DC₁(A,B))]
 
         $0{receiveLenQuotient()} => C
 
@@ -216,7 +222,7 @@ array_div_long_prepare_mul_quo_inB:
         D - 1 => E
 
         %MAX_CNT_STEPS - STEP - 4*%ARRAY_MAX_LEN - 3*D - 1      :JMPN(outOfCountersStep)
-        ; [steps: 46 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 3*lenB, bin: 5 + 2*(lenA - diff_chunk_inA_inB)]
+        ; [steps: 46 + 3*lenA + 7*(lenA - DC₁(A,B)) + 3*lenB, bin: 5 + 2*(lenA - DC₁(A,B))]
 
 array_div_long_quo_to_mul:
         ${receiveQuotientChunk(RR)} => A
@@ -230,9 +236,9 @@ array_div_long_inB_to_mul:
         E - 1 => E      :JMPN(array_div_long_mul_quo_inB, array_div_long_inB_to_mul)
 
 array_div_long_mul_quo_inB:
-        ; [steps: 46 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 6*lenB + 4*lenQ, bin: 5 + 2*(lenA - diff_chunk_inA_inB)]
+        ; [steps: 46 + 3*lenA + 7*(lenA - DC₁(A,B)) + 6*lenB + 4*lenQ(A,B), bin: 5 + 2*(lenA - DC₁(A,B))]
                         :CALL(array_mul) ; (assuming long mul for counters)
-        ; [steps: 86 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 14*lenB + 15*lenQ + 33*lenQ*lenB, bin: 5 + 2*(lenA - diff_chunk_inA_inB) + 4*lenQ*lenB, arith: 1 + lenQ*lenB]
+        ; [steps: 86 + 3*lenA + 7*(lenA - DC₁(A,B)) + 14*lenB + 15*lenQ(A,B) + 33*lenQ(A,B)*lenB, bin: 5 + 2*(lenA - DC₁(A,B)) + 4*lenQ(A,B)*lenB, arith: 1 + lenQ(A,B)*lenB]
 
         %MAX_CNT_BINARY - CNT_BINARY - 1        :JMPN(outOfCountersBinary)
         %MAX_CNT_STEPS - STEP        - 10       :JMPN(outOfCountersStep)
@@ -258,7 +264,7 @@ array_div_long_mul_quo_inB:
         D - 1 => E
 
         %MAX_CNT_STEPS - STEP - 3*C - 3*%ARRAY_MAX_LEN - 1    :JMPN(outOfCountersStep)
-        ; [steps: 98 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 14*lenB + 15*lenQ + 33*lenQ*lenB, bin: 6 + 2*(lenA - diff_chunk_inA_inB) + 4*lenQ*lenB, arith: 1 + lenQ*lenB]
+        ; [steps: 98 + 3*lenA + 7*(lenA - DC₁(A,B)) + 14*lenB + 15*lenQ(A,B) + 33*lenQ(A,B)*lenB, bin: 6 + 2*(lenA - DC₁(A,B)) + 4*lenQ(A,B)*lenB, arith: 1 + lenQ(A,B)*lenB]
 
 array_div_long_compare_inB2:
         $ => A          :MLOAD(array_div_long_inB + RR)
@@ -271,11 +277,11 @@ array_div_long_compare_rem:
         E - 1 => E      :JMPN(array_div_long_compare2, array_div_long_compare_rem)
 
 array_div_long_compare2:
-        ; [steps: 98 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 17*lenB + 15*lenQ + 3*lenR + 33*lenQ*lenB, bin: 6 + 2*(lenA - diff_chunk_inA_inB) + 4*lenQ*lenB, arith: 1 + lenQ*lenB]
-                        :CALL(array_compare) ; (inB > rem): [steps: 10 + 7*(lenB - diff_chunk_inB_rem) + 6, bin: 2*(lenB - diff_chunk_inB_rem) + 2]
-        ; [steps: 114 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 7*(lenB - diff_chunk_inB_rem) + 17*lenB + 15*lenQ + 3*lenR + 33*lenQ*lenB,
-        ;    bin: 8 + 2*(lenA - diff_chunk_inA_inB) + 2*(lenB - diff_chunk_inB_rem) + 4*lenQ*lenB,
-        ;  arith: 1 + lenQ*lenB]
+        ; [steps: 98 + 3*lenA + 7*(lenA - DC₁(A,B)) + 17*lenB + 15*lenQ(A,B) + 3*lenR(A,B) + 33*lenQ(A,B)*lenB, bin: 6 + 2*(lenA - DC₁(A,B)) + 4*lenQ(A,B)*lenB, arith: 1 + lenQ(A,B)*lenB]
+                        :CALL(array_compare) ; (inB > rem): [steps: 10 + 7*(lenB - DC₁(B,R(A,B))) + 6, bin: 2*(lenB - DC₁(B,R(A,B))) + 2]
+        ; [steps: 114 + 3*lenA + 7*(lenA - DC₁(A,B)) + 7*(lenB - DC₁(B,R(A,B))) + 17*lenB + 15*lenQ(A,B) + 3*lenR(A,B) + 33*lenQ(A,B)*lenB,
+        ;    bin: 8 + 2*(lenA - DC₁(A,B)) + 2*(lenB - DC₁(B,R(A,B))) + 4*lenQ(A,B)*lenB,
+        ;  arith: 1 + lenQ(A,B)*lenB]
 
        %MAX_CNT_STEPS - STEP - 6        :JMPN(outOfCountersStep)
 
@@ -289,9 +295,9 @@ array_div_long_compare2:
         D - 1 => E
 
         %MAX_CNT_STEPS - STEP - 3*C - 4*D - 1    :JMPN(outOfCountersStep)
-        ; [steps: 121 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 7*(lenB - diff_chunk_inB_rem) + 17*lenB + 15*lenQ + 3*lenR + 33*lenQ*lenB,
-        ;    bin: 8 + 2*(lenA - diff_chunk_inA_inB) + 2*(lenB - diff_chunk_inB_rem) + 4*lenQ*lenB,
-        ;  arith: 1 + lenQ*lenB]
+        ; [steps: 121 + 3*lenA + 7*(lenA - DC₁(A,B)) + 7*(lenB - DC₁(B,R(A,B))) + 17*lenB + 15*lenQ(A,B) + 3*lenR(A,B) + 33*lenQ(A,B)*lenB,
+        ;    bin: 8 + 2*(lenA - DC₁(A,B)) + 2*(lenB - DC₁(B,R(A,B))) + 4*lenQ(A,B)*lenB,
+        ;  arith: 1 + lenQ(A,B)*lenB]
 
 array_div_long_res_to_add:
         $ => A          :MLOAD(array_mul_out + RR)
@@ -305,13 +311,13 @@ array_div_long_rem_to_add:
         E - 1 => E      :JMPN(array_div_long_add_res_rem, array_div_long_rem_to_add)
 
 array_div_long_add_res_rem:
-        ; [steps: 121 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 7*(lenB - diff_chunk_inB_rem) + 20*lenB + 18*lenQ + 6*lenR + 33*lenQ*lenB,
-        ;    bin: 8 + 2*(lenA - diff_chunk_inA_inB) + 2*(lenB - diff_chunk_inB_rem) + 4*lenQ*lenB,
-        ;  arith: 1 + lenQ*lenB]
-                        :CALL(array_add_AGTB) ; [steps: 16 + 9*(lenQ + lenB) + 5*lenR, bin: (lenQ + lenB) + lenR]
-        ; [steps: 137 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 7*(lenB - diff_chunk_inB_rem) + 29*lenB + 27*lenQ + 11*lenR + 33*lenQ*lenB,
-        ;    bin: 8 + lenQ + lenB + lenR 2*(lenA - diff_chunk_inA_inB) + 2*(lenB - diff_chunk_inB_rem) + 4*lenQ*lenB,
-        ;  arith: 1 + lenQ*lenB]
+        ; [steps: 121 + 3*lenA + 7*(lenA - DC₁(A,B)) + 7*(lenB - DC₁(B,R(A,B))) + 20*lenB + 18*lenQ(A,B) + 6*lenR(A,B) + 33*lenQ(A,B)*lenB,
+        ;    bin: 8 + 2*(lenA - DC₁(A,B)) + 2*(lenB - DC₁(B,R(A,B))) + 4*lenQ(A,B)*lenB,
+        ;  arith: 1 + lenQ(A,B)*lenB]
+                        :CALL(array_add_AGTB) ; [steps: 16 + 9*(lenQ(A,B) + lenB) + 5*lenR(A,B), bin: (lenQ(A,B) + lenB) + lenR(A,B)]
+        ; [steps: 137 + 3*lenA + 7*(lenA - DC₁(A,B)) + 7*(lenB - DC₁(B,R(A,B))) + 29*lenB + 27*lenQ(A,B) + 11*lenR(A,B) + 33*lenQ(A,B)*lenB,
+        ;    bin: 8 + lenQ(A,B) + lenB + lenR(A,B) 2*(lenA - DC₁(A,B)) + 2*(lenB - DC₁(B,R(A,B))) + 4*lenQ(A,B)*lenB,
+        ;  arith: 1 + lenQ(A,B)*lenB]
 
         %MAX_CNT_STEPS - STEP - 5      :JMPN(outOfCountersStep)
 
@@ -322,9 +328,9 @@ array_div_long_add_res_rem:
         D - 1 => E
 
         %MAX_CNT_STEPS - STEP - 3*C - 3*D - 1    :JMPN(outOfCountersStep)
-        ; [steps: 143 + 3*lenA + 7*(lenA - diff_chunk_inA_inB) + 7*(lenB - diff_chunk_inB_rem) + 29*lenB + 27*lenQ + 11*lenR + 33*lenQ*lenB,
-        ;    bin: 8 + lenQ + lenB + lenR + 2*(lenA - diff_chunk_inA_inB) + 2*(lenB - diff_chunk_inB_rem) + 4*lenQ*lenB,
-        ;  arith: 1 + lenQ*lenB]
+        ; [steps: 143 + 3*lenA + 7*(lenA - DC₁(A,B)) + 7*(lenB - DC₁(B,R(A,B))) + 29*lenB + 27*lenQ(A,B) + 11*lenR(A,B) + 33*lenQ(A,B)*lenB,
+        ;    bin: 8 + lenQ(A,B) + lenB + lenR(A,B) + 2*(lenA - DC₁(A,B)) + 2*(lenB - DC₁(B,R(A,B))) + 4*lenQ(A,B)*lenB,
+        ;  arith: 1 + lenQ(A,B)*lenB]
 
 array_div_long_compare_inA2:
         $ => A          :MLOAD(array_add_AGTB_out + RR)
@@ -337,13 +343,13 @@ array_div_long_compare_inB3:
         E - 1 => E      :JMPN(array_div_long_compare3, array_div_long_compare_inB3)
 
 array_div_long_compare3:
-        ; [steps: 143 + 9*lenA + 7*(lenA - diff_chunk_inA_inB) + 7*(lenB - diff_chunk_inB_rem) + 29*lenB + 27*lenQ + 11*lenR + 33*lenQ*lenB,
-        ;    bin: 8 + lenQ + lenB + lenR + 2*(lenA - diff_chunk_inA_inB) + 2*(lenB - diff_chunk_inB_rem) + 4*lenQ*lenB,
-        ;  arith: 1 + lenQ*lenB]
+        ; [steps: 143 + 9*lenA + 7*(lenA - DC₁(A,B)) + 7*(lenB - DC₁(B,R(A,B))) + 29*lenB + 27*lenQ(A,B) + 11*lenR(A,B) + 33*lenQ(A,B)*lenB,
+        ;    bin: 8 + lenQ(A,B) + lenB + lenR(A,B) + 2*(lenA - DC₁(A,B)) + 2*(lenB - DC₁(B,R(A,B))) + 4*lenQ(A,B)*lenB,
+        ;  arith: 1 + lenQ(A,B)*lenB]
                         :CALL(array_compare) ; [steps: 10 + 7*lenA, bin: 2*lenA]
-        ; [steps: 153 + 16*lenA + 7*(lenA - diff_chunk_inA_inB) + 7*(lenB - diff_chunk_inB_rem) + 29*lenB + 27*lenQ + 11*lenR + 33*lenQ*lenB,
-        ;    bin: 8 + 2*lenA + lenQ + lenB + lenR + 2*(lenA - diff_chunk_inA_inB) + 2*(lenB - diff_chunk_inB_rem) + 4*lenQ*lenB,
-        ;  arith: 1 + lenQ*lenB]
+        ; [steps: 153 + 16*lenA + 7*(lenA - DC₁(A,B)) + 7*(lenB - DC₁(B,R(A,B))) + 29*lenB + 27*lenQ(A,B) + 11*lenR(A,B) + 33*lenQ(A,B)*lenB,
+        ;    bin: 8 + 2*lenA + lenQ(A,B) + lenB + lenR(A,B) + 2*(lenA - DC₁(A,B)) + 2*(lenB - DC₁(B,R(A,B))) + 4*lenQ(A,B)*lenB,
+        ;  arith: 1 + lenQ(A,B)*lenB]
 
         %MAX_CNT_STEPS - STEP - 4      :JMPN(outOfCountersStep)
 

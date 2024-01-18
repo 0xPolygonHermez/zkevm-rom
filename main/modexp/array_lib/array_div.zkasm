@@ -1,5 +1,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;  PRE: The input arrays have been trimmed;
+;;  PRE: The input arrays have been trimmed.
 ;; POST: The quotient and remainder are trimmed.
 ;;
 ;; array_div:
@@ -12,8 +12,6 @@
 ;;          output:
 ;;                  · [quo,rem] = [inA / inB, inA % inB], with len(quo) <= C - D + 1, len(rem) <= D
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-; TODO: It can be optimized, it is doubling double 0 checks, both here and in the div_long and div_short
 
 ; function array_div(a: bigint[], b: bigint[], base: bigint): bigint[] {
 ;     if (a === [0n]) {
@@ -53,22 +51,28 @@ VAR GLOBAL array_div_RR
 ; 0 - no error
 ; 1 - inB is zero
 
-; RESOURCES:
-; -----------------------------
-; PATH 1 inA == 0 and inB == 0: [steps: 15, bin: 2]
-; PATH 2 inA == 0 and inB != 0: [steps: 19, bin: 2]
-; PATH 3 inA != 0 and inB == 0: [steps: 15, bin: 2]
-; PATH 4 inA,inB != 0:
-;       · PATH 4.1 inA == inB: [steps: 34 + 10*lenA + 3*lenB, bin: 2 + 2*lenA]
-;       · PATH 4.2 inA < inB:  [steps: 38 + 6*lenA + 7*(lenA - diff_chunk_inA_inB) + 3*lenB, bin: 3 + 2*(lenA - diff_chunk_inA_inB)]
-;       · PATH 4.3 inA > inB:
-;               · PATH 4.3.1 Long Div:
-;                       [steps: 204 + 22*lenA + 14*(lenA - diff_chunk_inA_inB) + 7*(lenB - diff_chunk_inB_rem) + 35*lenB + 30*lenQ + 14*lenR + 33*lenQ*lenB,
-;                           bin: 12 + 2*lenA + 4*(lenA - diff_chunk_inA_inB) + lenQ + lenB + lenR + 2*(lenB - diff_chunk_inB_rem) + 4*lenQ*lenB
-;                         arith: 1 + lenQ*lenB]
-;               · PATH 4.3.1 Short Div:
-;                       [steps: 170 + 29*lenA + 44*lenQ, bin: 9 + 4*lenA + 3*lenQ, arith: lenQ]
-; -------------------------------------------
+/*
+ * RESOURCES:
+ * -----------------------------
+ * PATH 1 inA == 0 and inB == 0: [steps: 15, bin: 2]
+ * PATH 2 inA == 0 and inB != 0: [steps: 19, bin: 2]
+ * PATH 3 inA != 0 and inB == 0: [steps: 15, bin: 2]
+ * PATH 4 inA,inB != 0:
+ *       · PATH 4.1 inA == inB: [steps: 34 + 10*lenA + 3*lenB, bin: 2 + 2*lenA]
+ *       · PATH 4.2 inA < inB:  [steps: 38 + 6*lenA + 7*(lenA - DC₁(A,B)) + 3*lenB, bin: 3 + 2*(lenA - DC₁(A,B))]
+ *       · PATH 4.3 inA > inB:
+ *               · PATH 4.3.1 Long Div:
+ *                        [steps: 204 + 36*lenA + 42*lenB + lenQ(A,B)*(30 + 33*lenB) + 14*lenR(A,B) - 14*DC₁(A,B) - 7*DC₁(B,R(A,B)),
+ *                           bin:  12 +  6*lenA +  3*lenB +   lenQ(A,B)*(1 + 4*lenB) +    lenR(A,B) -  4*DC₁(A,B) - 2*DC₁(B,R(A,B)),
+ *                         arith:   1 + lenQ(A,B)*lenB]
+ *               · PATH 4.3.1 Short Div:
+ *                       [steps: 170 + 29*lenA + 44*lenQ, bin: 9 + 4*lenA + 3*lenQ, arith: lenQ]
+ * -------------------------------------------
+ * where:
+ *       DC₁(X,Y) = First chunk that is different between X and Y, from most significant to least significant
+ *         R(X,Y) = Remainder of X / Y
+ *         Q(X,Y) = Quotient of X / Y
+ */
 
 array_div:
         %MAX_CNT_BINARY - CNT_BINARY - 2                    :JMPN(outOfCountersBinary)
