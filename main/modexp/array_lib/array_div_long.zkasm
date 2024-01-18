@@ -124,8 +124,8 @@ array_div_long_compare1:
         ; PATH 2 inA < inB:  [steps: 10 + 7*(lenA - DC₁(A,B)) + 3, bin: 2*(lenA - DC₁(A,B)) + 1]
         ; PATH 3 inA == inB: [steps: 10 + 7*lenA,                    bin: 2*lenA] <--- w.c.
 
-        %MAX_CNT_BINARY - CNT_BINARY - 1         :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 15        :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY - 1                                        :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 12 - 4*%ARRAY_MAX_LEN - 3*D - 1    :JMPN(outOfCountersStep)
 
         $ => A          :MLOAD(array_compare_result), JMPZ(array_div_long_prep_inALTinB)
         A - 1           :JMPZ(array_div_long_same_input)
@@ -184,7 +184,7 @@ array_div_long_prep_inALTinB:
         1               :MSTORE(array_div_long_len_quo)
         C               :MSTORE(array_div_long_len_rem)
 
-        %MAX_CNT_STEPS - STEP  - 1 - 4*C - 2        :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP  - 1 - 3*C - 2        :JMPN(outOfCountersStep)
 
         C - 1 => RR
 array_div_long_inALTinB:
@@ -216,13 +216,15 @@ array_div_long_prepare_mul_quo_inB:
         ; From here, the quotient is trimmed
 
         C               :MSTORE(array_div_long_len_quo) ; len(quo) <= lenA - lenB + 1
-
         $ => D          :MLOAD(array_div_long_len_inB)
         C - 1 => RR
         D - 1 => E
-
-        %MAX_CNT_STEPS - STEP - 4*%ARRAY_MAX_LEN - 3*D - 1      :JMPN(outOfCountersStep)
         ; [steps: 46 + 3*lenA + 7*(lenA - DC₁(A,B)) + 3*lenB, bin: 5 + 2*(lenA - DC₁(A,B))]
+
+        ; save the first non-zero chunk of quo
+        A               :MSTORE(array_div_long_quo + RR)
+        A               :MSTORE(array_mul_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_long_inB_to_mul)
 
 array_div_long_quo_to_mul:
         ${receiveQuotientChunk(RR)} => A
@@ -240,8 +242,9 @@ array_div_long_mul_quo_inB:
                         :CALL(array_mul) ; (assuming long mul for counters)
         ; [steps: 86 + 3*lenA + 7*(lenA - DC₁(A,B)) + 14*lenB + 15*lenQ(A,B) + 33*lenQ(A,B)*lenB, bin: 5 + 2*(lenA - DC₁(A,B)) + 4*lenQ(A,B)*lenB, arith: 1 + lenQ(A,B)*lenB]
 
-        %MAX_CNT_BINARY - CNT_BINARY - 1        :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 10       :JMPN(outOfCountersStep)
+        $ => D          :MLOAD(array_div_long_len_inB)
+        %MAX_CNT_BINARY - CNT_BINARY - 1                                        :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 8 - 3*%ARRAY_MAX_LEN - 3*D - 1           :JMPN(outOfCountersStep)
 
         ; Check the remainder
         $0{receiveLenRemainder()} => D ; len(rem) <= lenB
@@ -262,19 +265,21 @@ array_div_long_mul_quo_inB:
         $ => C           :MLOAD(array_div_long_len_inB)
         C - 1 => RR
         D - 1 => E
-
-        %MAX_CNT_STEPS - STEP - 3*C - 3*%ARRAY_MAX_LEN - 1    :JMPN(outOfCountersStep)
         ; [steps: 98 + 3*lenA + 7*(lenA - DC₁(A,B)) + 14*lenB + 15*lenQ(A,B) + 33*lenQ(A,B)*lenB, bin: 6 + 2*(lenA - DC₁(A,B)) + 4*lenQ(A,B)*lenB, arith: 1 + lenQ(A,B)*lenB]
 
-array_div_long_compare_inB2:
-        $ => A          :MLOAD(array_div_long_inB + RR)
-        A               :MSTORE(array_compare_inA + RR)
-        RR - 1 => RR    :JMPN(array_div_long_compare_rem, array_div_long_compare_inB2)
+        ; save the first non-zero chunk of rem
+        A               :MSTORE(array_compare_inB + E)
+        E - 1 => E      :JMPN(array_div_long_compare_inB2)
 
 array_div_long_compare_rem:
         ${receiveRemainderChunk(E)} => A
         A               :MSTORE(array_compare_inB + E)
-        E - 1 => E      :JMPN(array_div_long_compare2, array_div_long_compare_rem)
+        E - 1 => E      :JMPN(array_div_long_compare_inB2, array_div_long_compare_rem)
+
+array_div_long_compare_inB2:
+        $ => A          :MLOAD(array_div_long_inB + RR)
+        A               :MSTORE(array_compare_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_long_compare2, array_div_long_compare_inB2)
 
 array_div_long_compare2:
         ; [steps: 98 + 3*lenA + 7*(lenA - DC₁(A,B)) + 17*lenB + 15*lenQ(A,B) + 3*lenR(A,B) + 33*lenQ(A,B)*lenB, bin: 6 + 2*(lenA - DC₁(A,B)) + 4*lenQ(A,B)*lenB, arith: 1 + lenQ(A,B)*lenB]
@@ -283,7 +288,7 @@ array_div_long_compare2:
         ;    bin: 8 + 2*(lenA - DC₁(A,B)) + 2*(lenB - DC₁(B,R(A,B))) + 4*lenQ(A,B)*lenB,
         ;  arith: 1 + lenQ(A,B)*lenB]
 
-       %MAX_CNT_STEPS - STEP - 6        :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 5 - 3*%ARRAY_MAX_LEN - 4*%ARRAY_MAX_LEN - 1        :JMPN(outOfCountersStep)
 
         2               :MLOAD(array_compare_result)
 
@@ -293,8 +298,6 @@ array_div_long_compare2:
         $ => C          :MLOAD(array_mul_len_out) ; len(quo·inB) <= lenA
         C - 1 => RR
         D - 1 => E
-
-        %MAX_CNT_STEPS - STEP - 3*C - 4*D - 1    :JMPN(outOfCountersStep)
         ; [steps: 121 + 3*lenA + 7*(lenA - DC₁(A,B)) + 7*(lenB - DC₁(B,R(A,B))) + 17*lenB + 15*lenQ(A,B) + 3*lenR(A,B) + 33*lenQ(A,B)*lenB,
         ;    bin: 8 + 2*(lenA - DC₁(A,B)) + 2*(lenB - DC₁(B,R(A,B))) + 4*lenQ(A,B)*lenB,
         ;  arith: 1 + lenQ(A,B)*lenB]
@@ -305,7 +308,7 @@ array_div_long_res_to_add:
         RR - 1 => RR    :JMPN(array_div_long_rem_to_add, array_div_long_res_to_add)
 
 array_div_long_rem_to_add:
-        ${receiveRemainderChunk(E)} => A
+        $ => A          :MLOAD(array_compare_inB + E) ; Load the remainder used in the comparison
         A               :MSTORE(array_div_long_rem + E)
         A               :MSTORE(array_add_AGTB_inB + E)
         E - 1 => E      :JMPN(array_div_long_add_res_rem, array_div_long_rem_to_add)
@@ -326,11 +329,11 @@ array_div_long_add_res_rem:
         $ => D           :MLOAD(array_div_long_len_inA)
         C - 1 => RR
         D - 1 => E
-
-        %MAX_CNT_STEPS - STEP - 3*C - 3*D - 1    :JMPN(outOfCountersStep)
         ; [steps: 143 + 3*lenA + 7*(lenA - DC₁(A,B)) + 7*(lenB - DC₁(B,R(A,B))) + 29*lenB + 27*lenQ(A,B) + 11*lenR(A,B) + 33*lenQ(A,B)*lenB,
         ;    bin: 8 + lenQ(A,B) + lenB + lenR(A,B) + 2*(lenA - DC₁(A,B)) + 2*(lenB - DC₁(B,R(A,B))) + 4*lenQ(A,B)*lenB,
         ;  arith: 1 + lenQ(A,B)*lenB]
+
+        %MAX_CNT_STEPS - STEP - 3*%ARRAY_MAX_LEN - 3*D - 1    :JMPN(outOfCountersStep)
 
 array_div_long_compare_inA2:
         $ => A          :MLOAD(array_add_AGTB_out + RR)

@@ -32,7 +32,7 @@ start: ; main zkROM entry point
         ${getL1InfoRoot()}                      :MSTORE(l1InfoRoot)
         ${getSequencerAddr()}                   :MSTORE(sequencerAddr)
         ${getTimestampLimit()}                  :MSTORE(timestampLimit)
-        ${getTxsLen()}                          :MSTORE(batchL2DataLength) ; less than 300.000 bytes. Enforced by the smart contract
+        ${getTxsLen()}                          :MSTORE(batchL2DataLength) ; less than 120000 bytes. Enforced by the smart contract
         ${getForcedBlockHashL1()} => A          :MSTORE(forcedBlockHashL1)
 
         ;set initial state root
@@ -121,12 +121,12 @@ txLoop:
         A - 1                                   :JMPZ(processChangeL2Block, processTx)
 
 processTxFinished:
+        %MAX_CNT_BINARY - CNT_BINARY - 1        :JMPN(outOfCountersBinary)
         ; Increase cumulativeGasUsed
         $ => A                                  :MLOAD(txGasLimit)
         A - GAS => A
         $ => B                                  :MLOAD(cumulativeGasUsed)
-        ; Fill block info tree with tx receipt
-        A + B                                   :MSTORE(cumulativeGasUsed), CALL(fillBlockInfoTreeWithTxReceipt)
+        $                                       :ADD, MSTORE(cumulativeGasUsed), CALL(fillBlockInfoTreeWithTxReceipt)
         ; Increase txIndex
         $ => A                                  :MLOAD(txIndex)
         A + 1                                   :MSTORE(txIndex)
@@ -145,6 +145,11 @@ finalizeBatch:
 ;;      - compute batchHashData
 ;;      - compute newAccInputHash
 ;;;;;;;;;;;;;;;;;;
+
+;; Batch must be always end correctly
+;; Meaning that enough zk-counters should be available to finalize it
+;;   - 'keccaks' are reserved at the very beginning of the batch in order to be able to perform the final 'accInputHash' hash
+;;   - the rest of counters will not overflow since it is added a %SAFE_RANGE bandwith
 
 ;; Get local exit root
         ; Read 'localExitRoot' variable from GLOBAL_EXIT_ROOT_MANAGER_L2 and store
