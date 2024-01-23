@@ -11,12 +11,12 @@ const path = require('path');
 const { newCommitPolsArray } = require('pilcom');
 const smMain = require('@0xpolygonhermez/zkevm-proverjs/src/sm/sm_main/sm_main');
 
-let rom = require('../../build/rom.json');
+let rom = require('../../../build/rom.json');
 
 let stepsN = 2 ** 23;
 let counters = false;
 
-const fileCachePil = path.join(__dirname, '../../node_modules/@0xpolygonhermez/zkevm-proverjs/cache-main-pil.json');
+const fileCachePil = path.join(__dirname, '../../../node_modules/@0xpolygonhermez/zkevm-proverjs/cache-main-pil.json');
 
 const checkerDir = path.join(__dirname, 'checker.txt');
 
@@ -31,7 +31,7 @@ it(`${nameFile}`, async () => {
     const pil = JSON.parse(fs.readFileSync(fileCachePil));
     const cmPols = newCommitPolsArray(pil);
     if (input.gasLimit) {
-        rom = require(`../../build/rom-${input.gasLimit}.test.json`);
+        rom = require(`../../../build/rom-${input.gasLimit}.test.json`);
     }
     if (input.stepsN) {
         stepsN = input.stepsN;

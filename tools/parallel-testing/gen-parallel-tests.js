@@ -9,12 +9,12 @@ const { compile } = require('pilcom');
 const buildPoseidon = require('@0xpolygonhermez/zkevm-commonjs').getPoseidon;
 
 const folderPaths = [
-    '../node_modules/@0xpolygonhermez/zkevm-testvectors/inputs-executor',
-    '../node_modules/@0xpolygonhermez/zkevm-testvectors/inputs-executor/ethereum-tests/GeneralStateTests',
+    '../../node_modules/@0xpolygonhermez/zkevm-testvectors/inputs-executor',
+    '../../node_modules/@0xpolygonhermez/zkevm-testvectors/inputs-executor/ethereum-tests/GeneralStateTests',
 ];
 
-const fileCachePil = path.join(__dirname, '../node_modules/@0xpolygonhermez/zkevm-proverjs/cache-main-pil.json');
-const pathMainPil = path.join(__dirname, '../node_modules/@0xpolygonhermez/zkevm-proverjs/pil/main.pil');
+const fileCachePil = path.join(__dirname, '../../node_modules/@0xpolygonhermez/zkevm-proverjs/cache-main-pil.json');
+const pathMainPil = path.join(__dirname, '../../node_modules/@0xpolygonhermez/zkevm-proverjs/pil/main.pil');
 const inputs = [];
 const testsFolder = path.join(__dirname, 'parallel-tests');
 const sampleDir = path.join(__dirname, 'parallel-tests-sample/sample.test.js');
@@ -67,7 +67,7 @@ async function main() {
     fs.writeFileSync(fileCachePil, `${JSON.stringify(pil, null, 1)}\n`, 'utf8');
     genTestsFiles();
     // Generate counters diff table csv file
-    fs.writeFileSync(path.join(__dirname, 'parallel-tests/countersDiffs.csv'), 'Test name,vSteps,rSteps,StepsDiff,vArith,rArith,ArithDiff,vBinary,rBinary,BinaryDiff,vMemAlign,rMemAlign,memAlignDiff,vKeccaks,rKeccaks,keccaksDiff,vPoseidon,rPoseidon,PoseidonDiff,vPadding,rPadding,PaddingDiff,vSHA256,rSHA256,SHA256Diff\n', 'utf8');
+    fs.writeFileSync(path.join(__dirname, 'countersDiffs.csv'), 'Test name,vSteps,rSteps,StepsDiff,vArith,rArith,ArithDiff,vBinary,rBinary,BinaryDiff,vMemAlign,rMemAlign,memAlignDiff,vKeccaks,rKeccaks,keccaksDiff,vPoseidon,rPoseidon,PoseidonDiff,vPadding,rPadding,PaddingDiff,vSHA256,rSHA256,SHA256Diff\n', 'utf8');
 }
 
 main();
