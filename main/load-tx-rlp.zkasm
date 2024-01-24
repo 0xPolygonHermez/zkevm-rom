@@ -1,5 +1,6 @@
 INCLUDE "load-tx-rlp-utils.zkasm"
 INCLUDE "load-change-l2-block.zkasm"
+INCLUDE "l2-tx-hash.zkasm"
 
 ; Blocks RLP parsing
 ;       A - Initialization
@@ -84,6 +85,9 @@ endList:
         $ => D                          :MLOAD(cntKeccakPreProcess)
         %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B - D - 1    :JMPN(outOfCountersKeccak)
 
+; reserve one byte for the txType in the l2HashTx
+        1                               :MSTORE(l2HASHP)
+
 ;; Read RLP 'nonce'
         ; 64 bits max
 nonceREAD:
@@ -104,6 +108,7 @@ shortNonce:
                                         :CALL(checkNonLeadingZeros)
 
 endNonce:
+        8 => D
         A                               :MSTORE(txNonce), CALL(addL2HashTx)
 
 ;; Read RLP 'gas price'
@@ -125,6 +130,7 @@ shortGasPrice:
                                         :CALL(checkNonLeadingZeros)
 
 endGasPrice:
+        32 => D
         A                               :MSTORE(txGasPriceRLP), CALL(addL2HashTx)
 
 
@@ -147,6 +153,7 @@ shortGasLimit:
                                         :CALL(checkNonLeadingZeros)
 
 endGasLimit:
+        8 => D
         A                               :MSTORE(txGasLimit), CALL(addL2HashTx)
 
 ;; Read RLP 'to'
@@ -160,10 +167,12 @@ toREAD:
         A - 0x95                        :JMPN(shortTo, invalidTxRLP)
 
 noTo:
-        1                               :MSTORE(isCreateContract), JMP(endTo)
+        1                               :MSTORE(isCreateContract), CALL(addL2HashTx_isDeploy)
+                                        :JMP(endTo)
 
 shortTo:
         A - 0x80 => D                   :CALL(addHashTx)
+                                        :CALL(addL2HashTx_isNotDeploy)
                                         :CALL(addL2HashTx)
                                         :CALL(addBatchHashData)
         A                               :MSTORE(txDestAddr)
@@ -190,6 +199,7 @@ shortValue:
                                         :CALL(checkNonLeadingZeros)
 
 endValue:
+        32 => D
         A                               :MSTORE(txValue), CALL(addL2HashTx)
 
 ;; Read RLP 'data'
@@ -204,7 +214,7 @@ dataREAD:
         1 => D                          :CALL(addHashTx)
                                         :CALL(addBatchHashData)
         A - 0x80                        :JMPN(veryShortData)
-        A - 0x81                        :JMPN(endData)
+        A - 0x81                        :JMPN(zeroBytesData)
         A - 0xb8                        :JMPN(shortData)
         ; do not allow string over 2**24 bytes length
         ; Transaction could not have more than 120.000 due to smart contract limitation (keccaks counters)
@@ -212,7 +222,8 @@ dataREAD:
         A - 0xbb                        :JMPN(longData, invalidTxRLP)
 
 veryShortData:
-        1                               :MSTORE(txCalldataLen), CALL(addL2HashTx)
+        1                               :MSTORE(txCalldataLen), CALL(addL2HashTx_dataLength)
+                                        :CALL(addL2HashTx)
         31 => D                         :CALL(SHLarith) ; in: [A: value, D: #bytes to left shift] out: [A: shifted result]
         ; Store current CTX
         CTX => B
@@ -228,7 +239,8 @@ veryShortData:
 shortData:
         $ => D                          :MLOAD(batchHashPos)
         D                               :MSTORE(dataStarts)
-        A - 0x80 => B                   :MSTORE(txCalldataLen), JMP(readData)
+        A - 0x80 => B                   :MSTORE(txCalldataLen), CALL(addL2HashTx_dataLength)
+                                        :JMP(readData)
 
 longData:
         A - 0xb7 => D                   :CALL(addHashTx)
@@ -237,7 +249,7 @@ longData:
                                         :CALL(checkNonLeadingZeros)
         $ => D                          :MLOAD(batchHashPos)
         D                               :MSTORE(dataStarts)
-        A => B                          :MSTORE(txCalldataLen)
+        A => B                          :MSTORE(txCalldataLen), CALL(addL2HashTx_dataLength)
 
 readData:
         32 => D
@@ -270,6 +282,10 @@ readDataFinal:
         E + 1                           :MSTORE(globalCalldataMemoryOffset)
         32 - D => D                     :CALL(addBatchHashByteByByte); in: [A: bytes to add, D: bytes length] out: [E: lastHashKIdUsed, A: shifted bytes to add]
                                         :CALL(checkShortDataRLP)
+                                        :JMP(endData)
+
+zeroBytesData:
+                                        :CALL(addL2HashTx_dataLength)
 
 endData:
         ; Check all bytes read to detect pre EIP-155 tx, if bytes read are the same as txLength, we reached the end, so it's a pre EIP-155 tx
@@ -297,7 +313,8 @@ shortChainId:
                                         :CALL(checkNonLeadingZeros)
 
 endChainId:
-        A                               :MSTORE(txChainId)
+        8 => D
+        A                               :MSTORE(txChainId), CALL(addL2HashTx)
 
 ;; Read RLP last two values (0, 0)
         2 => D                          :CALL(addHashTx)
@@ -366,14 +383,14 @@ finishLoadRLP:
 checkAndSaveFrom:
         ; warning: we need to insert one transition step between label `checkAndSafeFrom` and `MSTORE(txSrcAddr)` to allow unsigned transactions from executor
         20 => D
-        A                               :MSTORE(txSrcAddr)
-        $ => E                          :MLOAD(l2TxHashPointer)
-        $ => HASHPOS                    :MLOAD(l2HASHP)
-        A                               :HASHP(E)
-        HASHPOS                         :HASHPLEN(E)
-        %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
-        $ => B                          :HASHPDIGEST(E)
-        B                               :MSTORE(l2TxHash),JMP(txLoopRLP)
+        ; save 'from' to l2TxHash
+        A                                       :MSTORE(txSrcAddr), CALL(addL2HashTx)
+        ; save txType to l2TxHash
+                                                :CALL(addL2HashTx_txType)
+        HASHPOS                                 :HASHPLEN(E)
+        %MAX_CNT_BINARY - CNT_BINARY - 1        :JMPN(outOfCountersBinary)
+        $ => B                                  :HASHPDIGEST(E)
+        B                                       :MSTORE(l2TxHash),JMP(txLoopRLP)
 
 ;;;;;;;;;
 ;; E - Handler error RLP fields

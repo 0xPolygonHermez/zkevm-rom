@@ -1,0 +1,89 @@
+VAR CTX l2HASHP
+VAR GLOBAL addL2HashTxAux
+VAR GLOBAL tmpVarA_addL2HashTx
+VAR GLOBAL tmpVarB_addL2HashTx
+VAR GLOBAL tmpVarD_addL2HashTx
+VAR GLOBAL tmpVarE_addL2HashTx
+
+;; Add bytes to generate L2 transaction hash
+; @in A => bytes to add to hash
+; @in D => length of the bytes to add to hash
+addL2HashTx:
+        E => B
+        $ => E                          :MLOAD(l2TxHashPointer)
+        HASHPOS                         :MSTORE(addL2HashTxAux)
+        $ => HASHPOS                    :MLOAD(l2HASHP)
+        A                               :HASHP(E)
+        HASHPOS                         :MSTORE(l2HASHP)
+        $ => HASHPOS                    :MLOAD(addL2HashTxAux)
+        B => E                          :RETURN
+
+;; Add byte to determine if it is a deployment
+addL2HashTx_isDeploy:
+        A                               :MSTORE(tmpVarA_addL2HashTx)
+        D                               :MSTORE(tmpVarD_addL2HashTx)
+        E => B
+        $ => E                          :MLOAD(l2TxHashPointer)
+        HASHPOS                         :MSTORE(addL2HashTxAux)
+        $ => HASHPOS                    :MLOAD(l2HASHP)
+        1 => D
+        1                               :HASHP(E)
+        HASHPOS                         :MSTORE(l2HASHP)
+        $ => HASHPOS                    :MLOAD(addL2HashTxAux)
+        $ => D                          :MLOAD(tmpVarD_addL2HashTx)
+        $ => A                          :MLOAD(tmpVarA_addL2HashTx)
+        B => E                          :RETURN
+
+;; Add byte to determine if it is not a deployment
+addL2HashTx_isNotDeploy:
+        A                               :MSTORE(tmpVarA_addL2HashTx)
+        D                               :MSTORE(tmpVarD_addL2HashTx)
+        E => B
+        $ => E                          :MLOAD(l2TxHashPointer)
+        HASHPOS                         :MSTORE(addL2HashTxAux)
+        $ => HASHPOS                    :MLOAD(l2HASHP)
+        1 => D
+        0                               :HASHP(E)
+        HASHPOS                         :MSTORE(l2HASHP)
+        $ => HASHPOS                    :MLOAD(addL2HashTxAux)
+        $ => D                          :MLOAD(tmpVarD_addL2HashTx)
+        $ => A                          :MLOAD(tmpVarA_addL2HashTx)
+        B => E                          :RETURN
+
+;; Add 3 bytes which will be the data length
+addL2HashTx_dataLength:
+        A                               :MSTORE(tmpVarA_addL2HashTx)
+        B                               :MSTORE(tmpVarB_addL2HashTx)
+        D                               :MSTORE(tmpVarD_addL2HashTx)
+        E                               :MSTORE(tmpVarE_addL2HashTx)
+        $ => E                          :MLOAD(l2TxHashPointer)
+        HASHPOS                         :MSTORE(addL2HashTxAux)
+        $ => HASHPOS                    :MLOAD(l2HASHP)
+        3 => D
+        $ => A                          :MLOAD(txCalldataLen)
+        A                               :HASHP(E)
+        HASHPOS                         :MSTORE(l2HASHP)
+        $ => HASHPOS                    :MLOAD(addL2HashTxAux)
+        $ => E                          :MLOAD(tmpVarE_addL2HashTx)
+        $ => D                          :MLOAD(tmpVarD_addL2HashTx)
+        $ => B                          :MLOAD(tmpVarB_addL2HashTx)
+        $ => A                          :MLOAD(tmpVarA_addL2HashTx), RETURN
+
+;; Add 1 bytes which will be the txType
+addL2HashTx_txType:
+        A                               :MSTORE(tmpVarA_addL2HashTx)
+        D                               :MSTORE(tmpVarD_addL2HashTx)
+        $ => E                          :MLOAD(l2TxHashPointer)
+        HASHPOS                         :MSTORE(addL2HashTxAux)
+        0 => HASHPOS
+        1 => D
+        $ => A                          :MLOAD(isPreEIP155), JMPZ(addL2HashTx_txType_write_1)
+addL2HashTx_txType_write_0:
+        0                               :HASHP(E), JMP(addL2HashTx_txType_finish)
+addL2HashTx_txType_write_1:
+        1                               :HASHP(E)
+addL2HashTx_txType_finish:
+        ; recover total length HASHPOS
+        $ => HASHPOS                    :MLOAD(l2HASHP)
+        $ => D                          :MLOAD(tmpVarD_addL2HashTx)
+        $ => A                          :MLOAD(tmpVarA_addL2HashTx), RETURN
