@@ -1,0 +1,127 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; POST: out is trimmed
+;;
+;; array_mul_short:
+;;             in:
+;;                  · C ∈ [1, 32], the len of inA
+;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
+;;                  · inB ∈ [0, 2²⁵⁶ - 1], the second input
+;;
+;;          output:
+;;                  · out = inA·inB, with len(out) <= C + 1
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; function array_mul_short(a: bigint[], b: bigint, base: bigint): bigint[] {
+;     const alen = a.length;
+;     const len = alen;
+;     const result = new Array<bigint>(len).fill(0n);
+;     let product: bigint;
+;     let carry = 0n;
+;     let i;
+;     for (i = 0; i < alen; i++) {
+;         product = a[i] * b + carry;
+;         carry = product / base;
+;         out[i] = product - carry * base;
+;     }
+
+;     if (carry > 0n) {
+;         result.push(carry);
+;     }
+
+;     trim(result);
+;     return result;
+; }
+
+VAR GLOBAL array_mul_short_inA[%ARRAY_MAX_LEN]
+VAR GLOBAL array_mul_short_inB
+VAR GLOBAL array_mul_short_out[%ARRAY_MAX_LEN_PLUS_ONE]
+VAR GLOBAL array_mul_short_len_inA
+VAR GLOBAL array_mul_short_len_out
+
+VAR GLOBAL array_mul_short_carry
+
+VAR GLOBAL array_mul_short_RR
+
+array_mul_short:
+        %MAX_CNT_BINARY - CNT_BINARY               - 2*C        :JMPN(outOfCountersBinary)
+        %MAX_CNT_ARITH - CNT_ARITH                 - C          :JMPN(outOfCountersArith)
+        %MAX_CNT_STEPS - STEP        - 6 - 2*C-2   - 18*C - 6   :JMPN(outOfCountersStep)
+
+        RR              :MSTORE(array_mul_short_RR)
+
+        C               :MSTORE(array_mul_short_len_inA)
+        C + 1           :MSTORE(array_mul_short_len_out)
+
+        C => E          ; auxiliar index
+        0 => RCX        ; index in loops
+        0               :MSTORE(array_mul_short_carry)
+
+array_mul_short_clean_out:
+        0               :MSTORE(array_mul_short_out + E)
+        E - 1 => E      :JMPN(array_mul_short_loopZero2inA, array_mul_short_clean_out)
+
+array_mul_short_loopZero2inA:
+        ; The result will be stored as D·base + C
+
+        RCX => E
+        ; 1] a[i] * b, where a[i],b ∈ [0,base-1]: This number cannot be GT (base - 2)·base + 1, two chunks
+        $ => A          :MLOAD(array_mul_short_inA + E)
+        $ => B          :MLOAD(array_mul_short_inB)
+        0 => C
+        $${var _arrayShortMul_AB = A*B}
+        ${_arrayShortMul_AB >> 256} => D
+        ${_arrayShortMul_AB} => E :ARITH
+
+        ; 2] product = a[i] * b + carry, where carry ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
+        E => A
+        $ => B          :MLOAD(array_mul_short_carry)
+        $ => C          :ADD, JMPNC(__array_mul_short_no_carry_continue)
+        ;-----------------
+        ; Since here D ∈ [0, base - 2], there cannot be carry in the following addition
+        D => A
+        1 => B
+        $ => D          :ADD
+        ;-----------------
+                        __array_mul_short_no_carry_continue:
+
+        ; carry = product / base
+        D               :MSTORE(array_mul_short_carry)
+
+        ; out[i] = product - carry·base
+        RCX => E
+        C               :MSTORE(array_mul_short_out + E)
+
+        RCX + 1 => RCX
+        $ => B          :MLOAD(array_mul_short_len_inA)
+        B - RCX         :JMPZ(array_mul_short_carry_check, array_mul_short_loopZero2inA)
+
+; If the last carry > 0, we need to insert it to the output
+array_mul_short_carry_check:
+        $ => A          :MLOAD(array_mul_short_carry)
+        0 => B
+        $               :EQ, JMPC(array_mul_short_prep_trim_in)
+
+        RCX => E
+        A              :MSTORE(array_mul_short_out + E)
+
+array_mul_short_prep_trim_in:
+        $ => C          :MLOAD(array_mul_short_len_out)
+        C - 1 => E
+
+        %MAX_CNT_STEPS - STEP - 3*C - 1   :JMPN(outOfCountersStep)
+
+array_mul_short_trim_in:
+        $ => A          :MLOAD(array_mul_short_out + E)
+        A               :MSTORE(array_trim_in + E)
+        E - 1 => E      :JMPZ(array_mul_short_trim, array_mul_short_trim_in)
+
+array_mul_short_trim:
+                        :CALL(array_trim)
+
+        %MAX_CNT_STEPS - STEP - 3   :JMPN(outOfCountersStep)
+
+        C               :MSTORE(array_mul_short_len_out)
+
+array_mul_short_end:
+        $ => RR         :MLOAD(array_mul_short_RR)
+                        :RETURN

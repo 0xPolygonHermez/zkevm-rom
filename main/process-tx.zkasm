@@ -2,7 +2,7 @@ INCLUDE "map-opcodes.zkasm"
 INCLUDE "precompiled/selector.zkasm"
 INCLUDE "ecrecover/ecrecover.zkasm"
 INCLUDE "touched.zkasm"
-INCLUDE "2-exp.zkasm"
+INCLUDE "tables/2-exp.zkasm"
 
 ; Blocks process txs
 ;       A - Verify ecdsa signature
@@ -26,26 +26,18 @@ processTx:
 ;; Store init state
 ;;;;;;;;;
 
-        ; Store initial state at the beginning of the transaction
-        SR                              :MSTORE(originSR)
         SR                              :MSTORE(initSR)
         CTX                             :MSTORE(currentCTX)
-        ; Minimum of 100000 steps left to process a tx
-        %MAX_CNT_STEPS - STEP - 100000 :JMPN(outOfCountersStep)
-        %MAX_CNT_BINARY - CNT_BINARY - 100   :JMPN(outOfCountersBinary)
-        %MAX_CNT_ARITH - CNT_ARITH - 2  :JMPN(outOfCountersArith)
 
-        $ => A                          :MLOAD(txHash)
+        ; Minimum of 100000 steps left to process a tx
+        %MAX_CNT_STEPS - STEP - 100000          :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY - 100      :JMPN(outOfCountersBinary)
+        %MAX_CNT_ARITH - CNT_ARITH - 2          :JMPN(outOfCountersArith)
+
         ; Check the signature
-        $ => B                          :MLOAD(txR)
-        $ => C                          :MLOAD(txS)
-        $ => D                          :MLOAD(txV), CALL(ecrecover_tx)
-        ; Check result is non-zero
-checkAndSaveFrom:
-        0 => B
-        A                               :MSTORE(txSrcAddr)
+        $ => A                          :MLOAD(txSrcAddr)
         A                               :MSTORE(txSrcOriginAddr)
-        $                               :EQ,JMPC(invalidIntrinsicTxSignature)
+        $                               :MLOAD(ecrecoverErrorCode), JMPNZ(invalidIntrinsicTxSignature)
 
 ;;;;;;;;;;;;;;;;;;
 ;; B - Verify tx.sender does not have any code deployed (EIP3607)
@@ -69,8 +61,9 @@ endCheckChainId:
 ;; Reset warm/cold information
         $ => A                          :MLOAD(txSrcOriginAddr), CALL(initTouchedTree)
                                         :CALL(isColdAddress) ; add tx.origin to touched addresses
-        0                               :MSTORE(depth) ; Initial depth is 0
 
+; Set tx status to success by default
+        1                               :MSTORE(txStatus),CALL(checkpointBlockInfoTree)
 ;; Set gasPrice global var depending on effectivePercentage [0-255] -> txGasPrice = Floor((gasPrice * (effectivePercentage + 1)) / 256)
         ; gasPrice => A
         $ => A                          :MLOAD(txGasPriceRLP)
@@ -85,12 +78,12 @@ endCheckChainId:
         ; get value above 256 bits
         ${_effGasPriceShifted >> 256} => D
         ; compute ARITH
-        ${_effGasPriceShifted} => E              :ARITH
+        ${_effGasPriceShifted} => E             :ARITH
 
         ; txGasPrice = _effGasPriceShifted / 256
         256 => B
         ; (_effGasPriceShifted / 256)(A) * 256(B) + (_effGasPriceShifted % 256)(C) = D * 2**256 + op(E)
-        ${_effGasPriceShifted / 256} => A        :MSTORE(txGasPrice)
+        ${_effGasPriceShifted / 256} => A       :MSTORE(txGasPrice)
         ${_effGasPriceShifted % 256} => C
         ; compute ARITH
         E                                       :ARITH
@@ -143,7 +136,7 @@ addGas:
         0 => C                          :JMP(loopBytes)
 
 loopBytes:
-        %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 10      :JMPN(outOfCountersStep)
         A - C - 1                       :JMPN(endCalldataIntrinsicGas)
         E => B
         $ => E                          :MLOAD(batchHashDataId)
@@ -187,16 +180,16 @@ endCalldataIntrinsicGas:
         C => A
         $                               :LT, JMPC(invalidIntrinsicTxBalance)
 
-        ; Substract (gas price * gas limit) from caller balance
+        ; Subtract (gas price * gas limit) from caller balance
         C                               :MSTORE(arithA)
         D                               :MSTORE(arithB), CALL(subARITH)
-        ; Substracted balance result in D
+        ; Subtracted balance result in D
         $ => D                          :MLOAD(arithRes1)
         $ => A                          :MLOAD(txSrcOriginAddr)
         0 => B,C
         $ => SR                         :SSTORE
 
-        ; Store state root with upfront cost substracted and nonce increased
+        ; Store state root with upfront cost subtracted and nonce increased
         SR                              :MSTORE(initSR)
 
         ; Substract intrinsic gas
@@ -279,7 +272,7 @@ create2:
         136                             :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
         $ => B                          :MLOAD(arithRes1)
         $ => A                          :MLOAD(cntKeccakPreProcess)
-        ; -2 because we will use one more keccack for generating contract address
+        ; -2 because we will use one more keccak for generating contract address
         %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2 - B :JMPN(outOfCountersKeccak)
 
         $ => CTX                        :MLOAD(originCTX)
@@ -333,10 +326,10 @@ endContractAddress:
 
 ;; deploy contract in state-tree
 deploy:
-        %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 200                                             :JMPN(outOfCountersStep)
         %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*3 :JMPN(outOfCountersPoseidon)
-        %MAX_CNT_BINARY - CNT_BINARY - 3   :JMPN(outOfCountersBinary)
-                                :CALL(isColdAddress) ; add address to touched addresses
+        %MAX_CNT_BINARY - CNT_BINARY - 3                                        :JMPN(outOfCountersBinary)
+                                                                                :CALL(isColdAddress) ; add address to touched addresses
         ; check if address is deployable ( nonce == bytecode == 0)
         A => E
 
@@ -464,9 +457,9 @@ readCode:
 ;; Compute and save hash bytecode and bytecode length in the state-tree
 endDeploy:
         ; checks zk-counters
-        %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 400                                             :JMPN(outOfCountersStep)
         %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*2 :JMPN(outOfCountersPoseidon)
-
+        %MAX_CNT_BINARY - CNT_BINARY - 2                                        :JMPN(outOfCountersBinary)
         ; called from `opRETURNDeploy` which has: C --> length, E --> offset
         ; only when first context ends on deploy
         ; If length is 0 do not modify state-tree
@@ -489,7 +482,7 @@ endDeploy:
         $ => A                          :MLOAD(createContractAddress)
         0 => C
         %SMT_KEY_SC_CODE => B
-        $ => SR                         :SSTORE
+        $ => SR                         :SSTORE, JMP(handleGas)
 
 ;;;;;;;;;;;;;;;;;;
 ;; G - Handle GAS
@@ -497,11 +490,14 @@ endDeploy:
 ;;   - Return gas not used to caller
 ;;   - Pay gas to sequencer
 ;;;;;;;;;;;;;;;;;;
-
+handleGasFromError:
+    ; Set tx status to failure
+    0               :MSTORE(txStatus)
 ;; compute maximum gas to refund
 handleGas:
-        %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 200                                             :JMPN(outOfCountersStep)
         %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*4 :JMPN(outOfCountersPoseidon)
+        %MAX_CNT_BINARY - CNT_BINARY - 2                                        :JMPN(outOfCountersBinary)
         0 => A
         $ => B                          :MLOAD(gasRefund), JMPZ(refundGas)
         $ => A                          :MLOAD(txGasLimit)
@@ -557,35 +553,34 @@ sendGasSeq:
         $ => D          :MLOAD(arithRes1)
         $ => A          :MLOAD(sequencerAddr)
         0 => B,C ; balance key smt
-        $ => SR         :SSTORE, JMP(processTxEnd)
+        $ => SR         :SSTORE, JMP(processTxFinished)
 
 ;; handle invalid transaction due to intrinsic checks
 invalidIntrinsicTxSignature:
-        $${eventLog(onError, intrinsic_invalid_signature)} :JMP(handleIntrinsicError)
+        $${eventLog(onError, intrinsic_invalid_signature)}      :JMP(handleIntrinsicError)
 
 invalidIntrinsicTxChainId:
-        $${eventLog(onError, intrinsic_invalid_chain_id)}  :JMP(handleIntrinsicError)
+        $${eventLog(onError, intrinsic_invalid_chain_id)}       :JMP(handleIntrinsicError)
 
 invalidIntrinsicTxNonce:
-        $${eventLog(onError, intrinsic_invalid_nonce)}     :JMP(handleIntrinsicError)
+        $${eventLog(onError, intrinsic_invalid_nonce)}          :JMP(handleIntrinsicError)
 
 invalidIntrinsicTxGasLimit:
-        $${eventLog(onError, intrinsic_invalid_gas_limit)}  :JMP(handleIntrinsicError)
+        $${eventLog(onError, intrinsic_invalid_gas_limit)}      :JMP(handleIntrinsicError)
 
 invalidIntrinsicTxGasOverflow:
-        $${eventLog(onError, intrinsic_invalid_gas_overflow)} :JMP(handleIntrinsicError)
+        $${eventLog(onError, intrinsic_invalid_gas_overflow)}   :JMP(handleIntrinsicError)
 
 invalidIntrinsicTxBalance:
-        $${eventLog(onError, intrinsic_invalid_balance)}    :JMP(handleIntrinsicError)
+        $${eventLog(onError, intrinsic_invalid_balance)}        :JMP(handleIntrinsicError)
 
 invalidIntrinsicBatchGasLimit:
-        $${eventLog(onError, intrinsic_invalid_batch_gas_limit)} :JMP(handleIntrinsicError)
+        $${eventLog(onError, intrinsic_invalid_batch_gas_limit)}:JMP(handleIntrinsicError)
 
 invalidIntrinsicTxSenderCode:
-        $${eventLog(onError, intrinsic_invalid_sender_code)} :JMP(handleIntrinsicError)
-
+        $${eventLog(onError, intrinsic_invalid_sender_code)}    :JMP(handleIntrinsicError)
 handleIntrinsicError:
-        $ => SR                         :MLOAD(originSR), JMP(processTxFinished)
+        $ => SR                                                 :MLOAD(originSR), JMP(processIntrinsicTxFinished)
 
 ;; handle error no more bytecode to read
 defaultOpCode:

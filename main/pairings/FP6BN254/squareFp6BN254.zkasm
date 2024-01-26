@@ -1,0 +1,147 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; POST: The result is in the range [0,BN254_P) because if falls back to FP2 arithmetic
+;;
+;; squareFp6BN254:
+;;             in: (a1 + a2·v + a3·v²) ∈ Fp6, where ai ∈ Fp2
+;;             out: (c1 + c2·v + c3·v²) ∈ Fp6, where:
+;;                  - c1 = 2·a2·a3·(9 + u) + a1²
+;;                  - c2 = a3²·(9 + u) + 2·a1·a2
+;;                  - c3 = 2·a1·a2 - a3² + (a1 - a2 + a3)² + 2·a2·a3 - a1²
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL squareFp6BN254_a1_x
+VAR GLOBAL squareFp6BN254_a1_y
+VAR GLOBAL squareFp6BN254_a2_x
+VAR GLOBAL squareFp6BN254_a2_y
+VAR GLOBAL squareFp6BN254_a3_x
+VAR GLOBAL squareFp6BN254_a3_y
+VAR GLOBAL squareFp6BN254_c1_x
+VAR GLOBAL squareFp6BN254_c1_y
+VAR GLOBAL squareFp6BN254_c2_x
+VAR GLOBAL squareFp6BN254_c2_y
+VAR GLOBAL squareFp6BN254_c3_x
+VAR GLOBAL squareFp6BN254_c3_y
+
+VAR GLOBAL squareFp6BN254_2a1a2mul_x
+VAR GLOBAL squareFp6BN254_2a1a2mul_y
+VAR GLOBAL squareFp6BN254_a3square_x
+VAR GLOBAL squareFp6BN254_a3square_y
+VAR GLOBAL squareFp6BN254_2a1a2a3sqsub_x
+VAR GLOBAL squareFp6BN254_2a1a2a3sqsub_y
+VAR GLOBAL squareFp6BN254_a1square_x
+VAR GLOBAL squareFp6BN254_a1square_y
+VAR GLOBAL squareFp6BN254_a1a2a3sub_x
+VAR GLOBAL squareFp6BN254_a1a2a3sub_y
+VAR GLOBAL squareFp6BN254_2a2a3mul_x
+VAR GLOBAL squareFp6BN254_2a2a3mul_y
+
+VAR GLOBAL squareFp6BN254_RR
+
+squareFp6BN254:
+        RR              :MSTORE(squareFp6BN254_RR)
+
+        ; 1] 2·a1·a2
+        $ => A          :MLOAD(squareFp6BN254_a1_x)
+        $ => B          :MLOAD(squareFp6BN254_a1_y)
+        $ => C          :MLOAD(squareFp6BN254_a2_x)
+        $ => D          :MLOAD(squareFp6BN254_a2_y), CALL(mulFp2BN254)
+        2n => A
+        C => D
+        E => C          :CALL(escalarMulFp2BN254)
+
+        E               :MSTORE(squareFp6BN254_2a1a2mul_x)
+        C               :MSTORE(squareFp6BN254_2a1a2mul_y)
+
+        ; 2] a3²
+        $ => A          :MLOAD(squareFp6BN254_a3_x)
+        $ => B          :MLOAD(squareFp6BN254_a3_y), CALL(squareFp2BN254)
+        E               :MSTORE(squareFp6BN254_a3square_x)
+        C               :MSTORE(squareFp6BN254_a3square_y)
+
+        ; 3] c2 = a3²·(9 + u) + 2·a1·a2
+        $ => A          :MLOAD(squareFp6BN254_a3square_x)
+        $ => B          :MLOAD(squareFp6BN254_a3square_y)
+        9n => C
+        1n => D         :CALL(mulFp2BN254)
+
+        $ => A          :MLOAD(squareFp6BN254_2a1a2mul_x)
+        $ => B          :MLOAD(squareFp6BN254_2a1a2mul_y)
+        C => D
+        E => C          :CALL(addFp2BN254)
+
+        E               :MSTORE(squareFp6BN254_c2_x)
+        C               :MSTORE(squareFp6BN254_c2_y)
+
+        ; 4] 2·a1·a2 - a3²
+        $ => A          :MLOAD(squareFp6BN254_2a1a2mul_x)
+        $ => B          :MLOAD(squareFp6BN254_2a1a2mul_y)
+        $ => C          :MLOAD(squareFp6BN254_a3square_x)
+        $ => D          :MLOAD(squareFp6BN254_a3square_y), CALL(subFp2BN254)
+        E               :MSTORE(squareFp6BN254_2a1a2a3sqsub_x)
+        C               :MSTORE(squareFp6BN254_2a1a2a3sqsub_y)
+
+        ; 5] a1²
+        $ => A          :MLOAD(squareFp6BN254_a1_x)
+        $ => B          :MLOAD(squareFp6BN254_a1_y), CALL(squareFp2BN254)
+        E               :MSTORE(squareFp6BN254_a1square_x)
+        C               :MSTORE(squareFp6BN254_a1square_y)
+
+        ; 6] (a1 - a2 + a3)²
+        $ => A          :MLOAD(squareFp6BN254_a1_x)
+        $ => B          :MLOAD(squareFp6BN254_a1_y)
+        $ => C          :MLOAD(squareFp6BN254_a2_x)
+        $ => D          :MLOAD(squareFp6BN254_a2_y), CALL(subFp2BN254)
+        E => A
+        C => B
+        $ => C          :MLOAD(squareFp6BN254_a3_x)
+        $ => D          :MLOAD(squareFp6BN254_a3_y), CALL(addFp2BN254)
+        E => A
+        C => B          :CALL(squareFp2BN254)
+
+        E               :MSTORE(squareFp6BN254_a1a2a3sub_x)
+        C               :MSTORE(squareFp6BN254_a1a2a3sub_y)
+
+        ; 7] 2·a2·a3
+        $ => A          :MLOAD(squareFp6BN254_a2_x)
+        $ => B          :MLOAD(squareFp6BN254_a2_y)
+        $ => C          :MLOAD(squareFp6BN254_a3_x)
+        $ => D          :MLOAD(squareFp6BN254_a3_y), CALL(mulFp2BN254)
+        2n => A
+        C => D
+        E => C          :CALL(escalarMulFp2BN254)
+
+        E               :MSTORE(squareFp6BN254_2a2a3mul_x)
+        C               :MSTORE(squareFp6BN254_2a2a3mul_y)
+
+        ; 8] c1 = 2·a2·a3·(9 + u) + a1²
+        $ => A          :MLOAD(squareFp6BN254_2a2a3mul_x)
+        $ => B          :MLOAD(squareFp6BN254_2a2a3mul_y)
+        9n => C
+        1n => D         :CALL(mulFp2BN254)
+
+        E => A
+        C => B
+        $ => C          :MLOAD(squareFp6BN254_a1square_x)
+        $ => D          :MLOAD(squareFp6BN254_a1square_y), CALL(addFp2BN254)
+        E               :MSTORE(squareFp6BN254_c1_x)
+        C               :MSTORE(squareFp6BN254_c1_y)
+
+        ; 9] c3 = 2·a1·a2 - a3² + (a1 - a2 + a3)² + 2·a2·a3 - a1²
+        $ => A          :MLOAD(squareFp6BN254_2a1a2a3sqsub_x)
+        $ => B          :MLOAD(squareFp6BN254_2a1a2a3sqsub_y)
+        $ => C          :MLOAD(squareFp6BN254_a1a2a3sub_x)
+        $ => D          :MLOAD(squareFp6BN254_a1a2a3sub_y), CALL(addFp2BN254)
+        E => A
+        C => B
+        $ => C          :MLOAD(squareFp6BN254_2a2a3mul_x)
+        $ => D          :MLOAD(squareFp6BN254_2a2a3mul_y), CALL(addFp2BN254)
+        E => A
+        C => B
+        $ => C          :MLOAD(squareFp6BN254_a1square_x)
+        $ => D          :MLOAD(squareFp6BN254_a1square_y), CALL(subFp2BN254)
+        E               :MSTORE(squareFp6BN254_c3_x)
+        C               :MSTORE(squareFp6BN254_c3_y)
+
+        $ => RR         :MLOAD(squareFp6BN254_RR)
+                        :RETURN

@@ -1,0 +1,159 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; POST: The resulting coordinates are in the range [0,BN254_P) because if falls back to FP arithmetic
+;;
+;; ecMul:
+;;             in: k, P = (P.x, P.y) ∈ E(Fp), where k ∈ [0,r-1]
+;;             out: k·P = (Q.x, Q.y) ∈ E(Fp)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Since the curve is E/Fp: y² = x³ + 3, there is no issue in representing the point at infinity as (0, 0).
+
+VAR GLOBAL ecMul_k
+VAR GLOBAL ecMul_P_x
+VAR GLOBAL ecMul_P_y
+VAR GLOBAL ecMul_Q_x
+VAR GLOBAL ecMul_Q_y
+
+VAR GLOBAL ecMul_RR
+
+; ERROR CODES (B)
+; 0 - no error
+; 1 - P_x is too big
+; 2 - P_y is too big
+; 3 - P is not in E(Fp)
+
+ecMul:
+        RR      :MSTORE(ecMul_RR)
+
+        %BN254_P_MINUS_ONE => A
+        $ => B      :MLOAD(ecMul_P_x)
+        $           :LT, JMPC(ecMul_Px_too_big)
+        $ => B      :MLOAD(ecMul_P_y)
+        $           :LT, JMPC(ecMul_Py_too_big)
+
+        ; Is P = O?
+        0n => B
+        $ => A  :MLOAD(ecMul_P_x)
+        $       :EQ, JMPNC(__ecMul_P_continue)
+        $ => A  :MLOAD(ecMul_P_y)
+        $       :EQ, JMPC(ecMul_P_is_zero)
+                __ecMul_P_continue:
+
+        ; 1] Check if P is in E(Fp)
+        ; P in E iff (P.y)² == (P.x)³ + 3 (mod p)
+        ; 1.1] Compute LHS and RHS
+        $ => A    :MLOAD(ecMul_P_x), CALL(squareFpBN254)
+        ; B = (P.x)²
+
+        $ => A      :MLOAD(ecMul_P_x), CALL(mulFpBN254)
+        ; C = (P.x)³
+
+        %BN254_E_B => A     :CALL(addFpBN254)
+        ; C = (P.x)³ + 3
+        C           :MSTORE(ecMul_Q_x)
+
+        $ => A    :MLOAD(ecMul_P_y), CALL(squareFpBN254)
+        ; B = (Py)²
+
+        ; 1.2] Check if LHS == RHS
+        B => A
+        $ => B      :MLOAD(ecMul_Q_x)
+        $           :EQ, JMPNC(ecMul_P_is_not_in_E)
+
+        ; Is k ∈ [1,r-1]?
+        $ => B      :MLOAD(ecMul_k), CALL(reduceFrBN254)
+        A           :MSTORE(ecMul_k)
+        0n => B
+        $           :EQ, JMPC(ecMul_k_is_zero)
+
+        257 => RCX
+
+        $ => A  :MLOAD(ecMul_P_x)
+        $ => C  :MLOAD(ecMul_P_y)
+        A       :MSTORE(ecMul_Q_x)
+        C       :MSTORE(ecMul_Q_y)
+
+                :JMP(ecMul_find_MSB_k)
+
+ecMul_P_is_zero:
+        ; Q = O
+        0n      :MSTORE(ecMul_Q_x)
+        0n      :MSTORE(ecMul_Q_y)
+
+                :JMP(ecMul_correct)
+
+ecMul_k_is_zero:
+        ; Q = O
+        0n      :MSTORE(ecMul_Q_x)
+        0n      :MSTORE(ecMul_Q_y)
+
+                :JMP(ecMul_correct)
+
+ecMul_find_MSB_k:
+        RCX - 1 => RCX
+        $ => A,B        :MLOAD(ecMul_k)
+        ; E = 2A
+        $ => E          :ADD,MSTORE(ecMul_k), JMPNC(ecMul_find_MSB_k)
+
+
+ecMul_loop:
+        RCX - 1 => RCX    :JMPZ(ecMul_correct)
+
+        ; We always double
+        $ => A  :MLOAD(ecMul_Q_x)
+        $ => B  :MLOAD(ecMul_Q_y)
+        A       :MSTORE(ecAdd_P1_x)
+        B       :MSTORE(ecAdd_P1_y)
+        A       :MSTORE(ecAdd_P2_x)
+        B       :MSTORE(ecAdd_P2_y), CALL(ecAdd)
+        ; Q = Q + Q
+
+        $ => A  :MLOAD(ecAdd_P3_x)
+        $ => B  :MLOAD(ecAdd_P3_y)
+        A       :MSTORE(ecMul_Q_x)
+        B       :MSTORE(ecMul_Q_y)
+
+        ; We check if the MSB b of k is either 1 or 0. If b==1, we should add P to Q.
+        ; Then, update the value of k.
+        $ => A,B        :MLOAD(ecMul_k)
+        ; E = 2A
+        $ => E          :ADD, MSTORE(ecMul_k), JMPNC(ecMul_loop)
+
+ecMul_add:
+        ; We add
+        $ => A  :MLOAD(ecMul_Q_x)
+        $ => B  :MLOAD(ecMul_Q_y)
+        $ => C  :MLOAD(ecMul_P_x)
+        $ => D  :MLOAD(ecMul_P_y)
+        A       :MSTORE(ecAdd_P1_x)
+        B       :MSTORE(ecAdd_P1_y)
+        C       :MSTORE(ecAdd_P2_x)
+        D       :MSTORE(ecAdd_P2_y), CALL(ecAdd)
+        ; Q = Q + P
+
+        $ => A  :MLOAD(ecAdd_P3_x)
+        $ => B  :MLOAD(ecAdd_P3_y)
+        A       :MSTORE(ecMul_Q_x)
+        B       :MSTORE(ecMul_Q_y), JMP(ecMul_loop)
+
+
+; ERRORS
+ecMul_Px_too_big:
+        1 => B      :JMP(ecMul_error)
+
+ecMul_Py_too_big:
+        2 => B      :JMP(ecMul_error)
+
+ecMul_P_is_not_in_E:
+        3 => B      :JMP(ecMul_error)
+
+ecMul_correct:
+        0 => B      :JMP(ecMul_end)
+
+ecMul_error:
+        0 => A
+
+ecMul_end:
+        $ => RR         :MLOAD(ecMul_RR)
+                        :RETURN

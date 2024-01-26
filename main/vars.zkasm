@@ -1,16 +1,20 @@
 ; Input variables
 VAR GLOBAL oldStateRoot ; Previous state-tree root
 VAR GLOBAL oldAccInputHash ; Previous accumulated input hash
-VAR GLOBAL globalExitRoot ; Global exit-tree root
+VAR GLOBAL l1InfoRoot ; Global exit-tree root
 VAR GLOBAL oldNumBatch ; Previous batch processed
 VAR GLOBAL sequencerAddr ; Coinbase address which will receive the fees
 VAR GLOBAL batchHashData ; batchHashData = H_keccak( transactions )
+VAR GLOBAL timestampLimit ; timestampLimit of the batch
 VAR GLOBAL timestamp ; Current batch timestamp
 VAR GLOBAL chainID ; Current batch chain id
 VAR GLOBAL forkID ; Fork identifier
+VAR GLOBAL forcedBlockHashL1 ; blockHash ¡n L1 when a forced transaction has been done
+VAR GLOBAL isForced ; Flag to determine if the batch is forced
+VAR GLOBAL cumulativeGasUsed ; cumulative gas used in the block
 
 ; Output variables
-VAR GLOBAL newAccInputHash ; Final accumulated input hash. newAccInputHash = H_keccak( oldAccInputHash | batchHashData | globalExitRoot | timestamp | sequencerAddr )
+VAR GLOBAL newAccInputHash ; Final accumulated input hash. newAccInputHash = H_keccak( oldAccInputHash | batchHashData | l1InfoRoot | timestamp | sequencerAddr )
 VAR GLOBAL newLocalExitRoot ; Updated local exit tree root
 VAR GLOBAL newNumBatch ; Current batch processed
 
@@ -34,14 +38,15 @@ VAR GLOBAL valueCall ; value parameter when creating a new context
 VAR GLOBAL argsLengthCall ; size of the calldata creating a new context
 VAR GLOBAL txSrcOriginAddr ; origin address of a tx
 VAR GLOBAL txGasPrice ; transaction parameter: 'gasPrice' global var
-VAR GLOBAL depth ; Current depth execution
 VAR GLOBAL cntKeccakPreProcess ; Number of keccak counters needed to finish the batch
 
-VAR GLOBAL nextFreeLogIndex ; pointer to the next free slot to store information in LOG opcode
 VAR GLOBAL originSR ; State root before processing each transaction
 VAR GLOBAL batchSR ; State root before processing any transaction
-VAR GLOBAL txCount ; Current transaction count
+VAR GLOBAL blockNum ; Current block number
+VAR GLOBAL previousBlockHash ; Previous block hash
+VAR GLOBAL currentTx ; Current tx index in batch
 
+VAR GLOBAL blockInfoSR ; block info tree root
 VAR GLOBAL touchedSR ; touched tree root
 VAR GLOBAL numTopics ; number of topics depending on LOG opcode call
 VAR GLOBAL auxSR ; auxiliary variable. Temporary state root
@@ -50,6 +55,7 @@ VAR GLOBAL txDataRead ; aux variable to check transaction 'data' left that needs
 VAR GLOBAL isLoadingRLP ; flag to determine if the function is called from RLP loop
 VAR GLOBAL globalCalldataMemoryOffset ; Aux variable to store current calldata memory offset at calldata CTX's memory
 
+VAR GLOBAL txIndex ; index of the current tx in the block
 VAR CTX txGasLimit ; transaction parameter: 'gas limit'
 VAR CTX txDestAddr ; transaction parameter: 'to'
 VAR CTX storageAddr ; address which the storage will be modified
@@ -62,13 +68,16 @@ VAR CTX txS ; transaction parameter: ecdsa signature S
 VAR CTX txR ; transaction parameter: ecdsa signature R
 VAR CTX txV ; transaction parameter: ecdsa signature V
 VAR CTX txSrcAddr ; address that sends a transaction 'message.sender'
+VAR CTX ecrecoverErrorCode ; ecrecover result error code
+VAR CTX txStatus ; flag indicating success or failure of current transaction
 VAR CTX txHash ; signed tx hash
+VAR CTX l2TxHash ; L2 tx hash linearPoseidon[nonce, gasPrice, gasLimit, to, value, data, from]
 VAR CTX txCalldataLen ; calldata length
 VAR CTX isCreateContract ; flag to determine if a transaction will create a new contract
 VAR CTX createContractAddress ; address computed of a new contract
 VAR CTX lengthNonce ; 'nonce' length used when computing a new contract address
 VAR CTX gasRefund ; keeps track of the transaction gas refund
-VAR CTX initSR ; state-tree once the initial upfront cost is substracted and nonce is increased
+VAR CTX initSR ; state-tree once the initial upfront cost is subtracted and nonce is increased
 VAR CTX memLength ; current memory size
 VAR CTX lastMemLength ; length of bytes to copy to memory
 VAR CTX lastMemoryExpansionCost ; cost of the last memory expansion
@@ -95,3 +104,12 @@ VAR CTX gasCTX ; remaining gas in the origin CTX when a new context is created
 VAR CTX dataStarts; hash position where the transaction 'data' starts in the batchHashData
 VAR CTX isPreEIP155 ; flag to check if the current tx is legacy, previous to Spurious Dragon (EIP-155)
 VAR CTX initTouchedSR ; touched root once a new context begins
+VAR CTX initBlockInfoSR ; block info root once a new context begins
+VAR CTX initLogIndex ; log index once a new context begins
+
+VAR CTX deltaTimestamp ; delta timestamp of the current change L2 block tx
+VAR CTX indexL1InfoTree ; indexL1InfoTree of the current change L2 block tx
+VAR CTX gerL1InfoTree ; new GER of the current change L2 block tx
+VAR CTX blockHashL1InfoTree ; new BlockhashL1 of the current change L2 block tx
+VAR CTX timestampL1InfoTree ; new timestamp of the current change L2 block tx
+VAR CTX isChangeL2BlockTx ; flag to determine if the current tx is a change L2 block tx

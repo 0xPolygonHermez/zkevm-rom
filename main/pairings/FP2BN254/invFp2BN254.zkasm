@@ -1,0 +1,66 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; POST: The result is in the range [0,BN254_P)
+;;
+;; invFp2BN254
+;;             in: (A + B·u) ∈ Fp2, where A,B ∈ Fp
+;;             out: C + D·u = (A·(A² + B²)⁻¹) + (-B·(A² + B²)⁻¹)·u ∈ Fp2
+;;
+;; NOTE: On input 0, it returns 0
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL invFp2BN254_x
+VAR GLOBAL invFp2BN254_y
+
+VAR GLOBAL invFp2BN254_RR
+
+invFp2BN254:
+        RR              :MSTORE(invFp2BN254_RR)
+
+        B               :MSTORE(invFp2BN254_y)
+        ; Normalization of A,B
+        %BN254_P => B
+        $               :LT, JMPC(__invFp2BN254_reduce_A_continue)
+                        :CALL(reduceFpBN254)
+                        __invFp2BN254_reduce_A_continue:
+        A               :MSTORE(invFp2BN254_x)
+        $ => A          :MLOAD(invFp2BN254_y)
+        %BN254_P => B
+        $               :LT, JMPC(__invFp2BN254_reduce_B_continue)
+                        :CALL(reduceFpBN254)
+                        __invFp2BN254_reduce_B_continue:
+        A               :MSTORE(invFp2BN254_y)
+        ; From here, it is guaranteed that A,B ∈ [0,BN254_P)
+
+invFp2BN254_zero_check:
+        ; Check if A = B = 0, and if so, return 0
+        $ => B          :MLOAD(invFp2BN254_x)
+        0 => A
+        $               :EQ, JMPNC(invFp2BN254_normalized)
+        $ => B          :MLOAD(invFp2BN254_y)
+        $               :EQ, JMPC(invFp2BN254_input_is_zero)
+
+invFp2BN254_normalized:
+        $ => A          :MLOAD(invFp2BN254_x)
+        $ => B          :MLOAD(invFp2BN254_y)
+        ; Remember that an element y ∈ Fp2 is the inverse of x ∈ Fp2 if and only if x·y = 1 in Fp2
+        ; We therefore check that (A + B·u)·(C + D·u) = 1 + 0·u
+        ; A·[C] - B·[D] = 1 + (q0·BN254_P)
+        ; A·[D] + B·[C] = 0 + (q1·BN254_P)
+        ${fp2InvBN254_x(mem.invFp2BN254_x,mem.invFp2BN254_y)} => C
+        ${fp2InvBN254_y(mem.invFp2BN254_x,mem.invFp2BN254_y)} => D
+        1n => E
+        0n                      :ARITH_BN254_MULFP2
+
+        ; Check that the resulting elements are lower than BN254_P
+        %BN254_P => B
+        C => A
+        1               :LT
+        D => A
+        1               :LT, JMP(invFp2BN254_end)
+
+invFp2BN254_input_is_zero:
+        0 => C,D
+
+invFp2BN254_end:
+        $ => RR         :MLOAD(invFp2BN254_RR)
+                        :RETURN

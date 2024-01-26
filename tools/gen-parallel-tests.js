@@ -10,7 +10,7 @@ const buildPoseidon = require('@0xpolygonhermez/zkevm-commonjs').getPoseidon;
 
 const folderPaths = [
     '../node_modules/@0xpolygonhermez/zkevm-testvectors/inputs-executor',
-    '../node_modules/@0xpolygonhermez/zkevm-testvectors/tools/ethereum-tests/GeneralStateTests',
+    '../node_modules/@0xpolygonhermez/zkevm-testvectors/inputs-executor/ethereum-tests/GeneralStateTests',
 ];
 
 const fileCachePil = path.join(__dirname, '../node_modules/@0xpolygonhermez/zkevm-proverjs/cache-main-pil.json');
@@ -41,12 +41,13 @@ async function main() {
         const inputsPath = path.join(__dirname, folder);
         fs.readdirSync(inputsPath).forEach((file) => {
             const filePath = path.join(inputsPath, file);
-            if (file.endsWith('.json')) {
+            // Remove json lists that are generated with gen inputs script and are not inputs
+            if (file.endsWith('.json') && !file.includes('testsOOC-list.json') && !file.includes('tests30M-list.json')) {
                 inputs.push(filePath);
-            } else if (fs.statSync(filePath).isDirectory()) {
+            } else if (fs.statSync(filePath).isDirectory() && !filePath.includes('tests-OOC')) {
                 fs.readdirSync(filePath).forEach((subFile) => {
                     const subFilePath = path.join(filePath, subFile);
-                    if (subFile.endsWith('.json')) {
+                    if (subFile.endsWith('.json') && !subFile.includes('testsOOC-list.json') && !subFile.includes('tests30M-list.json')) {
                         inputs.push(subFilePath);
                     }
                 });
