@@ -1,0 +1,215 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  PRE: The input arrays have been trimmed;
+;; POST: The quotient and remainder are trimmed.
+;;
+;; array_div:
+;;             in:
+;;                  · C ∈ [1, 32], the len of inA
+;;                  · D ∈ [1, 32], the len of inB
+;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
+;;                  · inB ∈ [0, 2²⁵⁶ - 1]^D, the second input array
+;;
+;;          output:
+;;                  · [quo,rem] = [inA / inB, inA % inB], with len(quo) <= C - D + 1, len(rem) <= D
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; function array_div(a: bigint[], b: bigint[], base: bigint): bigint[] {
+;     if (a === [0n]) {
+;         if (b === [0n]) {
+;             throw new Error("Division by zero");
+;         }
+;         return [0n, 0n];
+;     } else if (b === [0n]) {
+;         throw new Error("Division by zero");
+;     }
+;
+;     if (a === b) {
+;         return [1n, 0n];
+;     } else if (a < b) {
+;         return [0n, a];
+;     }
+;
+;     if (b.length === 1) {
+;         return array_div_short(a, b, base);
+;     }
+;     return array_div_long(a, b, base);
+; }
+
+VAR GLOBAL array_div_inA[%ARRAY_MAX_LEN]
+VAR GLOBAL array_div_inB[%ARRAY_MAX_LEN]
+VAR GLOBAL array_div_quo[%ARRAY_MAX_LEN]
+VAR GLOBAL array_div_rem[%ARRAY_MAX_LEN]
+
+VAR GLOBAL array_div_len_inA
+VAR GLOBAL array_div_len_inB
+VAR GLOBAL array_div_len_quo
+VAR GLOBAL array_div_len_rem
+
+VAR GLOBAL array_div_RR
+
+; ERROR CODES (B)
+; 0 - no error
+; 1 - inB is zero
+
+array_div:
+        %MAX_CNT_BINARY - CNT_BINARY - 2                    :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 12 - 3*C - 3*D - 1   :JMPN(outOfCountersStep)
+
+        RR              :MSTORE(array_div_RR)
+
+        C               :MSTORE(array_div_len_inA)
+        D               :MSTORE(array_div_len_inB)
+
+        ; Let's cover the edge cases
+        1 => B
+        ; 1] Is C == 1 and inA == 0?
+        C - B           :JMPNZ(__array_div_inA_continue)
+        $ => A          :MLOAD(array_div_inA)
+        $               :LT, JMPC(array_div_inA_is_zero)
+                        __array_div_inA_continue:
+
+        ; 2] Is D == 1 and inB == 0?
+        D - B           :JMPNZ(__array_div_inB_continue_1)
+        $ => A          :MLOAD(array_div_inB)
+        $               :LT, JMPC(array_div_inB_is_zero)
+                        __array_div_inB_continue_1:
+
+        ; 3] Check if inA = inB or inA < inB
+        C - 1 => RR
+        D - 1 => E
+array_div_compare_inA:
+        $ => A          :MLOAD(array_div_inA + RR)
+        A               :MSTORE(array_compare_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_compare_inB, array_div_compare_inA)
+
+array_div_compare_inB:
+        $ => A          :MLOAD(array_div_inB + E)
+        A               :MSTORE(array_compare_inB + E)
+        E - 1 => E      :JMPN(array_div_compare, array_div_compare_inB)
+
+array_div_compare:
+                        :CALL(array_compare)
+
+        %MAX_CNT_STEPS - STEP        - 5 - 3*C - 3*D - 1  :JMPN(outOfCountersStep)
+
+        $ => A          :MLOAD(array_compare_result), JMPZ(array_div_prep_inALTinB)
+        A - 1           :JMPZ(array_div_same_input)
+        ; From here, inA > inB
+
+        C - 1 => RR
+        D - 1 => E
+        D - 1           :JMPZ(array_div_inA_to_div_short, array_div_inA_to_div_long); worst case is div long
+
+; Begin of edge cases
+array_div_inA_is_zero:
+        ;Is D == 1 and inB == 0? 0/0 is undefined
+        D - B           :JMPNZ(__array_div_inB_continue_2)
+        $ => A          :MLOAD(array_div_inB)
+        $               :LT, JMPC(array_div_inB_is_zero)
+                        __array_div_inB_continue_2:
+        ; From here, inB != 0
+
+        ; Return [q,r] = [0,0] and len(q) = 1, len(r) = 1
+        0               :MSTORE(array_div_quo)
+        0               :MSTORE(array_div_rem)
+        1               :MSTORE(array_div_len_quo)
+        1               :MSTORE(array_div_len_rem)
+        0 => B          :JMP(array_div_end)
+
+array_div_inB_is_zero:
+        ; Error, you cannot divide by 0
+        1 => B          :JMP(array_div_end)
+
+array_div_same_input:
+        1               :MSTORE(array_div_quo)
+        0               :MSTORE(array_div_rem)
+        1               :MSTORE(array_div_len_quo)
+        1               :MSTORE(array_div_len_rem)
+        0 => B          :JMP(array_div_end)
+
+array_div_prep_inALTinB:
+        C               :MSTORE(array_div_len_rem)
+        1               :MSTORE(array_div_len_quo)
+
+        %MAX_CNT_STEPS - STEP  - 1 - 4*C - 2        :JMPN(outOfCountersStep)
+
+        C - 1 => RR
+array_div_inALTinB:
+        $ => A          :MLOAD(array_div_inA + RR)
+        A               :MSTORE(array_div_rem + RR)
+        RR - 1 => RR    :JMPN(array_div_inALTinB_before_end, array_div_inALTinB)
+
+array_div_inALTinB_before_end:
+        0               :MSTORE(array_div_quo)
+        0 => B          :JMP(array_div_end)
+; End of edge cases
+
+; Long
+array_div_inA_to_div_long:
+        $ => A          :MLOAD(array_div_inA + RR)
+        A               :MSTORE(array_div_long_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_inB_to_div_long, array_div_inA_to_div_long)
+
+array_div_inB_to_div_long:
+        $ => A          :MLOAD(array_div_inB + E)
+        A               :MSTORE(array_div_long_inB + E)
+        E - 1 => E      :JMPN(array_div_compute_long, array_div_inB_to_div_long)
+
+array_div_compute_long:
+                        :CALL(array_div_long)
+
+        %MAX_CNT_STEPS - STEP - 7      :JMPN(outOfCountersStep)
+
+        $ => C          :MLOAD(array_div_long_len_quo)
+        $ => D          :MLOAD(array_div_long_len_rem)
+        C               :MSTORE(array_div_len_quo)
+        D               :MSTORE(array_div_len_rem)
+        C - 1 => RR
+        D - 1 => E
+
+        %MAX_CNT_STEPS - STEP - 3*C - 3*D - 2  :JMPN(outOfCountersStep)
+
+array_div_assign_long_quo:
+        $ => A          :MLOAD(array_div_long_quo + RR)
+        A               :MSTORE(array_div_quo + RR)
+        RR - 1 => RR    :JMPN(array_div_assign_long_rem, array_div_assign_long_quo)
+
+array_div_assign_long_rem:
+        $ => A          :MLOAD(array_div_long_rem + E)
+        A               :MSTORE(array_div_rem + E)
+        E - 1 => E      :JMPN(array_div_end, array_div_assign_long_rem)
+
+; Short
+array_div_inA_to_div_short:
+        $ => A          :MLOAD(array_div_inA + RR)
+        A               :MSTORE(array_div_short_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_inB_to_div_short, array_div_inA_to_div_short)
+
+array_div_inB_to_div_short:
+        $ => A          :MLOAD(array_div_inB)
+        A               :MSTORE(array_div_short_inB)
+
+array_div_compute_short:
+                        :CALL(array_div_short)
+
+        %MAX_CNT_STEPS - STEP - 5      :JMPN(outOfCountersStep)
+
+        $ => C          :MLOAD(array_div_short_len_quo)
+        C               :MSTORE(array_div_len_quo)
+        1               :MSTORE(array_div_len_rem)
+        C - 1 => RR
+
+        %MAX_CNT_STEPS - STEP - 3*C - 4  :JMPN(outOfCountersStep)
+
+array_div_assign_short_quo:
+        $ => A          :MLOAD(array_div_short_quo + RR)
+        A               :MSTORE(array_div_quo + RR)
+        RR - 1 => RR    :JMPN(array_div_assign_short_rem, array_div_assign_short_quo)
+
+array_div_assign_short_rem:
+        $ => A          :MLOAD(array_div_short_rem)
+        A               :MSTORE(array_div_rem)
+
+array_div_end:
+        $ => RR         :MLOAD(array_div_RR)
+                        :RETURN

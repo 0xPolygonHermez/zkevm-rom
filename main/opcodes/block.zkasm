@@ -22,7 +22,7 @@ opBLOCKHASH:
     GAS - %GAS_EXT_STEP => GAS  :JMPN(outOfGas)
 
     $ => B          :MLOAD(SP) ; [blockNumber => B]
-    ; If block number does not exist in the smart conract system, it will return 0
+    ; If block number does not exist in the smart contract system, it will return 0
 
     ; Create key for the batch hash mapping key
     ; set bytes length to D
@@ -94,16 +94,12 @@ opTIMESTAMP:
 opNUMBER:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 1   :JMPN(outOfCountersBinary)
 
     ; check out-of-gas
     GAS - %GAS_QUICK_STEP => GAS  :JMPN(outOfGas)
-    ; Get current tx count
-    $ => A          :MLOAD(txCount)
-    1 => B
-
-    ; call binary:add state machine and push to the stack
-    $               :ADD, MSTORE(SP++); [blockNumber => SP]
+    ; Get current block number
+    $ => A          :MLOAD(blockNum)
+    A               :MSTORE(SP++); [blockNumber => SP]
     ; check stack overflow
     %MAX_STACK_SIZE - SP       :JMPN(stackOverflow, readCode)
 
@@ -141,8 +137,8 @@ opGASLIMIT:
 
     ; check out-of-gas
     GAS-%GAS_QUICK_STEP => GAS    :JMPN(outOfGas)
-    ; constant tx gas limit
-    %TX_GAS_LIMIT => A
+    ; constant block gas limit
+    %BLOCK_GAS_LIMIT => A
     A               :MSTORE(SP++); [gasLimit => SP]
     ; check stack overflow
     %MAX_STACK_SIZE - SP       :JMPN(stackOverflow, readCode)

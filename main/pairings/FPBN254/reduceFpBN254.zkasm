@@ -1,0 +1,25 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; POST: The result is in the range [0,BN254_P)
+;;
+;; reduceFpBN254:
+;;             in: A ∈ [0, 2²⁵⁶-1]
+;;             out: A (mod BN254_P) ∈ Fp
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL reduceFpBN254_tmp
+
+reduceFpBN254:
+        ; 1] It must be satisfied that:
+        ; [BN254_P]·[A / p] + [A % p] = [0]·2²⁵⁶ + A
+        A       :MSTORE(reduceFpBN254_tmp)
+        ${A / const.BN254_P} => B        ; quotient  (256 bits)
+        ${A % const.BN254_P} => C        ; residue (256 bits)
+        %BN254_P => A
+        0n => D
+        $       :MLOAD(reduceFpBN254_tmp), ARITH
+
+        ; 2] Check the the residue is less than p
+        A => B
+        C => A
+        1       :LT, RETURN

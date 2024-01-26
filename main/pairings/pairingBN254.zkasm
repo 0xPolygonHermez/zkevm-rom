@@ -1,0 +1,481 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Optimal Ate Pairing e: G1 x G2 -> GT over the BN254 curve
+;; where G1 = E(Fp)[r] = E(Fp), G2 = E'(Fp2)[r] and GT = mu_r (the r-th roots of unity over Fp12*
+;; the involved curves are E/Fp: y² = x³ + 3 and E'/Fp2: y² = x³ + 3/(9+u)
+;;  pairingBN254:
+;;          input: P ∈ G1 and Q ∈ G2
+;;          output: e(P,Q) ∈ GT
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL pairingBN254_P_x
+VAR GLOBAL pairingBN254_P_y
+VAR GLOBAL pairingBN254_Q_x1
+VAR GLOBAL pairingBN254_Q_x2
+VAR GLOBAL pairingBN254_Q_y1
+VAR GLOBAL pairingBN254_Q_y2
+
+VAR GLOBAL pairingBN254_f11_x
+VAR GLOBAL pairingBN254_f11_y
+VAR GLOBAL pairingBN254_f12_x
+VAR GLOBAL pairingBN254_f12_y
+VAR GLOBAL pairingBN254_f13_x
+VAR GLOBAL pairingBN254_f13_y
+VAR GLOBAL pairingBN254_f21_x
+VAR GLOBAL pairingBN254_f21_y
+VAR GLOBAL pairingBN254_f22_x
+VAR GLOBAL pairingBN254_f22_y
+VAR GLOBAL pairingBN254_f23_x
+VAR GLOBAL pairingBN254_f23_y
+
+VAR GLOBAL pairingBN254_RR
+
+VAR GLOBAL pairingBN254_P_x3
+VAR GLOBAL pairingBN254_Q_RHS_x
+VAR GLOBAL pairingBN254_Q_RHS_y
+VAR GLOBAL pairingBN254_psi_x1
+VAR GLOBAL pairingBN254_psi_x2
+VAR GLOBAL pairingBN254_psi_y1
+VAR GLOBAL pairingBN254_psi_y2
+
+; ERROR CODES (B)
+; 0 - no error
+; 1 - P_x is too big
+; 2 - P_y is too big
+; 3 - Q_x1 is too big
+; 4 - Q_x2 is too big
+; 5 - Q_y1 is too big
+; 6 - Q_y2 is too big
+; 7 - P is not in G1
+; 8 - Q is not in G2
+
+pairingBN254:
+    RR          :MSTORE(pairingBN254_RR)
+
+    %BN254_P_MINUS_ONE => A
+    $ => B      :MLOAD(pairingBN254_P_x)
+    $           :LT, JMPC(pairingBN254_Px_too_big)
+    $ => B      :MLOAD(pairingBN254_P_y)
+    $           :LT, JMPC(pairingBN254_Py_too_big)
+    $ => B      :MLOAD(pairingBN254_Q_x1)
+    $           :LT, JMPC(pairingBN254_Qx1_too_big)
+    $ => B      :MLOAD(pairingBN254_Q_x2)
+    $           :LT, JMPC(pairingBN254_Qx2_too_big)
+    $ => B      :MLOAD(pairingBN254_Q_y1)
+    $           :LT, JMPC(pairingBN254_Qy1_too_big)
+    $ => B      :MLOAD(pairingBN254_Q_y2)
+    $           :LT, JMPC(pairingBN254_Qy2_too_big)
+
+    ; Is P = O?
+    0n => B
+    $ => A  :MLOAD(pairingBN254_P_x)
+    $       :EQ, JMPNC(__pairingBN254_P_continue)
+    $ => A  :MLOAD(pairingBN254_P_y)
+    $       :EQ, JMPC(pairingBN254_P_is_zero)
+            __pairingBN254_P_continue:
+
+    ; Is Q = O?
+    $ => A  :MLOAD(pairingBN254_Q_x1)
+    $       :EQ, JMPNC(__pairingBN254_Q_continue1)
+    $ => A  :MLOAD(pairingBN254_Q_x2)
+    $       :EQ, JMPNC(__pairingBN254_Q_continue1)
+    $ => A  :MLOAD(pairingBN254_Q_y1)
+    $       :EQ, JMPNC(__pairingBN254_Q_continue1)
+    $ => A  :MLOAD(pairingBN254_Q_y2)
+    $       :EQ, JMPC(pairingBN254_Q_is_zero)
+            __pairingBN254_Q_continue1:
+
+                :JMP(pairingBN254_P_subgroup_check)
+
+
+pairingBN254_P_is_zero:
+    ; Is Q = O?
+    $ => A  :MLOAD(pairingBN254_Q_x1)
+    $       :EQ, JMPNC(__pairingBN254_Q_continue2)
+    $ => A  :MLOAD(pairingBN254_Q_x2)
+    $       :EQ, JMPNC(__pairingBN254_Q_continue2)
+    $ => A  :MLOAD(pairingBN254_Q_y1)
+    $       :EQ, JMPNC(__pairingBN254_Q_continue2)
+    $ => A  :MLOAD(pairingBN254_Q_y2)
+    $       :EQ, JMPC(pairingBN254_P_and_Q_are_zero)
+            __pairingBN254_Q_continue2:
+
+    ; Check that Q is in G2
+    ; Q in G2 iff Q in E' and psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
+
+    ; 1] Check if Q is in E'(Fp2)
+    ; Q in E' iff (Q.y1 + Q.y2·u)² == (Q.x1 + Q.x2·u)³ + 3/(9+u)
+    ; 1.1] Compute LHS and RHS
+    $ => A  :MLOAD(pairingBN254_Q_x1)
+    $ => B  :MLOAD(pairingBN254_Q_x2), CALL(squareFp2BN254)
+    ; E + C·u = (Q.x1 + Q.x2·u)²
+
+    E => A
+    C => B
+    $ => C  :MLOAD(pairingBN254_Q_x1)
+    $ => D  :MLOAD(pairingBN254_Q_x2), CALL(mulFp2BN254)
+    ; E + C·u = (Q.x1 + Q.x2·u)³
+
+    E => A
+    C => B
+    %BN254_ETWISTED_B_X => C
+    %BN254_ETWISTED_B_Y => D    :CALL(addFp2BN254)
+    ; E + C·u = (Q.x1 + Q.x2·u)³ + 3/(9+u)
+    E           :MSTORE(pairingBN254_Q_RHS_x)
+    C           :MSTORE(pairingBN254_Q_RHS_y)
+
+    $ => A  :MLOAD(pairingBN254_Q_y1)
+    $ => B  :MLOAD(pairingBN254_Q_y2), CALL(squareFp2BN254)
+    ; E + C·u = (Q.y1 + Q.y2·u)²
+
+    ; 1.2] Check if LHS == RHS
+    E => A
+    $ => B  :MLOAD(pairingBN254_Q_RHS_x)
+    $       :EQ, JMPNC(pairingBN254_Q_is_not_in_G2)
+
+    C => A
+    $ => B  :MLOAD(pairingBN254_Q_RHS_y)
+    $       :EQ, JMPNC(pairingBN254_Q_is_not_in_G2)
+
+    ; 2] Check if psi(Q) == [6x²]Q
+    ; 2.1] Compute psi(Q)
+    %BN254_P => A
+    $ => B      :MLOAD(pairingBN254_Q_x2)
+    $ => D      :SUB                                ; D = -Qx2
+    %FROBENIUS_GAMMA121 => A
+    %FROBENIUS_GAMMA122 => B
+    $ => C      :MLOAD(pairingBN254_Q_x1), CALL(mulFp2BN254)
+    E           :MSTORE(pairingBN254_psi_x1)
+    C           :MSTORE(pairingBN254_psi_x2)
+
+    %BN254_P => A
+    $ => B      :MLOAD(pairingBN254_Q_y2)
+    $ => D      :SUB                                ; D = -Qy2
+    %FROBENIUS_GAMMA131 => A
+    %FROBENIUS_GAMMA132 => B
+    $ => C      :MLOAD(pairingBN254_Q_y1), CALL(mulFp2BN254)
+    E           :MSTORE(pairingBN254_psi_y1)
+    C           :MSTORE(pairingBN254_psi_y2)
+
+    ; 2.2] Compute [6x²]Q
+    $ => A      :MLOAD(pairingBN254_Q_x1)
+    $ => B      :MLOAD(pairingBN254_Q_x2)
+    $ => C      :MLOAD(pairingBN254_Q_y1)
+    $ => D      :MLOAD(pairingBN254_Q_y2)
+    A           :MSTORE(escalarMulBN254_P_x1)
+    B           :MSTORE(escalarMulBN254_P_x2)
+    C           :MSTORE(escalarMulBN254_P_y1)
+    D           :MSTORE(escalarMulBN254_P_y2)
+    %BN254_SIX_TIMES_X_SQ :MSTORE(escalarMulBN254_k), CALL(escalarMulBN254)
+
+
+    ; 2.3] Check if psi(Q) == [6x²]Q
+    $ => A      :MLOAD(pairingBN254_psi_x1)
+    $ => B      :MLOAD(escalarMulBN254_Q_x1)
+    $           :EQ, JMPNC(pairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(pairingBN254_psi_x2)
+    $ => B      :MLOAD(escalarMulBN254_Q_x2)
+    $           :EQ, JMPNC(pairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(pairingBN254_psi_y1)
+    $ => B      :MLOAD(escalarMulBN254_Q_y1)
+    $           :EQ, JMPNC(pairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(pairingBN254_psi_y2)
+    $ => B      :MLOAD(escalarMulBN254_Q_y2)
+    $           :EQ, JMPNC(pairingBN254_Q_is_not_in_G2)
+
+    ; e(O,Q) = 1
+    1n      :MSTORE(pairingBN254_f11_x)
+    0n      :MSTORE(pairingBN254_f11_y)
+    0n      :MSTORE(pairingBN254_f12_x)
+    0n      :MSTORE(pairingBN254_f12_y)
+    0n      :MSTORE(pairingBN254_f13_x)
+    0n      :MSTORE(pairingBN254_f13_y)
+    0n      :MSTORE(pairingBN254_f21_x)
+    0n      :MSTORE(pairingBN254_f21_y)
+    0n      :MSTORE(pairingBN254_f22_x)
+    0n      :MSTORE(pairingBN254_f22_y)
+    0n      :MSTORE(pairingBN254_f23_x)
+    0n      :MSTORE(pairingBN254_f23_y)
+
+    0 => B     :JMP(pairingBN254_end)
+
+pairingBN254_Q_is_zero:
+    ; Check that P is in G1
+    ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
+    ; 1] Compute LHS and RHS
+    $ => A,B    :MLOAD(pairingBN254_P_x), CALL(mulFpBN254); C = (Px)²
+    C => A                                         ; A = (Px)²
+    $ => B      :MLOAD(pairingBN254_P_x), CALL(mulFpBN254); C = (Px)³
+
+    %BN254_E_B => A     :CALL(addFpBN254)                  ; C = (Px)³ + 3
+    C           :MSTORE(pairingBN254_P_x3)               ; pairingBN254_P_x3 = (Px)³ + 3
+
+    $ => A,B    :MLOAD(pairingBN254_P_y), CALL(mulFpBN254); C = (Py)²
+
+    ; 2] Check if LHS == RHS
+    C => A
+    $ => B      :MLOAD(pairingBN254_P_x3)
+    $           :EQ, JMPNC(pairingBN254_P_is_not_in_G1)
+
+    ; e(P,O) = 1
+    1n      :MSTORE(pairingBN254_f11_x)
+    0n      :MSTORE(pairingBN254_f11_y)
+    0n      :MSTORE(pairingBN254_f12_x)
+    0n      :MSTORE(pairingBN254_f12_y)
+    0n      :MSTORE(pairingBN254_f13_x)
+    0n      :MSTORE(pairingBN254_f13_y)
+    0n      :MSTORE(pairingBN254_f21_x)
+    0n      :MSTORE(pairingBN254_f21_y)
+    0n      :MSTORE(pairingBN254_f22_x)
+    0n      :MSTORE(pairingBN254_f22_y)
+    0n      :MSTORE(pairingBN254_f23_x)
+    0n      :MSTORE(pairingBN254_f23_y)
+
+    0 => B     :JMP(pairingBN254_end)
+
+pairingBN254_P_and_Q_are_zero:
+    ; e(O,O) = 1
+    1n      :MSTORE(pairingBN254_f11_x)
+    0n      :MSTORE(pairingBN254_f11_y)
+    0n      :MSTORE(pairingBN254_f12_x)
+    0n      :MSTORE(pairingBN254_f12_y)
+    0n      :MSTORE(pairingBN254_f13_x)
+    0n      :MSTORE(pairingBN254_f13_y)
+    0n      :MSTORE(pairingBN254_f21_x)
+    0n      :MSTORE(pairingBN254_f21_y)
+    0n      :MSTORE(pairingBN254_f22_x)
+    0n      :MSTORE(pairingBN254_f22_y)
+    0n      :MSTORE(pairingBN254_f23_x)
+    0n      :MSTORE(pairingBN254_f23_y)
+
+pairingBN254_P_subgroup_check:
+    ; Check that P is in G1
+    ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
+    ; 1] Compute LHS and RHS
+    $ => A,B    :MLOAD(pairingBN254_P_x), CALL(mulFpBN254); C = (Px)²
+    C => A                                         ; A = (Px)²
+    $ => B      :MLOAD(pairingBN254_P_x), CALL(mulFpBN254); C = (Px)³
+
+    %BN254_E_B => A     :CALL(addFpBN254)                  ; C = (Px)³ + 3
+    C           :MSTORE(pairingBN254_P_x3)               ; pairingBN254_P_x3 = (Px)³ + 3
+
+    $ => A,B    :MLOAD(pairingBN254_P_y), CALL(mulFpBN254); C = (Py)²
+
+    ; 2] Check if LHS == RHS
+    C => A
+    $ => B      :MLOAD(pairingBN254_P_x3)
+    $           :EQ, JMPNC(pairingBN254_P_is_not_in_G1)
+
+pairingBN254_Q_subgroup_check:
+    ; Check that Q is in G2
+    ; Q in G2 iff Q in E' and psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
+
+    ; 1] Check if Q is in E'(Fp2)
+    ; Q in E' iff (Q.y1 + Q.y2·u)² == (Q.x1 + Q.x2·u)³ + 3/(9+u)
+    ; 1.1] Compute LHS and RHS
+    $ => A  :MLOAD(pairingBN254_Q_x1)
+    $ => B  :MLOAD(pairingBN254_Q_x2), CALL(squareFp2BN254)
+    ; E + C·u = (Q.x1 + Q.x2·u)²
+
+    E => A
+    C => B
+    $ => C  :MLOAD(pairingBN254_Q_x1)
+    $ => D  :MLOAD(pairingBN254_Q_x2), CALL(mulFp2BN254)
+    ; E + C·u = (Q.x1 + Q.x2·u)³
+
+    E => A
+    C => B
+    %BN254_ETWISTED_B_X => C
+    %BN254_ETWISTED_B_Y => D :CALL(addFp2BN254)
+    ; E + C·u = (Q.x1 + Q.x2·u)³ + 3/(9+u)
+    E           :MSTORE(pairingBN254_Q_RHS_x)
+    C           :MSTORE(pairingBN254_Q_RHS_y)
+
+    $ => A  :MLOAD(pairingBN254_Q_y1)
+    $ => B  :MLOAD(pairingBN254_Q_y2), CALL(squareFp2BN254)
+    ; E + C·u = (Q.y1 + Q.y2·u)²
+
+    ; 1.2] Check if LHS == RHS
+    E => A
+    $ => B  :MLOAD(pairingBN254_Q_RHS_x)
+    $       :EQ, JMPNC(pairingBN254_Q_is_not_in_G2)
+
+    C => A
+    $ => B  :MLOAD(pairingBN254_Q_RHS_y)
+    $       :EQ, JMPNC(pairingBN254_Q_is_not_in_G2)
+
+    ; 2] Check if psi(Q) == [6x²]Q
+    ; 2.1] Compute psi(Q)
+    %BN254_P => A
+    $ => B      :MLOAD(pairingBN254_Q_x2)
+    $ => D      :SUB                                ; D = -Qx2
+    %FROBENIUS_GAMMA121 => A
+    %FROBENIUS_GAMMA122 => B
+    $ => C      :MLOAD(pairingBN254_Q_x1), CALL(mulFp2BN254)
+    E           :MSTORE(pairingBN254_psi_x1)
+    C           :MSTORE(pairingBN254_psi_x2)
+
+    %BN254_P => A
+    $ => B      :MLOAD(pairingBN254_Q_y2)
+    $ => D      :SUB                                ; D = -Qx2
+    %FROBENIUS_GAMMA131 => A
+    %FROBENIUS_GAMMA132 => B
+    $ => C      :MLOAD(pairingBN254_Q_y1), CALL(mulFp2BN254)
+    E           :MSTORE(pairingBN254_psi_y1)
+    C           :MSTORE(pairingBN254_psi_y2)
+
+    ; 2.2] Compute [6x²]Q
+    $ => A      :MLOAD(pairingBN254_Q_x1)
+    $ => B      :MLOAD(pairingBN254_Q_x2)
+    $ => C      :MLOAD(pairingBN254_Q_y1)
+    $ => D      :MLOAD(pairingBN254_Q_y2)
+    A           :MSTORE(escalarMulBN254_P_x1)
+    B           :MSTORE(escalarMulBN254_P_x2)
+    C           :MSTORE(escalarMulBN254_P_y1)
+    D           :MSTORE(escalarMulBN254_P_y2)
+    %BN254_SIX_TIMES_X_SQ :MSTORE(escalarMulBN254_k), CALL(escalarMulBN254)
+
+
+    ; 2.3] Check if psi(Q) == [6x²]Q
+    $ => A      :MLOAD(pairingBN254_psi_x1)
+    $ => B      :MLOAD(escalarMulBN254_Q_x1)
+    $           :EQ, JMPNC(pairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(pairingBN254_psi_x2)
+    $ => B      :MLOAD(escalarMulBN254_Q_x2)
+    $           :EQ, JMPNC(pairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(pairingBN254_psi_y1)
+    $ => B      :MLOAD(escalarMulBN254_Q_y1)
+    $           :EQ, JMPNC(pairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(pairingBN254_psi_y2)
+    $ => B      :MLOAD(escalarMulBN254_Q_y2)
+    $           :EQ, JMPNC(pairingBN254_Q_is_not_in_G2)
+
+pairingBN254_Miller_loop:
+    $ => A      :MLOAD(pairingBN254_P_x)
+    $ => B      :MLOAD(pairingBN254_P_y)
+    A           :MSTORE(millerLoopBN254_P_x)
+    B           :MSTORE(millerLoopBN254_P_y)
+    $ => A      :MLOAD(pairingBN254_Q_x1)
+    $ => B      :MLOAD(pairingBN254_Q_x2)
+    $ => C      :MLOAD(pairingBN254_Q_y1)
+    $ => D      :MLOAD(pairingBN254_Q_y2)
+    A           :MSTORE(millerLoopBN254_Q_x1)
+    B           :MSTORE(millerLoopBN254_Q_x2)
+    C           :MSTORE(millerLoopBN254_Q_y1)
+    D           :MSTORE(millerLoopBN254_Q_y2), CALL(millerLoopBN254)
+    $ => A      :MLOAD(millerLoopBN254_f11_x)
+    $ => B      :MLOAD(millerLoopBN254_f11_y)
+    A           :MSTORE(pairingBN254_f11_x)
+    B           :MSTORE(pairingBN254_f11_y)
+    $ => A      :MLOAD(millerLoopBN254_f12_x)
+    $ => B      :MLOAD(millerLoopBN254_f12_y)
+    A           :MSTORE(pairingBN254_f12_x)
+    B           :MSTORE(pairingBN254_f12_y)
+    $ => A      :MLOAD(millerLoopBN254_f13_x)
+    $ => B      :MLOAD(millerLoopBN254_f13_y)
+    A           :MSTORE(pairingBN254_f13_x)
+    B           :MSTORE(pairingBN254_f13_y)
+    $ => A      :MLOAD(millerLoopBN254_f21_x)
+    $ => B      :MLOAD(millerLoopBN254_f21_y)
+    A           :MSTORE(pairingBN254_f21_x)
+    B           :MSTORE(pairingBN254_f21_y)
+    $ => A      :MLOAD(millerLoopBN254_f22_x)
+    $ => B      :MLOAD(millerLoopBN254_f22_y)
+    A           :MSTORE(pairingBN254_f22_x)
+    B           :MSTORE(pairingBN254_f22_y)
+    $ => A      :MLOAD(millerLoopBN254_f23_x)
+    $ => B      :MLOAD(millerLoopBN254_f23_y)
+    A           :MSTORE(pairingBN254_f23_x)
+    B           :MSTORE(pairingBN254_f23_y)
+
+
+pairingBN254_final_exponentiation:
+    $ => A      :MLOAD(pairingBN254_f11_x)
+    $ => B      :MLOAD(pairingBN254_f11_y)
+    A           :MSTORE(finalExpBN254_f11_x)
+    B           :MSTORE(finalExpBN254_f11_y)
+    $ => A      :MLOAD(pairingBN254_f12_x)
+    $ => B      :MLOAD(pairingBN254_f12_y)
+    A           :MSTORE(finalExpBN254_f12_x)
+    B           :MSTORE(finalExpBN254_f12_y)
+    $ => A      :MLOAD(pairingBN254_f13_x)
+    $ => B      :MLOAD(pairingBN254_f13_y)
+    A           :MSTORE(finalExpBN254_f13_x)
+    B           :MSTORE(finalExpBN254_f13_y)
+    $ => A      :MLOAD(pairingBN254_f21_x)
+    $ => B      :MLOAD(pairingBN254_f21_y)
+    A           :MSTORE(finalExpBN254_f21_x)
+    B           :MSTORE(finalExpBN254_f21_y)
+    $ => A      :MLOAD(pairingBN254_f22_x)
+    $ => B      :MLOAD(pairingBN254_f22_y)
+    A           :MSTORE(finalExpBN254_f22_x)
+    B           :MSTORE(finalExpBN254_f22_y)
+    $ => A      :MLOAD(pairingBN254_f23_x)
+    $ => B      :MLOAD(pairingBN254_f23_y)
+    A           :MSTORE(finalExpBN254_f23_x)
+    B           :MSTORE(finalExpBN254_f23_y), CALL(finalExpBN254)
+    $ => A      :MLOAD(finalExpBN254_f11_x)
+    $ => B      :MLOAD(finalExpBN254_f11_y)
+    A           :MSTORE(pairingBN254_f11_x)
+    B           :MSTORE(pairingBN254_f11_y)
+    $ => A      :MLOAD(finalExpBN254_f12_x)
+    $ => B      :MLOAD(finalExpBN254_f12_y)
+    A           :MSTORE(pairingBN254_f12_x)
+    B           :MSTORE(pairingBN254_f12_y)
+    $ => A      :MLOAD(finalExpBN254_f13_x)
+    $ => B      :MLOAD(finalExpBN254_f13_y)
+    A           :MSTORE(pairingBN254_f13_x)
+    B           :MSTORE(pairingBN254_f13_y)
+    $ => A      :MLOAD(finalExpBN254_f21_x)
+    $ => B      :MLOAD(finalExpBN254_f21_y)
+    A           :MSTORE(pairingBN254_f21_x)
+    B           :MSTORE(pairingBN254_f21_y)
+    $ => A      :MLOAD(finalExpBN254_f22_x)
+    $ => B      :MLOAD(finalExpBN254_f22_y)
+    A           :MSTORE(pairingBN254_f22_x)
+    B           :MSTORE(pairingBN254_f22_y)
+    $ => A      :MLOAD(finalExpBN254_f23_x)
+    $ => B      :MLOAD(finalExpBN254_f23_y)
+    A           :MSTORE(pairingBN254_f23_x)
+    B           :MSTORE(pairingBN254_f23_y)
+
+    0 => B     :JMP(pairingBN254_end)
+
+; ERRORS
+pairingBN254_Px_too_big:
+    1 => B      :JMP(pairingBN254_error)
+
+pairingBN254_Py_too_big:
+    2 => B      :JMP(pairingBN254_error)
+
+pairingBN254_Qx1_too_big:
+    3 => B      :JMP(pairingBN254_error)
+
+pairingBN254_Qx2_too_big:
+    4 => B      :JMP(pairingBN254_error)
+
+pairingBN254_Qy1_too_big:
+    5 => B      :JMP(pairingBN254_error)
+
+pairingBN254_Qy2_too_big:
+    6 => B      :JMP(pairingBN254_error)
+
+pairingBN254_P_is_not_in_G1:
+    7 => B      :JMP(pairingBN254_error)
+
+pairingBN254_Q_is_not_in_G2:
+    8 => B      :JMP(pairingBN254_error)
+
+pairingBN254_error:
+    0 => A
+
+pairingBN254_end:
+        $ => RR     :MLOAD(pairingBN254_RR)
+        :RETURN
