@@ -27,7 +27,11 @@ async function main() {
     // eslint-disable-next-line no-restricted-syntax
     console.log(chalk.yellow('--> Start running zkasm files'));
     for (const file of files) {
-        if (file.includes('ignore')) { continue; }
+
+        if (file.includes('ignore')) {
+          continue; 
+        }
+
         if (await runTest(file, cmPols) == 1) {
             wasFailed = true;
         }
