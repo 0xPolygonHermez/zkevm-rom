@@ -2,16 +2,30 @@
 /* eslint-disable no-continue */
 /* eslint-disable no-restricted-syntax */
 const rom = require('../../build/rom.json');
-const prevRom = require('./rom.json');
+const argv = require('yargs');
 
 /**
- * This script checks if there are new registry operations in the rom build. It compares it with the build stored at ./rom.json
+ * This script checks if there are new registry operations in the rom build. It compares it with the rom input selected
  * The result is logged in the console.
  */
-function main() {
+async function main() {
+    // load rom input
+    let input = {};
+
+    if (argv._.length === 0) {
+        console.log('You need to specify an input file');
+        process.exit(1);
+    } else if (argv._.length === 1) {
+        console.log('path input: ', argv._[0]);
+        input = JSON.parse(await fs.promises.readFile(argv._[0], 'utf8'));
+    } else {
+        console.log('Only one input file at a time is permitted');
+        process.exit(1);
+    }
+
     // Find free inputs at rom's build
     const regOpFound = getRegOpFromBuild(rom.program);
-    const prevRegOpFound = getRegOpFromBuild(prevRom.program);
+    const prevRegOpFound = getRegOpFromBuild(input.program);
     const diffFound = [];
     // Compare found registers with previous rom
     for (const op of regOpFound) {
