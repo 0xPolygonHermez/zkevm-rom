@@ -1,0 +1,428 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;;  halfPairingBN254:
+;;          input: P ∈ G1 and Q ∈ G2
+;;          output: It returns 1 if either P = 0 or Q = 0 and f_{r,Q}(P) ∈ Fp12 otherwise
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL halfPairingBN254_P_x
+VAR GLOBAL halfPairingBN254_P_y
+VAR GLOBAL halfPairingBN254_Q_x1
+VAR GLOBAL halfPairingBN254_Q_x2
+VAR GLOBAL halfPairingBN254_Q_y1
+VAR GLOBAL halfPairingBN254_Q_y2
+
+VAR GLOBAL halfPairingBN254_f11_x
+VAR GLOBAL halfPairingBN254_f11_y
+VAR GLOBAL halfPairingBN254_f12_x
+VAR GLOBAL halfPairingBN254_f12_y
+VAR GLOBAL halfPairingBN254_f13_x
+VAR GLOBAL halfPairingBN254_f13_y
+VAR GLOBAL halfPairingBN254_f21_x
+VAR GLOBAL halfPairingBN254_f21_y
+VAR GLOBAL halfPairingBN254_f22_x
+VAR GLOBAL halfPairingBN254_f22_y
+VAR GLOBAL halfPairingBN254_f23_x
+VAR GLOBAL halfPairingBN254_f23_y
+
+VAR GLOBAL halfPairingBN254_RR
+
+VAR GLOBAL halfPairingBN254_P_x3
+VAR GLOBAL halfPairingBN254_Q_RHS_x
+VAR GLOBAL halfPairingBN254_Q_RHS_y
+VAR GLOBAL halfPairingBN254_psi_x1
+VAR GLOBAL halfPairingBN254_psi_x2
+VAR GLOBAL halfPairingBN254_psi_y1
+VAR GLOBAL halfPairingBN254_psi_y2
+
+; ERROR CODES (B)
+; 0 - no error
+; 1 - P_x is too big
+; 2 - P_y is too big
+; 3 - Q_x1 is too big
+; 4 - Q_x2 is too big
+; 5 - Q_y1 is too big
+; 6 - Q_y2 is too big
+; 7 - P is not in G1
+; 8 - Q is not in G2
+
+halfPairingBN254:
+    RR          :MSTORE(halfPairingBN254_RR)
+
+    %BN254_P_MINUS_ONE => A
+    $ => B      :MLOAD(halfPairingBN254_P_x)
+    $           :LT, JMPC(halfPairingBN254_Px_too_big)
+    $ => B      :MLOAD(halfPairingBN254_P_y)
+    $           :LT, JMPC(halfPairingBN254_Py_too_big)
+    $ => B      :MLOAD(halfPairingBN254_Q_x1)
+    $           :LT, JMPC(halfPairingBN254_Qx1_too_big)
+    $ => B      :MLOAD(halfPairingBN254_Q_x2)
+    $           :LT, JMPC(halfPairingBN254_Qx2_too_big)
+    $ => B      :MLOAD(halfPairingBN254_Q_y1)
+    $           :LT, JMPC(halfPairingBN254_Qy1_too_big)
+    $ => B      :MLOAD(halfPairingBN254_Q_y2)
+    $           :LT, JMPC(halfPairingBN254_Qy2_too_big)
+
+    ; Is P = O?
+    0n => B
+    $ => A  :MLOAD(halfPairingBN254_P_x)
+    $       :EQ, JMPNC(__halfPairingBN254_P_continue)
+    $ => A  :MLOAD(halfPairingBN254_P_y)
+    $       :EQ, JMPC(halfPairingBN254_P_is_zero)
+            __halfPairingBN254_P_continue:
+
+    ; Is Q = O?
+    $ => A  :MLOAD(halfPairingBN254_Q_x1)
+    $       :EQ, JMPNC(__halfPairingBN254_Q_continue1)
+    $ => A  :MLOAD(halfPairingBN254_Q_x2)
+    $       :EQ, JMPNC(__halfPairingBN254_Q_continue1)
+    $ => A  :MLOAD(halfPairingBN254_Q_y1)
+    $       :EQ, JMPNC(__halfPairingBN254_Q_continue1)
+    $ => A  :MLOAD(halfPairingBN254_Q_y2)
+    $       :EQ, JMPC(halfPairingBN254_Q_is_zero)
+            __halfPairingBN254_Q_continue1:
+
+                :JMP(halfPairingBN254_P_subgroup_check)
+
+halfPairingBN254_P_is_zero:
+    ; Is Q = O?
+    $ => A  :MLOAD(halfPairingBN254_Q_x1)
+    $       :EQ, JMPNC(__halfPairingBN254_Q_continue2)
+    $ => A  :MLOAD(halfPairingBN254_Q_x2)
+    $       :EQ, JMPNC(__halfPairingBN254_Q_continue2)
+    $ => A  :MLOAD(halfPairingBN254_Q_y1)
+    $       :EQ, JMPNC(__halfPairingBN254_Q_continue2)
+    $ => A  :MLOAD(halfPairingBN254_Q_y2)
+    $       :EQ, JMPC(halfPairingBN254_P_and_Q_are_zero)
+            __halfPairingBN254_Q_continue2:
+
+    ; Check that Q is in G2
+    ; Q in G2 iff Q in E' and psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
+
+    ; 1] Check if Q is in E'(Fp2)
+    ; Q in E' iff (Q.y1 + Q.y2·u)² == (Q.x1 + Q.x2·u)³ + 3/(9+u)
+    ; 1.1] Compute LHS and RHS
+    $ => A  :MLOAD(halfPairingBN254_Q_x1)
+    $ => B  :MLOAD(halfPairingBN254_Q_x2), CALL(squareFp2BN254)
+    ; E + C·u = (Q.x1 + Q.x2·u)²
+
+    E => A
+    C => B
+    $ => C  :MLOAD(halfPairingBN254_Q_x1)
+    $ => D  :MLOAD(halfPairingBN254_Q_x2), CALL(mulFp2BN254)
+    ; E + C·u = (Q.x1 + Q.x2·u)³
+
+    E => A
+    C => B
+    %BN254_ETWISTED_B_X => C
+    %BN254_ETWISTED_B_Y => D     :CALL(addFp2BN254)
+    ; E + C·u = (Q.x1 + Q.x2·u)³ + 3/(9+u)
+    E           :MSTORE(halfPairingBN254_Q_RHS_x)
+    C           :MSTORE(halfPairingBN254_Q_RHS_y)
+
+    $ => A  :MLOAD(halfPairingBN254_Q_y1)
+    $ => B  :MLOAD(halfPairingBN254_Q_y2), CALL(squareFp2BN254)
+    ; E + C·u = (Q.y1 + Q.y2·u)²
+
+    ; 1.2] Check if LHS == RHS
+    E => A
+    $ => B  :MLOAD(halfPairingBN254_Q_RHS_x)
+    $       :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    C => A
+    $ => B  :MLOAD(halfPairingBN254_Q_RHS_y)
+    $       :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    ; 2] Check if psi(Q) == [6x²]Q
+    ; 2.1] Compute psi(Q)
+    %BN254_P => A
+    $ => B      :MLOAD(halfPairingBN254_Q_x2)
+    $ => D      :SUB                                ; D = -Qx2
+    %FROBENIUS_GAMMA121 => A
+    %FROBENIUS_GAMMA122 => B
+    $ => C      :MLOAD(halfPairingBN254_Q_x1), CALL(mulFp2BN254)
+    E           :MSTORE(halfPairingBN254_psi_x1)
+    C           :MSTORE(halfPairingBN254_psi_x2)
+
+    %BN254_P => A
+    $ => B      :MLOAD(halfPairingBN254_Q_y2)
+    $ => D      :SUB                                ; D = -Qy2
+    %FROBENIUS_GAMMA131 => A
+    %FROBENIUS_GAMMA132 => B
+    $ => C      :MLOAD(halfPairingBN254_Q_y1), CALL(mulFp2BN254)
+    E           :MSTORE(halfPairingBN254_psi_y1)
+    C           :MSTORE(halfPairingBN254_psi_y2)
+
+    ; 2.2] Compute [6x²]Q
+    $ => A      :MLOAD(halfPairingBN254_Q_x1)
+    $ => B      :MLOAD(halfPairingBN254_Q_x2)
+    $ => C      :MLOAD(halfPairingBN254_Q_y1)
+    $ => D      :MLOAD(halfPairingBN254_Q_y2)
+    A           :MSTORE(escalarMulBN254_P_x1)
+    B           :MSTORE(escalarMulBN254_P_x2)
+    C           :MSTORE(escalarMulBN254_P_y1)
+    D           :MSTORE(escalarMulBN254_P_y2)
+    %BN254_SIX_TIMES_X_SQ :MSTORE(escalarMulBN254_k), CALL(escalarMulBN254)
+
+
+    ; 2.3] Check if psi(Q) == [6x²]Q
+    $ => A      :MLOAD(halfPairingBN254_psi_x1)
+    $ => B      :MLOAD(escalarMulBN254_Q_x1)
+    $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(halfPairingBN254_psi_x2)
+    $ => B      :MLOAD(escalarMulBN254_Q_x2)
+    $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(halfPairingBN254_psi_y1)
+    $ => B      :MLOAD(escalarMulBN254_Q_y1)
+    $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(halfPairingBN254_psi_y2)
+    $ => B      :MLOAD(escalarMulBN254_Q_y2)
+    $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    ; e(O,Q) = 1
+    1n      :MSTORE(halfPairingBN254_f11_x)
+    0n      :MSTORE(halfPairingBN254_f11_y)
+    0n      :MSTORE(halfPairingBN254_f12_x)
+    0n      :MSTORE(halfPairingBN254_f12_y)
+    0n      :MSTORE(halfPairingBN254_f13_x)
+    0n      :MSTORE(halfPairingBN254_f13_y)
+    0n      :MSTORE(halfPairingBN254_f21_x)
+    0n      :MSTORE(halfPairingBN254_f21_y)
+    0n      :MSTORE(halfPairingBN254_f22_x)
+    0n      :MSTORE(halfPairingBN254_f22_y)
+    0n      :MSTORE(halfPairingBN254_f23_x)
+    0n      :MSTORE(halfPairingBN254_f23_y)
+
+    0 => B     :JMP(halfPairingBN254_end)
+
+halfPairingBN254_Q_is_zero:
+    ; Check that P is in G1
+    ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
+    ; 1] Compute LHS and RHS
+    $ => A,B    :MLOAD(halfPairingBN254_P_x), CALL(mulFpBN254); C = (Px)²
+    C => A                                         ; A = (Px)²
+    $ => B      :MLOAD(halfPairingBN254_P_x), CALL(mulFpBN254); C = (Px)³
+
+    %BN254_E_B => A     :CALL(addFpBN254)                  ; C = (Px)³ + 3
+    C           :MSTORE(halfPairingBN254_P_x3)               ; halfPairingBN254_P_x3 = (Px)³ + 3
+
+    $ => A,B    :MLOAD(halfPairingBN254_P_y), CALL(mulFpBN254); C = (Py)²
+
+    ; 2] Check if LHS == RHS
+    C => A
+    $ => B      :MLOAD(halfPairingBN254_P_x3)
+    $           :EQ, JMPNC(halfPairingBN254_P_is_not_in_G1)
+
+    ; e(P,O) = 1
+    1n      :MSTORE(halfPairingBN254_f11_x)
+    0n      :MSTORE(halfPairingBN254_f11_y)
+    0n      :MSTORE(halfPairingBN254_f12_x)
+    0n      :MSTORE(halfPairingBN254_f12_y)
+    0n      :MSTORE(halfPairingBN254_f13_x)
+    0n      :MSTORE(halfPairingBN254_f13_y)
+    0n      :MSTORE(halfPairingBN254_f21_x)
+    0n      :MSTORE(halfPairingBN254_f21_y)
+    0n      :MSTORE(halfPairingBN254_f22_x)
+    0n      :MSTORE(halfPairingBN254_f22_y)
+    0n      :MSTORE(halfPairingBN254_f23_x)
+    0n      :MSTORE(halfPairingBN254_f23_y)
+
+    0 => B     :JMP(halfPairingBN254_end)
+
+halfPairingBN254_P_and_Q_are_zero:
+    ; e(O,O) = 1
+    1n      :MSTORE(halfPairingBN254_f11_x)
+    0n      :MSTORE(halfPairingBN254_f11_y)
+    0n      :MSTORE(halfPairingBN254_f12_x)
+    0n      :MSTORE(halfPairingBN254_f12_y)
+    0n      :MSTORE(halfPairingBN254_f13_x)
+    0n      :MSTORE(halfPairingBN254_f13_y)
+    0n      :MSTORE(halfPairingBN254_f21_x)
+    0n      :MSTORE(halfPairingBN254_f21_y)
+    0n      :MSTORE(halfPairingBN254_f22_x)
+    0n      :MSTORE(halfPairingBN254_f22_y)
+    0n      :MSTORE(halfPairingBN254_f23_x)
+    0n      :MSTORE(halfPairingBN254_f23_y)
+
+    0 => B     :JMP(halfPairingBN254_end)
+
+halfPairingBN254_P_subgroup_check:
+    ; Check that P is in G1
+    ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
+    ; 1] Compute LHS and RHS
+    $ => A,B    :MLOAD(halfPairingBN254_P_x), CALL(mulFpBN254); C = (Px)²
+    C => A                                         ; A = (Px)²
+    $ => B      :MLOAD(halfPairingBN254_P_x), CALL(mulFpBN254); C = (Px)³
+
+    %BN254_E_B => A     :CALL(addFpBN254)                  ; C = (Px)³ + 3
+    C           :MSTORE(halfPairingBN254_P_x3)               ; halfPairingBN254_P_x3 = (Px)³ + 3
+
+    $ => A,B    :MLOAD(halfPairingBN254_P_y), CALL(mulFpBN254); C = (Py)²
+
+    ; 2] Check if LHS == RHS
+    C => A
+    $ => B      :MLOAD(halfPairingBN254_P_x3)
+    $           :EQ, JMPNC(halfPairingBN254_P_is_not_in_G1)
+
+halfPairingBN254_Q_subgroup_check:
+    ; Check that Q is in G2
+    ; Q in G2 iff Q in E' and psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
+
+    ; 1] Check if Q is in E'(Fp2)
+    ; Q in E' iff (Q.y1 + Q.y2·u)² == (Q.x1 + Q.x2·u)³ + 3/(9+u)
+    ; 1.1] Compute LHS and RHS
+    $ => A  :MLOAD(halfPairingBN254_Q_x1)
+    $ => B  :MLOAD(halfPairingBN254_Q_x2), CALL(squareFp2BN254)
+    ; E + C·u = (Q.x1 + Q.x2·u)²
+
+    E => A
+    C => B
+    $ => C  :MLOAD(halfPairingBN254_Q_x1)
+    $ => D  :MLOAD(halfPairingBN254_Q_x2), CALL(mulFp2BN254)
+    ; E + C·u = (Q.x1 + Q.x2·u)³
+
+    E => A
+    C => B
+    %BN254_ETWISTED_B_X => C
+    %BN254_ETWISTED_B_Y => D :CALL(addFp2BN254)
+    ; E + C·u = (Q.x1 + Q.x2·u)³ + 3/(9+u)
+    E           :MSTORE(halfPairingBN254_Q_RHS_x)
+    C           :MSTORE(halfPairingBN254_Q_RHS_y)
+
+    $ => A  :MLOAD(halfPairingBN254_Q_y1)
+    $ => B  :MLOAD(halfPairingBN254_Q_y2), CALL(squareFp2BN254)
+    ; E + C·u = (Q.y1 + Q.y2·u)²
+
+    ; 1.2] Check if LHS == RHS
+    E => A
+    $ => B  :MLOAD(halfPairingBN254_Q_RHS_x)
+    $       :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    C => A
+    $ => B  :MLOAD(halfPairingBN254_Q_RHS_y)
+    $       :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    ; 2] Check if psi(Q) == [6x²]Q
+    ; 2.1] Compute psi(Q)
+    %BN254_P => A
+    $ => B      :MLOAD(halfPairingBN254_Q_x2)
+    $ => D      :SUB                                ; D = -Qx2
+    %FROBENIUS_GAMMA121 => A
+    %FROBENIUS_GAMMA122 => B
+    $ => C      :MLOAD(halfPairingBN254_Q_x1), CALL(mulFp2BN254)
+    E           :MSTORE(halfPairingBN254_psi_x1)
+    C           :MSTORE(halfPairingBN254_psi_x2)
+
+    %BN254_P => A
+    $ => B      :MLOAD(halfPairingBN254_Q_y2)
+    $ => D      :SUB                                ; D = -Qx2
+    %FROBENIUS_GAMMA131 => A
+    %FROBENIUS_GAMMA132 => B
+    $ => C      :MLOAD(halfPairingBN254_Q_y1), CALL(mulFp2BN254)
+    E           :MSTORE(halfPairingBN254_psi_y1)
+    C           :MSTORE(halfPairingBN254_psi_y2)
+
+    ; 2.2] Compute [6x²]Q
+    $ => A      :MLOAD(halfPairingBN254_Q_x1)
+    $ => B      :MLOAD(halfPairingBN254_Q_x2)
+    $ => C      :MLOAD(halfPairingBN254_Q_y1)
+    $ => D      :MLOAD(halfPairingBN254_Q_y2)
+    A           :MSTORE(escalarMulBN254_P_x1)
+    B           :MSTORE(escalarMulBN254_P_x2)
+    C           :MSTORE(escalarMulBN254_P_y1)
+    D           :MSTORE(escalarMulBN254_P_y2)
+    %BN254_SIX_TIMES_X_SQ :MSTORE(escalarMulBN254_k), CALL(escalarMulBN254)
+
+
+    ; 2.3] Check if psi(Q) == [6x²]Q
+    $ => A      :MLOAD(halfPairingBN254_psi_x1)
+    $ => B      :MLOAD(escalarMulBN254_Q_x1)
+    $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(halfPairingBN254_psi_x2)
+    $ => B      :MLOAD(escalarMulBN254_Q_x2)
+    $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(halfPairingBN254_psi_y1)
+    $ => B      :MLOAD(escalarMulBN254_Q_y1)
+    $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+    $ => A      :MLOAD(halfPairingBN254_psi_y2)
+    $ => B      :MLOAD(escalarMulBN254_Q_y2)
+    $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
+
+halfPairingBN254_Miller_loop:
+    $ => A      :MLOAD(halfPairingBN254_P_x)
+    $ => B      :MLOAD(halfPairingBN254_P_y)
+    A           :MSTORE(millerLoopBN254_P_x)
+    B           :MSTORE(millerLoopBN254_P_y)
+    $ => A      :MLOAD(halfPairingBN254_Q_x1)
+    $ => B      :MLOAD(halfPairingBN254_Q_x2)
+    $ => C      :MLOAD(halfPairingBN254_Q_y1)
+    $ => D      :MLOAD(halfPairingBN254_Q_y2)
+    A           :MSTORE(millerLoopBN254_Q_x1)
+    B           :MSTORE(millerLoopBN254_Q_x2)
+    C           :MSTORE(millerLoopBN254_Q_y1)
+    D           :MSTORE(millerLoopBN254_Q_y2), CALL(millerLoopBN254)
+    $ => A      :MLOAD(millerLoopBN254_f11_x)
+    $ => B      :MLOAD(millerLoopBN254_f11_y)
+    A           :MSTORE(halfPairingBN254_f11_x)
+    B           :MSTORE(halfPairingBN254_f11_y)
+    $ => A      :MLOAD(millerLoopBN254_f12_x)
+    $ => B      :MLOAD(millerLoopBN254_f12_y)
+    A           :MSTORE(halfPairingBN254_f12_x)
+    B           :MSTORE(halfPairingBN254_f12_y)
+    $ => A      :MLOAD(millerLoopBN254_f13_x)
+    $ => B      :MLOAD(millerLoopBN254_f13_y)
+    A           :MSTORE(halfPairingBN254_f13_x)
+    B           :MSTORE(halfPairingBN254_f13_y)
+    $ => A      :MLOAD(millerLoopBN254_f21_x)
+    $ => B      :MLOAD(millerLoopBN254_f21_y)
+    A           :MSTORE(halfPairingBN254_f21_x)
+    B           :MSTORE(halfPairingBN254_f21_y)
+    $ => A      :MLOAD(millerLoopBN254_f22_x)
+    $ => B      :MLOAD(millerLoopBN254_f22_y)
+    A           :MSTORE(halfPairingBN254_f22_x)
+    B           :MSTORE(halfPairingBN254_f22_y)
+    $ => A      :MLOAD(millerLoopBN254_f23_x)
+    $ => B      :MLOAD(millerLoopBN254_f23_y)
+    A           :MSTORE(halfPairingBN254_f23_x)
+    B           :MSTORE(halfPairingBN254_f23_y)
+
+    0 => B     :JMP(halfPairingBN254_end)
+
+; ERRORS
+halfPairingBN254_Px_too_big:
+    1 => B      :JMP(halfPairingBN254_error)
+
+halfPairingBN254_Py_too_big:
+    2 => B      :JMP(halfPairingBN254_error)
+
+halfPairingBN254_Qx1_too_big:
+    3 => B      :JMP(halfPairingBN254_error)
+
+halfPairingBN254_Qx2_too_big:
+    4 => B      :JMP(halfPairingBN254_error)
+
+halfPairingBN254_Qy1_too_big:
+    5 => B      :JMP(halfPairingBN254_error)
+
+halfPairingBN254_Qy2_too_big:
+    6 => B      :JMP(halfPairingBN254_error)
+
+halfPairingBN254_P_is_not_in_G1:
+    7 => B      :JMP(halfPairingBN254_error)
+
+halfPairingBN254_Q_is_not_in_G2:
+    8 => B      :JMP(halfPairingBN254_error)
+
+halfPairingBN254_error:
+    0 => A
+
+halfPairingBN254_end:
+    $ => RR     :MLOAD(halfPairingBN254_RR)
+    :RETURN

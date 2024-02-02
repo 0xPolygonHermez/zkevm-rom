@@ -9,12 +9,12 @@ const { compile } = require('pilcom');
 const buildPoseidon = require('@0xpolygonhermez/zkevm-commonjs').getPoseidon;
 
 const folderPaths = [
-    '../node_modules/@0xpolygonhermez/zkevm-testvectors/inputs-executor',
-    '../node_modules/@0xpolygonhermez/zkevm-testvectors/tools/ethereum-tests/GeneralStateTests',
+    '../../node_modules/@0xpolygonhermez/zkevm-testvectors/inputs-executor',
+    '../../node_modules/@0xpolygonhermez/zkevm-testvectors/inputs-executor/ethereum-tests/GeneralStateTests',
 ];
 
-const fileCachePil = path.join(__dirname, '../node_modules/@0xpolygonhermez/zkevm-proverjs/cache-main-pil.json');
-const pathMainPil = path.join(__dirname, '../node_modules/@0xpolygonhermez/zkevm-proverjs/pil/main.pil');
+const fileCachePil = path.join(__dirname, '../../node_modules/@0xpolygonhermez/zkevm-proverjs/cache-main-pil.json');
+const pathMainPil = path.join(__dirname, '../../node_modules/@0xpolygonhermez/zkevm-proverjs/pil/main.pil');
 const inputs = [];
 const testsFolder = path.join(__dirname, 'parallel-tests');
 const sampleDir = path.join(__dirname, 'parallel-tests-sample/sample.test.js');
@@ -41,12 +41,13 @@ async function main() {
         const inputsPath = path.join(__dirname, folder);
         fs.readdirSync(inputsPath).forEach((file) => {
             const filePath = path.join(inputsPath, file);
-            if (file.endsWith('.json')) {
+            // Remove json lists that are generated with gen inputs script and are not inputs
+            if (file.endsWith('.json') && !file.includes('testsOOC-list.json') && !file.includes('tests30M-list.json') && !file.includes('no-exec')) {
                 inputs.push(filePath);
-            } else if (fs.statSync(filePath).isDirectory()) {
+            } else if (fs.statSync(filePath).isDirectory() && !filePath.includes('tests-OOC')) {
                 fs.readdirSync(filePath).forEach((subFile) => {
                     const subFilePath = path.join(filePath, subFile);
-                    if (subFile.endsWith('.json')) {
+                    if (subFile.endsWith('.json') && !subFile.includes('testsOOC-list.json') && !subFile.includes('tests30M-list.json') && !subFile.includes('no-exec')) {
                         inputs.push(subFilePath);
                     }
                 });
@@ -65,6 +66,8 @@ async function main() {
     const pil = await compile(F, pathMainPil, null, pilConfig);
     fs.writeFileSync(fileCachePil, `${JSON.stringify(pil, null, 1)}\n`, 'utf8');
     genTestsFiles();
+    // Generate counters diff table csv file
+    fs.writeFileSync(path.join(__dirname, 'countersDiffs.csv'), 'Test name,vSteps,rSteps,StepsDiff,vArith,rArith,ArithDiff,vBinary,rBinary,BinaryDiff,vMemAlign,rMemAlign,memAlignDiff,vKeccaks,rKeccaks,keccaksDiff,vPoseidon,rPoseidon,PoseidonDiff,vPadding,rPadding,PaddingDiff,vSHA256,rSHA256,SHA256Diff\n', 'utf8');
 }
 
 main();

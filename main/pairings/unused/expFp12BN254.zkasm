@@ -1,0 +1,333 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; expFp12BN254:
+;;             in: e, (a1 + a2·w) ∈ Fp12, where e ∈ [0,p¹²-2] ai ∈ Fp6
+;;             out: (a1 + a2·w)^e = (c1 + c2·w) ∈ Fp12
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Comment: We use this algorithm with a very small e (i.e., it fits in 32 bits), but it must be adpated to use it with a bigger e
+; Comment: In some cases, we can speed this algorithm up by using pseudobinary encoding instead of binary encoding
+
+VAR GLOBAL expFp12BN254_e
+VAR GLOBAL expFp12BN254_a11_x
+VAR GLOBAL expFp12BN254_a11_y
+VAR GLOBAL expFp12BN254_a12_x
+VAR GLOBAL expFp12BN254_a12_y
+VAR GLOBAL expFp12BN254_a13_x
+VAR GLOBAL expFp12BN254_a13_y
+VAR GLOBAL expFp12BN254_a21_x
+VAR GLOBAL expFp12BN254_a21_y
+VAR GLOBAL expFp12BN254_a22_x
+VAR GLOBAL expFp12BN254_a22_y
+VAR GLOBAL expFp12BN254_a23_x
+VAR GLOBAL expFp12BN254_a23_y
+VAR GLOBAL expFp12BN254_c11_x
+VAR GLOBAL expFp12BN254_c11_y
+VAR GLOBAL expFp12BN254_c12_x
+VAR GLOBAL expFp12BN254_c12_y
+VAR GLOBAL expFp12BN254_c13_x
+VAR GLOBAL expFp12BN254_c13_y
+VAR GLOBAL expFp12BN254_c21_x
+VAR GLOBAL expFp12BN254_c21_y
+VAR GLOBAL expFp12BN254_c22_x
+VAR GLOBAL expFp12BN254_c22_y
+VAR GLOBAL expFp12BN254_c23_x
+VAR GLOBAL expFp12BN254_c23_y
+
+VAR GLOBAL expFp12BN254_RR
+
+expFp12BN254:
+        RR              :MSTORE(expFp12BN254_RR)
+
+        ; Trivial cases:
+        ;  1] Is a = 0?
+        0n => B
+        $ => A  :MLOAD(expFp12BN254_a11_x)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue1)
+        $ => A  :MLOAD(expFp12BN254_a11_y)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue1)
+        $ => A  :MLOAD(expFp12BN254_a12_x)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue1)
+        $ => A  :MLOAD(expFp12BN254_a12_y)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue1)
+        $ => A  :MLOAD(expFp12BN254_a13_x)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue1)
+        $ => A  :MLOAD(expFp12BN254_a13_y)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue1)
+        $ => A  :MLOAD(expFp12BN254_a21_x)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue1)
+        $ => A  :MLOAD(expFp12BN254_a21_y)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue1)
+        $ => A  :MLOAD(expFp12BN254_a22_x)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue1)
+        $ => A  :MLOAD(expFp12BN254_a22_y)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue1)
+        $ => A  :MLOAD(expFp12BN254_a23_x)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue1)
+        $ => A  :MLOAD(expFp12BN254_a23_y)
+        $       :EQ, JMPC(expFp12BN254_a_is_zero)
+                __expFp12BN254_a_continue1:
+
+        ;  2] Is a = 1?
+        1n => B
+        $ => A  :MLOAD(expFp12BN254_a11_x)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue2)
+        0n => B
+        $ => A  :MLOAD(expFp12BN254_a11_y)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue2)
+        $ => A  :MLOAD(expFp12BN254_a12_x)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue2)
+        $ => A  :MLOAD(expFp12BN254_a12_y)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue2)
+        $ => A  :MLOAD(expFp12BN254_a13_x)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue2)
+        $ => A  :MLOAD(expFp12BN254_a13_y)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue2)
+        $ => A  :MLOAD(expFp12BN254_a21_x)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue2)
+        $ => A  :MLOAD(expFp12BN254_a21_y)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue2)
+        $ => A  :MLOAD(expFp12BN254_a22_x)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue2)
+        $ => A  :MLOAD(expFp12BN254_a22_y)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue2)
+        $ => A  :MLOAD(expFp12BN254_a23_x)
+        $       :EQ, JMPNC(__expFp12BN254_a_continue2)
+        $ => A  :MLOAD(expFp12BN254_a23_y)
+        $       :EQ, JMPC(expFp12BN254_a_is_one)
+                __expFp12BN254_a_continue2:
+
+        ;  3] Is e = 0?
+        $ => A  :MLOAD(expFp12BN254_e)
+        0n => B
+        $       :EQ, JMPC(expFp12BN254_e_is_zero)
+
+        257 => RCX
+
+        $ => A  :MLOAD(expFp12BN254_a11_x)
+        $ => B  :MLOAD(expFp12BN254_a11_y)
+        A       :MSTORE(expFp12BN254_c11_x)
+        B       :MSTORE(expFp12BN254_c11_y)
+        $ => A  :MLOAD(expFp12BN254_a12_x)
+        $ => B  :MLOAD(expFp12BN254_a12_y)
+        A       :MSTORE(expFp12BN254_c12_x)
+        B       :MSTORE(expFp12BN254_c12_y)
+        $ => A  :MLOAD(expFp12BN254_a13_x)
+        $ => B  :MLOAD(expFp12BN254_a13_y)
+        A       :MSTORE(expFp12BN254_c13_x)
+        B       :MSTORE(expFp12BN254_c13_y)
+        $ => A  :MLOAD(expFp12BN254_a21_x)
+        $ => B  :MLOAD(expFp12BN254_a21_y)
+        A       :MSTORE(expFp12BN254_c21_x)
+        B       :MSTORE(expFp12BN254_c21_y)
+        $ => A  :MLOAD(expFp12BN254_a22_x)
+        $ => B  :MLOAD(expFp12BN254_a22_y)
+        A       :MSTORE(expFp12BN254_c22_x)
+        B       :MSTORE(expFp12BN254_c22_y)
+        $ => A  :MLOAD(expFp12BN254_a23_x)
+        $ => B  :MLOAD(expFp12BN254_a23_y)
+        A       :MSTORE(expFp12BN254_c23_x)
+        B       :MSTORE(expFp12BN254_c23_y)
+
+                :JMP(expFp12BN254_find_MSB_e)
+
+expFp12BN254_a_is_zero:
+        ; I define 0^0 = 0 for simplicity
+        0n      :MSTORE(expFp12BN254_c11_x)
+        0n      :MSTORE(expFp12BN254_c11_y)
+        0n      :MSTORE(expFp12BN254_c12_x)
+        0n      :MSTORE(expFp12BN254_c12_y)
+        0n      :MSTORE(expFp12BN254_c13_x)
+        0n      :MSTORE(expFp12BN254_c13_y)
+        0n      :MSTORE(expFp12BN254_c21_x)
+        0n      :MSTORE(expFp12BN254_c21_y)
+        0n      :MSTORE(expFp12BN254_c22_x)
+        0n      :MSTORE(expFp12BN254_c22_y)
+        0n      :MSTORE(expFp12BN254_c23_x)
+        0n      :MSTORE(expFp12BN254_c23_y)
+
+                :JMP(expFp12BN254_end)
+
+expFp12BN254_a_is_one:
+        ; 1^e = 1
+        1n      :MSTORE(expFp12BN254_c11_x)
+        0n      :MSTORE(expFp12BN254_c11_y)
+        0n      :MSTORE(expFp12BN254_c12_x)
+        0n      :MSTORE(expFp12BN254_c12_y)
+        0n      :MSTORE(expFp12BN254_c13_x)
+        0n      :MSTORE(expFp12BN254_c13_y)
+        0n      :MSTORE(expFp12BN254_c21_x)
+        0n      :MSTORE(expFp12BN254_c21_y)
+        0n      :MSTORE(expFp12BN254_c22_x)
+        0n      :MSTORE(expFp12BN254_c22_y)
+        0n      :MSTORE(expFp12BN254_c23_x)
+        0n      :MSTORE(expFp12BN254_c23_y)
+
+                :JMP(expFp12BN254_end)
+
+expFp12BN254_e_is_zero:
+        ; a^0 = 1
+        1n      :MSTORE(expFp12BN254_c11_x)
+        0n      :MSTORE(expFp12BN254_c11_y)
+        0n      :MSTORE(expFp12BN254_c12_x)
+        0n      :MSTORE(expFp12BN254_c12_y)
+        0n      :MSTORE(expFp12BN254_c13_x)
+        0n      :MSTORE(expFp12BN254_c13_y)
+        0n      :MSTORE(expFp12BN254_c21_x)
+        0n      :MSTORE(expFp12BN254_c21_y)
+        0n      :MSTORE(expFp12BN254_c22_x)
+        0n      :MSTORE(expFp12BN254_c22_y)
+        0n      :MSTORE(expFp12BN254_c23_x)
+        0n      :MSTORE(expFp12BN254_c23_y)
+
+                :JMP(expFp12BN254_end)
+
+expFp12BN254_find_MSB_e:
+        RCX - 1 => RCX
+        $ => A,B        :MLOAD(expFp12BN254_e)
+        ; E = 2A
+        $ => E          :ADD,MSTORE(expFp12BN254_e), JMPNC(expFp12BN254_find_MSB_e)
+
+
+expFp12BN254_loop:
+        RCX - 1 => RCX         :JMPZ(expFp12BN254_end)
+
+        ; We always square: c = c^2
+        $ => A  :MLOAD(expFp12BN254_c11_x)
+        $ => B  :MLOAD(expFp12BN254_c11_y)
+        A       :MSTORE(squareFp12BN254_a11_x)
+        B       :MSTORE(squareFp12BN254_a11_y)
+        $ => A  :MLOAD(expFp12BN254_c12_x)
+        $ => B  :MLOAD(expFp12BN254_c12_y)
+        A       :MSTORE(squareFp12BN254_a12_x)
+        B       :MSTORE(squareFp12BN254_a12_y)
+        $ => A  :MLOAD(expFp12BN254_c13_x)
+        $ => B  :MLOAD(expFp12BN254_c13_y)
+        A       :MSTORE(squareFp12BN254_a13_x)
+        B       :MSTORE(squareFp12BN254_a13_y)
+        $ => A  :MLOAD(expFp12BN254_c21_x)
+        $ => B  :MLOAD(expFp12BN254_c21_y)
+        A       :MSTORE(squareFp12BN254_a21_x)
+        B       :MSTORE(squareFp12BN254_a21_y)
+        $ => A  :MLOAD(expFp12BN254_c22_x)
+        $ => B  :MLOAD(expFp12BN254_c22_y)
+        A       :MSTORE(squareFp12BN254_a22_x)
+        B       :MSTORE(squareFp12BN254_a22_y)
+        $ => A  :MLOAD(expFp12BN254_c23_x)
+        $ => B  :MLOAD(expFp12BN254_c23_y)
+        A       :MSTORE(squareFp12BN254_a23_x)
+        B       :MSTORE(squareFp12BN254_a23_y), CALL(squareFp12BN254)
+
+        ; c = c^2
+        $ => A  :MLOAD(squareFp12BN254_c11_x)
+        $ => B  :MLOAD(squareFp12BN254_c11_y)
+        A       :MSTORE(expFp12BN254_c11_x)
+        B       :MSTORE(expFp12BN254_c11_y)
+        $ => A  :MLOAD(squareFp12BN254_c12_x)
+        $ => B  :MLOAD(squareFp12BN254_c12_y)
+        A       :MSTORE(expFp12BN254_c12_x)
+        B       :MSTORE(expFp12BN254_c12_y)
+        $ => A  :MLOAD(squareFp12BN254_c13_x)
+        $ => B  :MLOAD(squareFp12BN254_c13_y)
+        A       :MSTORE(expFp12BN254_c13_x)
+        B       :MSTORE(expFp12BN254_c13_y)
+        $ => A  :MLOAD(squareFp12BN254_c21_x)
+        $ => B  :MLOAD(squareFp12BN254_c21_y)
+        A       :MSTORE(expFp12BN254_c21_x)
+        B       :MSTORE(expFp12BN254_c21_y)
+        $ => A  :MLOAD(squareFp12BN254_c22_x)
+        $ => B  :MLOAD(squareFp12BN254_c22_y)
+        A       :MSTORE(expFp12BN254_c22_x)
+        B       :MSTORE(expFp12BN254_c22_y)
+        $ => A  :MLOAD(squareFp12BN254_c23_x)
+        $ => B  :MLOAD(squareFp12BN254_c23_y)
+        A       :MSTORE(expFp12BN254_c23_x)
+        B       :MSTORE(expFp12BN254_c23_y)
+
+        ; 2] We check if the MSB b of e is either 1 or 0. If b==1, we should multiply a to c.
+        ;    Then, update the value of e.
+        $ => A,B        :MLOAD(expFp12BN254_e)
+        ; E = 2A
+        $ => E          :ADD,MSTORE(expFp12BN254_e), JMPNC(expFp12BN254_loop)
+
+expFp12BN254_multiply:
+        $ => A  :MLOAD(expFp12BN254_a11_x)
+        $ => B  :MLOAD(expFp12BN254_a11_y)
+        A       :MSTORE(mulFp12BN254_a11_x)
+        B       :MSTORE(mulFp12BN254_a11_y)
+        $ => A  :MLOAD(expFp12BN254_a12_x)
+        $ => B  :MLOAD(expFp12BN254_a12_y)
+        A       :MSTORE(mulFp12BN254_a12_x)
+        B       :MSTORE(mulFp12BN254_a12_y)
+        $ => A  :MLOAD(expFp12BN254_a13_x)
+        $ => B  :MLOAD(expFp12BN254_a13_y)
+        A       :MSTORE(mulFp12BN254_a13_x)
+        B       :MSTORE(mulFp12BN254_a13_y)
+        $ => A  :MLOAD(expFp12BN254_a21_x)
+        $ => B  :MLOAD(expFp12BN254_a21_y)
+        A       :MSTORE(mulFp12BN254_a21_x)
+        B       :MSTORE(mulFp12BN254_a21_y)
+        $ => A  :MLOAD(expFp12BN254_a22_x)
+        $ => B  :MLOAD(expFp12BN254_a22_y)
+        A       :MSTORE(mulFp12BN254_a22_x)
+        B       :MSTORE(mulFp12BN254_a22_y)
+        $ => A  :MLOAD(expFp12BN254_a23_x)
+        $ => B  :MLOAD(expFp12BN254_a23_y)
+        A       :MSTORE(mulFp12BN254_a23_x)
+        B       :MSTORE(mulFp12BN254_a23_y)
+        $ => A  :MLOAD(expFp12BN254_c11_x)
+        $ => B  :MLOAD(expFp12BN254_c11_y)
+        A       :MSTORE(mulFp12BN254_b11_x)
+        B       :MSTORE(mulFp12BN254_b11_y)
+        $ => A  :MLOAD(expFp12BN254_c12_x)
+        $ => B  :MLOAD(expFp12BN254_c12_y)
+        A       :MSTORE(mulFp12BN254_b12_x)
+        B       :MSTORE(mulFp12BN254_b12_y)
+        $ => A  :MLOAD(expFp12BN254_c13_x)
+        $ => B  :MLOAD(expFp12BN254_c13_y)
+        A       :MSTORE(mulFp12BN254_b13_x)
+        B       :MSTORE(mulFp12BN254_b13_y)
+        $ => A  :MLOAD(expFp12BN254_c21_x)
+        $ => B  :MLOAD(expFp12BN254_c21_y)
+        A       :MSTORE(mulFp12BN254_b21_x)
+        B       :MSTORE(mulFp12BN254_b21_y)
+        $ => A  :MLOAD(expFp12BN254_c22_x)
+        $ => B  :MLOAD(expFp12BN254_c22_y)
+        A       :MSTORE(mulFp12BN254_b22_x)
+        B       :MSTORE(mulFp12BN254_b22_y)
+        $ => A  :MLOAD(expFp12BN254_c23_x)
+        $ => B  :MLOAD(expFp12BN254_c23_y)
+        A       :MSTORE(mulFp12BN254_b23_x)
+        B       :MSTORE(mulFp12BN254_b23_y), CALL(mulFp12BN254)
+
+        ; c = c·a
+        $ => A  :MLOAD(mulFp12BN254_c11_x)
+        $ => B  :MLOAD(mulFp12BN254_c11_y)
+        A       :MSTORE(expFp12BN254_c11_x)
+        B       :MSTORE(expFp12BN254_c11_y)
+        $ => A  :MLOAD(mulFp12BN254_c12_x)
+        $ => B  :MLOAD(mulFp12BN254_c12_y)
+        A       :MSTORE(expFp12BN254_c12_x)
+        B       :MSTORE(expFp12BN254_c12_y)
+        $ => A  :MLOAD(mulFp12BN254_c13_x)
+        $ => B  :MLOAD(mulFp12BN254_c13_y)
+        A       :MSTORE(expFp12BN254_c13_x)
+        B       :MSTORE(expFp12BN254_c13_y)
+        $ => A  :MLOAD(mulFp12BN254_c21_x)
+        $ => B  :MLOAD(mulFp12BN254_c21_y)
+        A       :MSTORE(expFp12BN254_c21_x)
+        B       :MSTORE(expFp12BN254_c21_y)
+        $ => A  :MLOAD(mulFp12BN254_c22_x)
+        $ => B  :MLOAD(mulFp12BN254_c22_y)
+        A       :MSTORE(expFp12BN254_c22_x)
+        B       :MSTORE(expFp12BN254_c22_y)
+        $ => A  :MLOAD(mulFp12BN254_c23_x)
+        $ => B  :MLOAD(mulFp12BN254_c23_y)
+        A       :MSTORE(expFp12BN254_c23_x)
+        B       :MSTORE(expFp12BN254_c23_y)
+                :JMP(expFp12BN254_loop)
+
+expFp12BN254_end:
+        $ => RR :MLOAD(expFp12BN254_RR)
+                :RETURN

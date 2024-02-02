@@ -28,7 +28,7 @@ opSTOPend:
     CTX             :MSTORE(currentCTX)
     ; restore retDataCTX, no return data in stop
     0               :MSTORE(retDataCTX)
-    ; handle gas reund
+    ; handle gas refund
     $ => B          :MLOAD(gasCTX)
     A               :MSTORE(gasRefund)
     GAS + B => GAS
@@ -36,10 +36,7 @@ opSTOPend:
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     ; store stack output
-    D               :MSTORE(SP++)
-    ; decrease depth
-    $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth), JMP(readCode)
+    D               :MSTORE(SP++), JMP(readCode)
 
 /**
  * @link [https://www.evm.codes/#f0?fork=berlin]
@@ -54,16 +51,12 @@ opSTOPend:
 opCREATE:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 3          :JMPN(outOfCountersBinary)
+    %MAX_CNT_BINARY - CNT_BINARY - 4          :JMPN(outOfCountersBinary)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*3 :JMPN(outOfCountersPoseidon)
 
     ; check out-of-gas
     GAS - %CREATE_GAS => GAS  :JMPN(outOfGas)
     GAS                 :MSTORE(gasCall)
-
-    ; increase depth
-    $ => A              :MLOAD(depth)
-    A + 1               :MSTORE(depth)
 
     ; check stack underflow
     SP - 3              :JMPN(stackUnderflow)
@@ -148,16 +141,13 @@ opCREATE:
     $ => A              :MLOAD(argsLengthCall)
     ; set calldata pointers to current CTX
     A                   :MSTORE(txCalldataLen), CALL(saveCalldataPointer)
-    $ => A              :MLOAD(valueCall)
+    $ => A              :MLOAD(valueCall), CALL(checkpointBlockInfoTree)
     ; Save touched root when a new context is created
     A                   :MSTORE(txValue), CALL(checkpointTouched)
                         :JMP(txType)
 
 opCreateFail:
-    ; decrease depth
-    $ => A                          :MLOAD(depth)
-    A - 1                           :MSTORE(depth)
-
+    ; return 0 if create fails
     0                   :MSTORE(retDataCTX)
     0                   :MSTORE(SP++), JMP(readCode); [0 => SP]
 
@@ -175,9 +165,6 @@ opCALL:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCountersBinary)
-    ; increase depth
-    $ => A          :MLOAD(depth)
-    A + 1           :MSTORE(depth)
     ; check stack underflow
     SP - 7          :JMPN(stackUnderflow)
     SP - 1 => SP
@@ -228,7 +215,7 @@ opCALL2:
 
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost + value_to_empty_account_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
-    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS :JMPN(outOfGas)
+    GAS - %WARM_STORAGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS :JMPN(outOfGas)
     ; Calculate positive_value_cost, if value call > 0 -> 9000
     $ => B          :MLOAD(valueCall)
     0 => A
@@ -281,6 +268,7 @@ opCALLend:
     A                   :MSTORE(txCalldataLen), CALL(saveCalldataPointer)
     ; save touched root when a new context is created
                         :CALL(checkpointTouched)
+                        :CALL(checkpointBlockInfoTree)
                         :JMP(txType)
 
 /**
@@ -296,9 +284,6 @@ opCALLCODE:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 200 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
-    ; increase depth
-    $ => A          :MLOAD(depth)
-    A + 1           :MSTORE(depth)
     ; check stack underflow
     SP - 7          :JMPN(stackUnderflow)
     SP - 1 => SP
@@ -339,12 +324,12 @@ opCALLCODE:
 
     ;gas_cost = memory_expansion_cost + code_execution_cost + address_access_cost + positive_value_cost
     ; Calculate address_access_cost: 100 for warm account, 2600 for cold account
-    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS    :JMPN(outOfGas)
+    GAS - %WARM_STORAGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS    :JMPN(outOfGas)
     ; Calculate positive_value_cost, if value call > 0 -> 9000
     $ => B                   :MLOAD(valueCall)
     0 => A
     $                        :EQ,JMPC(opCALLCODEend)
-    ; Substract gas if the call has value
+    ; Subtract gas if the call has value
     GAS - %CALL_VALUE_TRANSFER_GAS => GAS        :JMPN(outOfGas)
 
 opCALLCODEend:
@@ -389,6 +374,7 @@ opCALLCODEend:
     A               :MSTORE(txCalldataLen), CALL(saveCalldataPointer)
     ; Save touched root when a new context is created
                     :CALL(checkpointTouched)
+                    :CALL(checkpointBlockInfoTree)
                     :JMP(txType)
 /**
  * @link [https://www.evm.codes/#f3?fork=berlin]
@@ -480,10 +466,7 @@ opRETURNend:
     ; restore origin CTX values
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
-    1               :MSTORE(SP++); [1 => SP]
-    ; decrease depth
-    $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth), JMP(readCode)
+    1               :MSTORE(SP++), JMP(readCode); [1 => SP]
 
 opRETURNdeploy:
     ; code size limit = 0x6000
@@ -497,7 +480,7 @@ opRETURNcreate:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*2 :JMPN(outOfCountersPoseidon)
-
+    %MAX_CNT_BINARY - CNT_BINARY - 2                                        :JMPN(outOfCountersBinary)
     ; save offset memory and length to compute contract hash
     E               :MSTORE(memOffsetLinearPoseidon)
     C               :MSTORE(memSizeLinearPoseidon), CALL(checkBytecodeStartsEF) ; in: [memOffset], out: [startsWithEF]
@@ -529,10 +512,7 @@ opRETURNcreateEnd:
     ; set SP and PC
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
-    A               :MSTORE(SP++); [createContractAddress(A) => SP]
-    ; decrease depth
-    $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth), JMP(readCode)
+    A               :MSTORE(SP++), JMP(readCode); [createContractAddress(A) => SP]
 
 /**
  * @link [https://www.evm.codes/#f4?fork=berlin]
@@ -545,9 +525,7 @@ opRETURNcreateEnd:
 opDELEGATECALL:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
-    ; increase depth
-    $ => A          :MLOAD(depth)
-    A + 1           :MSTORE(depth)
+
     ; check stack underflow
     SP - 6          :JMPN(stackUnderflow)
     SP - 1 => SP
@@ -586,7 +564,7 @@ opDELEGATECALL:
     $ => A                   :MLOAD(addrCall)
                              :CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ;gas_cost = base_gas + gas_sent_with_call
-    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS    :JMPN(outOfGas)
+    GAS - %WARM_STORAGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS    :JMPN(outOfGas)
 
     ; transition to new CTX
     $ => C          :MLOAD(txSrcAddr)
@@ -626,6 +604,7 @@ opDELEGATECALLend:
     A               :MSTORE(txCalldataLen), CALL(saveCalldataPointer)
     ; Save touched root when a new context is created
                     :CALL(checkpointTouched)
+                    :CALL(checkpointBlockInfoTree)
                     :JMP(txType)
 
 /**
@@ -641,14 +620,10 @@ opDELEGATECALLend:
 opCREATE2:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 4          :JMPN(outOfCountersBinary)
+    %MAX_CNT_BINARY - CNT_BINARY - 5          :JMPN(outOfCountersBinary)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*2 :JMPN(outOfCountersPoseidon)
     ; check out-of-gas
     GAS - %CREATE_2_GAS => GAS  :JMPN(outOfGas)
-
-    ; increase depth
-    $ => A              :MLOAD(depth)
-    A + 1               :MSTORE(depth)
 
     ; check stack underflow
     SP - 4              :JMPN(stackUnderflow)
@@ -672,7 +647,7 @@ opCREATE2:
     ; store current CTX to auxiliary var for later usage
     CTX                 :MSTORE(originAuxCTX)
 
-    ; cost to hash the initialisation code
+    ; cost to hash the initialization code
     C + 31              :MSTORE(arithA)
     32                  :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => C              :MLOAD(arithRes1)
@@ -746,7 +721,7 @@ opCREATE2:
     $ => A              :MLOAD(argsLengthCall)
     ; set calldata pointers to current CTX
     A                   :MSTORE(txCalldataLen), CALL(saveCalldataPointer)
-    $ => A              :MLOAD(valueCall)
+    $ => A              :MLOAD(valueCall), CALL(checkpointBlockInfoTree)
     ; Save touched root when a new context is created
     A                   :MSTORE(txValue), CALL(checkpointTouched)
                         :JMP(txType)
@@ -762,9 +737,6 @@ opCREATE2:
 opSTATICCALL:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 300 :JMPN(outOfCountersStep)
-    ; increase depth
-    $ => A          :MLOAD(depth)
-    A + 1           :MSTORE(depth)
     ; check stack underflow
     SP - 6          :JMPN(stackUnderflow)
     SP - 1 => SP
@@ -797,7 +769,7 @@ opSTATICCALL:
     ; check if an address is cold. If it is, add it to the touched tree
     $ => A          :MLOAD(addrCall), CALL(isColdAddress); in: [A: address] out: [D: 0 if warm, 1 if cold]
     ;gas_cost = base_gas + gas_sent_with_call
-    GAS - %WARM_STORGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS    :JMPN(outOfGas)
+    GAS - %WARM_STORAGE_READ_GAS - D * %COLD_ACCOUNT_ACCESS_COST_REDUCED => GAS    :JMPN(outOfGas)
 
     ; setup vars for next CTX
     $ => D          :MLOAD(storageAddr)
@@ -831,6 +803,7 @@ opSTATICCALL:
     A               :MSTORE(txCalldataLen), CALL(saveCalldataPointer)
     ; save touched root when a new context is created
                     :CALL(checkpointTouched)
+                    :CALL(checkpointBlockInfoTree)
                     :JMP(txType)
 /**
  * @link [https://www.evm.codes/#fd?fork=berlin]
@@ -849,7 +822,7 @@ opREVERT:
     ; revert touched accounts
     $ => SR         :MLOAD(initSR), CALL(revertTouched)
 
-    $ => E          :MLOAD(SP+1); [offset => E]
+    $ => E          :MLOAD(SP+1), CALL(revertBlockInfoTree); [offset => E]
     $ => C          :MLOAD(SP); [size => C]
     E               :MSTORE(retDataOffset)
     C               :MSTORE(retDataLength)
@@ -863,7 +836,7 @@ opREVERT:
     $${eventLog(onError, revert)}
     0               :MSTORE(gasRefund)
     ; if origin ctx is 0, end tx
-    B               :JMPZ(handleGas)
+    B               :JMPZ(handleGasFromError)
     ; decrease CTX
     $ => A          :MLOAD(currentCTX)
     B => CTX
@@ -917,10 +890,7 @@ opREVERTend:
     CTX             :MSTORE(currentCTX)
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
-    0               :MSTORE(SP++); [0 => SP]
-    ; decrease depth
-    $ => A          :MLOAD(depth)
-    A - 1           :MSTORE(depth), JMP(readCode)
+    0               :MSTORE(SP++), JMP(readCode); [0 => SP]
 
 VAR GLOBAL sendAllAddress
 ; SELFDESTRUCT is deprecated and EIP-4758 is implemented: https://eips.ethereum.org/EIPS/eip-4758
@@ -938,7 +908,7 @@ VAR GLOBAL sendAllAddress
 opSENDALL:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
+    %MAX_CNT_BINARY - CNT_BINARY - 4 :JMPN(outOfCountersBinary)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*4 :JMPN(outOfCountersPoseidon)
     ; check out-of-gas
     GAS - %SENDALL_GAS => GAS   :JMPN(outOfGas)
@@ -1026,10 +996,8 @@ opSENDALLendContinue:
     ; restore origin CTX values
     $ => SP                 :MLOAD(lastSP)
     $ => PC                 :MLOAD(lastPC)
-    D                       :MSTORE(SP++); [output => SP]
-    ; decrease depth
-    $ => A                  :MLOAD(depth)
-    A - 1                   :MSTORE(depth), JMP(readCode)
+    D                       :MSTORE(SP++), JMP(readCode); [output => SP]
+
 /**
  * @link [https://www.evm.codes/#fe?fork=berlin]
  * @zk-counters

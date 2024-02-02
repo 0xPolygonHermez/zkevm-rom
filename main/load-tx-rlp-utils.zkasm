@@ -9,6 +9,9 @@ addBatchHashData:
         $ => E                          :MLOAD(lastHashKIdUsed), RETURN
 
 ;; get D bytes from transaction bytes
+;@in D: number of bytes to get
+;@in C: current data parsed pointer
+;@out A: D bytes from batch data at offset C
 getTxBytes:
         $ => A                          :MLOAD(batchL2DataLength)
         $ => B                          :MLOAD(batchL2DataParsed)
@@ -17,7 +20,9 @@ getTxBytes:
         $${p = p + D}
                                         :RETURN
 
-;; Add bytes to generate ethereum transaction hash. transactionHash = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data, chainId, 0, 0))
+;; Add bytes to generate ethereum signed message
+;; - legacy transaction: signedMessage = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data, chainId, 0, 0))
+;; - pre EIP-155: signedMessage = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data))
 addHashTx:
         $ => A                          :MLOAD(txRLPLength)
         A - HASHPOS - D                 :JMPN(invalidTxRLP)
@@ -29,6 +34,7 @@ addHashTxBegin:
         $${p = p + D}
         A                               :HASHK(E)
         C + D => C                      :RETURN
+
 
 ;; Check short value is over 127. Error RLP: single byte < 0x80 are not prefixed
 checkShortRLP:
@@ -56,11 +62,11 @@ skipCheckShortData:
 VAR GLOBAL tmpVarAcheckNonLeadingZeros
 VAR GLOBAL tmpVarZkPCcheckNonLeadingZeros
 checkNonLeadingZeros:
-        RR              :MSTORE(tmpVarZkPCcheckNonLeadingZeros)
-        A               :MSTORE(tmpVarAcheckNonLeadingZeros)
+        RR                              :MSTORE(tmpVarZkPCcheckNonLeadingZeros)
+        A                               :MSTORE(tmpVarAcheckNonLeadingZeros)
         ; set value to B and get its
-        A => B          :CALL(getLenBytes) ; in: [B: number] out: [A: byte length of B]
+        A => B                          :CALL(getLenBytes) ; in: [B: number] out: [A: byte length of B]
         ; check (bytes length - encoded length) are not equal
-        D - A           :JMPNZ(invalidTxRLP)
-        $ => RR         :MLOAD(tmpVarZkPCcheckNonLeadingZeros)
-        $ => A          :MLOAD(tmpVarAcheckNonLeadingZeros), RETURN
+        D - A                           :JMPNZ(invalidTxRLP)
+        $ => RR                         :MLOAD(tmpVarZkPCcheckNonLeadingZeros)
+        $ => A                          :MLOAD(tmpVarAcheckNonLeadingZeros), RETURN

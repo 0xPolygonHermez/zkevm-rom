@@ -1,0 +1,96 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PRE: P ∈ E'(Fp2) and Q ∈ E(Fp)
+;; POST: The result is in the range [0,BN254_P) because if falls back to FP2 arithmetic
+;;
+;; lineSamePointsBN254:
+;;              in: P = (P.x1 + P.x2·u, P.y1 + P.y2·u) ∈ E'(Fp2) and Q = (Q.x,Q.y) ∈ E(Fp)
+;;             out: line_{twist(P), twist(P)}(Q) = (3·P.x1³ - 2·P.y1²)·(9 + u) + (2·Q.y·P.y1)·w³ + (-3·Q.x·P.x1²)·w⁴ ∈ Fp12
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; The precondition is ensured by the pairing.
+; However, it must be implemented if lineSamePointsBN254 wants to be used independently.
+
+VAR GLOBAL lineSamePointsBN254_P_x1
+VAR GLOBAL lineSamePointsBN254_P_x2
+VAR GLOBAL lineSamePointsBN254_P_y1
+VAR GLOBAL lineSamePointsBN254_P_y2
+VAR GLOBAL lineSamePointsBN254_Q_x
+VAR GLOBAL lineSamePointsBN254_Q_y
+
+VAR GLOBAL lineSamePointsBN254_P_x1_square
+VAR GLOBAL lineSamePointsBN254_P_x2_square
+VAR GLOBAL lineSamePointsBN254_P_y1_square
+VAR GLOBAL lineSamePointsBN254_P_y2_square
+
+VAR GLOBAL lineSamePointsBN254_l11_x
+VAR GLOBAL lineSamePointsBN254_l11_y
+VAR GLOBAL lineSamePointsBN254_l13_x
+VAR GLOBAL lineSamePointsBN254_l13_y
+VAR GLOBAL lineSamePointsBN254_l22_x
+VAR GLOBAL lineSamePointsBN254_l22_y
+
+VAR GLOBAL lineSamePointsBN254_RR
+
+lineSamePointsBN254:
+        RR              :MSTORE(lineSamePointsBN254_RR)
+
+        ; 1] (3·P.x1³ - 2·P.y1²)·(9 + u)
+        $ => A          :MLOAD(lineSamePointsBN254_P_y1)
+        $ => B          :MLOAD(lineSamePointsBN254_P_y2), CALL(squareFp2BN254)
+        C => D
+        E => C
+        2n => A         :CALL(escalarMulFp2BN254)
+        E               :MSTORE(lineSamePointsBN254_P_y1_square)
+        C               :MSTORE(lineSamePointsBN254_P_y2_square)
+
+        $ => A          :MLOAD(lineSamePointsBN254_P_x1)
+        $ => B          :MLOAD(lineSamePointsBN254_P_x2), CALL(squareFp2BN254)
+        ; save it for the last step
+        E               :MSTORE(lineSamePointsBN254_P_x1_square)
+        C               :MSTORE(lineSamePointsBN254_P_x2_square)
+        E => A
+        C => B
+        $ => C          :MLOAD(lineSamePointsBN254_P_x1)
+        $ => D          :MLOAD(lineSamePointsBN254_P_x2), CALL(mulFp2BN254)
+        C => D
+        E => C
+        3n => A         :CALL(escalarMulFp2BN254)
+
+        E => A
+        C => B
+        $ => C          :MLOAD(lineSamePointsBN254_P_y1_square)
+        $ => D          :MLOAD(lineSamePointsBN254_P_y2_square), CALL(subFp2BN254)
+
+        E => A
+        C => B
+        9n => C
+        1n => D         :CALL(mulFp2BN254)
+
+        E               :MSTORE(lineSamePointsBN254_l11_x)
+        C               :MSTORE(lineSamePointsBN254_l11_y)
+
+
+        ; 2] 2·Q.y·P.y1
+        2n => A
+        $ => B          :MLOAD(lineSamePointsBN254_Q_y), CALL(mulFpBN254)
+
+        C => A
+        $ => C          :MLOAD(lineSamePointsBN254_P_y1)
+        $ => D          :MLOAD(lineSamePointsBN254_P_y2), CALL(escalarMulFp2BN254)
+
+        E               :MSTORE(lineSamePointsBN254_l22_x)
+        C               :MSTORE(lineSamePointsBN254_l22_y)
+
+        ; 3] -3·Q.x·P.x1²
+        %BN254_P - 3n => A ; This clearly assumes that %BN254_P >= 3n
+        $ => B          :MLOAD(lineSamePointsBN254_Q_x), CALL(mulFpBN254)
+        C => A
+        $ => C          :MLOAD(lineSamePointsBN254_P_x1_square)
+        $ => D          :MLOAD(lineSamePointsBN254_P_x2_square), CALL(escalarMulFp2BN254)
+
+        E               :MSTORE(lineSamePointsBN254_l13_x)
+        C               :MSTORE(lineSamePointsBN254_l13_y)
+
+        $ => RR         :MLOAD(lineSamePointsBN254_RR)
+                        :RETURN

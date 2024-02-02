@@ -1,0 +1,230 @@
+VAR GLOBAL tmpVarAmodexp
+VAR GLOBAL tmpVarBmodexp
+VAR GLOBAL tmpVarCmodexp
+VAR GLOBAL tmpVarDmodexp
+VAR GLOBAL offsetInitModexp
+VAR GLOBAL tmpVarEmodexp
+VAR GLOBAL tmpZkPCmodexp
+VAR GLOBAL modExpArrayIndex
+
+modexp_getBase:
+    %MAX_CNT_STEPS - STEP - 15         :JMPN(outOfCountersStep)
+
+    RR                  :MSTORE(tmpZkPCmodexp)
+    A                   :MSTORE(tmpVarAmodexp)
+    B                   :MSTORE(tmpVarBmodexp)
+    C                   :MSTORE(tmpVarCmodexp)
+    D                   :MSTORE(tmpVarDmodexp)
+    ; offset init
+    E                   :MSTORE(offsetInitModexp)
+    ;E = offset final
+    E + C => E
+    0                   :MSTORE(modExpArrayIndex)
+    0                   :MSTORE(modexp_Blen)
+    32                  :MSTORE(readXFromCalldataLength)
+
+modexp_getBaseLoop:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 6   :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 100        :JMPN(outOfCountersStep)
+    ; C length to read
+    C => A
+    0 => B
+    ; if C (length) == 0 --> modexp_saveBaseLen
+    $                   :EQ,JMPC(modexp_saveBaseLen)
+    32 => B
+    ; if C (length) < 32 --> modexp_getBaseMloadX
+    $                   :LT,JMPC(modexp_getBaseMloadX)
+    E - 32 => E
+    E                   :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A              :MLOAD(readXFromCalldataResult)
+    C - 32 => C         :JMP(modexp_getBaseMstore)
+
+modexp_getBaseMloadX:
+    C                   :MSTORE(readXFromCalldataLength)
+    E - C => E
+    E                   :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A              :MLOAD(readXFromCalldataResult)
+    32 - C => D         :CALL(SHRarith)
+    0 => C
+
+modexp_getBaseMstore:
+    ; mstore base at index E
+    E                   :MSTORE(tmpVarEmodexp)
+    $ => E              :MLOAD(modExpArrayIndex)
+    A                   :MSTORE(modexp_B+E)
+    ; update modExpArrayIndex + 1
+    E + 1 => B          :MSTORE(modExpArrayIndex)
+
+modexp_getBaseFinal:
+    $ => E              :MLOAD(tmpVarEmodexp),JMP(modexp_getBaseLoop)
+
+modexp_saveBaseLen:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 2   :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 20         :JMPN(outOfCountersStep)
+
+    ; if modExpArrayIndex == 0 --> modexp_getReturn
+    $ => A              :MLOAD(modExpArrayIndex)
+    0 => B
+    $                   :EQ,JMPC(modexp_getReturn)
+    ; update modExpArrayIndex = modExpArrayIndex - 1
+    A - 1 => E          :MSTORE(modExpArrayIndex)
+    ; get value of the last index
+    $ => A              :MLOAD(modexp_B + E)
+    ; if last value == 0 --> modexp_saveBaseLen
+    $                   :EQ,JMPC(modexp_saveBaseLen)
+    ; else Blen == modExpArrayIndex + 1
+    E + 1               :MSTORE(modexp_Blen),JMP(modexp_getReturn)
+
+modexp_getExp:
+
+    %MAX_CNT_STEPS - STEP - 15         :JMPN(outOfCountersStep)
+
+    RR                  :MSTORE(tmpZkPCmodexp)
+    A                   :MSTORE(tmpVarAmodexp)
+    B                   :MSTORE(tmpVarBmodexp)
+    C                   :MSTORE(tmpVarCmodexp)
+    D                   :MSTORE(tmpVarDmodexp)
+    ; offset init
+    E                   :MSTORE(offsetInitModexp)
+    ;E = offset final
+    E + C => E
+    0                   :MSTORE(modExpArrayIndex)
+    0                   :MSTORE(modexp_Elen)
+    32                  :MSTORE(readXFromCalldataLength)
+
+modexp_getExpLoop:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 6   :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 100        :JMPN(outOfCountersStep)
+    ; C length to read
+    C => A
+    0 => B
+    ; if C (length) == 0 --> modexp_saveExpLen
+    $                   :EQ,JMPC(modexp_saveExpLen)
+    32 => B
+    ; if C (length) < 32 --> modexp_getExpMloadX
+    $                   :LT,JMPC(modexp_getExpMloadX)
+    E - 32 => E
+    E                   :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A              :MLOAD(readXFromCalldataResult)
+    C - 32 => C         :JMP(modexp_getExpMstore)
+
+modexp_getExpMloadX:
+    C                   :MSTORE(readXFromCalldataLength)
+    E - C => E
+    E                   :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A              :MLOAD(readXFromCalldataResult)
+    32 - C => D         :CALL(SHRarith)
+    0 => C
+
+modexp_getExpMstore:
+    ; mstore exp at index E
+    E                   :MSTORE(tmpVarEmodexp)
+    $ => E              :MLOAD(modExpArrayIndex)
+    A                   :MSTORE(modexp_E+E)
+    ; update modExpArrayIndex + 1
+    E + 1 => B          :MSTORE(modExpArrayIndex)
+
+modexp_getExpFinal:
+    $ => E              :MLOAD(tmpVarEmodexp),JMP(modexp_getExpLoop)
+
+modexp_saveExpLen:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 2   :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 20         :JMPN(outOfCountersStep)
+
+    ; if modExpArrayIndex == 0 --> modexp_getReturn
+    $ => A              :MLOAD(modExpArrayIndex)
+    0 => B
+    $                   :EQ,JMPC(modexp_getReturn)
+    ; update modExpArrayIndex = modExpArrayIndex - 1
+    A - 1 => E          :MSTORE(modExpArrayIndex)
+    ; get value of the last index
+    $ => A              :MLOAD(modexp_E + E)
+    ; if last value == 0 --> modexp_saveExpLen
+    $                   :EQ,JMPC(modexp_saveExpLen)
+    ; else Elen == modExpArrayIndex + 1
+    E + 1               :MSTORE(modexp_Elen),JMP(modexp_getReturn)
+
+modexp_getMod:
+
+    %MAX_CNT_STEPS - STEP - 15         :JMPN(outOfCountersStep)
+
+    RR                  :MSTORE(tmpZkPCmodexp)
+    A                   :MSTORE(tmpVarAmodexp)
+    B                   :MSTORE(tmpVarBmodexp)
+    C                   :MSTORE(tmpVarCmodexp)
+    D                   :MSTORE(tmpVarDmodexp)
+    ; offset init
+    E                   :MSTORE(offsetInitModexp)
+    ;E = offset final
+    E + C => E
+    0                   :MSTORE(modExpArrayIndex)
+    0                   :MSTORE(modexp_Mlen)
+    32                  :MSTORE(readXFromCalldataLength)
+
+modexp_getModLoop:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 6   :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
+    ; C length to read
+    C => A
+    0 => B
+    ; if C (length) == 0 --> modexp_saveModLen
+    $                   :EQ,JMPC(modexp_saveModLen)
+    32 => B
+    ; if C (length) < 32 --> modexp_getModMloadX
+    $                   :LT,JMPC(modexp_getModMloadX)
+    E - 32 => E
+    E                   :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A              :MLOAD(readXFromCalldataResult)
+    C - 32 => C         :JMP(modexp_getModMstore)
+
+modexp_getModMloadX:
+    C                   :MSTORE(readXFromCalldataLength)
+    E - C => E
+    E                   :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+    $ => A              :MLOAD(readXFromCalldataResult)
+    32 - C => D         :CALL(SHRarith)
+    0 => C
+
+modexp_getModMstore:
+    ; mstore mod at index E
+    E                   :MSTORE(tmpVarEmodexp)
+    $ => E              :MLOAD(modExpArrayIndex)
+    A                   :MSTORE(modexp_M+E)
+    ; update modExpArrayIndex + 1
+    E + 1 => B          :MSTORE(modExpArrayIndex)
+
+modexp_getModFinal:
+    $ => E              :MLOAD(tmpVarEmodexp),JMP(modexp_getModLoop)
+
+modexp_saveModLen:
+
+    %MAX_CNT_BINARY - CNT_BINARY - 2   :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 20         :JMPN(outOfCountersStep)
+
+    ; if modExpArrayIndex == 0 --> modexp_getReturn
+    $ => A              :MLOAD(modExpArrayIndex)
+    0 => B
+    $                   :EQ,JMPC(modexp_getReturn)
+    ; update modExpArrayIndex = modExpArrayIndex - 1
+    A - 1 => E          :MSTORE(modExpArrayIndex)
+    ; get value of the last index
+    $ => A              :MLOAD(modexp_M + E)
+    ; if last value == 0 --> modexp_saveModLen
+    $                   :EQ,JMPC(modexp_saveModLen)
+    ; else Mlen == modExpArrayIndex + 1
+    E + 1               :MSTORE(modexp_Mlen),JMP(modexp_getReturn)
+
+modexp_getReturn:
+    $ => RR             :MLOAD(tmpZkPCmodexp)
+    $ => A              :MLOAD(tmpVarAmodexp)
+    $ => B              :MLOAD(tmpVarBmodexp)
+    $ => C              :MLOAD(tmpVarCmodexp)
+    $ => D              :MLOAD(tmpVarDmodexp)
+    $ => E              :MLOAD(offsetInitModexp)
+    E + C => E
+                        :RETURN

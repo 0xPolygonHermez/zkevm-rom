@@ -1,0 +1,83 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PRE: P1,P2 ∈ E'(Fp2) with P1 != P2,-P2 and Q ∈ E(Fp)
+;; POST: The result is in the range [0,BN254_P) because if falls back to FP2 arithmetic
+;;
+;; lineDiffPointsBN254:
+;;              in: P1 = (P1.x1 + P1.x2·u, P1.y1 + P1.y2·u), P2 = (P2.x1 + P2.x2·u, P2.y1 + P2.y2·u) ∈ E'(Fp2)
+;;                  and Q = (Q.x,Q.y) ∈ E(Fp)
+;;             out: line_{twist(P1), twist(P2)}(Q) = (P2.x - P1.x)·Q.y·w² + (P1.y - P2.y)·Q.x·w³ + (P1.x·P2.y - P2.x·P1.y)·w⁵ ∈ Fp12
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; The precondition is ensured by the pairing.
+; However, it must be implemented if lineDiffPointsBN254 wants to be used independently.
+
+VAR GLOBAL lineDiffPointsBN254_P1_x1
+VAR GLOBAL lineDiffPointsBN254_P1_x2
+VAR GLOBAL lineDiffPointsBN254_P1_y1
+VAR GLOBAL lineDiffPointsBN254_P1_y2
+VAR GLOBAL lineDiffPointsBN254_P2_x1
+VAR GLOBAL lineDiffPointsBN254_P2_x2
+VAR GLOBAL lineDiffPointsBN254_P2_y1
+VAR GLOBAL lineDiffPointsBN254_P2_y2
+VAR GLOBAL lineDiffPointsBN254_Q_x
+VAR GLOBAL lineDiffPointsBN254_Q_y
+
+VAR GLOBAL lineDiffPointsBN254_P2x_P1y_x
+VAR GLOBAL lineDiffPointsBN254_P2x_P1y_y
+
+VAR GLOBAL lineDiffPointsBN254_l12_x
+VAR GLOBAL lineDiffPointsBN254_l12_y
+VAR GLOBAL lineDiffPointsBN254_l22_x
+VAR GLOBAL lineDiffPointsBN254_l22_y
+VAR GLOBAL lineDiffPointsBN254_l23_x
+VAR GLOBAL lineDiffPointsBN254_l23_y
+
+VAR GLOBAL lineDiffPointsBN254_RR
+
+lineDiffPointsBN254:
+        RR              :MSTORE(lineDiffPointsBN254_RR)
+
+        ; 1] (P2.x - P1.x)·Q.y
+        $ => A          :MLOAD(lineDiffPointsBN254_P2_x1)
+        $ => B          :MLOAD(lineDiffPointsBN254_P2_x2)
+        $ => C          :MLOAD(lineDiffPointsBN254_P1_x1)
+        $ => D          :MLOAD(lineDiffPointsBN254_P1_x2), CALL(subFp2BN254)
+        $ => A          :MLOAD(lineDiffPointsBN254_Q_y)
+        C => D
+        E => C          :CALL(escalarMulFp2BN254)
+        E               :MSTORE(lineDiffPointsBN254_l12_x)
+        C               :MSTORE(lineDiffPointsBN254_l12_y)
+
+        ; 2] (P1.y - P2.y)·Q.x
+        $ => A          :MLOAD(lineDiffPointsBN254_P1_y1)
+        $ => B          :MLOAD(lineDiffPointsBN254_P1_y2)
+        $ => C          :MLOAD(lineDiffPointsBN254_P2_y1)
+        $ => D          :MLOAD(lineDiffPointsBN254_P2_y2), CALL(subFp2BN254)
+        $ => A          :MLOAD(lineDiffPointsBN254_Q_x)
+        C => D
+        E => C          :CALL(escalarMulFp2BN254)
+        E               :MSTORE(lineDiffPointsBN254_l22_x)
+        C               :MSTORE(lineDiffPointsBN254_l22_y)
+
+        ; 3] (P1.x·P2.y - P2.x·P1.y)
+        $ => A          :MLOAD(lineDiffPointsBN254_P2_x1)
+        $ => B          :MLOAD(lineDiffPointsBN254_P2_x2)
+        $ => C          :MLOAD(lineDiffPointsBN254_P1_y1)
+        $ => D          :MLOAD(lineDiffPointsBN254_P1_y2), CALL(mulFp2BN254)
+        E               :MSTORE(lineDiffPointsBN254_P2x_P1y_x)
+        C               :MSTORE(lineDiffPointsBN254_P2x_P1y_y)
+
+        $ => A          :MLOAD(lineDiffPointsBN254_P1_x1)
+        $ => B          :MLOAD(lineDiffPointsBN254_P1_x2)
+        $ => C          :MLOAD(lineDiffPointsBN254_P2_y1)
+        $ => D          :MLOAD(lineDiffPointsBN254_P2_y2), CALL(mulFp2BN254)
+        E => A
+        C => B
+        $ => C          :MLOAD(lineDiffPointsBN254_P2x_P1y_x)
+        $ => D          :MLOAD(lineDiffPointsBN254_P2x_P1y_y), CALL(subFp2BN254)
+        E               :MSTORE(lineDiffPointsBN254_l23_x)
+        C               :MSTORE(lineDiffPointsBN254_l23_y)
+
+        $ => RR         :MLOAD(lineDiffPointsBN254_RR)
+                        :RETURN

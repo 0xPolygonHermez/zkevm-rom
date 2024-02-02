@@ -1,0 +1,222 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  PRE: The input arrays have been trimmed.
+;; POST: The quotient is trimmed.
+;;
+;; array_div_short:
+;;             in:
+;;                  · C ∈ [1, 32], the len of inA
+;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
+;;                  · inB ∈ [0, 2²⁵⁶ - 1], the second input
+;;
+;;          output:
+;;                  · [quo,rem] = [inA / inB[0], inA % inB[0]], with len(quo) <= C, len(rem) = 1
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; function array_div_short(a: bigint[], b: bigint, base: bigint): bigint[] {
+;     if (a === [0n]) {
+;         if (b === 0n) {
+;             throw new Error("Division by zero");
+;         }
+;         return [0n, 0n];
+;     } else if (b === 0n) {
+;         throw new Error("Division by zero");
+;     }
+;
+;     if (a === b) {
+;         return [1n, 0n];
+;     } else if (a < b) {
+;         return [0n, a];
+;     }
+; }
+
+; NOTE: This function receives the actual result from the helper (avoiding the need of computing divisions);
+;       checks the correctness of the result and returns the result to the caller
+
+VAR GLOBAL array_div_short_inA[%ARRAY_MAX_LEN]
+VAR GLOBAL array_div_short_inB
+VAR GLOBAL array_div_short_quo[%ARRAY_MAX_LEN]
+VAR GLOBAL array_div_short_rem
+
+VAR GLOBAL array_div_short_len_inA
+VAR GLOBAL array_div_short_len_quo
+
+VAR GLOBAL array_div_short_RR
+
+; ERROR CODES (B)
+; 0 - no error
+; 1 - inB is zero
+
+array_div_short:
+        %MAX_CNT_BINARY - CNT_BINARY - 2             :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 11 - 3*C - 3  :JMPN(outOfCountersStep)
+
+        RR              :MSTORE(array_div_short_RR)
+
+        C               :MSTORE(array_div_short_len_inA)
+        C               :MSTORE(array_div_short_len_quo)
+
+        ; Let's cover the edge cases
+        1 => B
+        ; 1] Is C == 1 and inA == 0?
+        C - B           :JMPNZ(__array_div_short_inA_continue)
+        $ => A          :MLOAD(array_div_short_inA)
+        $               :LT, JMPC(array_div_short_inA_is_zero)
+                        __array_div_short_inA_continue:
+
+        ; 2] Is inB == 0?
+        $ => A          :MLOAD(array_div_short_inB)
+        $               :LT, JMPC(array_div_short_inB_is_zero)
+
+        ; Check whether inA = inB or inA < inB
+        C - 1 => RR
+        1 => D
+array_div_short_inA_to_compare1:
+        $ => A          :MLOAD(array_div_short_inA + RR)
+        A               :MSTORE(array_compare_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_short_inB_to_compare, array_div_short_inA_to_compare1)
+
+array_div_short_inB_to_compare:
+        $ => A          :MLOAD(array_div_short_inB)
+        A               :MSTORE(array_compare_inB)
+
+array_div_short_compare_inA_inB:
+                        :CALL(array_compare)
+
+        %MAX_CNT_BINARY - CNT_BINARY - 1                                :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 10 - 4*%ARRAY_MAX_LEN - 3  :JMPN(outOfCountersStep)
+
+        $ => A          :MLOAD(array_compare_result), JMPZ(array_div_short_inALTinB)
+        A - 1           :JMPZ(array_div_short_same_input)
+        ; From here, inA > inB
+
+        ; Strategy: Divide outside and check the result inside
+        $${MPdiv_short(addr.array_div_short_inA,mem.array_div_short_len_inA,mem.array_div_short_inB)}
+
+                        :JMP(array_div_short_prepare_mul_quo_inB)
+
+; Begin of edge cases
+array_div_short_inA_is_zero:
+        ; Is inB == 0? 0/0 is undefined
+        $ => A          :MLOAD(array_div_short_inB)
+        $               :LT, JMPC(array_div_short_inB_is_zero)
+        ; From here, inB != 0
+
+        ; Return [q,r] = [0,0] and len(q) = 1, len(r) = 1
+        0               :MSTORE(array_div_short_quo)
+        0               :MSTORE(array_div_short_rem)
+        1               :MSTORE(array_div_short_len_quo)
+        0 => B          :JMP(array_div_short_end)
+
+array_div_short_inB_is_zero:
+        ; Error, you cannot divide by 0
+        1 => B          :JMP(array_div_short_end)
+
+array_div_short_same_input:
+        ; If inA = inB, then the result is [1,0] since inA = 1·inB + 0
+        1              :MSTORE(array_div_short_quo)
+        1               :MSTORE(array_div_short_len_quo)
+        0               :MSTORE(array_div_short_rem)
+        0 => B          :JMP(array_div_short_end)
+
+array_div_short_inALTinB:
+        ; If inA < inB, then the result is [0, inA] since inA = 0·inB + inA
+        0               :MSTORE(array_div_short_quo)
+        1               :MSTORE(array_div_short_len_quo)
+        $ => A          :MLOAD(array_div_short_inA)
+        A               :MSTORE(array_div_short_rem)
+        0 => B          :JMP(array_div_short_end)
+; End of edge cases
+
+array_div_short_prepare_mul_quo_inB:
+        $0{receiveLenQuotient_short()} => C
+
+        ; The received length must be between 1 and %ARRAY_MAX_LEN
+        C - 1 => RR             :JMPN(failAssert) ; If C = 0, then fail
+        %ARRAY_MAX_LEN - C      :JMPN(failAssert) ; If C > %ARRAY_MAX_LEN, then fail
+        ; From here, 1 <= C <= %ARRAY_MAX_LEN
+
+        ; To avoid non-determinism, we must ensure that the quotient is trimmed
+        ; i.e., that its last chunk is not 0
+        ${receiveQuotientChunk_short(RR)} => A
+        0 => B
+        0               :EQ
+        ; From here, the quotient is trimmed
+
+        C               :MSTORE(array_div_short_len_quo)
+        C - 1 => RR
+
+        ; save the first non-zero chunk of quo
+        A               :MSTORE(array_div_short_quo + RR)
+        A               :MSTORE(array_mul_short_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_short_inB_to_mul)
+
+array_div_short_quo_to_mul:
+        ${receiveQuotientChunk_short(RR)} => A
+        A               :MSTORE(array_div_short_quo + RR)
+        A               :MSTORE(array_mul_short_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_short_inB_to_mul, array_div_short_quo_to_mul)
+
+array_div_short_inB_to_mul:
+        $ => A          :MLOAD(array_div_short_inB)
+        A               :MSTORE(array_mul_short_inB)
+
+array_div_short_mul_quo_inB:
+                        :CALL(array_mul_short)
+
+        %MAX_CNT_BINARY - CNT_BINARY - 1                        :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP - 2 - 3*%ARRAY_MAX_LEN - 6        :JMPN(outOfCountersStep)
+
+        ; prepare next
+        $ => C          :MLOAD(array_mul_short_len_out)
+        C - 1 => RR
+
+array_div_short_result_to_add:
+        $ => A          :MLOAD(array_mul_short_out + RR)
+        A               :MSTORE(array_add_short_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_short_rem_to_add, array_div_short_result_to_add)
+
+array_div_short_rem_to_add:
+        ${receiveRemainderChunk_short()} => A
+
+        ; We must ensure the the remaider is lower than inB
+        $ => B          :MLOAD(array_div_short_inB)
+        1               :LT
+
+        A               :MSTORE(array_div_short_rem)
+        A               :MSTORE(array_add_short_inB)
+
+array_div_short_add_result_rem:
+                        :CALL(array_add_short)
+
+        %MAX_CNT_STEPS - STEP - 5      :JMPN(outOfCountersStep)
+
+        ; prepare next
+        $ => C          :MLOAD(array_add_short_len_out)
+        $ => D          :MLOAD(array_div_short_len_inA)
+        C - 1 => RR
+        D - 1 => E
+
+        %MAX_CNT_STEPS - STEP - 3*%ARRAY_MAX_LEN - 3*D - 1    :JMPN(outOfCountersStep)
+
+array_div_short_result_to_compare:
+        $ => A          :MLOAD(array_add_short_out + RR)
+        A               :MSTORE(array_compare_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_short_inA_to_compare2, array_div_short_result_to_compare)
+
+array_div_short_inA_to_compare2:
+        $ => A          :MLOAD(array_div_short_inA + E)
+        A               :MSTORE(array_compare_inB + E)
+        E - 1 => E      :JMPN(array_div_short_compare_result_inA, array_div_short_inA_to_compare2)
+
+array_div_short_compare_result_inA:
+                        :CALL(array_compare)
+
+        %MAX_CNT_STEPS - STEP - 4      :JMPN(outOfCountersStep)
+
+        1               :MLOAD(array_compare_result)
+
+        0 => B ; error code
+
+array_div_short_end:
+        $ => RR         :MLOAD(array_div_short_RR)
+                        :RETURN
