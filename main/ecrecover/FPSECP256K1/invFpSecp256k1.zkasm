@@ -1,0 +1,42 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PRE: A is not alias-free
+;; POST: The result B is not alias-free (on MAP)
+;;
+;; invFpSecp256k1:
+;;             in: A
+;;             out: B = A⁻¹ (mod p)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; RESOURCES:
+;   non-normalized: 2 ariths + 2 binaries + 13 steps
+;   normalized: 2 ariths + 1 binaries + 12 steps
+;   TOTAL (worst case): 2 ariths + 2 binaries + 13 steps
+
+VAR GLOBAL invFpSecp256k1_tmp
+
+invFpSecp256k1:
+
+        ; Reduction of A
+        %SECP256K1_P => B
+        $       :LT, JMPC(invFpSecp256k1_normalized)
+        $ => A  :SUB
+
+invFpSecp256k1_normalized:
+
+        ; 1] Compute and check the inverse over Z
+        ; A·A⁻¹ + 0 = [D]·2²⁵⁶ + [E]
+        0 => C
+        ${var _invFpSecp256k1_A = inverseFpEc(A)} => B :MSTORE(invFpSecp256k1_tmp);
+        $${var _invFpSecp256k1_AB = A * _invFpSecp256k1_A}
+        ${_invFpSecp256k1_AB >> 256} => D
+        ${_invFpSecp256k1_AB} => E :ARITH
+
+        ; 2] Check it over Fp, that is, it must be satisfied that:
+        ; p·[(A·A⁻¹) / p] + 1 = D·2²⁵⁶ + E
+        %SECP256K1_P => A
+        ${_invFpSecp256k1_AB / const.SECP256K1_P} => B        ; quotient  (256 bits)
+        1 => C                                               ; residue (1 bit)
+        E :ARITH
+
+        $ => B   :MLOAD(invFpSecp256k1_tmp), RETURN
