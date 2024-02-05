@@ -8,24 +8,42 @@
 ;; NOTE: On input 0, it returns 0
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; TODO: Verify if alias check is necessary
+
 VAR GLOBAL invFpBN254_tmp
 VAR GLOBAL invFpBN254_RR
 
+; RESOURCES:
+; -------------------------------------------
+; PATH 1 input_is_reduced_and_0:     [steps: 8,  bin: 2]
+; PATH 2 input_is_not_reduced_and_0: [steps: 18, bin: 3, arith: 1]
+; PATH 3 input_is_reduced:           [steps: 20, bin: 3, arith: 2]
+; PATH 4 input_is_not_reduced:       [steps: 30, bin: 4, arith: 3] <--- w.c.
+; -------------------------------------------
+
 invFpBN254:
+        ; block costs:
+        ; · input_is_reduced:     [steps: 3,  bin: 1]
+        ; · input_is_not_reduced: [steps: 13, bin: 2, arith: 1]
+
         RR              :MSTORE(invFpBN254_RR)
 
-        ; Normalization of A
+        ; Reduction of A
         %BN254_P => B
         $       :LT, JMPC(invFpBN254_zero_check)
                 :CALL(reduceFpBN254)
         ; From here, it is guaranteed that A ∈ [0,BN254_P)
 
 invFpBN254_zero_check:
+        ; block costs: [steps: 2,  bin: 1]
+
         ; Check if A = 0, and if so, return 0
         0 => B
         $       :EQ, JMPC(invFpBN254_A_is_zero)
 
 invFpBN254_normalized:
+        ; block costs: [steps: 13, bin: 1, arith: 2]
+
         ; 1] Compute and check the inverse over Z
         ; A·A⁻¹ + [0] = [D]·2²⁵⁶ + [E]
         0 => C
@@ -48,6 +66,8 @@ invFpBN254_normalized:
         A => B          :JMP(invFpBN254_end)
 
 invFpBN254_A_is_zero:
+        ; block costs: [steps: 1]
+
         0 => B
 
 invFpBN254_end:

@@ -8,6 +8,10 @@
 ;; NOTE: The output is not guaranteed to be in GΦ6(p²), if the input isn't.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; TODO: unroll the loop
+; TODO: Do not decompress!!!
+; TODO: Multiply in compressed form
+
 VAR GLOBAL expByXCompCycloFp12BN254_a0_x
 VAR GLOBAL expByXCompCycloFp12BN254_a0_y
 VAR GLOBAL expByXCompCycloFp12BN254_a2_x
@@ -34,6 +38,22 @@ VAR GLOBAL expByXCompCycloFp12BN254_c5_x
 VAR GLOBAL expByXCompCycloFp12BN254_c5_y
 
 VAR GLOBAL expByXCompCycloFp12BN254_RR
+
+; TODO: Add flags to avoid the a == 0,1 checks
+
+; RESOURCES:
+; -------------------------------------------
+; PATH 1 a == 0: [steps: 40, bin: 12, arith: 0]
+; PATH 2 a == 1: [steps: 66, bin: 13, arith: 0]
+; PATH 3 a != 0:  <--- w.c.
+;                [steps: 2338, bin: 29, arith: 216]                  // setup
+;                 + 58 * [steps: 237, bin: 0, arith: 27]             // squarings
+;                 + 26 * [steps: 1305, bin: 5, arith: 108]           // multiplications
+;                 + [steps: 26]                                      // last iteration + end
+;               total (w.c.): [steps: 50040 bin: 159, arith: 4590]   // [2338 + 58*237 + 26*1305 + 26,
+;                                                                        29            + 26*5,
+;                                                                        216  + 58*27  + 26*108]
+; -------------------------------------------
 
 expByXCompCycloFp12BN254:
         RR              :MSTORE(expByXCompCycloFp12BN254_RR)
@@ -65,6 +85,7 @@ expByXCompCycloFp12BN254:
         $ => A  :MLOAD(expByXCompCycloFp12BN254_a5_y)
         $       :EQ, JMPC(expByXCompCycloFp12BN254_a_is_zero)
                 __expByXCompCycloFp12BN254_a_continue1:
+        ; [steps: 26, bin: 12, arith: 0]
 
         ; Is a = 1?
         1n => B
@@ -94,6 +115,7 @@ expByXCompCycloFp12BN254:
         $ => A  :MLOAD(expByXCompCycloFp12BN254_a5_y)
         $       :EQ, JMPC(expByXCompCycloFp12BN254_a_is_one)
                 __expByXCompCycloFp12BN254_a_continue2:
+        ; [steps: 52, bin: 24, arith: 0]
 
         59 => RCX
 
@@ -137,6 +159,7 @@ expByXCompCycloFp12BN254:
         B               :MSTORE(expByXCompCycloFp12BN254_c5_y)
         A               :MSTORE(compressFp12BN254_a5_x)
         B               :MSTORE(compressFp12BN254_a5_y), CALL(compressFp12BN254)
+        ; [steps: 106, bin: 24, arith: 0]
 
         $ => A          :MLOAD(compressFp12BN254_Ca2_x)
         $ => B          :MLOAD(compressFp12BN254_Ca2_y)
@@ -154,6 +177,7 @@ expByXCompCycloFp12BN254:
         $ => B          :MLOAD(compressFp12BN254_Ca5_y)
         A               :MSTORE(squareCompCycloFp12BN254_Ca5_x)
         B               :MSTORE(squareCompCycloFp12BN254_Ca5_y), CALL(squareCompCycloFp12BN254)
+        ; [steps: 338, bin: 24, arith: 27]
 
         ; 2] Third bit is 0, so compute C(c⁴)
         $ => A          :MLOAD(squareCompCycloFp12BN254_Cb2_x)
@@ -172,6 +196,7 @@ expByXCompCycloFp12BN254:
         $ => B          :MLOAD(squareCompCycloFp12BN254_Cb5_y)
         A               :MSTORE(squareCompCycloFp12BN254_Ca5_x)
         B               :MSTORE(squareCompCycloFp12BN254_Ca5_y), CALL(squareCompCycloFp12BN254)
+        ; [steps: 570, bin: 24, arith: 54]
 
         ; 3] Fourth bit is 0, so compute C(c⁸)
         $ => A          :MLOAD(squareCompCycloFp12BN254_Cb2_x)
@@ -190,6 +215,7 @@ expByXCompCycloFp12BN254:
         $ => B          :MLOAD(squareCompCycloFp12BN254_Cb5_y)
         A               :MSTORE(squareCompCycloFp12BN254_Ca5_x)
         B               :MSTORE(squareCompCycloFp12BN254_Ca5_y), CALL(squareCompCycloFp12BN254)
+        ; [steps: 802, bin: 24, arith: 81]
 
         ; 4] Fifth bit is 1, so compute C(c¹⁶), decompress to obtain c¹⁶ and multiply by a
         $ => A          :MLOAD(squareCompCycloFp12BN254_Cb2_x)
@@ -208,6 +234,7 @@ expByXCompCycloFp12BN254:
         $ => B          :MLOAD(squareCompCycloFp12BN254_Cb5_y)
         A               :MSTORE(squareCompCycloFp12BN254_Ca5_x)
         B               :MSTORE(squareCompCycloFp12BN254_Ca5_y), CALL(squareCompCycloFp12BN254)
+        ; [steps: 1034, bin: 24, arith: 108]
 
         $ => A          :MLOAD(squareCompCycloFp12BN254_Cb2_x)
         $ => B          :MLOAD(squareCompCycloFp12BN254_Cb2_y)
@@ -225,6 +252,7 @@ expByXCompCycloFp12BN254:
         $ => B          :MLOAD(squareCompCycloFp12BN254_Cb5_y)
         A               :MSTORE(decompressFp12BN254_Ca5_x)
         B               :MSTORE(decompressFp12BN254_Ca5_y), CALL(decompressFp12BN254)
+        ; [steps: 1240, bin: 29, arith: 128]
 
         $ => A          :MLOAD(expByXCompCycloFp12BN254_c0_x)
         $ => B          :MLOAD(expByXCompCycloFp12BN254_c0_y)
@@ -274,10 +302,12 @@ expByXCompCycloFp12BN254:
         $ => B          :MLOAD(decompressFp12BN254_a5_y)
         A               :MSTORE(mulFp12BN254_b23_x)
         B               :MSTORE(mulFp12BN254_b23_y), CALL(mulFp12BN254)
-
                         :JMP(expByXCompCycloFp12BN254_loop)
+        ; [steps: 2339, bin: 29, arith: 216]
 
+; Begin of branching
 expByXCompCycloFp12BN254_a_is_zero:
+        ; before (w.c.) -> [steps: 26, bin: 12, arith: 0]
         ; c = 0
         0n              :MSTORE(expByXCompCycloFp12BN254_c0_x)
         0n              :MSTORE(expByXCompCycloFp12BN254_c0_y)
@@ -290,11 +320,13 @@ expByXCompCycloFp12BN254_a_is_zero:
         0n              :MSTORE(expByXCompCycloFp12BN254_c3_x)
         0n              :MSTORE(expByXCompCycloFp12BN254_c3_y)
         0n              :MSTORE(expByXCompCycloFp12BN254_c5_x)
-        0n              :MSTORE(expByXCompCycloFp12BN254_c5_y)
+        0n              :MSTORE(expByXCompCycloFp12BN254_c5_y), JMP(expByXCompCycloFp12BN254_end)
 
-                        :JMP(expByXCompCycloFp12BN254_end)
+        ; till the end -> [steps: 40, bin: 12, arith: 0]
 
 expByXCompCycloFp12BN254_a_is_one:
+        ; before (w.c.) -> [steps: 52, bin: 24, arith: 0]
+
         ; c = 1
         1n              :MSTORE(expByXCompCycloFp12BN254_c0_x)
         0n              :MSTORE(expByXCompCycloFp12BN254_c0_y)
@@ -307,11 +339,16 @@ expByXCompCycloFp12BN254_a_is_one:
         0n              :MSTORE(expByXCompCycloFp12BN254_c3_x)
         0n              :MSTORE(expByXCompCycloFp12BN254_c3_y)
         0n              :MSTORE(expByXCompCycloFp12BN254_c5_x)
-        0n              :MSTORE(expByXCompCycloFp12BN254_c5_y)
+        0n              :MSTORE(expByXCompCycloFp12BN254_c5_y), JMP(expByXCompCycloFp12BN254_end)
 
-                        :JMP(expByXCompCycloFp12BN254_end)
+        ; till the end -> [steps: 66, bin: 24, arith: 0]
+; End of branching
 
 expByXCompCycloFp12BN254_loop:
+        ; block costs:
+        ;       no_last: [steps: 237, bin: 0, arith: 27]
+        ;       last:    [steps: 1]
+
         RCX - 1 => RCX         :JMPZ(expByXCompCycloFp12BN254_last)
 
         ; We always square (in compressed form): C(c²)
@@ -334,7 +371,7 @@ expByXCompCycloFp12BN254_loop:
         B               :MSTORE(squareCompCycloFp12BN254_Ca5_y), CALL(squareCompCycloFp12BN254)
 
         ; We check if the MSB b of x is either 1 or 0
-        RCX-1 => RR
+        RCX - 1 => RR
                         :CALL(@xBinDecompBN254 + RR)
 
         ; if bit = 0, then repeat
@@ -343,6 +380,8 @@ expByXCompCycloFp12BN254_loop:
         ; else, multiply by the last result
 
 expByXCompCycloFp12BN254_multiply:
+        ; block costs: [steps: 1305, bin: 5, arith: 108]
+
         $ => A          :MLOAD(squareCompCycloFp12BN254_Cb2_x)
         $ => B          :MLOAD(squareCompCycloFp12BN254_Cb2_y)
         A               :MSTORE(decompressFp12BN254_Ca2_x)
@@ -408,10 +447,11 @@ expByXCompCycloFp12BN254_multiply:
         $ => B          :MLOAD(decompressFp12BN254_a5_y)
         A               :MSTORE(mulFp12BN254_b23_x)
         B               :MSTORE(mulFp12BN254_b23_y), CALL(mulFp12BN254)
-
                         :JMP(expByXCompCycloFp12BN254_loop)
 
 expByXCompCycloFp12BN254_last:
+        ; block costs till end: [steps: 26, bin: 0, arith: 0]
+
         ; Last asignments
         $ => A          :MLOAD(mulFp12BN254_c11_x)
         $ => B          :MLOAD(mulFp12BN254_c11_y)
@@ -441,4 +481,3 @@ expByXCompCycloFp12BN254_last:
 expByXCompCycloFp12BN254_end:
         $ => RR         :MLOAD(expByXCompCycloFp12BN254_RR)
                         :RETURN
-

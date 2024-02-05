@@ -1,0 +1,191 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PRE: P ∈ E'(Fp2)
+;; POST: The resulting coordinates are in the range [0,BN254_P) because if falls back to addPointFP2BN254
+;;
+;;
+;; scalarMulPointFP2BN254:
+;;             in: k, P = (P.x1 + P.x2·u, P.y1 + P.y2·u) ∈ E'(Fp2), where k ∈ [0,r-1]
+;;             out: k·P = (Q.x1 + Q.x2·u, Q.y1 + Q.y2·u) ∈ E'(Fp2)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; scalarMulPointFP2BN254 assumes P belong to E'(Fp2), since it is checked in the pairing.
+; However, it must be implemented if scalarMulPointFP2BN254 wants to be used independently.
+
+; Since the curve is E'/Fp2: y² = x³ + 3/(9+u), there is no issue in representing the point at infinity as (0, 0).
+
+VAR GLOBAL scalarMulPointFP2BN254_k
+VAR GLOBAL scalarMulPointFP2BN254_P_x1
+VAR GLOBAL scalarMulPointFP2BN254_P_x2
+VAR GLOBAL scalarMulPointFP2BN254_P_y1
+VAR GLOBAL scalarMulPointFP2BN254_P_y2
+VAR GLOBAL scalarMulPointFP2BN254_Q_x1
+VAR GLOBAL scalarMulPointFP2BN254_Q_x2
+VAR GLOBAL scalarMulPointFP2BN254_Q_y1
+VAR GLOBAL scalarMulPointFP2BN254_Q_y2
+
+VAR GLOBAL scalarMulPointFP2BN254_acummulator
+
+VAR GLOBAL scalarMulPointFP2BN254_RR
+
+; RESOURCES:
+; -------------------------------------------
+; PATH 1 P == 𝒪:            [steps: 16, bin: 4]
+; PATH 2 k == 0 and P != 𝒪: [steps: 32, bin: 7, arith: 1]
+; PATH 3 k > r and P != 𝒪:  <--- w.c.
+;                [steps: 38, bin: 7, arith: 1]                                 // setup
+;                 + max_bin_len(k) * [steps: 120, bin: 4, arith: 11]           // doubles
+;                 + number_of_bits_1(k) * [steps: 131, bin: 4, arith: 10]      // additions
+;                 + [steps: 6, bin: 1]                                         // last iteration + k reconstruction check
+;               total (w.c.): [steps: 63416 bin: 2028, arith: 5304]            // [38 + 253*120 + 252*131 + 6,
+;                                                                                  7  + 253*4   + 252*4   + 1,
+;                                                                                  1  + 253*11  + 252*10]
+; -------------------------------------------
+
+scalarMulPointFP2BN254:
+        RR      :MSTORE(scalarMulPointFP2BN254_RR)
+
+        ; Is P = 𝒪?
+        0n => B
+        $ => A  :MLOAD(scalarMulPointFP2BN254_P_x1)
+        $       :EQ, JMPNC(__scalarMulPointFP2BN254_P_continue)
+        $ => A  :MLOAD(scalarMulPointFP2BN254_P_x2)
+        $       :EQ, JMPNC(__scalarMulPointFP2BN254_P_continue)
+        $ => A  :MLOAD(scalarMulPointFP2BN254_P_y1)
+        $       :EQ, JMPNC(__scalarMulPointFP2BN254_P_continue)
+        $ => A  :MLOAD(scalarMulPointFP2BN254_P_y2)
+        $       :EQ, JMPC(scalarMulPointFP2BN254_P_is_zero)
+                __scalarMulPointFP2BN254_P_continue:
+        ; [steps: 10, bin: 4]
+
+        ; Is k ∈ [0,r-1]?
+        $ => A          :MLOAD(scalarMulPointFP2BN254_k)
+        %BN254_R => B
+        $               :LT, JMPC(__scalarMulPointFP2BN254_continue)
+        A => B          :CALL(reduceFrBN254)
+                        __scalarMulPointFP2BN254_continue:
+        0 => B
+        $               :EQ, JMPC(scalarMulPointFP2BN254_k_is_zero)
+        A               :MSTORE(scalarMulPointFP2BN254_k)
+        ; [steps: 26, bin: 7, arith: 1]
+        ; k ∈ [1,r-1] from here
+
+        $0{receiveLen(mem.scalarMulPointFP2BN254_k)} => RCX,E           ; receive the length of the binary representation of k
+
+        ; start the acummulator with the MSB of k
+        0 => A  :CALL(@bitwiseReconstruction + E)
+        A       :MSTORE(scalarMulPointFP2BN254_acummulator)
+
+        $ => A  :MLOAD(scalarMulPointFP2BN254_P_x1)
+        $ => B  :MLOAD(scalarMulPointFP2BN254_P_x2)
+        $ => C  :MLOAD(scalarMulPointFP2BN254_P_y1)
+        $ => D  :MLOAD(scalarMulPointFP2BN254_P_y2)
+        A       :MSTORE(scalarMulPointFP2BN254_Q_x1)
+        B       :MSTORE(scalarMulPointFP2BN254_Q_x2)
+        C       :MSTORE(scalarMulPointFP2BN254_Q_y1)
+        D       :MSTORE(scalarMulPointFP2BN254_Q_y2), JMP(scalarMulPointFP2BN254_loop)
+        ; [steps: 38, bin: 7, arith: 1]
+
+; Begin of branching
+scalarMulPointFP2BN254_P_is_zero:
+        ; before (w.c.) -> [steps: 10, bin: 4]
+
+        ; Q = 𝒪
+        0n      :MSTORE(scalarMulPointFP2BN254_Q_x1)
+        0n      :MSTORE(scalarMulPointFP2BN254_Q_x2)
+        0n      :MSTORE(scalarMulPointFP2BN254_Q_y1)
+        0n      :MSTORE(scalarMulPointFP2BN254_Q_y2), JMP(scalarMulPointFP2BN254_end)
+
+        ; till the end -> [steps: 16, bin: 4]
+
+scalarMulPointFP2BN254_k_is_zero:
+        ; before (w.c.) -> [steps: 26, bin: 7, arith: 1]
+
+        ; Q = 𝒪
+        0n      :MSTORE(scalarMulPointFP2BN254_Q_x1)
+        0n      :MSTORE(scalarMulPointFP2BN254_Q_x2)
+        0n      :MSTORE(scalarMulPointFP2BN254_Q_y1)
+        0n      :MSTORE(scalarMulPointFP2BN254_Q_y2), JMP(scalarMulPointFP2BN254_end)
+
+        ; till the end -> [steps: 32, bin: 7, arith: 1]
+; End of branching
+
+scalarMulPointFP2BN254_loop:
+        ; block costs:
+        ;       no_last: [steps: 120, bin: 4, arith: 11]
+        ;       last:    [steps: 1]
+
+        RCX - 1 => RCX    :JMPN(scalarMulPointFP2BN254_check)
+
+        ; We always double
+        $ => A  :MLOAD(scalarMulPointFP2BN254_Q_x1)
+        $ => B  :MLOAD(scalarMulPointFP2BN254_Q_x2)
+        $ => C  :MLOAD(scalarMulPointFP2BN254_Q_y1)
+        $ => D  :MLOAD(scalarMulPointFP2BN254_Q_y2)
+        A       :MSTORE(doublePointFP2BN254_P_x1)
+        B       :MSTORE(doublePointFP2BN254_P_x2)
+        C       :MSTORE(doublePointFP2BN254_P_y1)
+        D       :MSTORE(doublePointFP2BN254_P_y2), CALL(doublePointFP2BN254)
+        ; Q = Q + Q
+
+        $ => A  :MLOAD(doublePointFP2BN254_Q_x1)
+        $ => B  :MLOAD(doublePointFP2BN254_Q_x2)
+        $ => C  :MLOAD(doublePointFP2BN254_Q_y1)
+        $ => D  :MLOAD(doublePointFP2BN254_Q_y2)
+        A       :MSTORE(scalarMulPointFP2BN254_Q_x1)
+        B       :MSTORE(scalarMulPointFP2BN254_Q_x2)
+        C       :MSTORE(scalarMulPointFP2BN254_Q_y1)
+        D       :MSTORE(scalarMulPointFP2BN254_Q_y2)
+
+        ; Receive the next MSB b of k. If b == 1, we should add P to Q, otherwise start the next iteration
+        $0{(mem.scalarMulPointFP2BN254_k) >> RCX & 0x1}         :JMPZ(scalarMulPointFP2BN254_loop)
+
+scalarMulPointFP2BN254_add:
+        ; block costs: [steps: 131, bin: 4, arith: 10]
+
+        ; We add
+        $ => A  :MLOAD(scalarMulPointFP2BN254_Q_x1)
+        $ => B  :MLOAD(scalarMulPointFP2BN254_Q_x2)
+        $ => C  :MLOAD(scalarMulPointFP2BN254_Q_y1)
+        $ => D  :MLOAD(scalarMulPointFP2BN254_Q_y2)
+        A       :MSTORE(addPointFP2BN254_P1_x1)
+        B       :MSTORE(addPointFP2BN254_P1_x2)
+        C       :MSTORE(addPointFP2BN254_P1_y1)
+        D       :MSTORE(addPointFP2BN254_P1_y2)
+
+        $ => A  :MLOAD(scalarMulPointFP2BN254_P_x1)
+        $ => B  :MLOAD(scalarMulPointFP2BN254_P_x2)
+        $ => C  :MLOAD(scalarMulPointFP2BN254_P_y1)
+        $ => D  :MLOAD(scalarMulPointFP2BN254_P_y2)
+        A       :MSTORE(addPointFP2BN254_P2_x1)
+        B       :MSTORE(addPointFP2BN254_P2_x2)
+        C       :MSTORE(addPointFP2BN254_P2_y1)
+        D       :MSTORE(addPointFP2BN254_P2_y2)
+        1       :MSTORE(addPointFP2BN254_diff), CALL(addPointFP2BN254)
+        ; Q = Q + P
+
+        $ => A  :MLOAD(addPointFP2BN254_P3_x1)
+        $ => B  :MLOAD(addPointFP2BN254_P3_x2)
+        $ => C  :MLOAD(addPointFP2BN254_P3_y1)
+        $ => D  :MLOAD(addPointFP2BN254_P3_y2)
+        A       :MSTORE(scalarMulPointFP2BN254_Q_x1)
+        B       :MSTORE(scalarMulPointFP2BN254_Q_x2)
+        C       :MSTORE(scalarMulPointFP2BN254_Q_y1)
+        D       :MSTORE(scalarMulPointFP2BN254_Q_y2)
+
+        ; We keep reconstruction the scalar k
+        $ => A          :MLOAD(scalarMulPointFP2BN254_acummulator)
+        RCX => E
+                        :CALL(@bitwiseReconstruction + E)
+        A               :MSTORE(scalarMulPointFP2BN254_acummulator), JMP(scalarMulPointFP2BN254_loop)
+
+
+scalarMulPointFP2BN254_check:
+        ; till the end -> [steps: 5, bin: 1]
+        $ => A      :MLOAD(scalarMulPointFP2BN254_k)
+        $ => B      :MLOAD(scalarMulPointFP2BN254_acummulator)
+        1           :EQ
+
+scalarMulPointFP2BN254_end:
+        $ => RR         :MLOAD(scalarMulPointFP2BN254_RR)
+                        :RETURN
