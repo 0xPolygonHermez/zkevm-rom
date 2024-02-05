@@ -1,0 +1,58 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PRE: A = [0,1] and C is not alias-free
+;; POST: The result C is alias-free
+;;
+;; mulFpSecp256k1:
+;;             in: A,C, where A indicates the parity of the result
+;;             out:
+;;              · B = 1 or 0, depending on whether C has square root or not
+;;              · C = √C or -√C (mod p), if B = 1
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; RESOURCES:
+;   with sqrt: 2 arith + 1 binary + 15 steps
+;   without sqrt: 1 binary + 5 steps
+;   TOTAL (worst case): 2 arith + 1 binary + 15 steps
+
+VAR GLOBAL sqrtFpSecp256k1_tmp
+VAR GLOBAL sqrtFpSecp256k1_res
+
+sqrtFpSecp256k1:
+        C               :MSTORE(sqrtFpSecp256k1_tmp)
+
+        ; start by free-inputing the square root of the input C
+        ; taking the positive one if A = 1, and the negative one if A = 0
+        ${var _sqrtFpSecp256k1_sqrt = sqrtFpEcParity(C,A)} => A,C :MSTORE(sqrtFpSecp256k1_res)
+
+        ; In this point we check whether A is LT than SECP256K1_P since, otherwise, either:
+        ;    a) A doesn't have square root. 0 is returned in B.
+        ;    b) A contains an alias, it's a MAP. 0 is returned in B. In this case, the proof cannot
+        ;    be generated because we check in checkSqrtFpSecp256k1 if the root actually exists.
+        %SECP256K1_P => B
+        $ => B                                           :LT, JMPNC(sqrtFpSecp256k1_NoRoot)
+        ; From here, A,C < SECP256K1_P
+
+        ; 1] Compute and check the square over Z
+        ; √C·√C + 0 = [D]·2²⁵⁶ + [E]
+        A => B
+        0 => C
+        $${var _sqrtFpSecp256k1_sq = _sqrtFpSecp256k1_sqrt * _sqrtFpSecp256k1_sqrt }
+        ${_sqrtFpSecp256k1_sq >> 256} => D
+        ${_sqrtFpSecp256k1_sq} => E :ARITH
+
+
+        ; 2] Check it over Fp, that is, it must be satisfied that:
+        ; p·[(√C·√C) / p] + C = D·2²⁵⁶ + E
+        %SECP256K1_P => A
+        ${_sqrtFpSecp256k1_sq / const.SECP256K1_P} => B        ; quotient  (256 bits)
+        $ => C          :MLOAD(sqrtFpSecp256k1_tmp)            ; residue (256 bits)
+        E :ARITH
+
+        ; the result is guaranteed to be < SECP256K1_P, so we can skip the check
+
+        1 => B
+        $ => C          :MLOAD(sqrtFpSecp256k1_res), RETURN
+
+sqrtFpSecp256k1_NoRoot:
+        :RETURN
