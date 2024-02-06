@@ -43,15 +43,15 @@ VAR GLOBAL dblScalarMulSecp256k1_RR
 VAR GLOBAL dblScalarMulSecp256k1_RCX
 
 ; RESOURCES (k1,k2):
-;                1 arith + 23 steps                                     // setup, calculation p12
-;              + number_of_bits_1(k1|k2) * arith                        // additions
-;              + max_bin_len(k1,k2) * arith                             // doubles
-;              + 29 * max_bin_len(k1,k2)                                // additions + doubles (steps, worst case)
-;              + (8 - 5) steps                                          // last part - last part double no done
-;              - 1 arith                                                // first assignation
+;                1 arith + 19 steps                              // setup, calculation p12
+;              + number_of_bits_1(k1|k2) * arith                 // additions
+;              + max_bin_len(k1,k2) * arith                      // doubles
+;              + max_bin_len(k1,k2)/32 * 29 steps                // additions + doubles (steps, worst case)
+;              + (256 - max_bin_len(k1,k2)/32) * 24 steps        // additions + doubles (steps, worst case)
+;              + 8 steps + 2 bin                                 // last part
 ;
 ;
-; RESOURCES (worst case): 512 arith + 2 binaries + 7451 steps           // 23 + 256 * 29 + 3 = 7451
+; RESOURCES (worst case): 513 arith + 2 binaries + 6239 steps    // 20 + 256/32 * 29 + (256 - 256/32) * 24 + 8 = 6212
 
 dblScalarMulSecp256k1:
     	RR      :MSTORE(dblScalarMulSecp256k1_RR)
@@ -60,7 +60,6 @@ dblScalarMulSecp256k1:
 
         $0{receiveLen(mem.dblScalarMulSecp256k1_k1, mem.dblScalarMulSecp256k1_k2)} => RR    ; receive the maximum length between the binary
                                                                                             ; representations of k1 and k2
-
         ; start the acummulator of k1 and k2
         0 => RCX        :MSTORE(dblScalarMulSecp256k1_acum_k1)
         0 => HASHPOS    :MSTORE(dblScalarMulSecp256k1_acum_k2)
@@ -75,15 +74,15 @@ dblScalarMulSecp256k1:
         $ => D  :MLOAD(dblScalarMulSecp256k1_p2_y)
 
         ; check p1_x == p2_x
-        ; [steps: 14]
         ${A == C}     :JMPZ(dblScalarMulSecp256k1DiffInitialPoints)
+		; [steps: 11]
 
         ; verify path p1_x == p2_x
         C             :ASSERT
 
         ; check p1_y == p2_y
-        ; [steps: 16]
         ${B == D}     :JMPNZ(dblScalarMulSecp256k1SameInitialPoints)
+		; [steps: 13]
 
         ; verify path p1_y != p2_y <==> p1_y = -p2_y or p1_y + p2_y = 0
         ; use arith because in this path save a lot of arith,
@@ -100,11 +99,11 @@ dblScalarMulSecp256k1:
         ; We have p2 == -p1
 
         ; p12 = p1 - p1 = 𝒪, therefore is the point at infinity
-        ; [steps: 23]
         1n            :MSTORE(dblScalarMulSecp256k1_p12_zero), JMP(dblScalarMulSecp256k1_loop)
+		; [steps: 19, arith: 1]
 
 dblScalarMulSecp256k1SameInitialPoints:
-        ; [steps.before: 16]
+        ; [steps.before: 13]
         ; verify path p1_y (B) == p2_y (D)
         ; as an ASSERT(B == mulPointEc_p2_y)
         B             :MLOAD(dblScalarMulSecp256k1_p2_y)
@@ -118,9 +117,10 @@ dblScalarMulSecp256k1SameInitialPoints:
         ; (A,B) * 2 = (E, op)
         ${xDblPointEc(A,B)} => E  :MSTORE(dblScalarMulSecp256k1_p12_x)
         ${yDblPointEc(A,B)}       :ARITH_ECADD_SAME, MSTORE(dblScalarMulSecp256k1_p12_y), JMP(dblScalarMulSecp256k1_loop)
+		; [steps: 17, arith: 1]
 
 dblScalarMulSecp256k1DiffInitialPoints:
-        ; [steps.before: 14]
+        ; [steps.before: 11]
         ; verify path p1_x != p2_x
         ; p2_x != p1_x ==> p2 != p1
         ; [MAP] if p1 == p2 => arith fails because p1 = p2
@@ -132,18 +132,21 @@ dblScalarMulSecp256k1DiffInitialPoints:
         ; (A, B) + (C, D) = (E, op)
         ${xAddPointEc(A,B,C,D)} => E  :MSTORE(dblScalarMulSecp256k1_p12_x)
         ${yAddPointEc(A,B,C,D)}       :ARITH_ECADD_DIFFERENT, MSTORE(dblScalarMulSecp256k1_p12_y)
+		; [steps: 14, arith: 1]
 
 
-; [steps.before (worst case): 23]
+; [steps.before (worst case): 19, arith.before: 1]
 
 ; Goes forward in different branches of code depending on the values of the
 ; most significant bits of k1 and k2.
 
-; [steps.byloop (worst case): 12 + 17 = 29]
+; [steps.byloop (worst case & nosave): 8 + 16 = 24]
+; [steps.byloop (worst case & save):  13 + 16 = 29]
 
-; [steps.byloop (p3initialempty.nolast): 12]
-; [steps.byloop (bit.k1 || bit.k2 == 1): 8]
-; [steps.byloop (bit.k1 && bit.k2 == 1): 12]
+; [steps.byloop ((bit.k1 || bit.k2) == 1) & nosave:  6 + 16 = 22]
+; [steps.byloop ((bit.k1 && bit.k2) == 1) & nosave:  8 + 16 = 24]
+; [steps.byloop ((bit.k1 || bit.k2) == 1) & save:   11 + 16 = 27]
+; [steps.byloop ((bit.k1 && bit.k2) == 1) & save:   13 + 16 = 29]
 
 dblScalarMulSecp256k1_loop:
         ; Receive the next MSB bit of k1
@@ -158,6 +161,9 @@ dblScalarMulSecp256k1_k10:
 dblScalarMulSecp256k1_k10_k21:
         :JMP(@dblScalarMulSecp256k1_scalar_table_k10_k21 + RR)
 dblScalarMulSecp256k1_k10_k21_continue:
+		; [steps.before.nosave: 4]
+		; [steps.before.save:   9]
+		; [steps.before (w.c.): 9]
         $ => C  :MLOAD(dblScalarMulSecp256k1_p2_x)
         $ => D  :MLOAD(dblScalarMulSecp256k1_p2_y), JMP(dblScalarMulSecp256k1_add)
 
@@ -170,6 +176,10 @@ dblScalarMulSecp256k1_k11:
 dblScalarMulSecp256k1_k11_k21:
         :JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part1 + RR)
 dblScalarMulSecp256k1_k11_k21_continue:
+		; [steps.before.nosave: 5]
+		; [steps.before.save:   10]
+		; [steps.before (w.c.): 10]
+
         ; if (dblScalarMulSecp256k1_p12_zero) k11_k21 is the same as k10_k20
         ; because adding the point at infinity to a point is the point itself
         $       :MLOAD(dblScalarMulSecp256k1_p12_zero), JMPNZ(dblScalarMulSecp256k1_double)
@@ -179,19 +189,21 @@ dblScalarMulSecp256k1_k11_k21_continue:
 
 ; high_bit(k1) == 1 high_bit(k2) == 0
 dblScalarMulSecp256k1_k11_k20:
+		; [steps.before.nosave: 3]
+		; [steps.before.save:   9]
+		; [steps.before (w.c.): 9]
         $ => C  :MLOAD(dblScalarMulSecp256k1_p1_x)
         $ => D  :MLOAD(dblScalarMulSecp256k1_p1_y), JMP(dblScalarMulSecp256k1_add)
-; [steps.loadp2 (worst case): 7 (regular case 6)
 
 ; in this point C,D have point to be add
 dblScalarMulSecp256k1_add:
-        ; [steps.p3empty.nolast: 10]
-        ; [steps.p3empty.last: 5]
+        ; [steps.p3empty.nolast: 4 + steps.double = 10]
+        ; [steps.p3empty.last: 4 + steps.double = 5]
         ; [steps.xeq.yeq: 9 + steps.double = 15]
-        ; [steps.xeq.yneq: 11 + steps.double = 17]
+        ; [steps.xeq.yneq: 10 + steps.double = 16]
         ; [steps.xneq.nolast: 7 + steps.double = 13]
-        ; [steps.xneq.last: 7 + steps.double = 13]
-        ; [steps.block: 17]
+        ; [steps.xneq.last: 7 + steps.double = 8]
+        ; [steps.block: 16]
 
         ; if p3 is the point at infinity do not add, just assign, since 𝒪 + P = P
         $   :MLOAD(dblScalarMulSecp256k1_p3_is_zero), JMPNZ(dblScalarMulSecp256k1_p3_assignment)
@@ -242,8 +254,8 @@ dblScalarMulSecp256k1_double:
 
 dblScalarMulSecp256k1_x_equals_before_add:
         ; [steps.same.point: 7]
-        ; [steps.opposite.point: 9]
-        ; [steps.block: 9]
+        ; [steps.opposite.point: 8]
+        ; [steps.block: 8]
 
         ; [MAP] if C != mem.dblScalarMulSecp256k1_p3_x ==> fails, MLOAD fails because read something different
         ; for memory. It verifies C and dblScalarMulSecp256k1_p3_x are same value, as an ASSERT.
