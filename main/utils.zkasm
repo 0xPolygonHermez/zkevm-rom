@@ -907,8 +907,6 @@ VAR GLOBAL tmpVarBoffsetUtil
 offsetUtil:
     %MAX_CNT_STEPS - STEP - 20          :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
-    A                                   :MSTORE(tmpVarAoffsetUtil)
-    B                                   :MSTORE(tmpVarBoffsetUtil)
 
     ; E = [e7, e6, ..., e0]
     ; JMPN instruction assures e0 is within the range [0, 2**32 - 1]
@@ -920,12 +918,8 @@ offsetUtil:
     ; that equals the field
     ; Since e0 is assured to be less than 32 bits, e0 * 32 + c0 could not overflow the field
     E * 32 + C                          :ASSERT
-    C => A
-    0x20 => B
-    $                                   :LT,JMPNC(failAssert)
-
-    $ => A                              :MLOAD(tmpVarAoffsetUtil)
-    $ => B                              :MLOAD(tmpVarBoffsetUtil), RETURN
+    0x1F - C                            :JMPN(failAssert); If C is greater than 31, it is an error
+                                        :RETURN
 
 ;@info: move balances between two accounts
 ;@in: txSrcAddr: source address
