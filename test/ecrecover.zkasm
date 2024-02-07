@@ -12,8 +12,10 @@ start:
 
         CTX     :MSTORE(originalCTX)
         -1      :MSTORE(lastHashKIdUsed)
-                ; :JMP(repeat_ecrecover_test)
-                :JMP(edge_cases)
+                :JMP(repeat_ecrecover_test)
+                ; :JMP(edge_cases)
+                ; :JMP(worst_case)
+                ; :JMP(point_arith_tests)
 
 INCLUDE "../main/ecrecover/ecrecover.zkasm"
 
@@ -21,14 +23,14 @@ repeat_ecrecover_test:
         ; A:ecrecover_hash B:ecrecover_r C:ecrecover_s D:ecrecover_v
 
         0xd9eba16ed0ecae432b71fe008c98cc872bb4cc214d3220a36f365326cf807d68n => A
-        0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n => B ; ECGX
+        0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n => B ; SECP256K1_GX
         0x265e99e47ad31bb2cab9646c504576b3abc6939a1710afc08cbf3034d73214b8n => C
         0x1cn => D
         :CALL(ecrecover_tx)
         0xBC44674AD5868F642EAD3FDF94E2D9C9185EAFB7n :ASSERT
 
         0xd9eba16ed0ecae432b71fe008c98cc872bb4cc214d3220a36f365326cf807d68n => A
-        0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n => B ; ECGX
+        0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n => B ; SECP256K1_GX
         0x265e99e47ad31bb2cab9646c504576b3abc6939a1710afc08cbf3034d73214b8n => C
         0x1bn => D
         :CALL(ecrecover_tx)
@@ -293,7 +295,7 @@ repeat_ecrecover_test:
         0x4f8ae3bd7535248d0bd448298cc2e2071e56992d0774dc340c368ae950852adan => C
         0x1an => D
         :CALL(ecrecover_tx)
-        0 :ASSERT
+        0x0000000000000000000000000000000000000000n :ASSERT
 
         ; #28 v > 28
 
@@ -302,7 +304,7 @@ repeat_ecrecover_test:
         0x4f8ae3bd7535248d0bd448298cc2e2071e56992d0774dc340c368ae950852adan => C
         0x1dn => D
         :CALL(ecrecover_tx)
-        0 :ASSERT
+        0x0000000000000000000000000000000000000000n :ASSERT
 
         ; #29 r == 0
 
@@ -311,7 +313,7 @@ repeat_ecrecover_test:
         0x4f8ae3bd7535248d0bd448298cc2e2071e56992d0774dc340c368ae950852adan => C
         0x1cn => D
         :CALL(ecrecover_tx)
-        0 :ASSERT
+        0x0000000000000000000000000000000000000000n :ASSERT
 
         ; #30 r == field
 
@@ -320,7 +322,7 @@ repeat_ecrecover_test:
         0x4f8ae3bd7535248d0bd448298cc2e2071e56992d0774dc340c368ae950852adan => C
         0x1cn => D
         :CALL(ecrecover_tx)
-        0 :ASSERT
+        0x0000000000000000000000000000000000000000n :ASSERT
 
         ; #31 r > field
 
@@ -329,7 +331,7 @@ repeat_ecrecover_test:
         0x4f8ae3bd7535248d0bd448298cc2e2071e56992d0774dc340c368ae950852adan => C
         0x1cn => D
         :CALL(ecrecover_tx)
-        0 :ASSERT
+        0x0000000000000000000000000000000000000000n :ASSERT
 
         ; #32 r = field - 1
 
@@ -338,7 +340,7 @@ repeat_ecrecover_test:
         0x4f8ae3bd7535248d0bd448298cc2e2071e56992d0774dc340c368ae950852adan => C
         0x1cn => D
         :CALL(ecrecover_tx)
-        0 :ASSERT
+        0x0000000000000000000000000000000000000000n :ASSERT
 
         ; #33 s == 0
 
@@ -347,7 +349,7 @@ repeat_ecrecover_test:
         0x0000000000000000000000000000000000000000000000000000000000000000n => C
         0x1cn => D
         :CALL(ecrecover_tx)
-        0 :ASSERT
+        0x0000000000000000000000000000000000000000n :ASSERT
 
         ; #34 s == field/2 + 1. Valid (precompiled)
 
@@ -405,7 +407,7 @@ repeat_ecrecover_test:
         0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n => C
         0x1cn => D
         :CALL(ecrecover_tx)
-        0 :ASSERT
+        0x0000000000000000000000000000000000000000n :ASSERT
         B => A
         4n :ASSERT
 
@@ -425,7 +427,7 @@ repeat_ecrecover_test:
         0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140n => C
         0x1cn => D
         :CALL(ecrecover_tx)
-        0 :ASSERT
+        0x0000000000000000000000000000000000000000n :ASSERT
         B => A
         4n :ASSERT
 
@@ -436,14 +438,14 @@ repeat_ecrecover_test:
         0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364142n => C
         0x1cn => D
         :CALL(ecrecover_tx)
-        0 :ASSERT
+        0x0000000000000000000000000000000000000000n :ASSERT
 
 edge_cases:
 
         ; #40 EGX
 
         0x3cc4cb050478c49877188e4fbd022f35ccb41cee02d9d4417194cbf7ebc1eeben => A
-        %ECGX => B
+        %SECP256K1_GX => B
         0x2bcf13b5e4f34a04a77344d5943e0228ba2e787583036325450c889d597a16c4n => C
         0x1bn => D
         :CALL(ecrecover_tx)
@@ -452,7 +454,7 @@ edge_cases:
         ; #41 -EGX
 
         0x3cc4cb050478c49877188e4fbd022f35ccb41cee02d9d4417194cbf7ebc1eeben => A
-        %ECGX => B
+        %SECP256K1_GX => B
         0x2bcf13b5e4f34a04a77344d5943e0228ba2e787583036325450c889d597a16c4n => C
         0x1cn => D
         :CALL(ecrecover_tx)
@@ -489,11 +491,11 @@ edge_cases:
         0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a1n => C ; s
         0x1bn => D
         :CALL(ecrecover_precompiled)
-        0 :ASSERT
+        0x0000000000000000000000000000000000000000n :ASSERT
         B => A
         7 :ASSERT
 
-CONSTL %P2_C0_EGX = %ECGX & 0xFFFF
+CONSTL %P2_C0_EGX = %SECP256K1_GX & 0xFFFF
 
         ; # p2 & 0xFFFF == EGX & 0xFFFF
 
@@ -508,7 +510,7 @@ CONSTL %P2_C0_EGX = %ECGX & 0xFFFF
 
         ; # p2 & 0x001FFFF....FFFF == EGX & 0x001FFFF....FFFF
 
-CONSTL %P2_CH_EGX = %ECGX & 0x001FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn
+CONSTL %P2_CH_EGX = %SECP256K1_GX & 0x001FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn
 
         0x3cc4cb050478c49877188e4fbd022f35ccb41cee02d9d4417194cbf7ebc1eeben => A
         %P2_CH_EGX => B
@@ -516,7 +518,36 @@ CONSTL %P2_CH_EGX = %ECGX & 0x001FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
         0x1bn => D
         :CALL(ecrecover_tx)
         0x4c90563674ab8de6f7731475a01a2bd09fd7b4b1n :ASSERT
-        $${dump(STEP)}
+
+worst_case:
+        0x3ebaaedce6af48a03bbfd25e8cd0364142n => A
+        0x1n => B
+        0xffffffffffffffffffffffffffffffbfffffffffffffffffffffffffffffffffn => C
+        0x1bn => D
+        :CALL(ecrecover_precompiled)
+        0x7e38c8326cedaee2262b28bd1923d6ad4cb8ee0n :ASSERT
+
+point_arith_tests:
+        0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798n :MSTORE(dblScalarMulSecp256k1_p1_x)
+        0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8n :MSTORE(dblScalarMulSecp256k1_p1_y)
+        0xeb8e1a4eebb21f302bb161c4f716a5f7811f98936e3e3064380d7ad3884c4a6an :MSTORE(dblScalarMulSecp256k1_p2_x)
+        0x8d4be7f1115c36369738f4a0ed3eb1435d0c8e01e99d62f05e5617ec2ec1dacen :MSTORE(dblScalarMulSecp256k1_p2_y)
+        4n :MSTORE(dblScalarMulSecp256k1_k1)
+        5n :MSTORE(dblScalarMulSecp256k1_k2)
+        :CALL(dblScalarMulSecp256k1)
+        0xdf60fa077df9278809b7b55ac3640c6e3bb2807b2efee66c83bcc3fbfdb9a941n :MLOAD(dblScalarMulSecp256k1_p3_x)
+        0xc40bf0727719ab00044b9c4260d2599ef8db3a0ac47ca626aef24d28c9c7e4f8n :MLOAD(dblScalarMulSecp256k1_p3_y)
+
+        ; worst case test
+        0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798n :MSTORE(dblScalarMulSecp256k1_p1_x)
+        0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8n :MSTORE(dblScalarMulSecp256k1_p1_y)
+        0xeb8e1a4eebb21f302bb161c4f716a5f7811f98936e3e3064380d7ad3884c4a6an :MSTORE(dblScalarMulSecp256k1_p2_x)
+        0x8d4be7f1115c36369738f4a0ed3eb1435d0c8e01e99d62f05e5617ec2ec1dacen :MSTORE(dblScalarMulSecp256k1_p2_y)
+        0xffffffffffffffffffffffffffffffbfffffffffffffffffffffffffffffffffn :MSTORE(dblScalarMulSecp256k1_k1)
+        0xffffffffffffffffffffffffffffffbfffffffffffffffffffffffffffffffffn :MSTORE(dblScalarMulSecp256k1_k2)
+        :CALL(dblScalarMulSecp256k1)
+        0xfd7a1e96af355f55b5836449b599b69c32349abf1327c6b58a582b3a9cd6b88an :MLOAD(dblScalarMulSecp256k1_p3_x)
+        0xc9337fc5565b2c4fc235f4f3aa196948aba84d7af369f4d4096853e4730e4f2dn :MLOAD(dblScalarMulSecp256k1_p3_y)
 
         :JMP(end)
 
