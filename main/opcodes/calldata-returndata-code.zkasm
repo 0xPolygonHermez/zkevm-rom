@@ -482,11 +482,9 @@ opRETURNDATASIZE:
     ; check out-of-gas
     GAS - %GAS_QUICK_STEP => GAS  :JMPN(outOfGas)
     ; Load ret data length from last ctx
-    $ => B          :MLOAD(retDataCTX)
     ; if no retDataCTX(0), retDataLength = 0
-    0 => A
-    $               :EQ, JMPC(endOpRETURNDATASIZE)
-    B => CTX
+    $ => A          :MLOAD(retDataCTX), JMPZ(endOpRETURNDATASIZE)
+    A => CTX
     $ => A          :MLOAD(retDataLength)
     ; Restore current context
     $ => CTX        :MLOAD(currentCTX)
@@ -522,10 +520,7 @@ opRETURNDATACOPY:
     ; store lastMemLength for memory expansion gas cost
     C               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; if retDataCTX is 0, end opcode execution
-    $ => B          :MLOAD(retDataCTX)
-    0 => A
-    $               :EQ, JMPC(opRETURNDATACOPYEmpty)
-
+    $ => B          :MLOAD(retDataCTX), JMPZ(opRETURNDATACOPYEmpty)
     ; Load ret data length from last ctx
     B => CTX
     E => B
