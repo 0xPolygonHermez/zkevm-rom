@@ -1,0 +1,29 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PRE: A,C are not alias-free
+;; POST: The result C is not alias-free (on MAP)
+;;
+;; addFpSecp256k1:
+;;             in: A,C
+;;             out: C = A + C (mod p)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; RESOURCES:
+;   2 ariths + 8 steps
+
+addFpSecp256k1:
+
+        ; 1] Compute and check the sum over Z
+        ; A·[1] + C = [D]·2²⁵⁶ + [E]
+        1 => B
+        $${var _addFpSecp256k1_AC = A + C}
+        ${_addFpSecp256k1_AC >> 256} => D
+        ${_addFpSecp256k1_AC} => E :ARITH
+
+        ; 2] Check it over Fp, that is, it must be satisfied that:
+        ; p·[(A+C) / p] + [(A+C) % p] = D·2²⁵⁶ + E
+        %SECP256K1_P => A
+        ${_addFpSecp256k1_AC / const.SECP256K1_P} => B        ; quotient  (256 bits)
+        ${_addFpSecp256k1_AC % const.SECP256K1_P} => C        ; residue (256 bits)
+
+        E :ARITH, RETURN

@@ -1,0 +1,28 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PRE: A,B are not alias-free
+;; POST: The result C is not alias-free (on MAP)
+;;
+;; mulFnSecp256k1:
+;;             in: A,B
+;;             out: C = A·B (mod n)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; RESOURCES:
+;   2 arith + 8 steps
+
+mulFnSecp256k1:
+
+        ; 1] Compute and check the multiplication over Z
+        ; A·B + 0 = [D]·2²⁵⁶ + [E]
+        0 => C
+        $${var _mulFnSecp256k1_AB = A * B}
+        ${_mulFnSecp256k1_AB >> 256} => D
+        ${_mulFnSecp256k1_AB} => E :ARITH
+
+        ; 2] Check it over Fn, that is, it must be satisfied that:
+        ; n·[(A·B) / n] + [(A·B) % n] = D·2²⁵⁶ + E
+        %SECP256K1_N => A
+        ${_mulFnSecp256k1_AB / const.SECP256K1_N} => B        ; quotient (256 bits)
+        ${_mulFnSecp256k1_AB % const.SECP256K1_N} => C        ; residue  (256 bits)
+        E :ARITH, RETURN

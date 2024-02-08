@@ -1,0 +1,1707 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  PRE: p1 = (p1_x, p1_y), p2 = (p2_x, p2_y) are in E(Fp)\{𝒪} and p1_x,p1_y,p2_x,p2_y,k1,k2 are alias-free
+;; POST: The resulting coordinates p3_x,p3_y are alias-free and variable p3_is_zero ∈ {0,1}
+;;
+;; dblScalarMulSecp256k1:
+;;             in: Points p1 = (p1_x, p1_y), p2 = (p2_x, p2_y) and scalars k1, k2
+;;             out:
+;;              · p3 = (p3_x, p3_y) ∈ E(Fp)
+;;              · Variable p3_is_zero = 0 or 1, to indicate whether p3 is the point at infinity or not
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Since the curve is E: y² = x³ + 7, there is no issue in representing the point at infinity as (0, 0).
+
+VAR GLOBAL dblScalarMulSecp256k1_p1_x
+VAR GLOBAL dblScalarMulSecp256k1_p1_y
+VAR GLOBAL dblScalarMulSecp256k1_p2_x
+VAR GLOBAL dblScalarMulSecp256k1_p2_y
+VAR GLOBAL dblScalarMulSecp256k1_k1
+VAR GLOBAL dblScalarMulSecp256k1_k2
+
+; p3 output point
+VAR GLOBAL dblScalarMulSecp256k1_p3_x
+VAR GLOBAL dblScalarMulSecp256k1_p3_y
+
+; point p12 = p1 + p2
+VAR GLOBAL dblScalarMulSecp256k1_p12_x
+VAR GLOBAL dblScalarMulSecp256k1_p12_y
+
+; flag to indicate whether the resulting point p3 is the point at infinity
+VAR GLOBAL dblScalarMulSecp256k1_p3_is_zero
+
+; dblScalarMulSecp256k1_p12_zero = 1 ==> p12 is the point at infinity
+; dblScalarMulSecp256k1_p12_zero = 0 ==> p12 isn't the point at infinity
+VAR GLOBAL dblScalarMulSecp256k1_p12_zero
+
+; acummulators
+VAR GLOBAL dblScalarMulSecp256k1_acum_k1
+VAR GLOBAL dblScalarMulSecp256k1_acum_k2
+
+; backups
+VAR GLOBAL dblScalarMulSecp256k1_RR
+VAR GLOBAL dblScalarMulSecp256k1_RCX
+
+; RESOURCES (k1,k2):
+;                1 arith + 19 steps                              // setup, calculation p12
+;              + number_of_bits_1(k1|k2) * arith                 // additions
+;              + max_bin_len(k1,k2) * arith                      // doubles
+;              + max_bin_len(k1,k2)/32 * 29 steps                // additions + doubles (steps, worst case)
+;              + (256 - max_bin_len(k1,k2)/32) * 24 steps        // additions + doubles (steps, worst case)
+;              + 8 steps + 2 bin                                 // last part
+;
+;
+; RESOURCES (worst case): 513 arith + 2 binaries + 6239 steps    // 20 + 256/32 * 29 + (256 - 256/32) * 24 + 8 = 6212
+
+dblScalarMulSecp256k1:
+    	RR      :MSTORE(dblScalarMulSecp256k1_RR)
+
+        RCX     :MSTORE(dblScalarMulSecp256k1_RCX)
+
+        $0{receiveLen(mem.dblScalarMulSecp256k1_k1, mem.dblScalarMulSecp256k1_k2)} => RR    ; receive the maximum length between the binary
+                                                                                            ; representations of k1 and k2
+        ; start the acummulator of k1 and k2
+        0 => RCX        :MSTORE(dblScalarMulSecp256k1_acum_k1)
+        0 => HASHPOS    :MSTORE(dblScalarMulSecp256k1_acum_k2)
+
+        ; Initialize p3 = 𝒪 (it is symbolic, so we use a variable)
+        1n              :MSTORE(dblScalarMulSecp256k1_p3_is_zero)
+
+		; Start by precomputing P1 + P2
+        $ => A  :MLOAD(dblScalarMulSecp256k1_p1_x)
+        $ => B  :MLOAD(dblScalarMulSecp256k1_p1_y)
+        $ => C  :MLOAD(dblScalarMulSecp256k1_p2_x)
+        $ => D  :MLOAD(dblScalarMulSecp256k1_p2_y)
+
+        ; check p1_x == p2_x
+        ${A == C}     :JMPZ(dblScalarMulSecp256k1DiffInitialPoints)
+		; [steps: 11]
+
+        ; verify path p1_x == p2_x
+        C             :ASSERT
+
+        ; check p1_y == p2_y
+        ${B == D}     :JMPNZ(dblScalarMulSecp256k1SameInitialPoints)
+		; [steps: 13]
+
+        ; verify path p1_y != p2_y <==> p1_y = -p2_y or p1_y + p2_y = 0
+        ; use arith because in this path save a lot of arith,
+        ; because when add p12 do nothing.
+
+        ; x must be distinct from 0, because the square root of 7 doesn't exist (y² = x³ + 7)
+        ; y must be distinct from 0, because the cubic root of -7 doesn't exist (y² = x³ + 7)
+
+        B => A        ; A = p1_y
+        1 => B
+        D => C        ; C = p2_y
+        0 => D        ; check p1_y * 1 + p2_y = 0 * 2^256 * 0 + SECP256K1_P
+        %SECP256K1_P         :ARITH
+        ; We have p2 == -p1
+
+        ; p12 = p1 - p1 = 𝒪, therefore is the point at infinity
+        1n            :MSTORE(dblScalarMulSecp256k1_p12_zero), JMP(dblScalarMulSecp256k1_loop)
+		; [steps: 19, arith: 1]
+
+dblScalarMulSecp256k1SameInitialPoints:
+        ; [steps.before: 13]
+        ; verify path p1_y (B) == p2_y (D)
+        ; as an ASSERT(B == mulPointEc_p2_y)
+        B             :MLOAD(dblScalarMulSecp256k1_p2_y)
+
+        ; p12 = p1 + p1, therefore isn't the point at infinity
+        0n                        :MSTORE(dblScalarMulSecp256k1_p12_zero)
+
+        ; Compute and check the doubling p1 + p1
+        ; A == p1_x
+        ; B == p1_y
+        ; (A,B) * 2 = (E, op)
+        ${xDblPointEc(A,B)} => E  :MSTORE(dblScalarMulSecp256k1_p12_x)
+        ${yDblPointEc(A,B)}       :ARITH_ECADD_SAME, MSTORE(dblScalarMulSecp256k1_p12_y), JMP(dblScalarMulSecp256k1_loop)
+		; [steps: 17, arith: 1]
+
+dblScalarMulSecp256k1DiffInitialPoints:
+        ; [steps.before: 11]
+        ; verify path p1_x != p2_x
+        ; p2_x != p1_x ==> p2 != p1
+        ; [MAP] if p1 == p2 => arith fails because p1 = p2
+
+        ; p12 = p1 + p2, therefore isn't the point at infinity
+        0n                            :MSTORE(dblScalarMulSecp256k1_p12_zero)
+
+        ; Compute and check the addition p1 + p2
+        ; (A, B) + (C, D) = (E, op)
+        ${xAddPointEc(A,B,C,D)} => E  :MSTORE(dblScalarMulSecp256k1_p12_x)
+        ${yAddPointEc(A,B,C,D)}       :ARITH_ECADD_DIFFERENT, MSTORE(dblScalarMulSecp256k1_p12_y)
+		; [steps: 14, arith: 1]
+
+
+; [steps.before (worst case): 19, arith.before: 1]
+
+; Goes forward in different branches of code depending on the values of the
+; most significant bits of k1 and k2.
+
+; [steps.byloop (worst case & nosave): 8 + 16 = 24]
+; [steps.byloop (worst case & save):  13 + 16 = 29]
+
+; [steps.byloop ((bit.k1 || bit.k2) == 1) & nosave:  6 + 16 = 22]
+; [steps.byloop ((bit.k1 && bit.k2) == 1) & nosave:  8 + 16 = 24]
+; [steps.byloop ((bit.k1 || bit.k2) == 1) & save:   11 + 16 = 27]
+; [steps.byloop ((bit.k1 && bit.k2) == 1) & save:   13 + 16 = 29]
+
+dblScalarMulSecp256k1_loop:
+        ; Receive the next MSB bit of k1
+        $0{(mem.dblScalarMulSecp256k1_k1 >> RR) & 0x1}        :JMPNZ(dblScalarMulSecp256k1_k11)
+
+; high_bit(k1) == 0 high_bit(k2) == ??
+dblScalarMulSecp256k1_k10:
+        ; Receive the next MSB bit of k2
+        $0{(mem.dblScalarMulSecp256k1_k2) >> RR & 0x1}        :JMPZ(@dblScalarMulSecp256k1_scalar_table_k10_k20 + RR)
+
+; high_bit(k1) == 0 high_bit(k2) == 1
+dblScalarMulSecp256k1_k10_k21:
+        :JMP(@dblScalarMulSecp256k1_scalar_table_k10_k21 + RR)
+dblScalarMulSecp256k1_k10_k21_continue:
+		; [steps.before.nosave: 4]
+		; [steps.before.save:   9]
+		; [steps.before (w.c.): 9]
+        $ => C  :MLOAD(dblScalarMulSecp256k1_p2_x)
+        $ => D  :MLOAD(dblScalarMulSecp256k1_p2_y), JMP(dblScalarMulSecp256k1_add)
+
+; high_bit(k1) == 1 high_bit(k2) == ??
+dblScalarMulSecp256k1_k11:
+        ; Receive the next MSB b of k2.
+        $0{(mem.dblScalarMulSecp256k1_k2) >> RR & 0x1}        :JMPZ(@dblScalarMulSecp256k1_scalar_table_k11_k20 + RR)
+
+; high_bit(k1) == 1 high_bit(k2) == 1
+dblScalarMulSecp256k1_k11_k21:
+        :JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part1 + RR)
+dblScalarMulSecp256k1_k11_k21_continue:
+		; [steps.before.nosave: 5]
+		; [steps.before.save:   10]
+		; [steps.before (w.c.): 10]
+
+        ; if (dblScalarMulSecp256k1_p12_zero) k11_k21 is the same as k10_k20
+        ; because adding the point at infinity to a point is the point itself
+        $       :MLOAD(dblScalarMulSecp256k1_p12_zero), JMPNZ(dblScalarMulSecp256k1_double)
+
+        $ => C  :MLOAD(dblScalarMulSecp256k1_p12_x)
+        $ => D  :MLOAD(dblScalarMulSecp256k1_p12_y), JMP(dblScalarMulSecp256k1_add)
+
+; high_bit(k1) == 1 high_bit(k2) == 0
+dblScalarMulSecp256k1_k11_k20:
+		; [steps.before.nosave: 3]
+		; [steps.before.save:   9]
+		; [steps.before (w.c.): 9]
+        $ => C  :MLOAD(dblScalarMulSecp256k1_p1_x)
+        $ => D  :MLOAD(dblScalarMulSecp256k1_p1_y), JMP(dblScalarMulSecp256k1_add)
+
+; in this point C,D have point to be add
+dblScalarMulSecp256k1_add:
+        ; [steps.p3empty.nolast: 4 + steps.double = 10]
+        ; [steps.p3empty.last: 4 + steps.double = 5]
+        ; [steps.xeq.yeq: 9 + steps.double = 15]
+        ; [steps.xeq.yneq: 10 + steps.double = 16]
+        ; [steps.xneq.nolast: 7 + steps.double = 13]
+        ; [steps.xneq.last: 7 + steps.double = 8]
+        ; [steps.block: 16]
+
+        ; if p3 is the point at infinity do not add, just assign, since 𝒪 + P = P
+        $   :MLOAD(dblScalarMulSecp256k1_p3_is_zero), JMPNZ(dblScalarMulSecp256k1_p3_assignment)
+
+        ; check whether p.x == p3.x
+        ${ C == mem.dblScalarMulSecp256k1_p3_x } :JMPNZ(dblScalarMulSecp256k1_x_equals_before_add)
+
+        ; [MAP] if C == mem.dblScalarMulSecp256k1_p3_x ==> fails arithmetic because check
+        ; points are different
+
+        ; p3 = (A,B)
+        $ => A  :MLOAD(dblScalarMulSecp256k1_p3_x)
+        $ => B  :MLOAD(dblScalarMulSecp256k1_p3_y)
+
+        ; p3 = p3 + (C,D)
+        ; (C, D) is point to add (p1 or p2 or p12)
+        ; (A, B) + (C, D) = (E, op)
+        ${xAddPointEc(A,B,C,D)} => E :MSTORE(dblScalarMulSecp256k1_p3_x)
+        ${yAddPointEc(A,B,C,D)} => B :ARITH_ECADD_DIFFERENT, MSTORE(dblScalarMulSecp256k1_p3_y)
+
+dblScalarMulSecp256k1_after_add:
+        E => A  :JMP(dblScalarMulSecp256k1_double)
+
+dblScalarMulSecp256k1_p3_assignment:
+        ; p3 = (C,D)
+        0       :MSTORE(dblScalarMulSecp256k1_p3_is_zero) ; flag, dblScalarMulSecp256k1_p3 has a value, no-empty
+        C => A  :MSTORE(dblScalarMulSecp256k1_p3_x)
+        D => B  :MSTORE(dblScalarMulSecp256k1_p3_y)
+
+dblScalarMulSecp256k1_double:
+        ; [steps.last: 1]
+        ; [steps.nolast.p3empty: 2]
+        ; [steps.nolast.p3: 6]
+        ; [steps.block: 6]
+
+        ; E,A = p3_x  B = p3_y
+        RR - 1 => RR    :JMPN(dblScalarMulSecp256k1_end_loop)
+
+        ; if p3 is the point at infinity do not double, since 𝒪 + 𝒪 = 𝒪
+        $               :MLOAD(dblScalarMulSecp256k1_p3_is_zero), JMPNZ(dblScalarMulSecp256k1_loop)
+
+        $ => A  :MLOAD(dblScalarMulSecp256k1_p3_x)
+        $ => B  :MLOAD(dblScalarMulSecp256k1_p3_y)
+
+        ; (A, B) * 2 = (E, op)
+        ${xDblPointEc(A,B)} => E  :MSTORE(dblScalarMulSecp256k1_p3_x)
+        ${yDblPointEc(A,B)}       :ARITH_ECADD_SAME, MSTORE(dblScalarMulSecp256k1_p3_y), JMP(dblScalarMulSecp256k1_loop)
+
+dblScalarMulSecp256k1_x_equals_before_add:
+        ; [steps.same.point: 7]
+        ; [steps.opposite.point: 8]
+        ; [steps.block: 8]
+
+        ; [MAP] if C != mem.dblScalarMulSecp256k1_p3_x ==> fails, MLOAD fails because read something different
+        ; for memory. It verifies C and dblScalarMulSecp256k1_p3_x are same value, as an ASSERT.
+        C   :MLOAD(dblScalarMulSecp256k1_p3_x)
+
+        ; points to add: point1 (p3) + point2 (C,D)
+
+        ; C: point2.x
+        ; D: point2.y
+
+        ; p3_x == C, check if points are same or a point was opposite point
+
+        ${ D ==  mem.dblScalarMulSecp256k1_p3_y } :JMPNZ(dblScalarMulSecp256k1_same_point_to_add)
+
+        ; In this path must be verified that D != dblScalarMulSecp256k1_p3_y to
+        ; how p2_y and p3_y are different for same x, it implies that
+        ; p2_y == -p3_y. In this case next operation with p3 doesn't
+        ; spend arithmetics, for this reason is used an arithmetic
+        ; instead of binary to use similar resources on different paths.
+
+        ; if p2_y == -p3_y, and them are alias free ==> p2_y + p3_y === SECP256K1_P
+
+        1 => B
+        D => A
+        0 => D
+        $ => C :MLOAD(dblScalarMulSecp256k1_p3_y)
+
+        ; p2_y * 1 + p3_y = 2^256 * 0 + SECP256K1_P
+        %SECP256K1_P :ARITH
+
+        ; NOTE: all points are free of alias because arithmetic guarantees it
+
+        ; dblScalarMulSecp256k1_p3_is_zero flag = 0, dblScalarMulSecp256k1_p3 was empty, need addition must be an assignation
+        1n              :MSTORE(dblScalarMulSecp256k1_p3_is_zero), JMP(dblScalarMulSecp256k1_double)
+
+dblScalarMulSecp256k1_same_point_to_add:
+        ; [steps.block: 5]
+        ; must check really are equals, use MLOAD as ASSERT
+        ; ASSERT(D == dblScalarMulSecp256k1_p3_y)
+
+        D       :MLOAD(dblScalarMulSecp256k1_p3_y)
+        C => A
+        D => B
+
+        ; (A,B) * 2 = (E, op)
+        ${xDblPointEc(A,B)} => E  :MSTORE(dblScalarMulSecp256k1_p3_x)
+        ${yDblPointEc(A,B)} => B  :ARITH_ECADD_SAME, MSTORE(dblScalarMulSecp256k1_p3_y), JMP(dblScalarMulSecp256k1_after_add)
+
+dblScalarMulSecp256k1_end_loop:
+        ; [steps.block: 8]
+
+        ; Check that the accumulated scalars coincide with the original ones
+        $ => A      :MLOAD(dblScalarMulSecp256k1_k1)
+        $ => B      :MLOAD(dblScalarMulSecp256k1_acum_k1)
+        1           :EQ
+        $ => A      :MLOAD(dblScalarMulSecp256k1_k2)
+        $ => B      :MLOAD(dblScalarMulSecp256k1_acum_k2)
+        1           :EQ
+
+        $ => RR         :MLOAD(dblScalarMulSecp256k1_RR)
+        $ => RCX        :MLOAD(dblScalarMulSecp256k1_RCX), RETURN
+
+; Begin of table
+dblScalarMulSecp256k1_save_k10_k20:
+      ROTL_C + RCX      :MSTORE(dblScalarMulSecp256k1_acum_k1)
+
+      $ => C            :MLOAD(dblScalarMulSecp256k1_acum_k2)
+      ROTL_C + HASHPOS  :MSTORE(dblScalarMulSecp256k1_acum_k2)
+
+      0n => RCX,HASHPOS :JMP(dblScalarMulSecp256k1_double)
+
+dblScalarMulSecp256k1_save_k11_k20:
+      $ => C            :MLOAD(dblScalarMulSecp256k1_acum_k1)
+      ROTL_C + RCX      :MSTORE(dblScalarMulSecp256k1_acum_k1)
+
+      $ => C            :MLOAD(dblScalarMulSecp256k1_acum_k2)
+      ROTL_C + HASHPOS  :MSTORE(dblScalarMulSecp256k1_acum_k2)
+
+      0n => RCX,HASHPOS :JMP(dblScalarMulSecp256k1_k11_k20)
+
+dblScalarMulSecp256k1_save_k11_k21:
+      $ => C            :MLOAD(dblScalarMulSecp256k1_acum_k1)
+      ROTL_C + RCX      :MSTORE(dblScalarMulSecp256k1_acum_k1)
+
+      $ => C            :MLOAD(dblScalarMulSecp256k1_acum_k2)
+      ROTL_C + HASHPOS  :MSTORE(dblScalarMulSecp256k1_acum_k2)
+
+      0n => RCX,HASHPOS :JMP(dblScalarMulSecp256k1_k11_k21_continue)
+
+dblScalarMulSecp256k1_save_k10_k21:
+      $ => C            :MLOAD(dblScalarMulSecp256k1_acum_k1)
+      ROTL_C + RCX      :MSTORE(dblScalarMulSecp256k1_acum_k1)
+
+      $ => C            :MLOAD(dblScalarMulSecp256k1_acum_k2)
+      ROTL_C + HASHPOS  :MSTORE(dblScalarMulSecp256k1_acum_k2)
+
+      0n => RCX,HASHPOS :JMP(dblScalarMulSecp256k1_k10_k21_continue)
+
+; Sage code
+; ----------------------------------------
+; binLen = 256
+; clock = 32
+; for i in range(binLen):
+;     latch = i % clock
+;     power = 2**latch
+;     a = f"{power:#0{10}x}"
+;     if (latch == 0):
+;         print("\t:JMP(dblScalarMulSecp256k1_save_k10_k20)\t; RR = {}".format(i))
+;     else:
+;         print("\t:JMP(dblScalarMulSecp256k1_double)\t\t\t; RR = {}".format(i))
+; ----------------------------------------
+dblScalarMulSecp256k1_scalar_table_k10_k20:
+	$ => C	:MLOAD(dblScalarMulSecp256k1_acum_k1), JMP(dblScalarMulSecp256k1_save_k10_k20)	; RR = 0
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 1
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 2
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 3
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 4
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 5
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 6
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 7
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 8
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 9
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 10
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 11
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 12
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 13
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 14
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 15
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 16
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 17
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 18
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 19
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 20
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 21
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 22
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 23
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 24
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 25
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 26
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 27
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 28
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 29
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 30
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 31
+	$ => C	:MLOAD(dblScalarMulSecp256k1_acum_k1), JMP(dblScalarMulSecp256k1_save_k10_k20)	; RR = 32
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 33
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 34
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 35
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 36
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 37
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 38
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 39
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 40
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 41
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 42
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 43
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 44
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 45
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 46
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 47
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 48
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 49
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 50
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 51
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 52
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 53
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 54
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 55
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 56
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 57
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 58
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 59
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 60
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 61
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 62
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 63
+	$ => C	:MLOAD(dblScalarMulSecp256k1_acum_k1), JMP(dblScalarMulSecp256k1_save_k10_k20)	; RR = 64
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 65
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 66
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 67
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 68
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 69
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 70
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 71
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 72
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 73
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 74
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 75
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 76
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 77
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 78
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 79
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 80
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 81
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 82
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 83
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 84
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 85
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 86
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 87
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 88
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 89
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 90
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 91
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 92
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 93
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 94
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 95
+	$ => C	:MLOAD(dblScalarMulSecp256k1_acum_k1), JMP(dblScalarMulSecp256k1_save_k10_k20)	; RR = 96
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 97
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 98
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 99
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 100
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 101
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 102
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 103
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 104
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 105
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 106
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 107
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 108
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 109
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 110
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 111
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 112
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 113
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 114
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 115
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 116
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 117
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 118
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 119
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 120
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 121
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 122
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 123
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 124
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 125
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 126
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 127
+	$ => C	:MLOAD(dblScalarMulSecp256k1_acum_k1), JMP(dblScalarMulSecp256k1_save_k10_k20)	; RR = 128
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 129
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 130
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 131
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 132
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 133
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 134
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 135
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 136
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 137
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 138
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 139
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 140
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 141
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 142
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 143
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 144
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 145
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 146
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 147
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 148
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 149
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 150
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 151
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 152
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 153
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 154
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 155
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 156
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 157
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 158
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 159
+	$ => C	:MLOAD(dblScalarMulSecp256k1_acum_k1), JMP(dblScalarMulSecp256k1_save_k10_k20)	; RR = 160
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 161
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 162
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 163
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 164
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 165
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 166
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 167
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 168
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 169
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 170
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 171
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 172
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 173
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 174
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 175
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 176
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 177
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 178
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 179
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 180
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 181
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 182
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 183
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 184
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 185
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 186
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 187
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 188
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 189
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 190
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 191
+	$ => C	:MLOAD(dblScalarMulSecp256k1_acum_k1), JMP(dblScalarMulSecp256k1_save_k10_k20)	; RR = 192
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 193
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 194
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 195
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 196
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 197
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 198
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 199
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 200
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 201
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 202
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 203
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 204
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 205
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 206
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 207
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 208
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 209
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 210
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 211
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 212
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 213
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 214
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 215
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 216
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 217
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 218
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 219
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 220
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 221
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 222
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 223
+	$ => C	:MLOAD(dblScalarMulSecp256k1_acum_k1), JMP(dblScalarMulSecp256k1_save_k10_k20)	; RR = 224
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 225
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 226
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 227
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 228
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 229
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 230
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 231
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 232
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 233
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 234
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 235
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 236
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 237
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 238
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 239
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 240
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 241
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 242
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 243
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 244
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 245
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 246
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 247
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 248
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 249
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 250
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 251
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 252
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 253
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 254
+	:JMP(dblScalarMulSecp256k1_double)														; RR = 255
+
+; Sage code
+; ----------------------------------------
+; binLen = 256
+; clock = 32
+; for i in range(binLen):
+;     latch = i % clock
+;     power = 2**latch
+;     a = f"{power:#0{10}x}"
+;     if (latch == 0):
+;         print("\tRCX + {0}n => RCX\t\t:JMP(dblScalarMulSecp256k1_save_k11_k20)\t; RR = {1}".format(a,i))
+;     else:
+;         print("\tRCX + {0}n => RCX\t\t:JMP(dblScalarMulSecp256k1_k11_k20_add)\t\t; RR = {1}".format(a,i))
+; ----------------------------------------
+dblScalarMulSecp256k1_scalar_table_k11_k20:
+	RCX + 0x00000001n => RCX		:JMP(dblScalarMulSecp256k1_save_k11_k20)	; RR = 0
+	RCX + 0x00000002n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 1
+	RCX + 0x00000004n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 2
+	RCX + 0x00000008n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 3
+	RCX + 0x00000010n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 4
+	RCX + 0x00000020n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 5
+	RCX + 0x00000040n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 6
+	RCX + 0x00000080n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 7
+	RCX + 0x00000100n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 8
+	RCX + 0x00000200n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 9
+	RCX + 0x00000400n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 10
+	RCX + 0x00000800n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 11
+	RCX + 0x00001000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 12
+	RCX + 0x00002000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 13
+	RCX + 0x00004000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 14
+	RCX + 0x00008000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 15
+	RCX + 0x00010000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 16
+	RCX + 0x00020000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 17
+	RCX + 0x00040000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 18
+	RCX + 0x00080000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 19
+	RCX + 0x00100000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 20
+	RCX + 0x00200000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 21
+	RCX + 0x00400000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 22
+	RCX + 0x00800000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 23
+	RCX + 0x01000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 24
+	RCX + 0x02000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 25
+	RCX + 0x04000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 26
+	RCX + 0x08000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 27
+	RCX + 0x10000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 28
+	RCX + 0x20000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 29
+	RCX + 0x40000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 30
+	RCX + 0x80000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 31
+	RCX + 0x00000001n => RCX		:JMP(dblScalarMulSecp256k1_save_k11_k20)	; RR = 32
+	RCX + 0x00000002n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 33
+	RCX + 0x00000004n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 34
+	RCX + 0x00000008n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 35
+	RCX + 0x00000010n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 36
+	RCX + 0x00000020n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 37
+	RCX + 0x00000040n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 38
+	RCX + 0x00000080n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 39
+	RCX + 0x00000100n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 40
+	RCX + 0x00000200n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 41
+	RCX + 0x00000400n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 42
+	RCX + 0x00000800n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 43
+	RCX + 0x00001000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 44
+	RCX + 0x00002000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 45
+	RCX + 0x00004000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 46
+	RCX + 0x00008000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 47
+	RCX + 0x00010000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 48
+	RCX + 0x00020000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 49
+	RCX + 0x00040000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 50
+	RCX + 0x00080000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 51
+	RCX + 0x00100000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 52
+	RCX + 0x00200000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 53
+	RCX + 0x00400000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 54
+	RCX + 0x00800000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 55
+	RCX + 0x01000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 56
+	RCX + 0x02000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 57
+	RCX + 0x04000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 58
+	RCX + 0x08000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 59
+	RCX + 0x10000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 60
+	RCX + 0x20000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 61
+	RCX + 0x40000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 62
+	RCX + 0x80000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 63
+	RCX + 0x00000001n => RCX		:JMP(dblScalarMulSecp256k1_save_k11_k20)	; RR = 64
+	RCX + 0x00000002n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 65
+	RCX + 0x00000004n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 66
+	RCX + 0x00000008n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 67
+	RCX + 0x00000010n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 68
+	RCX + 0x00000020n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 69
+	RCX + 0x00000040n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 70
+	RCX + 0x00000080n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 71
+	RCX + 0x00000100n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 72
+	RCX + 0x00000200n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 73
+	RCX + 0x00000400n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 74
+	RCX + 0x00000800n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 75
+	RCX + 0x00001000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 76
+	RCX + 0x00002000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 77
+	RCX + 0x00004000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 78
+	RCX + 0x00008000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 79
+	RCX + 0x00010000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 80
+	RCX + 0x00020000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 81
+	RCX + 0x00040000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 82
+	RCX + 0x00080000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 83
+	RCX + 0x00100000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 84
+	RCX + 0x00200000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 85
+	RCX + 0x00400000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 86
+	RCX + 0x00800000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 87
+	RCX + 0x01000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 88
+	RCX + 0x02000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 89
+	RCX + 0x04000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 90
+	RCX + 0x08000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 91
+	RCX + 0x10000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 92
+	RCX + 0x20000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 93
+	RCX + 0x40000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 94
+	RCX + 0x80000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 95
+	RCX + 0x00000001n => RCX		:JMP(dblScalarMulSecp256k1_save_k11_k20)	; RR = 96
+	RCX + 0x00000002n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 97
+	RCX + 0x00000004n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 98
+	RCX + 0x00000008n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 99
+	RCX + 0x00000010n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 100
+	RCX + 0x00000020n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 101
+	RCX + 0x00000040n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 102
+	RCX + 0x00000080n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 103
+	RCX + 0x00000100n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 104
+	RCX + 0x00000200n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 105
+	RCX + 0x00000400n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 106
+	RCX + 0x00000800n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 107
+	RCX + 0x00001000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 108
+	RCX + 0x00002000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 109
+	RCX + 0x00004000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 110
+	RCX + 0x00008000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 111
+	RCX + 0x00010000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 112
+	RCX + 0x00020000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 113
+	RCX + 0x00040000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 114
+	RCX + 0x00080000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 115
+	RCX + 0x00100000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 116
+	RCX + 0x00200000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 117
+	RCX + 0x00400000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 118
+	RCX + 0x00800000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 119
+	RCX + 0x01000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 120
+	RCX + 0x02000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 121
+	RCX + 0x04000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 122
+	RCX + 0x08000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 123
+	RCX + 0x10000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 124
+	RCX + 0x20000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 125
+	RCX + 0x40000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 126
+	RCX + 0x80000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 127
+	RCX + 0x00000001n => RCX		:JMP(dblScalarMulSecp256k1_save_k11_k20)	; RR = 128
+	RCX + 0x00000002n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 129
+	RCX + 0x00000004n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 130
+	RCX + 0x00000008n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 131
+	RCX + 0x00000010n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 132
+	RCX + 0x00000020n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 133
+	RCX + 0x00000040n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 134
+	RCX + 0x00000080n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 135
+	RCX + 0x00000100n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 136
+	RCX + 0x00000200n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 137
+	RCX + 0x00000400n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 138
+	RCX + 0x00000800n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 139
+	RCX + 0x00001000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 140
+	RCX + 0x00002000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 141
+	RCX + 0x00004000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 142
+	RCX + 0x00008000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 143
+	RCX + 0x00010000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 144
+	RCX + 0x00020000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 145
+	RCX + 0x00040000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 146
+	RCX + 0x00080000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 147
+	RCX + 0x00100000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 148
+	RCX + 0x00200000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 149
+	RCX + 0x00400000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 150
+	RCX + 0x00800000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 151
+	RCX + 0x01000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 152
+	RCX + 0x02000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 153
+	RCX + 0x04000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 154
+	RCX + 0x08000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 155
+	RCX + 0x10000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 156
+	RCX + 0x20000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 157
+	RCX + 0x40000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 158
+	RCX + 0x80000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 159
+	RCX + 0x00000001n => RCX		:JMP(dblScalarMulSecp256k1_save_k11_k20)	; RR = 160
+	RCX + 0x00000002n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 161
+	RCX + 0x00000004n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 162
+	RCX + 0x00000008n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 163
+	RCX + 0x00000010n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 164
+	RCX + 0x00000020n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 165
+	RCX + 0x00000040n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 166
+	RCX + 0x00000080n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 167
+	RCX + 0x00000100n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 168
+	RCX + 0x00000200n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 169
+	RCX + 0x00000400n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 170
+	RCX + 0x00000800n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 171
+	RCX + 0x00001000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 172
+	RCX + 0x00002000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 173
+	RCX + 0x00004000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 174
+	RCX + 0x00008000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 175
+	RCX + 0x00010000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 176
+	RCX + 0x00020000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 177
+	RCX + 0x00040000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 178
+	RCX + 0x00080000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 179
+	RCX + 0x00100000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 180
+	RCX + 0x00200000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 181
+	RCX + 0x00400000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 182
+	RCX + 0x00800000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 183
+	RCX + 0x01000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 184
+	RCX + 0x02000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 185
+	RCX + 0x04000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 186
+	RCX + 0x08000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 187
+	RCX + 0x10000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 188
+	RCX + 0x20000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 189
+	RCX + 0x40000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 190
+	RCX + 0x80000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 191
+	RCX + 0x00000001n => RCX		:JMP(dblScalarMulSecp256k1_save_k11_k20)	; RR = 192
+	RCX + 0x00000002n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 193
+	RCX + 0x00000004n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 194
+	RCX + 0x00000008n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 195
+	RCX + 0x00000010n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 196
+	RCX + 0x00000020n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 197
+	RCX + 0x00000040n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 198
+	RCX + 0x00000080n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 199
+	RCX + 0x00000100n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 200
+	RCX + 0x00000200n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 201
+	RCX + 0x00000400n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 202
+	RCX + 0x00000800n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 203
+	RCX + 0x00001000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 204
+	RCX + 0x00002000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 205
+	RCX + 0x00004000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 206
+	RCX + 0x00008000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 207
+	RCX + 0x00010000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 208
+	RCX + 0x00020000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 209
+	RCX + 0x00040000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 210
+	RCX + 0x00080000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 211
+	RCX + 0x00100000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 212
+	RCX + 0x00200000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 213
+	RCX + 0x00400000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 214
+	RCX + 0x00800000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 215
+	RCX + 0x01000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 216
+	RCX + 0x02000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 217
+	RCX + 0x04000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 218
+	RCX + 0x08000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 219
+	RCX + 0x10000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 220
+	RCX + 0x20000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 221
+	RCX + 0x40000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 222
+	RCX + 0x80000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 223
+	RCX + 0x00000001n => RCX		:JMP(dblScalarMulSecp256k1_save_k11_k20)	; RR = 224
+	RCX + 0x00000002n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 225
+	RCX + 0x00000004n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 226
+	RCX + 0x00000008n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 227
+	RCX + 0x00000010n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 228
+	RCX + 0x00000020n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 229
+	RCX + 0x00000040n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 230
+	RCX + 0x00000080n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 231
+	RCX + 0x00000100n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 232
+	RCX + 0x00000200n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 233
+	RCX + 0x00000400n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 234
+	RCX + 0x00000800n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 235
+	RCX + 0x00001000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 236
+	RCX + 0x00002000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 237
+	RCX + 0x00004000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 238
+	RCX + 0x00008000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 239
+	RCX + 0x00010000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 240
+	RCX + 0x00020000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 241
+	RCX + 0x00040000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 242
+	RCX + 0x00080000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 243
+	RCX + 0x00100000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 244
+	RCX + 0x00200000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 245
+	RCX + 0x00400000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 246
+	RCX + 0x00800000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 247
+	RCX + 0x01000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 248
+	RCX + 0x02000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 249
+	RCX + 0x04000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 250
+	RCX + 0x08000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 251
+	RCX + 0x10000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 252
+	RCX + 0x20000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 253
+	RCX + 0x40000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 254
+	RCX + 0x80000000n => RCX		:JMP(dblScalarMulSecp256k1_k11_k20)		; RR = 255
+
+; Sage code
+; ----------------------------------------
+; binLen = 256
+; clock = 32
+; for i in range(binLen):
+;     latch = i % clock
+;     power = 2**latch
+;     a = f"{power:#0{10}x}"
+;     print("\tRCX + {0}n => RCX\t\t:JMP(dblScalarMulSecp256k1_scalar_table_k11_k21_part2)\t; RR = {1}".format(a,i))
+; ----------------------------------------
+dblScalarMulSecp256k1_scalar_table_k11_k21_part1:
+	RCX + 0x00000001n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 0
+	RCX + 0x00000002n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 1
+	RCX + 0x00000004n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 2
+	RCX + 0x00000008n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 3
+	RCX + 0x00000010n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 4
+	RCX + 0x00000020n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 5
+	RCX + 0x00000040n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 6
+	RCX + 0x00000080n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 7
+	RCX + 0x00000100n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 8
+	RCX + 0x00000200n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 9
+	RCX + 0x00000400n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 10
+	RCX + 0x00000800n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 11
+	RCX + 0x00001000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 12
+	RCX + 0x00002000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 13
+	RCX + 0x00004000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 14
+	RCX + 0x00008000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 15
+	RCX + 0x00010000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 16
+	RCX + 0x00020000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 17
+	RCX + 0x00040000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 18
+	RCX + 0x00080000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 19
+	RCX + 0x00100000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 20
+	RCX + 0x00200000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 21
+	RCX + 0x00400000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 22
+	RCX + 0x00800000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 23
+	RCX + 0x01000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 24
+	RCX + 0x02000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 25
+	RCX + 0x04000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 26
+	RCX + 0x08000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 27
+	RCX + 0x10000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 28
+	RCX + 0x20000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 29
+	RCX + 0x40000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 30
+	RCX + 0x80000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 31
+	RCX + 0x00000001n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 32
+	RCX + 0x00000002n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 33
+	RCX + 0x00000004n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 34
+	RCX + 0x00000008n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 35
+	RCX + 0x00000010n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 36
+	RCX + 0x00000020n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 37
+	RCX + 0x00000040n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 38
+	RCX + 0x00000080n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 39
+	RCX + 0x00000100n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 40
+	RCX + 0x00000200n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 41
+	RCX + 0x00000400n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 42
+	RCX + 0x00000800n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 43
+	RCX + 0x00001000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 44
+	RCX + 0x00002000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 45
+	RCX + 0x00004000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 46
+	RCX + 0x00008000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 47
+	RCX + 0x00010000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 48
+	RCX + 0x00020000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 49
+	RCX + 0x00040000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 50
+	RCX + 0x00080000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 51
+	RCX + 0x00100000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 52
+	RCX + 0x00200000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 53
+	RCX + 0x00400000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 54
+	RCX + 0x00800000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 55
+	RCX + 0x01000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 56
+	RCX + 0x02000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 57
+	RCX + 0x04000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 58
+	RCX + 0x08000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 59
+	RCX + 0x10000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 60
+	RCX + 0x20000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 61
+	RCX + 0x40000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 62
+	RCX + 0x80000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 63
+	RCX + 0x00000001n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 64
+	RCX + 0x00000002n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 65
+	RCX + 0x00000004n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 66
+	RCX + 0x00000008n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 67
+	RCX + 0x00000010n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 68
+	RCX + 0x00000020n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 69
+	RCX + 0x00000040n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 70
+	RCX + 0x00000080n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 71
+	RCX + 0x00000100n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 72
+	RCX + 0x00000200n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 73
+	RCX + 0x00000400n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 74
+	RCX + 0x00000800n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 75
+	RCX + 0x00001000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 76
+	RCX + 0x00002000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 77
+	RCX + 0x00004000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 78
+	RCX + 0x00008000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 79
+	RCX + 0x00010000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 80
+	RCX + 0x00020000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 81
+	RCX + 0x00040000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 82
+	RCX + 0x00080000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 83
+	RCX + 0x00100000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 84
+	RCX + 0x00200000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 85
+	RCX + 0x00400000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 86
+	RCX + 0x00800000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 87
+	RCX + 0x01000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 88
+	RCX + 0x02000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 89
+	RCX + 0x04000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 90
+	RCX + 0x08000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 91
+	RCX + 0x10000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 92
+	RCX + 0x20000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 93
+	RCX + 0x40000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 94
+	RCX + 0x80000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 95
+	RCX + 0x00000001n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 96
+	RCX + 0x00000002n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 97
+	RCX + 0x00000004n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 98
+	RCX + 0x00000008n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 99
+	RCX + 0x00000010n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 100
+	RCX + 0x00000020n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 101
+	RCX + 0x00000040n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 102
+	RCX + 0x00000080n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 103
+	RCX + 0x00000100n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 104
+	RCX + 0x00000200n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 105
+	RCX + 0x00000400n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 106
+	RCX + 0x00000800n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 107
+	RCX + 0x00001000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 108
+	RCX + 0x00002000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 109
+	RCX + 0x00004000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 110
+	RCX + 0x00008000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 111
+	RCX + 0x00010000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 112
+	RCX + 0x00020000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 113
+	RCX + 0x00040000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 114
+	RCX + 0x00080000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 115
+	RCX + 0x00100000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 116
+	RCX + 0x00200000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 117
+	RCX + 0x00400000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 118
+	RCX + 0x00800000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 119
+	RCX + 0x01000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 120
+	RCX + 0x02000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 121
+	RCX + 0x04000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 122
+	RCX + 0x08000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 123
+	RCX + 0x10000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 124
+	RCX + 0x20000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 125
+	RCX + 0x40000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 126
+	RCX + 0x80000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 127
+	RCX + 0x00000001n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 128
+	RCX + 0x00000002n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 129
+	RCX + 0x00000004n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 130
+	RCX + 0x00000008n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 131
+	RCX + 0x00000010n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 132
+	RCX + 0x00000020n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 133
+	RCX + 0x00000040n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 134
+	RCX + 0x00000080n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 135
+	RCX + 0x00000100n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 136
+	RCX + 0x00000200n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 137
+	RCX + 0x00000400n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 138
+	RCX + 0x00000800n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 139
+	RCX + 0x00001000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 140
+	RCX + 0x00002000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 141
+	RCX + 0x00004000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 142
+	RCX + 0x00008000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 143
+	RCX + 0x00010000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 144
+	RCX + 0x00020000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 145
+	RCX + 0x00040000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 146
+	RCX + 0x00080000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 147
+	RCX + 0x00100000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 148
+	RCX + 0x00200000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 149
+	RCX + 0x00400000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 150
+	RCX + 0x00800000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 151
+	RCX + 0x01000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 152
+	RCX + 0x02000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 153
+	RCX + 0x04000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 154
+	RCX + 0x08000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 155
+	RCX + 0x10000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 156
+	RCX + 0x20000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 157
+	RCX + 0x40000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 158
+	RCX + 0x80000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 159
+	RCX + 0x00000001n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 160
+	RCX + 0x00000002n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 161
+	RCX + 0x00000004n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 162
+	RCX + 0x00000008n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 163
+	RCX + 0x00000010n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 164
+	RCX + 0x00000020n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 165
+	RCX + 0x00000040n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 166
+	RCX + 0x00000080n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 167
+	RCX + 0x00000100n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 168
+	RCX + 0x00000200n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 169
+	RCX + 0x00000400n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 170
+	RCX + 0x00000800n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 171
+	RCX + 0x00001000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 172
+	RCX + 0x00002000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 173
+	RCX + 0x00004000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 174
+	RCX + 0x00008000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 175
+	RCX + 0x00010000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 176
+	RCX + 0x00020000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 177
+	RCX + 0x00040000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 178
+	RCX + 0x00080000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 179
+	RCX + 0x00100000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 180
+	RCX + 0x00200000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 181
+	RCX + 0x00400000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 182
+	RCX + 0x00800000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 183
+	RCX + 0x01000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 184
+	RCX + 0x02000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 185
+	RCX + 0x04000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 186
+	RCX + 0x08000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 187
+	RCX + 0x10000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 188
+	RCX + 0x20000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 189
+	RCX + 0x40000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 190
+	RCX + 0x80000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 191
+	RCX + 0x00000001n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 192
+	RCX + 0x00000002n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 193
+	RCX + 0x00000004n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 194
+	RCX + 0x00000008n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 195
+	RCX + 0x00000010n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 196
+	RCX + 0x00000020n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 197
+	RCX + 0x00000040n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 198
+	RCX + 0x00000080n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 199
+	RCX + 0x00000100n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 200
+	RCX + 0x00000200n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 201
+	RCX + 0x00000400n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 202
+	RCX + 0x00000800n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 203
+	RCX + 0x00001000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 204
+	RCX + 0x00002000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 205
+	RCX + 0x00004000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 206
+	RCX + 0x00008000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 207
+	RCX + 0x00010000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 208
+	RCX + 0x00020000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 209
+	RCX + 0x00040000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 210
+	RCX + 0x00080000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 211
+	RCX + 0x00100000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 212
+	RCX + 0x00200000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 213
+	RCX + 0x00400000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 214
+	RCX + 0x00800000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 215
+	RCX + 0x01000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 216
+	RCX + 0x02000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 217
+	RCX + 0x04000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 218
+	RCX + 0x08000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 219
+	RCX + 0x10000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 220
+	RCX + 0x20000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 221
+	RCX + 0x40000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 222
+	RCX + 0x80000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 223
+	RCX + 0x00000001n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 224
+	RCX + 0x00000002n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 225
+	RCX + 0x00000004n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 226
+	RCX + 0x00000008n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 227
+	RCX + 0x00000010n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 228
+	RCX + 0x00000020n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 229
+	RCX + 0x00000040n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 230
+	RCX + 0x00000080n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 231
+	RCX + 0x00000100n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 232
+	RCX + 0x00000200n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 233
+	RCX + 0x00000400n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 234
+	RCX + 0x00000800n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 235
+	RCX + 0x00001000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 236
+	RCX + 0x00002000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 237
+	RCX + 0x00004000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 238
+	RCX + 0x00008000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 239
+	RCX + 0x00010000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 240
+	RCX + 0x00020000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 241
+	RCX + 0x00040000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 242
+	RCX + 0x00080000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 243
+	RCX + 0x00100000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 244
+	RCX + 0x00200000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 245
+	RCX + 0x00400000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 246
+	RCX + 0x00800000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 247
+	RCX + 0x01000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 248
+	RCX + 0x02000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 249
+	RCX + 0x04000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 250
+	RCX + 0x08000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 251
+	RCX + 0x10000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 252
+	RCX + 0x20000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 253
+	RCX + 0x40000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 254
+	RCX + 0x80000000n => RCX		:JMP(@dblScalarMulSecp256k1_scalar_table_k11_k21_part2 + RR)	; RR = 255
+
+; Sage code
+; ----------------------------------------
+; binLen = 256
+; clock = 32
+; for i in range(binLen):
+;     latch = i % clock
+;     power = 2**latch
+;     a = f"{power:#0{10}x}"
+;     if (latch == 0):
+;         print("\tHASHPOS + {0}n => HASHPOS\t\t:JMP(dblScalarMulSecp256k1_save_k11_k21)\t; RR = {1}".format(a,i))
+;     else:
+;         print("\tHASHPOS + {0}n => HASHPOS\t\t:JMP(dblScalarMulSecp256k1_k11_k21_continue)\t\t; RR = {1}".format(a,i))
+; ----------------------------------------
+dblScalarMulSecp256k1_scalar_table_k11_k21_part2:
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)	; RR = 0
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 1
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 2
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 3
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 4
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 5
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 6
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 7
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 8
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 9
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 10
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 11
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 12
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 13
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 14
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 15
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 16
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 17
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 18
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 19
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 20
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 21
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 22
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 23
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 24
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 25
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 26
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 27
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 28
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 29
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 30
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 31
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)	; RR = 32
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 33
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 34
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 35
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 36
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 37
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 38
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 39
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 40
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 41
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 42
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 43
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 44
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 45
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 46
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 47
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 48
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 49
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 50
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 51
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 52
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 53
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 54
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 55
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 56
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 57
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 58
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 59
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 60
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 61
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 62
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 63
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)	; RR = 64
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 65
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 66
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 67
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 68
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 69
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 70
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 71
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 72
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 73
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 74
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 75
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 76
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 77
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 78
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 79
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 80
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 81
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 82
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 83
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 84
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 85
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 86
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 87
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 88
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 89
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 90
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 91
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 92
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 93
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 94
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 95
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)	; RR = 96
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 97
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 98
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 99
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 100
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 101
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 102
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 103
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 104
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 105
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 106
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 107
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 108
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 109
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 110
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 111
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 112
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 113
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 114
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 115
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 116
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 117
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 118
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 119
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 120
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 121
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 122
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 123
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 124
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 125
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 126
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 127
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)	; RR = 128
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 129
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 130
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 131
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 132
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 133
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 134
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 135
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 136
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 137
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 138
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 139
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 140
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 141
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 142
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 143
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 144
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 145
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 146
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 147
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 148
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 149
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 150
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 151
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 152
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 153
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 154
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 155
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 156
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 157
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 158
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 159
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)	; RR = 160
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 161
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 162
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 163
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 164
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 165
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 166
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 167
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 168
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 169
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 170
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 171
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 172
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 173
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 174
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 175
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 176
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 177
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 178
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 179
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 180
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 181
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 182
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 183
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 184
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 185
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 186
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 187
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 188
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 189
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 190
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 191
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)	; RR = 192
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 193
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 194
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 195
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 196
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 197
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 198
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 199
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 200
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 201
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 202
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 203
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 204
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 205
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 206
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 207
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 208
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 209
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 210
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 211
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 212
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 213
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 214
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 215
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 216
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 217
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 218
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 219
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 220
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 221
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 222
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 223
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)	; RR = 224
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 225
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 226
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 227
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 228
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 229
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 230
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 231
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 232
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 233
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 234
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 235
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 236
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 237
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 238
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 239
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 240
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 241
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 242
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 243
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 244
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 245
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 246
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 247
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 248
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 249
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 250
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 251
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 252
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 253
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 254
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_continue)		; RR = 255
+
+; Sage code
+; ----------------------------------------
+; binLen = 256
+; clock = 32
+; for i in range(binLen):
+;     latch = i % clock
+;     power = 2**latch
+;     a = f"{power:#0{10}x}"
+;     if (latch == 0):
+;         print("\tHASHPOS + {0}n => HASHPOS\t\t:JMP(dblScalarMulSecp256k1_save_k10_k21)\t; RR = {1}".format(a,i))
+;     else:
+;         print("\tHASHPOS + {0}n => HASHPOS\t\t:JMP(dblScalarMulSecp256k1_k10_k21_continue)\t\t; RR = {1}".format(a,i))
+; ----------------------------------------
+dblScalarMulSecp256k1_scalar_table_k10_k21:
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k10_k21)	; RR = 0
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 1
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 2
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 3
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 4
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 5
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 6
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 7
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 8
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 9
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 10
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 11
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 12
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 13
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 14
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 15
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 16
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 17
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 18
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 19
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 20
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 21
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 22
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 23
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 24
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 25
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 26
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 27
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 28
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 29
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 30
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 31
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k10_k21)	; RR = 32
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 33
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 34
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 35
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 36
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 37
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 38
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 39
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 40
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 41
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 42
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 43
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 44
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 45
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 46
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 47
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 48
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 49
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 50
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 51
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 52
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 53
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 54
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 55
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 56
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 57
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 58
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 59
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 60
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 61
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 62
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 63
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k10_k21)	; RR = 64
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 65
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 66
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 67
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 68
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 69
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 70
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 71
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 72
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 73
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 74
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 75
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 76
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 77
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 78
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 79
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 80
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 81
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 82
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 83
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 84
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 85
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 86
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 87
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 88
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 89
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 90
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 91
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 92
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 93
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 94
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 95
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k10_k21)	; RR = 96
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 97
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 98
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 99
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 100
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 101
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 102
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 103
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 104
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 105
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 106
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 107
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 108
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 109
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 110
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 111
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 112
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 113
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 114
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 115
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 116
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 117
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 118
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 119
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 120
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 121
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 122
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 123
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 124
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 125
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 126
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 127
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k10_k21)	; RR = 128
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 129
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 130
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 131
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 132
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 133
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 134
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 135
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 136
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 137
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 138
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 139
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 140
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 141
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 142
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 143
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 144
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 145
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 146
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 147
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 148
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 149
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 150
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 151
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 152
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 153
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 154
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 155
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 156
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 157
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 158
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 159
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k10_k21)	; RR = 160
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 161
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 162
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 163
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 164
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 165
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 166
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 167
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 168
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 169
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 170
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 171
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 172
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 173
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 174
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 175
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 176
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 177
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 178
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 179
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 180
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 181
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 182
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 183
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 184
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 185
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 186
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 187
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 188
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 189
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 190
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 191
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k10_k21)	; RR = 192
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 193
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 194
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 195
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 196
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 197
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 198
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 199
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 200
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 201
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 202
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 203
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 204
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 205
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 206
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 207
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 208
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 209
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 210
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 211
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 212
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 213
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 214
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 215
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 216
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 217
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 218
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 219
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 220
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 221
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 222
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 223
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k10_k21)	; RR = 224
+	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 225
+	HASHPOS + 0x00000004n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 226
+	HASHPOS + 0x00000008n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 227
+	HASHPOS + 0x00000010n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 228
+	HASHPOS + 0x00000020n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 229
+	HASHPOS + 0x00000040n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 230
+	HASHPOS + 0x00000080n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 231
+	HASHPOS + 0x00000100n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 232
+	HASHPOS + 0x00000200n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 233
+	HASHPOS + 0x00000400n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 234
+	HASHPOS + 0x00000800n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 235
+	HASHPOS + 0x00001000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 236
+	HASHPOS + 0x00002000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 237
+	HASHPOS + 0x00004000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 238
+	HASHPOS + 0x00008000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 239
+	HASHPOS + 0x00010000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 240
+	HASHPOS + 0x00020000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 241
+	HASHPOS + 0x00040000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 242
+	HASHPOS + 0x00080000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 243
+	HASHPOS + 0x00100000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 244
+	HASHPOS + 0x00200000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 245
+	HASHPOS + 0x00400000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 246
+	HASHPOS + 0x00800000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 247
+	HASHPOS + 0x01000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 248
+	HASHPOS + 0x02000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 249
+	HASHPOS + 0x04000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 250
+	HASHPOS + 0x08000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 251
+	HASHPOS + 0x10000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 252
+	HASHPOS + 0x20000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 253
+	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 254
+	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k10_k21_continue)		; RR = 255
