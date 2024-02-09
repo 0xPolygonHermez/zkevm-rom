@@ -27,18 +27,13 @@ opSHA3:
     C               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; check out-of-gas, dynamic
     ;${6*((C+31)/32)}
-    C+31 => A
+    ; C is secured to be less than 32 bits after calling saveMem
     ;(C+31)/32
-    A               :MSTORE(arithA)
-    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => A          :MLOAD(arithRes1)
+    C + 31 => A     :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     ; Mul operation with Arith
+    ; E is less than 32 bits because C is less than 32 bits and E = C/32
     ; 6*((C+31)/32)
-    6               :MSTORE(arithA)
-    A               :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
-    $ => A          :MLOAD(arithRes1)
-    GAS - A => GAS  :JMPN(outOfGas)  ; dynamic_gas = 6 * minimum_word_size + memory_expansion_cost
-
+    GAS - 6 * E => GAS  :JMPN(outOfGas)  ; dynamic_gas = 6 * minimum_word_size + memory_expansion_cost
     ; check keccak counters
     C + 1           :MSTORE(arithA)
     136             :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]

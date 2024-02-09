@@ -90,8 +90,7 @@ opCALLDATACOPY:
     GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
     ;${3*((C+31)/32)}
     ;(C+31)/32 => A
-    C+31 => A
-                        :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    C+31 => A       :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     GAS - 3*E => GAS    :JMPN(outOfGas)
     ; Recover destOffset at E
     $ => E          :MLOAD(lastMemOffset)
@@ -252,28 +251,22 @@ continueOpCODECOPY:
     $ => C          :MLOAD(SP+2); [destOffset => C]
     $ => D          :MLOAD(SP+1); [offset => D]
     $ => E          :MLOAD(SP); [size => E]
-    ; store lastMemOffset for memory expansion gas cost
-    C               :MSTORE(lastMemOffset)
-    ; store lastMemLength for memory expansion gas cost
+    ; store lastMemOffset for memory expansion gas cost, we store also at B to recover later
+    C => B          :MSTORE(lastMemOffset)
+    ; store lastMemLength for memory expansion gas cost, we store also at RCX to recover later
     ; compute memory expansion gas cost
-    E               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    E => RCX         :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; check out-of-gas
     GAS - %GAS_FASTEST_STEP => GAS  :JMPN(outOfGas)
     ;${3*((E+31)/32)}
-    E+31 => A
+    ; E is less than 32 bits because is secured after calling saveMem
     ;(E+31)/32
-    A               :MSTORE(arithA)
-    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => A          :MLOAD(arithRes1)
-    ; Mul operation with Arith
+    E + 31 => A     :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     ; 3*((E+31)/32)
-    3               :MSTORE(arithA)
-    A               :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
-    $ => A          :MLOAD(arithRes1)
-
-    GAS - A => GAS  :JMPN(outOfGas)
-
-
+    ; E is less than 32 bits because previous E is less than 32 bits and E = prevE/32
+    GAS - 3 * E => GAS  :JMPN(outOfGas)
+    RCX => E
+    B => C
     ; if offset is above data len, length => offset
     D => A
     $ => B          :MLOAD(bytecodeLength)
@@ -401,19 +394,13 @@ opEXTCODECOPY:
 
     ; check out-of-gas
     ;${3*((E+31)/32)}
-    E+31 => A
+    ; E is secured to be less than 32 bits after calling saveMem
     ;(E+31)/32
-    A               :MSTORE(arithA)
-    32              :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => A          :MLOAD(arithRes1)
-    ; Mul operation with Arith
+    E + 31 => A     :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    ; E is less than 32 bits because prevE is less than 32 bits and E = C/32
     ; 3*((E+31)/32)
-    3               :MSTORE(arithA)
-    A               :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
-    $ => A          :MLOAD(arithRes1)
     ; check out-of-gas
-    GAS - A => GAS  :JMPN(outOfGas)
+    GAS - 3 * E => GAS  :JMPN(outOfGas)
     ; if offset is above data len, length => offset
     D => A
     $ => B          :MLOAD(tmpContractLength)
@@ -537,19 +524,12 @@ opRETURNDATACOPY:
     ; E ret data offset (memory pointer) of last context, B offset in return data  that want to retrieve
     E + B => B ; memory pointer where start to copy memory
     ;${3*((C+31)/32)}
-    C+31 => A
+    ; C is secured to be less than 32 bits after calling saveMem
     ;(C+31)/32
-    A               :MSTORE(arithA)
-    32              :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => A          :MLOAD(arithRes1)
-    ; Mul operation with Arith
+    C + 31 => A     :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     ; 3*((C+31)/32)
-    3               :MSTORE(arithA)
-    A               :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
-    $ => A          :MLOAD(arithRes1)
     ; check out-of-gas
-    GAS - A => GAS  :JMPN(outOfGas)
+    GAS - 3 * E => GAS  :JMPN(outOfGas)
 
 opRETURNDATACOPYloop:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)

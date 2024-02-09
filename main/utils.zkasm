@@ -693,7 +693,6 @@ VAR GLOBAL tmpVarCSHX
 VAR GLOBAL tmpVarDSHX
 VAR GLOBAL tmpVarESHX
 
-VAR GLOBAL result
 ;@info Shift right D bytes to A
 ;@in A - (A >> D)
 ;@in D - (A >> D) D bytes
@@ -739,23 +738,23 @@ SHRarithinit:
     0 => B
     ; if A == 0 --> no shift
     $                       :EQ,JMPC(SHRarithfinal)
-    ; E init number
-    A => E
+    A => E                  :MSTORE(arithA)
     ; B bits
     D => B
     255 => A
     ; A < B, 255 < bits
     $                       :LT,JMPC(SHRarith0)
-    D => RR
-    E => A                  :MSTORE(arithA)
+    ; D is secure because value is lower than 255
+    D => RR                 :JMPZ(SHRarithfinal)
                             :CALL(@exp_num + RR); out:[B: 2**RR]
-    B                       :MSTORE(arithB),CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => A                  :MLOAD(arithRes1),JMP(SHRarithfinal)
+    B                       :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    $ => E                  :MLOAD(arithRes1),JMP(SHRarithfinal)
 
 SHRarith0:
-    0 => A
+    0 => E
 
 SHRarithfinal:
+    E => A
     $ => B                  :MLOAD(tmpVarBSHX)
     $ => C                  :MLOAD(tmpVarCSHX)
     $ => D                  :MLOAD(tmpVarDSHX)
@@ -801,21 +800,17 @@ SHLarithBit:
 SHLarithinit:
     ; E init number
     A => E
-    0 => A
     ; D --> B bits
     D => B
-    ; if D == 0 --> no shift
-    $                       :EQ,JMPC(SHLarithfinal)
     255 => A
      ; A < B, 255 < bits
     $                       :LT,JMPC(SHLarith0)
-
-    D => RR
+    ; D is secure because value is lower than 255
+    D => RR                 :JMPZ(SHLarithfinal)
     ; A init number and calculate B = 2**D
     E => A                  :CALL(@exp_num + RR); out:[B: 2**RR]
-    ; E = init number * 2**D (result)
+    ; E = init number * 2**D
     ${A*B} => E
-    E                       :MSTORE(result)
     ; D = 256 - D
     256 - D => D, RR
     B => C                  :CALL(@exp_num + RR); out:[B: 2**RR]
@@ -1637,10 +1632,7 @@ expADloop:
     ;D = exp/2
     $ => D          :MLOAD(arithRes1)
     ;A = exp%2 (0 or 1)
-    $ => A          :MLOAD(arithRes2)
-    0 => B
-    ;if exp%2 == 0 --> expADloop0
-    $               :EQ,JMPC(expADloop0)
+    $ => A          :MLOAD(arithRes2), JMPZ(expADloop0) ;if exp%2 == 0 --> expADloop0
     E               :MSTORE(arithA)
     ;mulARITH --> E*C
     C               :MSTORE(arithB), CALL(mulARITH)
