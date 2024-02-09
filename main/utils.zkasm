@@ -485,8 +485,7 @@ saveMem:
 
 saveMemGAS:
     ; store new memory length
-    B                           :MSTORE(memLength)
-    B => E
+    B => E                          :MSTORE(memLength)
     ; memory_size_word = (memory_byte_size + 31) / 32 in E
     ; ${(B+31)/32} => E
     E + 31 => A
@@ -814,7 +813,6 @@ SHLarithinit:
 
 SHLarith0:
     0 => E
-                            :JMP(SHLarithfinal)
 
 SHLarithfinal:
     E => A
@@ -1353,10 +1351,13 @@ checkBytecodeStartsEF:
 
     ; get 1 byte from memory
     1 => C                          :CALL(MLOADX) ; in: [E: offset, C: length] out: [A: value , E: new offset]
-    31 => D                         :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
 
+    ; mask first byte
+    0xFF00000000000000000000000000000000000000000000000000000000000000n => B
+    $ => A                          :AND
     ; check if byte read is equal to 0xEF
-    %BYTECODE_STARTS_EF - A         :JMPNZ(checkBytecodeStartsEFend)
+    0xEF00000000000000000000000000000000000000000000000000000000000000n => B
+    $                               :EQ, JMPNC(checkBytecodeStartsEFend)
     1                               :MSTORE(startsWithEF)
 
 checkBytecodeStartsEFend:
@@ -2279,7 +2280,6 @@ VAR GLOBAL readXFromCalldataResult
 VAR GLOBAL tmpVarAReadXFromOffset
 VAR GLOBAL tmpVarBReadXFromOffset
 VAR GLOBAL tmpVarCReadXFromOffset
-VAR GLOBAL tmpVarDReadXFromOffset
 VAR GLOBAL tmpVarEReadXFromOffset
 ; @info Reads {readXFromCalldataOffset} bytes (max 32) from a given offset in calldata memory. If offset or offset + length exceeds txCalldataLen, zeros are added
 ; @internalParam {readXFromCalldataOffset} offset to read from calldata
