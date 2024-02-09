@@ -612,49 +612,62 @@ finishMulArith:
 ; @out: arithRes2: remainder of division arithA % arithB
 divARITH:
     ; check zk-counters
-    %MAX_CNT_STEPS - STEP - 50       :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 30       :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCountersBinary)
-    %MAX_CNT_ARITH - CNT_ARITH - 1   :JMPN(outOfCountersArith)
+    ; store used regs
+    A               :MSTORE(tmpVarAArith)
+    B               :MSTORE(tmpVarBArith)
+    C               :MSTORE(tmpVarCArith)
+    D               :MSTORE(tmpVarDArith)
+    E               :MSTORE(tmpVarEArith)
 
-    RR              :MSTORE(tmpZkPCArith), CALL(storeTmp)
-    $ => E          :MLOAD(arithA)
-    $ => A          :MLOAD(arithB)
-    ; Check denominator(A) is not zero
-    0 => B
+    $ => E          :MLOAD(arithA) ; dividend
+    $ => A          :MLOAD(arithB) ; divisor
+    ; Check divisor(A) is not zero
+    0 => B, D
     $               :EQ, JMPC(zeroDiv)
-
-    ; Check if divisor (E) is smaller than denominator E < A
-    A => C ; store temporally A in C
-    E => A ; divisor
-    C => B ; denominator
-    $               :LT, JMPC(divisorSmallerDiv)
-    C => A
-
-    ${E%A} => C ; remainder
-    ${E/A} => B
-    0 => D
+    ; Check if dividend (E) is lower or equal than divisor E < A
+    E => B ; dividend
+    $               :LT, JMPNC(divisorSmallerDiv)
+    ; A*B + C = D * 2**256 + op(E)
+    %MAX_CNT_ARITH - CNT_ARITH - 1   :JMPN(outOfCountersArith)
+    ${E%A} => C     :MSTORE(arithRes2); remainder
+    ${E/A} => B     :MSTORE(arithRes1); quotient
+    ; D = 0 here
     E               :ARITH
-
-    B               :MSTORE(arithRes1)
-    C               :MSTORE(arithRes2)
-
-    ; check divisor > remainder
-    A => B ; divisor
-    C => A ; remainder
-    $ => A          :LT
-    1               :ASSERT,CALL(loadTmp)
-    $ => RR         :MLOAD(tmpZkPCArith)
-                    :RETURN
+    A => B
+    C => A
+    ; check divisor > remadinder
+    1               :LT
+    ; Recover used regs
+    $ => A          :MLOAD(tmpVarAArith)
+    $ => B          :MLOAD(tmpVarBArith)
+    $ => C          :MLOAD(tmpVarCArith)
+    $ => D          :MLOAD(tmpVarDArith)
+    $ => E          :MLOAD(tmpVarEArith), RETURN
 
 zeroDiv:
+    ; divisor is zero, return zero for both quotient and remainder
     0               :MSTORE(arithRes1)
+    RR              :MSTORE(tmpZkPCArith)
     0               :MSTORE(arithRes2), CALL(loadTmp)
     $ => RR         :MLOAD(tmpZkPCArith)
                     :RETURN
 
 divisorSmallerDiv:
+    ; check if divisor is eq than dividend
+    $               :EQ, JMPC(divisorEqDividenDiv)
+    ; dividend is smaller than divisor, quotion is zero and remainder is dividend
     0               :MSTORE(arithRes1)
+    RR              :MSTORE(tmpZkPCArith)
     E               :MSTORE(arithRes2), CALL(loadTmp)
+    $ => RR         :MLOAD(tmpZkPCArith)
+                    :RETURN
+
+divisorEqDividenDiv:
+    1               :MSTORE(arithRes1)
+    RR              :MSTORE(tmpZkPCArith)
+    0               :MSTORE(arithRes2), CALL(loadTmp)
     $ => RR         :MLOAD(tmpZkPCArith)
                     :RETURN
 
