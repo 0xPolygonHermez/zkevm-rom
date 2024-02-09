@@ -17,8 +17,8 @@ opSHA3:
     ; check out-of-gas
     GAS - %KECCAK_GAS => GAS :JMPN(outOfGas)
     SP - 1 => SP
-    $ => E          :MLOAD(SP--); [offset => E]
-    $ => C          :MLOAD(SP) ; [size => C]
+    $ => E, D       :MLOAD(SP--); [offset => E]
+    $ => C, B       :MLOAD(SP) ; [size => C]
 
     ; store lastMemOffset for memory expansion gas cost
     E               :MSTORE(lastMemOffset)
@@ -34,6 +34,9 @@ opSHA3:
     ; E is less than 32 bits because C is less than 32 bits and E = C/32
     ; 6*((C+31)/32)
     GAS - 6 * E => GAS  :JMPN(outOfGas)  ; dynamic_gas = 6 * minimum_word_size + memory_expansion_cost
+    ; Recover offset and size at E and C
+    D => E
+    B => C
     ; check keccak counters
     C + 1           :MSTORE(arithA)
     136             :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
