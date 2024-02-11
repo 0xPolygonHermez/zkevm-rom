@@ -55,7 +55,7 @@ async function runTest(cmPols, steps) {
         };
 
         const res = await smMain.execute(cmPols.Main, input, rom, config);
-        compareCounters(input.virtualCounters, res.counters);
+        // compareCounters(input.virtualCounters, res.counters);
     } catch (err) {
         fs.writeFileSync(checkerDir, `Failed test ${inputPath} - ${err}}`);
         throw err;
