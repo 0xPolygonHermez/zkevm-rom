@@ -99,161 +99,265 @@ getLenBitsEnd:
     $ => RR         :MLOAD(tmpZkPCgetLen)
     $ => D          :MLOAD(tmpVarDgetLen), RETURN
 
-VAR GLOBAL tmpVarAmstore
-VAR GLOBAL tmpVarBmstore
-VAR GLOBAL tmpVarCmstore
-VAR GLOBAL tmpVarDmstore
-VAR GLOBAL tmpVarEmstore
-VAR GLOBAL tmpZkPCmstore
+VAR GLOBAL tmpVarA_mstore
+VAR GLOBAL tmpVarB_mstore
+VAR GLOBAL tmpVarD_mstore
+VAR GLOBAL tmpVarRR_mstore
+VAR GLOBAL tmpVarLength_mstore
+VAR GLOBAL tmpVarOffset_mstore
+VAR GLOBAL tmpVar32BytesToStore_mstore
 
 VAR GLOBAL bytesToStore
-VAR GLOBAL isMSTOREX
-; @info save value to memory < 32 bytes with offset
-; @in bytesToStore => bytes to store in memory
-; @in E => offset
-; @in C => length
-; @out E => new offset
-MSTOREX:
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-    C               :JMPZ(endMSTOREX)
-    32 - C          :JMPN(errorMLOADMSTORE)
-    32 - C - 1      :JMPN(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
-    1               :MSTORE(isMSTOREX)
+
+MSTOREX:  
+        ; check if C == 32 then go to MSTORE32
+        C - 32              :JMPZ(MSTORE32) ; in: [bytesToStore, E: offset] out: [E: new offset]
+
+        ; store C with length (bytes), if length == 0 then nothing to do, go to __MSTOREX_end
+        C                   :MSTORE(tmpVarLength_mstore),JMPZ(__MSTOREX_end)
+
+        ; check step counters
+        %MAX_CNT_STEPS - STEP - 40 :JMPN(outOfCountersStep)
+
+        ; if length > 32 then ERROR
+        32 - C              :JMPN(errorMLOADMSTORE)
+
+        ; saving registers used
+        A                   :MSTORE(tmpVarA_mstore)
+        B                   :MSTORE(tmpVarB_mstore)
+        D                   :MSTORE(tmpVarD_mstore)
+        RR                  :MSTORE(tmpVarRR_mstore)
+        
+        ; A = offset in bytes of byte-address, no trust, if offset = 0 then go __MSTOREX_offset0 
+        ; on __MSTOREX_offset0 must be verified value of A.
+        $0{E % 32} => A     :MSTORE(tmpVarOffset_mstore), JMPZ(__MSTOREX_offset0)
+
+        ; check MemAlign counters
+        %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 3  :JMPN(outOfCountersMemalign)
+
+        A => C              :JMPN(failAssert)    ; check A,C is positive 32 bits (A7..A1 = 0 because use $0)
+        31 - C              :JMPN(failAssert)    ; check C < 32, if not MAP
+
+        $0{E / 32} => RR    :JMPN(failAssert)    ; address (ASSERT RR is 32-bit value) 4G x 32 bytes = 128GB
+        RR * 32 + C => A                         ; rebuild address to check that is same.
+        E                   :ASSERT
+
+        ;
+        ; [STEP 1]: Obtain a copy of memory (as a backup) of a 32-byte word that will be partially overwritten.
+        ;
+        ; =========================== A (M0_addr) ========================######################### B (M0_addr+1) ########################
+        ;                           :                                                              :
+        ; |<-------- offset ------->======================================##########################  => B,oldvalue
+        ;                           |<--------------------------- 32 bytes ----------------------->|
+        ;
+
+        $ => A      :MLOAD(MEM:RR)          ; M0
+        $ => B      :MLOAD(MEM:RR+1)        ; M1
+        ; C = offset, 
+        ; B = 32 current bytes of memory
+        $ => B      :MEM_ALIGN_RD ; read this 32 bytes with offset
+
+        ;
+        ; [STEP 2]: clear not used bytes of bytesToStore and oldvalue at same time. 
+        ; A short-example with 3 bytes instead of 32. 
+        ;
+        ;   bytesToStore = ABCDEF   
+        ;   B (memory backup) = 123456
+        ;   length = 2
+        ; 
+        ; In this operation is cleared two things: 
+        ;  - bytes of bytesToStore out of length: ABCDEF => AB0000 
+        ;  - on bytes read from memory, clean where we put bytesToStore: 123456 => 003456 
+        ;
+        ;   bytesToStore =      AB0000           
+        ;   B (memory backup) = 003456   
+        ;
+        ; Now we put bytesToStore and B side-by-side
+        ;
+        ;   bytesToStore  | B  =  ABCDEF123456
+        ;                              ↓  write 0, with offset = 2
+        ;   bytesToStore' | B' =  AB0000003456
+        ;
+        ; This operation is like a MEM_ALIGN_WR where M0 = bytesToStore, M1 = B, V = 0, offset = bytes = 2, W0 = bytesToStore', W1 = B'
+        ;
+        ;
+        ; Graphical example:
+        ;
+        ; ******************* A (bytesToStore) ***************************======================================##########################
+        ;                                     :                                                              :
+        ; |<----------- length  ------------->0000000000000000000000000000000000000000000000000000000000000000
+        ;                                     |<--------------------------- 32 bytes ----------------------->|
+        ; ************************************0000000000000000000000000000                                   :                             => D
+        ;                                                                 000000000000000000000000000000000000==########################## => E
+        ;
+
+        $ => A  :MLOAD(bytesToStore)
+        ; B contains bytes of memory before write
+        $ => C  :MLOAD(tmpVarLength_mstore)
+        ${memAlignWR_W0(A,0,C)} => D ; no trust calculate W0
+        ${memAlignWR_W1(B,0,C)} => E ; no trust calculate W1
+        0       :MEM_ALIGN_WR
+
+        ; D    ************************************0000000000000000000000000000
+        ; E    000000000000000000000000000000000000==##########################
+        ; D+E  ************************************==########################## => tmpVar32BytesToStore_mstore
+        ; D and E are  bit-disjoint, addition as logical-or
+
+        D + E   :MSTORE(tmpVar32BytesToStore_mstore)
+
+        ;
+        ; [STEP 3]: store 32 bytes of this mix of bytes, first "length" bytes comes from bytesToStore, and others bytes comes current value
+        ;           in memory, before write.
+        ;
+        ; =========================== A (M0_addr) ========================######################### B (M0_addr+1) ########################
+        ;                           :                                                              :
+        ; |<-------- offset ------->************************************==##########################
+        ;                           |<--------------------------- 32 bytes ----------------------->|
+        ;
+        ; ==========================************************************==################################################################
+
+        $ => A          :MLOAD(MEM:RR)       ;M0
+        $ => B          :MLOAD(MEM:RR+1)     ;M1
+        $ => C          :MLOAD(tmpVarOffset_mstore)
+
+        ${memAlignWR_W0(A,mem.tmpVar32BytesToStore_mstore,C)} => D ; no trust calculate W0
+        ${memAlignWR_W1(B,mem.tmpVar32BytesToStore_mstore,C)} => E ; no trust calculate W1
+        $               :MEM_ALIGN_WR,MLOAD(tmpVar32BytesToStore_mstore)
+
+        ; write values on memory
+        D               :MSTORE(MEM:RR)
+        E               :MSTORE(MEM:RR+1)
+
+        ; recalculate result on E as address + length. At this point E = 256-bit address * 32 + offset (C)
+        ; pending add length
+        RR * 32 + C => E
+
+        ; restore C with length and add it to E
+        $ => C          :MLOAD(tmpVarLength_mstore)
+        E + C => E
+
+        ; restore used registers and return
+        $ => RR         :MLOAD(tmpVarRR_mstore)
+        $ => A          :MLOAD(tmpVarA_mstore)
+        $ => B          :MLOAD(tmpVarB_mstore)
+        $ => D          :MLOAD(tmpVarD_mstore),RETURN
+
+__MSTOREX_end:
+        ; trivial case if length(C) == 0
+        :RETURN
+
+__MSTOREX_offset0:
+        ; short path, offset == 0 (no trust)
+
+        %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
+
+        ; in this branch assume offset == 0, if offset != 0 ==> RR * 32 != E 
+        $0{E / 32} => RR    :JMPN(failAssert)       ; address (ASSERT E is 32-bit value) 4G x 32 bytes = 128GB
+        RR * 32 - E         :JMPNZ(failAssert)      ; 32 bits * 32 (5 bits) = 37 bits is secure for FF
+
+        ; [STEP 1]: offset == 0, aligned read, memalign no needed.
+        $ => B              :MLOAD(MEM:RR)          ; M0
+
+        ; [STEP 2]: (see previous explanation)
+        $ => A              :MLOAD(bytesToStore)
+        ; B = current 32 bytes of memory
+        ; C = length
+        ${memAlignWR_W0(A,0,C)} => D ; no trust calculate W0
+        ${memAlignWR_W1(B,0,C)} => E ; no trust calculate W1
+        0                   :MEM_ALIGN_WR
+
+        ; [STEP 3]: trivial step, offset == 0 ==> aligned write, 
+        ;           memalign no needed, directly store the logical-or of D and E
+        D + E               :MSTORE(MEM:RR)
+
+        ; Calculate output E = 256-bit address * 32 + length (C), offset = 0
+        RR * 32 + C => E
+    
+        ; restore used registers, C contains original value (length)
+        $ => RR             :MLOAD(tmpVarRR_mstore)
+        $ => A              :MLOAD(tmpVarA_mstore)
+        $ => B              :MLOAD(tmpVarB_mstore)
+        $ => D              :MLOAD(tmpVarD_mstore),RETURN
 
 ; @info save value to memory 32 bytes with offset
 ; @in bytesToStore => bytes to store in memory
 ; @in E => offset
 ; @out E => new offset
+
 MSTORE32:
-    ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 50              :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 1        :JMPN(outOfCountersBinary)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
-    ; store current registries
-    RR              :MSTORE(tmpZkPCmstore)
-    A               :MSTORE(tmpVarAmstore)
-    B               :MSTORE(tmpVarBmstore)
-    C               :MSTORE(tmpVarCmstore)
-    D               :MSTORE(tmpVarDmstore)
-    ; check offset is lower than max memory
-    E => A
-    %MAX_MEM_EXPANSION_BYTES => B
-    $               :LT,JMPC(initMSTORE, errorMLOADMSTORE)
+        ; store C (length)
+        A                   :MSTORE(tmpVarA_mstore)
 
-initMSTORE:
-    zkPC+1 => RR    :JMP(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
-    ; is storing <32 bytes, jump to store last bytes or finish if 0 bytes left
-    $ => B          :MLOAD(isMSTOREX), JMPZ(finalMSTORE)
-    ; if C has value, offset != 0
-    C               :JMPNZ(MSTOREX2)
-    $ => C          :MLOAD(tmpVarCmstore)
-    ; load bytes to store
-    $ => A          :MLOAD(bytesToStore)
-    32 - C => D
-    ; shift bytes to store
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    A => B
-    ; load from memory
-    $ => A          :MLOAD(MEM:E)
-    32 - D => D
-    ; shift loaded bytes
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    A + B           :MSTORE(bytesToStore)
-    A + B => A
-    0 => C          :JMP(finalMSTORE)
+        ; setting A as offset (no trust)
+        $0{E & 0x1F} => A   :JMPZ(__MSTORE32_offset_0)
 
-; used if bytesToStore.length < 32 && offset != 0
-MSTOREX2:
-    $ => D          :MLOAD(tmpVarCmstore)
-    C + D => D
-    32 - D          :JMPN(MSTOREX3)
-    ; if bytesToStore.length < 32 && memory to load is allocated in two different slots
-    ; load memory from slot E
-    $ => A          :MLOAD(MEM:E)
-    ; shift loaded memory from slot E
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    $ => D          :MLOAD(tmpVarCmstore)
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    A => B
-    ; load memory from slot E+1
-    $ => A          :MLOAD(MEM:E+1)
-    32 - C => D
-    ; right shift loaded memory from slot E+1
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    ; join both results
-    A + B => B
-    $ => A          :MLOAD(bytesToStore)
-    $ => D          :MLOAD(tmpVarCmstore)
-    32 - D => D
-    ; shift bytes to store
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    ; append loaded bytes from concurrent slots
-    A + B => A      :MSTORE(bytesToStore)
-                    :JMP(finalMSTORE)
+        ; at this point A != 0, but could be negative or positive 
+        %MAX_CNT_STEPS - STEP - 30 :JMPN(outOfCountersStep)
+        %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
 
-; used if bytesToStore.length < 32 && memory to load is allocated in one slot
-MSTOREX3:
-    D - 32 => D
-    ; load memory from slot E+1
-    $ => A          :MLOAD(MEM:E+1)
-    ; shift bytes to store
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    $ => D          :MLOAD(tmpVarCmstore)
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    ; join both results
-    A => B
-    $ => A          :MLOAD(bytesToStore)
-    $ => D          :MLOAD(tmpVarCmstore)
-    32 - D => D
-    ; shift bytes to store
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    ; append loaded bytes from concurrent slots
-    A + B => A      :MSTORE(bytesToStore)
+        ; store registers will be used
+        C                   :MSTORE(tmpVarLength_mstore)
+        RR                  :MSTORE(tmpVarRR_mstore)    
+        B                   :MSTORE(tmpVarB_mstore)
+        D                   :MSTORE(tmpVarD_mstore)
 
-finalMSTORE:
-    C               :JMPNZ(memAlignOptionMSTORE)
-    $ => A          :MLOAD(bytesToStore)
-    A               :MSTORE(MEM:E)
-    E*32 => E
-    $               :MLOAD(isMSTOREX),JMPZ(offsetMSTORE32)
-    $ => C          :MLOAD(tmpVarCmstore)
-    E + C => E
-    0               :MSTORE(isMSTOREX),JMP(endMSTORE)
+        A => C              :JMPN(failAssert)        ; check C >= 0 (C7..C1 == 0 because use $0)
+        31 - C              :JMPN(failAssert)        ; assert(C < 32)
+        $0{E >> 5} => RR    :JMPN(failAssert)        ; RR must be a 32-bits positive value
+        E => A
+        RR * 32 + C         :ASSERT                  ; RR * 32 + C = E (use 38 bits secure)
+                                                     ; validated offset and 256-bit address
 
-memAlignOptionMSTORE:
-    E               :MSTORE(tmpVarEmstore)
+        ; [STEP 1]: unnecessary because length = 32 => directly MemAlign 
+        ; [STEP 2]: unnecessary we don't need to mix anything => directly MemAlign 
 
-    $ => A          :MLOAD(MEM:E)
-    $ => B          :MLOAD(MEM:E+1)
+        ; [STEP 3]: with MemAlign calculate (verify) W0,W1 to write on memory
+        $ => A              :MLOAD(MEM:RR)       ;M0
+        $ => B              :MLOAD(MEM:RR+1)     ;M1
+        ${memAlignWR_W0(A,mem.bytesToStore,C)} => D ; no trust calculate W0
+        ${memAlignWR_W1(B,mem.bytesToStore,C)} => E ; no trust calculate W1
+        $                   :MEM_ALIGN_WR,MLOAD(bytesToStore)
+        E                   :MSTORE(MEM:RR+1)
+        D                   :MSTORE(MEM:RR)
+        
+        ; restore saved registers
+        $ => A              :MLOAD(tmpVarA_mstore)
+        $ => B              :MLOAD(tmpVarB_mstore)
+        $ => D              :MLOAD(tmpVarD_mstore)
 
-    ${memAlignWR_W0(A,mem.bytesToStore,C)} => D                    ; no trust calculate W0
-    ${memAlignWR_W1(B,mem.bytesToStore,C)} => E                    ; no trust calculate W1
-    $               :MEM_ALIGN_WR,MLOAD(bytesToStore)
-    E => A
-    $ => E          :MLOAD(tmpVarEmstore)
-    D               :MSTORE(MEM:E)          ; write W0
-    A               :MSTORE(MEM:E+1)        ; write W1
-    E*32 + C => E
-    $ => A          :MLOAD(isMSTOREX), JMPZ(offsetMSTORE32)
-    $ => C          :MLOAD(tmpVarCmstore)
-    E + C => E
-    0               :MSTORE(isMSTOREX), JMP(endMSTORE)
+        ; Calculate output E = 256-bit address * 32 + offset (C) + length (32)
+        RR * 32 + C + 32 => E    
 
-offsetMSTORE32:
-    E + 32 => E
+        ; restore RR and C, this last because C is overwritten with offset
+        $ => RR             :MLOAD(tmpVarRR_mstore)
+        $ => C              :MLOAD(tmpVarLength_mstore), RETURN
+        
 
-endMSTORE:
-    $ => A          :MLOAD(tmpVarAmstore)
-    $ => B          :MLOAD(tmpVarBmstore)
-    $ => C          :MLOAD(tmpVarCmstore)
-    $ => RR         :MLOAD(tmpZkPCmstore)
-    $ => D          :MLOAD(tmpVarDmstore), RETURN
-endMSTOREX:
-                    :RETURN
+__MSTORE32_offset_0:
+        ; short path, offset == 0 (no trust)
+        ; 32 bytes and offset == 0 ==> no mem align needed
+
+        %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
+
+        RR              :MSTORE(tmpVarRR_mstore)
+
+        ${E >> 5} => RR :JMPN(failAssert)   ; RR must be a 32-bits positive value
+
+        RR * 32 => A                        
+        E               :ASSERT             ; RR * 32 = E (use 37 bits secure) check offset = 0
+
+        ; if offset is 0, and length 32, directly store value on memory
+        $ => A          :MLOAD(bytesToStore)
+
+        ; stored on memory
+        A               :MSTORE(MEM:RR)
+
+        ; Calculate output E = 256-bit address * 32 + offset (0) + length (32)
+        RR * 32 + 32 => E    
+
+        ; restore saved registers and return
+        $ => RR         :MLOAD(tmpVarRR_mstore)
+        $ => A          :MLOAD(tmpVarA_mstore), RETURN
 
 VAR GLOBAL tmpVarAmload
 VAR GLOBAL tmpVarBmload
