@@ -127,9 +127,7 @@ addDeploymentGasCost:
         %BASE_TX_DEPLOY_GAS => E ; 53000 gas if transaction is a create
 
 getCalldataGasCost:
-        $ => A                          :MLOAD(txCalldataLen)
-        0 => B
-        $                               :EQ,JMPC(endCalldataIntrinsicGas)
+        $ => A                          :MLOAD(txCalldataLen), JMPZ(endCalldataIntrinsicGas) ; less than 32 bits. Enforced by memory expansion gas cost & smart contract batchL2DataHash
 
 addGas:
         $ => HASHPOS                    :MLOAD(dataStarts)
@@ -266,7 +264,7 @@ nonceIs0:
 
 ;; compute new contract address as CREATE2 spec: keccak256(0xff ++ address ++ salt ++ keccak256(init_code))[12:] (https://eips.ethereum.org/EIPS/eip-1014)
 create2:
-        $ => C                          :MLOAD(txCalldataLen) ; less than 2**32 bytes. Enforced by memory expansion gas cost & smart contract batchL2DataHash
+        $ => C                          :MLOAD(txCalldataLen) ; less than 32bits. Enforced by memory expansion gas cost & smart contract batchL2DataHash
         ; Check keccak counters
         C + 1                           :MSTORE(arithA)
         136                             :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
@@ -413,10 +411,8 @@ callContract:
         ; get contract length
         %SMT_KEY_SC_LENGTH => B
         0 => C
-        $ => B                          :SLOAD
-        B                               :MSTORE(bytecodeLength)
-        0 => A
-        $                               :EQ, JMPC(defaultOpCode) ;no bytecode
+        ; Max length of a smart contract is 24kb, less than 32 bits, no need to use a binary
+        $ => B                          :SLOAD, MSTORE(bytecodeLength), JMPZ(defaultOpCode) ; no bytecode
 
         ; check poseidon counters
         ; 56 is the value used by the prover to increment poseidon counters depending on the hash length

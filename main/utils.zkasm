@@ -526,16 +526,16 @@ computeGasSendCall:
     ; C = [c7, c6, ..., c0]
     ; JMPN instruction assures c0 is within the range [0, 2**32 - 1]
     ${GAS >> 6} => C        :JMPN(failAssert)
-    ${GAS & 0x3f} => D
+    ; We secure D to be less than 32 bits with $0{}
+    $0{GAS & 0x3f} => D
 
     ; since D is assured to be less than 0x40
     ; it is enforced that [c7, c6, ..., c1] are 0 since there is no value multiplied by 64
     ; that equals the field
     ; Since e0 is assured to be less than 32 bits, c0 * 64 + d0 could not overflow the field
     C * 64 + D              :ASSERT
-    D => A
-    0x40 => B
-    $                       :LT,JMPNC(failAssert)
+    0x3f - D                :JMPN(failAssert) ; D is less than 32 bits, we can use JMPN
+
     GAS - C => A
     $ => B                  :MLOAD(gasCall)
     ; gas_sent_with_call = min(requested_gas, all_but_one_64th)
@@ -583,8 +583,9 @@ saveMem:
 
 
     ; load old memory length, if is greater than new memory length, no expansion cost
-    $ => A                      :MLOAD(memLength)
-    $                           :LT, JMPC(saveMemGAS, saveMemEnd)
+    $ => A                      :MLOAD(memLength) 
+    ; Both A and B are LT than MAX_MEM_EXPANSION_BYTES, this means they are lower thatn 32 bits, we don't need to use a binary to operate
+    A - B                       :JMPN(saveMemGAS, saveMemEnd)
 
 saveMemGAS:
     ; store new memory length
@@ -597,16 +598,15 @@ saveMemGAS:
     ; E = [e7, e6, ..., e0]
     ; JMPN instruction assures e0 is within the range [0, 2**32 - 1]
     ${A >> 5} => E              :JMPN(failAssert)
-    ${A & 0x1f} => D
+    $0{A & 0x1f} => D
 
     ; since D is assured to be less than 0x20
     ; it is enforced that [e7, e6, ..., e1] are 0 since there is no value multiplied by 32
     ; that equals the field
     ; Since e0 is assured to be less than 32 bits, e0 * 32 + d0 could not overflow the field
     E * 32 + D                  :ASSERT
-    D => A
-    0x20 => B
-    $                           :LT,JMPNC(failAssert)
+    0x1f - D                    :JMPN(failAssert) ; D is less than 32 bits, we can use JMPN
+
     ; memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word) in A
     ; ${E*E/512} + 3*E=> A
     E                           :MSTORE(arithA)
@@ -1011,25 +1011,19 @@ VAR GLOBAL tmpVarBoffsetUtil
 offsetUtil:
     %MAX_CNT_STEPS - STEP - 20          :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
-    A                                   :MSTORE(tmpVarAoffsetUtil)
-    B                                   :MSTORE(tmpVarBoffsetUtil)
 
     ; E = [e7, e6, ..., e0]
     ; JMPN instruction assures e0 is within the range [0, 2**32 - 1]
     ${A >> 5} => E                      :JMPN(failAssert)
-    ${A & 0x1F} => C
+    $0{A & 0x1F} => C                   ; C is 32 bits
 
     ; since C is assured to be less than 0x20
     ; it is enforced that [e7, e6, ..., e1] are 0 since there is no value multiplied by 32
     ; that equals the field
     ; Since e0 is assured to be less than 32 bits, e0 * 32 + c0 could not overflow the field
     E * 32 + C                          :ASSERT
-    C => A
-    0x20 => B
-    $                                   :LT,JMPNC(failAssert)
-
-    $ => A                              :MLOAD(tmpVarAoffsetUtil)
-    $ => B                              :MLOAD(tmpVarBoffsetUtil), RETURN
+    0x1F - C                            :JMPN(failAssert); If C is greater than 31, it is an error
+                                        :RETURN
 
 ;@info: move balances between two accounts
 ;@in: txSrcAddr: source address
@@ -1081,10 +1075,8 @@ endMoveBalances:
 invalidCall:
     ; return to origin context
     $ => SR                         :MLOAD(initSR)
-    $ => A                          :MLOAD(originCTX)
-    0 => B
     ; if last context, finish tx
-    $                               :EQ,JMPC(handleGas)
+    $ => A                          :MLOAD(originCTX),JMPZ(handleGas)
     A => CTX
     0                               :MSTORE(retDataCTX)
     CTX                             :MSTORE(currentCTX)
