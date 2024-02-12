@@ -3,7 +3,7 @@
 ;;
 ;; array_mul:
 ;;             in:
-;;                  · C ∈ [1, 32], the len of inA
+;;                  · C ∈ [1, 64], the len of inA
 ;;                  · D ∈ [1, 32], the len of inB
 ;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
 ;;                  · inB ∈ [0, 2²⁵⁶ - 1]^D, the second input array
@@ -19,9 +19,12 @@
 ;     return array_mul_long(a, b, base);
 ; }
 
-VAR GLOBAL array_mul_inA[%ARRAY_MAX_LEN]
+VAR GLOBAL array_mul_inA[%ARRAY_MAX_LEN_DOUBLED]
 VAR GLOBAL array_mul_inB[%ARRAY_MAX_LEN]
 VAR GLOBAL array_mul_out[%ARRAY_MAX_LEN_DOUBLED]
+; Note: The output length should not be bigger than %ARRAY_MAX_LEN_DOUBLED because the input is of size %ARRAY_MAX_LEN_DOUBLED
+;       only in the case of checking the result of a division of a number of size %ARRAY_MAX_LEN_DOUBLED by a number of size %ARRAY_MAX_LEN
+;       i.e., that a = q·b + r. Mul is used to mutiply q by b which cannot be bigger than %ARRAY_MAX_LEN_DOUBLED (the size of a)
 VAR GLOBAL array_mul_len_inA
 VAR GLOBAL array_mul_len_inB
 VAR GLOBAL array_mul_len_out
@@ -51,6 +54,7 @@ array_mul_inB_to_mul_long:
         E - 1 => E      :JMPN(array_mul_compute_long, array_mul_inB_to_mul_long)
 
 array_mul_compute_long:
+        0               :MSTORE(array_mul_long_last_chunk_is_zero)
                         :CALL(array_mul_long)
 
         %MAX_CNT_STEPS - STEP - 4   :JMPN(outOfCountersStep)

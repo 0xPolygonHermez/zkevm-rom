@@ -1,5 +1,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;  PRE: The input arrays have been trimmed.
+;;  PRE: The input arrays have been trimmed and inB != 0.
 ;; POST: The quotient is trimmed.
 ;;
 ;; array_div_short:
@@ -42,10 +42,6 @@ VAR GLOBAL array_div_short_len_quo
 
 VAR GLOBAL array_div_short_RR
 
-; ERROR CODES (B)
-; 0 - no error
-; 1 - inB is zero
-
 array_div_short:
         %MAX_CNT_BINARY - CNT_BINARY - 2             :JMPN(outOfCountersBinary)
         %MAX_CNT_STEPS - STEP        - 11 - 3*C - 3  :JMPN(outOfCountersStep)
@@ -63,11 +59,7 @@ array_div_short:
         $               :LT, JMPC(array_div_short_inA_is_zero)
                         __array_div_short_inA_continue:
 
-        ; 2] Is inB == 0?
-        $ => A          :MLOAD(array_div_short_inB)
-        $               :LT, JMPC(array_div_short_inB_is_zero)
-
-        ; Check whether inA = inB or inA < inB
+        ; 2] Check if inA = inB, inA < inB or inA > inB
         C - 1 => RR
         1 => D
 array_div_short_inA_to_compare1:
@@ -96,35 +88,23 @@ array_div_short_compare_inA_inB:
 
 ; Begin of edge cases
 array_div_short_inA_is_zero:
-        ; Is inB == 0? 0/0 is undefined
-        $ => A          :MLOAD(array_div_short_inB)
-        $               :LT, JMPC(array_div_short_inB_is_zero)
-        ; From here, inB != 0
-
         ; Return [q,r] = [0,0] and len(q) = 1, len(r) = 1
         0               :MSTORE(array_div_short_quo)
         0               :MSTORE(array_div_short_rem)
-        1               :MSTORE(array_div_short_len_quo)
-        0 => B          :JMP(array_div_short_end)
-
-array_div_short_inB_is_zero:
-        ; Error, you cannot divide by 0
-        1 => B          :JMP(array_div_short_end)
+        1               :MSTORE(array_div_short_len_quo), JMP(array_div_short_end)
 
 array_div_short_same_input:
         ; If inA = inB, then the result is [1,0] since inA = 1·inB + 0
-        1              :MSTORE(array_div_short_quo)
+        1               :MSTORE(array_div_short_quo)
         1               :MSTORE(array_div_short_len_quo)
-        0               :MSTORE(array_div_short_rem)
-        0 => B          :JMP(array_div_short_end)
+        0               :MSTORE(array_div_short_rem), JMP(array_div_short_end)
 
 array_div_short_inALTinB:
         ; If inA < inB, then the result is [0, inA] since inA = 0·inB + inA
         0               :MSTORE(array_div_short_quo)
         1               :MSTORE(array_div_short_len_quo)
         $ => A          :MLOAD(array_div_short_inA)
-        A               :MSTORE(array_div_short_rem)
-        0 => B          :JMP(array_div_short_end)
+        A               :MSTORE(array_div_short_rem), JMP(array_div_short_end)
 ; End of edge cases
 
 array_div_short_prepare_mul_quo_inB:
@@ -214,8 +194,6 @@ array_div_short_compare_result_inA:
         %MAX_CNT_STEPS - STEP - 4      :JMPN(outOfCountersStep)
 
         1               :MLOAD(array_compare_result)
-
-        0 => B ; error code
 
 array_div_short_end:
         $ => RR         :MLOAD(array_div_short_RR)
