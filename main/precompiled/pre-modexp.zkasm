@@ -40,6 +40,7 @@ VAR GLOBAL modexp_returnIndex
 VAR GLOBAL modexp_returnFirstIndex
 VAR GLOBAL modexp_returnIndexRem
 VAR GLOBAL expLenBits
+VAR GLOBAL retCopyLen
 
 funcModexp:
 
@@ -265,7 +266,15 @@ save0outMod0:
 finalMODEXP:
     %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
 
+    ; Get lower between retCallLength and modexp_Msize
+    $ => A                              :MLOAD(modexp_Msize)
+    $ => B                              :MLOAD(retCallLength)
+    $                                   :LT,JMPC(finalMODEXPreturn)
+    B => A
+
+finalMODEXPreturn:
     ; write data into memory
+    A                                   :MSTORE(retCopyLen)
     0 => B
     $ => C                              :MLOAD(modexp_Msize)
     C                                   :MSTORE(arithA)
@@ -314,6 +323,7 @@ modexpReturn:
     A => CTX
     E                                   :MSTORE(retDataCTX)
 
+    $ => C                              :MLOAD(retCopyLen)
     $ => E                              :MLOAD(modexp_returnFirstIndex)
     $ => A                              :MLOAD(modexp_returnIndexRem), JMPZ(returnLoop)
     A => C
@@ -323,7 +333,7 @@ modexpReturn:
     B => E
                                         :CALL(MSTOREX) ; in: [bytesToStore, E: offset, C: length] out: [E: new offset]
     E => B
-    $ => A                              :MLOAD(modexp_Msize)
+    $ => A                              :MLOAD(retCopyLen)
     A - C => C                          :JMPZ(endMODEXP)
     $ => E                              :MLOAD(modexp_returnFirstIndex)
 
