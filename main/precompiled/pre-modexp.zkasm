@@ -342,6 +342,7 @@ returnLoop:
     %MAX_CNT_STEPS - STEP - 50          :JMPN(outOfCountersStep)
 
     E - 1 => E                          :MSTORE(modexp_returnIndex)
+    C - 32                              :JMPN(returnLoopFinal)
     $ => A                              :MLOAD(modexp_out+E)
     A                                   :MSTORE(bytesToStore)
     B => E
@@ -349,6 +350,14 @@ returnLoop:
     E => B
     $ => E                              :MLOAD(modexp_returnIndex)
     C - 32 => C                         :JMPZ(endMODEXP, returnLoop)
+
+returnLoopFinal:
+    $ => A                              :MLOAD(modexp_out+E)
+    32 - C => D                         :CALL(SHLarith)
+    A                                   :MSTORE(bytesToStore)
+    B => E
+                                        :CALL(MSTOREX) ; in: [bytesToStore, E: offset, C: length] out: [E: new offset]
+                                        :JMP(endMODEXP)
 
 preEndMODEXP:
     $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
