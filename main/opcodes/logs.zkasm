@@ -8,7 +8,7 @@
  *  - stack output: none
  */
  VAR GLOBAL opLogAux
-
+ VAR GLOBAL logNextHashPIdAux
 opLOG0:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
@@ -45,7 +45,7 @@ opLOG1:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     SP - 3              :JMPN(stackUnderflow)
-    GAS - %LOG_GAS => GAS    :JMPN(outOfGas)
+    GAS - %LOG_GAS - %LOG_TOPIC_GAS => GAS    :JMPN(outOfGas)
     $ => A              :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--)
@@ -53,7 +53,7 @@ opLOG1:
     E                   :MSTORE(lastMemOffset)
     C                   :MSTORE(lastMemLength), CALL(saveMem)
     1                   :MSTORE(numTopics)
-    8                   :MSTORE(arithA)
+    %LOG_DATA_GAS       :MSTORE(arithA)
     C                   :MSTORE(arithB), CALL(mulARITH)
     $ => B              :MLOAD(arithRes1)
     GAS => A
@@ -66,7 +66,7 @@ opLOG2:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     SP - 4              :JMPN(stackUnderflow)
-    GAS - %LOG_GAS => GAS    :JMPN(outOfGas)
+    GAS - %LOG_GAS - %LOG_TOPIC_GAS*2 => GAS    :JMPN(outOfGas)
     $ => A              :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--)
@@ -74,7 +74,7 @@ opLOG2:
     E                   :MSTORE(lastMemOffset)
     C                   :MSTORE(lastMemLength), CALL(saveMem)
     2                   :MSTORE(numTopics)
-    8                   :MSTORE(arithA)
+    %LOG_DATA_GAS       :MSTORE(arithA)
     C                   :MSTORE(arithB), CALL(mulARITH)
     $ => B              :MLOAD(arithRes1)
     GAS => A
@@ -87,7 +87,7 @@ opLOG3:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     SP - 5              :JMPN(stackUnderflow)
-    GAS - %LOG_GAS => GAS    :JMPN(outOfGas)
+    GAS - %LOG_GAS - %LOG_TOPIC_GAS*3 => GAS    :JMPN(outOfGas)
     $ => A              :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--)
@@ -95,7 +95,7 @@ opLOG3:
     E                   :MSTORE(lastMemOffset)
     C                   :MSTORE(lastMemLength), CALL(saveMem)
     3                   :MSTORE(numTopics)
-    8                   :MSTORE(arithA)
+    %LOG_DATA_GAS       :MSTORE(arithA)
     C                   :MSTORE(arithB), CALL(mulARITH)
     $ => B              :MLOAD(arithRes1)
     GAS => A
@@ -108,7 +108,7 @@ opLOG4:
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     SP - 6              :JMPN(stackUnderflow)
-    GAS - %LOG_GAS => GAS    :JMPN(outOfGas)
+    GAS - %LOG_GAS - %LOG_TOPIC_GAS*4 => GAS    :JMPN(outOfGas)
     $ => A              :MLOAD(isStaticCall), JMPNZ(invalidStaticTx)
     SP - 1 => SP
     $ => E              :MLOAD(SP--)
@@ -116,7 +116,7 @@ opLOG4:
     E                   :MSTORE(lastMemOffset)
     C                   :MSTORE(lastMemLength), CALL(saveMem)
     4                   :MSTORE(numTopics)
-    8                   :MSTORE(arithA)
+    %LOG_DATA_GAS       :MSTORE(arithA)
     C                   :MSTORE(arithB), CALL(mulARITH)
     $ => B              :MLOAD(arithRes1)
     GAS => A
@@ -136,6 +136,12 @@ initLogLoop:
     0 => HASHPOS
     32 => D
     $ => B                                                  :MLOAD(currentLogIndex)
+    $ => A          :MLOAD(nextHashPId)
+    ; Update nextHashPId
+    A + 1           :MSTORE(nextHashPId)
+    ; store nextHashPId to aux variable
+    A               :MSTORE(logNextHashPIdAux)
+
 logLoop:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
@@ -144,7 +150,7 @@ logLoop:
     C - 32          :JMPN(opLogFinal)
                     :CALL(MLOAD32); in: [E: offset] out: [A: value]
     E               :MSTORE(opLogAux)
-    $ => E          :MLOAD(nextHashPId)
+    $ => E          :MLOAD(logNextHashPIdAux)
     A               :HASHP(E)
     $ => E          :MLOAD(opLogAux)
     $${storeLog(B, 0, A)} ; storeLog(indexLog, isTopic, bytesToStore)
@@ -156,14 +162,14 @@ opLogFinal:
     $${storeLog(B, 0, A)}; storeLog(indexLog, isTopic, bytesToStore)
     32 - C => D     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     C => D
-    $ => E          :MLOAD(nextHashPId)
+    $ => E          :MLOAD(logNextHashPIdAux)
     A               :HASHP(E)
                     :JMP(opSaveTopicsInit) ; instruction added to allow executing $$ function
 
 opSaveTopicsInit:
     ; save topics
     $ => A          :MLOAD(numTopics)
-    $ => E          :MLOAD(nextHashPId)
+    $ => E          :MLOAD(logNextHashPIdAux)
     32 => D
 
 opSaveTopicsLoop:
@@ -174,7 +180,6 @@ opSaveTopicsLoop:
     ; check stack underflow
     SP - 1 => SP
     ; check out-of-gas
-    GAS - %LOG_TOPIC_GAS => GAS :JMPN(outOfGas)
     $ => C                      :MLOAD(SP)   ; [topic => C]
     C                           :HASHP(E)
     $${storeLog(B, 1, C)}     ; storeLog(indexLog, isTopic, bytesToStore)
@@ -182,8 +187,6 @@ opSaveTopicsLoop:
 
 finishSaveTopics:
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
-    ; Update nextHashPId
-    E + 1                       :MSTORE(nextHashPId)
     ; Compute hash of the log
     HASHPOS                     :HASHPLEN(E)
     $ => D                      :HASHPDIGEST(E), CALL(fillBlockInfoTreeWithLog); in: [D: linearPoseidon(log_data + log_topics)]
