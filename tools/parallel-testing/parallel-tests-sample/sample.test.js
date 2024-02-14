@@ -23,6 +23,7 @@ const checkerDir = path.join(__dirname, 'checker.txt');
 const inputPath = '%%INPUT_PATH%%';
 const nameFile = path.basename(inputPath);
 const input = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
+const skipVcounters = '%%SKIP_VCOUNTERS%%';
 
 it(`${nameFile}`, async () => {
     if (fs.existsSync(checkerDir)) {
@@ -55,7 +56,9 @@ async function runTest(cmPols, steps) {
         };
 
         const res = await smMain.execute(cmPols.Main, input, rom, config);
-        compareCounters(input.virtualCounters, res.counters);
+        if (skipVcounters !== 'yes') {
+            compareCounters(input.virtualCounters, res.counters);
+        }
     } catch (err) {
         fs.writeFileSync(checkerDir, `Failed test ${inputPath} - ${err}}`);
         throw err;
