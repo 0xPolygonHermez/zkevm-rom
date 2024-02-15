@@ -23,18 +23,18 @@ VAR GLOBAL ecMul_RR
 ; 2 - P_y is too big
 ; 3 - P is not in E(Fp)
 
-; RESOURCES (not considering error paths):
+; RESOURCES (not considering error paths): ; updated with the sub fix of fork-etrog
 ; -------------------------------------------
 ; PATH 1 P == 𝒪:            [steps: 17, bin: 4]
 ; PATH 2 k == 0 and P != 𝒪: [steps: 80-82, bin: 10-11, arith: 9]
 ; PATH 3 k != 0 and P != 𝒪:  <--- w.c.
 ;                [steps: 80-82, bin: 10-11, arith: 9]                                   // setup
 ;                 + (257 - pos_1st_nz_bit(k)) * [steps: 3, bin: 1]                      // find MSB of k
-;                 + max_bin_len(k) * [steps: 304-336, bin: 32-34, arith: 40]            // doubles
-;                 + number_of_bits_1(k) * [steps: 277-310, bin: 30-31, arith: 36]       // additions
+;                 + max_bin_len(k) * [steps: 324-356, bin: 36-38, arith: 40]            // doubles
+;                 + number_of_bits_1(k) * [steps: 297-330, bin: 33-35, arith: 36]       // additions
 ;                 + [steps: 4]                                                          // last iteration + end
-;                total (w.c.): [steps: 162890 bin: 16395, arith: 19161]                 // [82 + 4*3 + 252*336 + 252*310 + 4,
-;                                                                                           11 + 4*1 + 252*34  + 252*31,
+;                total (w.c.): [steps: 172.970 bin: 18.411, arith: 19161]               // [82 + 4*3 + 252*356 + 252*330 + 4,
+;                                                                                           11 + 4*1 + 252*38  + 252*35,
 ;                                                                                           9        + 252*40  + 252*36]
 ; -------------------------------------------
 
@@ -130,7 +130,7 @@ ecMul_find_MSB_k:
 
 ecMul_loop:
         ; block costs:
-        ;       no_last: [steps: 304-336, bin: 32-34, arith: 40]
+        ;       no_last: [steps: 324-356, bin: 36-38, arith: 40]
         ;       last:    [steps: 1]
 
         RCX - 1 => RCX    :JMPZ(ecMul_correct)
@@ -156,7 +156,7 @@ ecMul_loop:
         $ => E          :ADD, MSTORE(ecMul_k), JMPNC(ecMul_loop)
 
 ecMul_add:
-        ; block costs: [steps: 277-310, bin: 29-31, arith: 36]
+        ; block costs: [steps: 297-330, bin: 33-35, arith: 36]
 
         ; We add
         $ => A  :MLOAD(ecMul_Q_x)
