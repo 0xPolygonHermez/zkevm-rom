@@ -47,6 +47,8 @@ VAR GLOBAL array_add_AGTB_len_out
 
 VAR GLOBAL array_add_AGTB_carry
 
+VAR GLOBAL array_add_AGTB_last_chunk_is_zero ; label to jump to if the last chunk is zero
+
 VAR GLOBAL array_add_AGTB_RR
 
 array_add_AGTB:
@@ -70,15 +72,19 @@ array_add_AGTB_loopZero2inB:
         $ => A          :MLOAD(array_add_AGTB_inA + E)
         $ => B          :MLOAD(array_add_AGTB_inB + E)
         $ => C          :ADD, JMPNC(__array_add_AGTB_continue_1)
+        ;-----------------
         1 => D
                         __array_add_AGTB_continue_1:
+        ;-----------------
 
         ; sum = (a[i] + b[i]) + carry: This number cannot be GT base + (base - 1), two chunks
         $ => A          :MLOAD(array_add_AGTB_carry)
         C => B
         $ => C          :ADD, JMPNC(__array_add_AGTB_continue_2)
+        ;-----------------
         1 => D
                         __array_add_AGTB_continue_2:
+        ;-----------------
 
         C               :MSTORE(array_add_AGTB_out + E)
         D               :MSTORE(array_add_AGTB_carry)
@@ -98,8 +104,10 @@ array_add_AGTB_loopInB2InA:
         $ => A          :MLOAD(array_add_AGTB_inA + E)
         $ => B          :MLOAD(array_add_AGTB_carry)
         $ => C          :ADD, JMPNC(__array_add_AGTB_continue_3)
+        ;-----------------
         1 => D
                         __array_add_AGTB_continue_3:
+        ;-----------------
 
         C               :MSTORE(array_add_AGTB_out + E)
         D               :MSTORE(array_add_AGTB_carry)
@@ -109,13 +117,17 @@ array_add_AGTB_loopInB2InA:
         B - A           :JMPZ(array_add_AGTB_check_carry, array_add_AGTB_loopInB2InA)
 
 array_add_AGTB_check_carry:
-        D => A
-        A               :JMPZ(__array_add_AGTB_continue_4)
+        ; if the last_chunk_is_zero flag is activated, go directly to set
+        $               :MLOAD(array_add_AGTB_last_chunk_is_zero), JMPNZ(__array_add_AGTB_continue_4)
+
+        D               :JMPZ(__array_add_AGTB_continue_4)
+        ;-----------------
         ; In this case, the carry = 1 and we should append it to the result
         1               :MSTORE(array_add_AGTB_out + E)
         E + 1           :MSTORE(array_add_AGTB_len_out)
                         :JMP(array_add_AGTB_end)
                         __array_add_AGTB_continue_4:
+        ;-----------------
         E               :MSTORE(array_add_AGTB_len_out)
 
 array_add_AGTB_end:

@@ -41,6 +41,8 @@ VAR GLOBAL array_mul_long_len_out
 
 VAR GLOBAL array_mul_long_out_chunk_2
 
+VAR GLOBAL array_mul_long_last_chunk_is_zero ; label to jump to if the last chunk is zero
+
 VAR GLOBAL array_mul_long_RR
 
 array_mul_long:
@@ -64,52 +66,80 @@ array_mul_long:
         C               :MSTORE(array_mul_long_len_inA)
         D               :MSTORE(array_mul_long_len_inB)
         C + D           :MSTORE(array_mul_long_len_out)
-        0               :MSTORE(array_mul_long_out_chunk_2) ; initialize the out chunk 2
 
-        C + D - 1 => E ; auxiliar index
-        0 => RCX   ; first index in loops
-        0 => RR    ; second index in loops
+        C + D - 1 => E  ; auxiliar index
+        0 => RCX        ; first index in loops
+        0 => RR         ; second index in loops
 
-array_mul_long_clean_out:
-        0               :MSTORE(array_mul_long_out + E)
-        E - 1 => E      :JMPN(array_mul_long_loopZero2inB, array_mul_long_clean_out)
+        ; Load a[0] for the first row computation
+        $ => A          :MLOAD(array_mul_long_inA)
+
+array_mul_long_first_iteration_first_row:
+        ; The result will be stored as D·base + C
+
+        ; a[0]·b[j] + out[j], where a[0],b[j],out[j] ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
+        $ => B          :MLOAD(array_mul_long_inB + RR)
+        0 => C
+        $${var _arrayLongMul_AB = A*B}
+        ${_arrayLongMul_AB >> 256} => D
+        ${_arrayLongMul_AB} => C :ARITH
+
+        ; out[j] = product - carry·B
+        C               :MSTORE(array_mul_long_out + RR)
+
+        ; out[j+1] = carry
+        RR + 1 => RR
+        D               :MSTORE(array_mul_long_out + RR)
+
+array_mul_long_finish_first_row:
+        ; The result will be stored as D·base + C
+
+        ; a[0]·b[j] + out[j], where a[0],b[j],out[j] ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
+        $ => B          :MLOAD(array_mul_long_inB + RR)
+        $ => C          :MLOAD(array_mul_long_out + RR)
+        $${var _arrayLongMul_AB = A*B + C}
+        ${_arrayLongMul_AB >> 256} => D
+        ${_arrayLongMul_AB} => C :ARITH
+
+        ; out[j] = product - carry·B
+        C               :MSTORE(array_mul_long_out + RR)
+
+        ; out[j+1] = carry
+        RR + 1 => RR
+        D               :MSTORE(array_mul_long_out + RR)
+
+        $ => B          :MLOAD(array_mul_long_len_inB)
+        B - RR          :JMPZ(array_mul_long_loop_index_check, array_mul_long_finish_first_row)
 
 ; Begin of branching
 array_mul_long_loop_index_check:
         RCX + 1 => RCX
         $ => B          :MLOAD(array_mul_long_len_inA)
-        B - RCX         :JMPZ(array_mul_long_prep_trim_in)
+        B - RCX         :JMPZ(array_mul_long_prep_trim)
 
-        0 => RR ; reset the second index
+        0 => RR                                                 ; reset the second index
+        0               :MSTORE(array_mul_long_out_chunk_2)     ; reset the out chunk 2
 ; End of branching
 
 array_mul_long_loopZero2inB:
         ; The result will be stored as D·base + C
 
         RCX => E
-        ; 1] a[i]·b[j], where a[i],b[j] ∈ [0,base-1]: This number cannot be GT (base - 2)·base + 1, two chunks
+        ; a[i]·b[j] + out[i+j], where a[i],b[j],out[i+j] ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
         $ => A          :MLOAD(array_mul_long_inA + E)
         $ => B          :MLOAD(array_mul_long_inB + RR)
-        0 => C
-        $${var _arrayLongMul_AB = A*B}
-        ${_arrayLongMul_AB >> 256} => D
-        ${_arrayLongMul_AB} => E :ARITH
-
-        ; 2] product = a[i]·b[j] + out[i+j], where out[i+j] ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
-        E => A
         RCX + RR => E
-        $ => B          :MLOAD(array_mul_long_out + E)
-        $ => C          :ADD, JMPNC(__array_mul_long_no_carry_continue_1)
+        $ => C          :MLOAD(array_mul_long_out + E)
+        $${var _arrayLongMul_AB = A*B + C}
+        ${_arrayLongMul_AB >> 256} => D
+        ${_arrayLongMul_AB} => C :ARITH
+
+        $ => A          :MLOAD(array_mul_long_out_chunk_2), JMPZ(__array_mul_long_c2isZ_continue) ; out_chunk_2 ∈ [0,1]
         ;-----------------
-        ; Since here D ∈ [0, base - 2], there cannot be carry in the following addition
-        D => A
-        1 => B
-        $ => D          :ADD
-        ;-----------------
-                        __array_mul_long_no_carry_continue_1:
-        $ => A          :MLOAD(array_mul_long_out_chunk_2) ; out_chunk_2 ∈ [0,1]
         D => B
         $ => D          :ADD ; the number is of two chunks, no carry can be generated here
+                        __array_mul_long_c2isZ_continue:
+        ;-----------------
 
         ; NOTE: It cannot happen that a[i]·b[j] + out[i+j] produces carry and out_chunk_2 is 1.
 
@@ -133,23 +163,54 @@ array_mul_long_loopZero2inB:
 
         RR + 1 => RR
         $ => B          :MLOAD(array_mul_long_len_inB)
-        B - RR          :JMPZ(array_mul_long_loop_index_check, array_mul_long_loopZero2inB)
+        B - RR - 1      :JMPZ(array_mul_long_last_column, array_mul_long_loopZero2inB)
 
-array_mul_long_prep_trim_in:
+array_mul_long_last_column:
+        ; The result will be stored as D·base + C
+
+        RCX => E
+        ; a[i]·b[lenB] + out[i+lenB], where a[i],b[lenB],out[i+lenB] ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
+        $ => A          :MLOAD(array_mul_long_inA + E)
+        $ => B          :MLOAD(array_mul_long_inB + RR)
+        RCX + RR => E
+        $ => C          :MLOAD(array_mul_long_out + E)
+        $${var _arrayLongMul_AB = A*B + C}
+        ${_arrayLongMul_AB >> 256} => D
+        ${_arrayLongMul_AB} => C :ARITH
+
+        $ => A          :MLOAD(array_mul_long_out_chunk_2), JMPZ(__array_mul_long_c2isZ_continue2) ; out_chunk_2 ∈ [0,1]
+        ;-----------------
+        D => B
+        $ => D          :ADD ; the number is of two chunks, no carry can be generated here
+                        __array_mul_long_c2isZ_continue2:
+        ;-----------------
+
+        ; NOTE: It cannot happen that a[i]·b[lenB] + out[i+lenB] produces carry and out_chunk_2 is 1.
+
+        ; out[i+lenB] = product - carry·B
+        C               :MSTORE(array_mul_long_out + E)
+
+        ; out[i+lenB+1] = carry, where carry ∈ [0,base-1]
+        E + 1 => E
+        D               :MSTORE(array_mul_long_out + E), JMP(array_mul_long_loop_index_check)
+
+array_mul_long_prep_trim:
         $ => C          :MLOAD(array_mul_long_len_out)
         C - 1 => E
-
-array_mul_long_trim_in:
         $ => A          :MLOAD(array_mul_long_out + E)
-        A               :MSTORE(array_trim_in + E)
-        E - 1 => E      :JMPN(array_mul_long_trim, array_mul_long_trim_in)
+
+        ; if the last_chunk_is_zero flag is activated, go directly to check that the last chunk is zero
+        $               :MLOAD(array_mul_long_last_chunk_is_zero), JMPNZ(array_mul_long_trim)
+
+        ; otherwise, check whether the last chunk is zero
+        ${A == 0}       :JMPNZ(array_mul_long_trim)
+
+        0 => B
+        0               :EQ, JMP(array_mul_long_end)
 
 array_mul_long_trim:
-                        :CALL(array_trim)
-
-        %MAX_CNT_STEPS - STEP - 3   :JMPN(outOfCountersStep)
-
-        C               :MSTORE(array_mul_long_len_out)
+        0               :ASSERT ; TODO: Is this assert necessary????
+        C - 1           :MSTORE(array_mul_long_len_out)
 
 array_mul_long_end:
         $ => RR         :MLOAD(array_mul_long_RR)
