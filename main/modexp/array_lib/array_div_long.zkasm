@@ -69,18 +69,37 @@ array_div_long:
         D - C           :JMPN(array_div_long_inAGTinB)
         ; Here, C = D
 
-        ; TODO: Signed get first diff index-1 chunk
-
         ; If the lengths are equal, then we must compare them chunk by chunk
-        $0{compare(addr.array_div_long_inA,addr.array_div_long_inB,mem.array_div_long_len_inA)} => A    :JMPZ(array_div_long_check_same_input)
 
-        ; Get the first different chunk and check that is between 1 and len(inA) = len(inB)
-        $0{getFirstDiffChunk(addr.array_div_long_inA,addr.array_div_long_inB,mem.array_div_long_len_inA)} => RR :JMPN(failAssert)
-        C - 1 - RR      :JMPN(failAssert)
+        ; Get the first different chunk and check that is between -len(inA) and len(inA)
+        $0{getFirstDiffChunkSigned(addr.array_div_long_inA,addr.array_div_long_inB,mem.array_div_long_len_inA)} => RR :JMPZ(array_div_long_check_same_input)
 
-        A - 1           :JMPZ(array_div_long_check_inALTinB)
+        ; The function does the following:
+        ; --------------------------------
+        ; if inA < inB => return -i-1
+        ; if inA > inB => return  i+1
+        ; if inA = inB => return  0
+        ; --------------------------------
+        ; where i is the first different chunk from 0 to len(inA)
 
-        ; TODO: (soundness) Check that inA > inB
+        C - RR      :JMPN(failAssert)
+        RR + C      :JMPN(failAssert)
+
+        RR          :JMPN(array_div_long_check_inALTinB)
+
+        RR - 1 => RR
+        ; Ensure that the received chunk is higher
+        $ => A          :MLOAD(array_div_long_inB + RR)
+        $ => B          :MLOAD(array_div_long_inA + RR)
+        1               :LT
+
+        ; Now, we must check that the above chunks are all equal, unless there are none
+        C - 1 => E
+array_div_long_check_inAGTinB_loop:
+        E - RR          :JMPZ(array_div_long_inAGTinB)
+        $ => A          :MLOAD(array_div_long_inA + E)
+        A               :MLOAD(array_div_long_inB + E)
+        E - 1 => E      :JMP(array_div_long_check_inAGTinB_loop)
 
 array_div_long_inAGTinB:
         ; From here, inA > inB
@@ -115,6 +134,7 @@ array_div_long_same_input:
         1               :MSTORE(array_div_long_len_rem), JMP(array_div_long_end)
 
 array_div_long_check_inALTinB:
+        -RR - 1 => RR
         ; Ensure that the received chunk is lower
         $ => A          :MLOAD(array_div_long_inA + RR)
         $ => B          :MLOAD(array_div_long_inB + RR)

@@ -64,25 +64,13 @@ array_mul_short_loopZero2inA:
         ; The result will be stored as D·base + C
 
         RCX => E
-        ; 1] a[i] * b, where a[i],b ∈ [0,base-1]: This number cannot be GT (base - 2)·base + 1, two chunks
+        ; 1] a[i] * b + carry, where a[i],b,carry ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
         $ => A          :MLOAD(array_mul_short_inA + E)
         $ => B          :MLOAD(array_mul_short_inB)
-        0 => C
-        $${var _arrayShortMul_AB = A*B}
+        $ => C          :MLOAD(array_mul_short_carry)
+        $${var _arrayShortMul_AB = A*B + C}
         ${_arrayShortMul_AB >> 256} => D
-        ${_arrayShortMul_AB} => E :ARITH
-
-        ; 2] product = a[i] * b + carry, where carry ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
-        E => A
-        $ => B          :MLOAD(array_mul_short_carry)
-        $ => C          :ADD, JMPNC(__array_mul_short_no_carry_continue)
-        ;-----------------
-        ; Since here D ∈ [0, base - 2], there cannot be carry in the following addition
-        D => A
-        1 => B
-        $ => D          :ADD
-        ;-----------------
-                        __array_mul_short_no_carry_continue:
+        ${_arrayShortMul_AB} => C :ARITH
 
         ; carry = product / base
         D               :MSTORE(array_mul_short_carry)
@@ -93,34 +81,29 @@ array_mul_short_loopZero2inA:
 
         RCX + 1 => RCX
         $ => B          :MLOAD(array_mul_short_len_inA)
-        B - RCX         :JMPZ(array_mul_short_carry_check, array_mul_short_loopZero2inA)
+        B - RCX         :JMPZ(array_mul_short_prep_trim, array_mul_short_loopZero2inA)
 
 ; If the last carry > 0, we need to insert it to the output
-array_mul_short_carry_check:
-        $ => A          :MLOAD(array_mul_short_carry)
-        0 => B
-        $               :EQ, JMPC(array_mul_short_prep_trim_in)
-
-        RCX => E
-        A              :MSTORE(array_mul_short_out + E)
-
-array_mul_short_prep_trim_in:
-        $ => C          :MLOAD(array_mul_short_len_out)
-        C - 1 => E
-
-        %MAX_CNT_STEPS - STEP - 3*C - 1   :JMPN(outOfCountersStep)
-
-array_mul_short_trim_in:
-        $ => A          :MLOAD(array_mul_short_out + E)
-        A               :MSTORE(array_trim_in + E)
-        E - 1 => E      :JMPZ(array_mul_short_trim, array_mul_short_trim_in)
-
-array_mul_short_trim:
-                        :CALL(array_trim)
-
+array_mul_short_prep_trim:
         %MAX_CNT_STEPS - STEP - 3   :JMPN(outOfCountersStep)
 
-        C               :MSTORE(array_mul_short_len_out)
+        $ => C          :MLOAD(array_mul_short_len_out)
+
+        ; if the last carry is 0, then we need to trim the output. Otherwise, we need to insert the carry
+        $ => A          :MLOAD(array_mul_short_carry)
+        ${A == 0}       :JMPNZ(array_mul_short_trim)
+
+        0 => B
+        0               :EQ
+
+        ; insert the carry
+        RCX => E
+        A              :MSTORE(array_mul_short_out + E), JMP(array_mul_short_end)
+
+array_mul_short_trim:
+        ; trim the output
+        0               :ASSERT
+        C - 1           :MSTORE(array_mul_short_len_out)
 
 array_mul_short_end:
         $ => RR         :MLOAD(array_mul_short_RR)
