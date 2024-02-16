@@ -52,16 +52,16 @@ array_div_short:
         C               :MSTORE(array_div_short_len_quo)
 
         ; Let's cover the edge cases
-        1 => B
+        0 => B
         ; 1] Is C == 1 and inA == 0?
         C - B           :JMPNZ(__array_div_short_inA_continue)
         $ => A          :MLOAD(array_div_short_inA); Here, len(inA) = len(inB) = 1
-        $               :LT, JMPC(array_div_short_inA_is_zero)
+        $               :EQ, JMPC(array_div_short_inA_is_zero, array_div_short_inALTinB)
                         __array_div_short_inA_continue:
 
         ; 2] Check if inA = inB, inA < inB or inA > inB
 
-        ; Start by comparing the lengths of the arrays
+        ; If len(inA) > 1, then we already know that inA > inB
         1 - C           :JMPN(array_div_short_inAGTinB)
         ; Here, C = 1
 
@@ -71,13 +71,13 @@ array_div_short:
         ; The function does the following:
         ; --------------------------------
         ; if inA < inB => return -1
-        ; if inA > inB => return +1
+        ; if inA > inB => return  1
         ; if inA = inB => return  0
         ; --------------------------------
-        1 - RR      :JMPN(failAssert)
-        RR + 1      :JMPN(failAssert)
 
         RR          :JMPN(array_div_short_check_inALTinB)
+
+        1 - RR      :JMPN(failAssert) ; if 1 < RR ERROR
 
         ; Ensure that the chunk is higher
         $ => A          :MLOAD(array_div_short_inB)
@@ -109,6 +109,8 @@ array_div_short_same_input:
         0               :MSTORE(array_div_short_rem), JMP(array_div_short_end)
 
 array_div_short_check_inALTinB:
+        RR + 1      :JMPN(failAssert) ; if RR < -1 ERROR
+
         $ => A          :MLOAD(array_div_short_inA)
         $ => B          :MLOAD(array_div_short_inB)
         1               :LT
@@ -125,16 +127,18 @@ array_div_short_prepare_mul_quo_inB:
         $0{receiveLenQuotient_short()} => C ; It cannot be zero because q=0 happens only when inA < inB
 
         ; 1] The received length must satisfy 1 <= len(Q) <= len(inA)
-        C - 1 => RR                     :JMPN(failAssert)
+        C - 1 => RR                     :JMPN(failAssert) ; if len(Q) < 1 ERROR
         $ => A                          :MLOAD(array_div_short_len_inA)
-        A - C                           :JMPN(failAssert)
+        A - C                           :JMPN(failAssert) ; if len(inA) < len(Q) ERROR
 
         ; 2] To avoid non-determinism, we must ensure that the quotient is trimmed
         ; i.e., that its last chunk is not 0
-        ${receiveQuotientChunk_short(RR)} => A
+        ${receiveQuotientChunk_short(RR)} => A ; It cannot be zero because q=0 happens only when inA < inB
         0 => B
         0               :EQ
         ; From here, the quotient is trimmed
+
+        ; 3] Let's multiply the quotient by inB
 
         C               :MSTORE(array_div_short_len_quo)
         C - 1 => RR
@@ -157,20 +161,14 @@ array_div_short_inB_to_mul:
 array_div_short_mul_quo_inB:
                         :CALL(array_mul_short)
 
-        %MAX_CNT_BINARY - CNT_BINARY - 1                        :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP - 2 - 3*%ARRAY_MAX_LEN - 6        :JMPN(outOfCountersStep)
-
-        ; prepare next
-        $ => C          :MLOAD(array_mul_short_len_out)
-        C - 1 => RR
-
-array_div_short_result_to_add:
-        $ => A          :MLOAD(array_mul_short_out + RR)
-        A               :MSTORE(array_add_short_inA + RR)
-        RR - 1 => RR    :JMPN(array_div_short_rem_to_add, array_div_short_result_to_add)
-
-array_div_short_rem_to_add:
+        ; Check the remainder
         ${receiveRemainderChunk_short()} => A
+
+        ${A == 0}       :JMPNZ(array_div_short_rem_is_zero)
+
+        ; Check that the remainder is not zero
+        0 => B
+        0               :EQ
 
         ; We must ensure the the remaider is lower than inB
         $ => B          :MLOAD(array_div_short_inB)
@@ -179,35 +177,44 @@ array_div_short_rem_to_add:
         A               :MSTORE(array_div_short_rem)
         A               :MSTORE(array_add_short_inB)
 
+        $ => C          :MLOAD(array_mul_short_len_out)
+        C - 1 => RR
+array_div_short_result_to_add:
+        $ => A          :MLOAD(array_mul_short_out + RR)
+        A               :MSTORE(array_add_short_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_short_add_result_rem, array_div_short_result_to_add)
+
 array_div_short_add_result_rem:
                         :CALL(array_add_short)
 
         %MAX_CNT_STEPS - STEP - 5      :JMPN(outOfCountersStep)
 
-        ; prepare next
+        ; The length of q·b + r must be the same as the input of a
         $ => C          :MLOAD(array_add_short_len_out)
-        $ => D          :MLOAD(array_div_short_len_inA)
+        C               :MLOAD(array_div_short_len_inA)
         C - 1 => RR
-        D - 1 => E
 
-        %MAX_CNT_STEPS - STEP - 3*%ARRAY_MAX_LEN - 3*D - 1    :JMPN(outOfCountersStep)
-
-array_div_short_result_to_compare:
+; Check that a == q·b + r
+array_div_short_check_result_eq_inA1:
         $ => A          :MLOAD(array_add_short_out + RR)
-        A               :MSTORE(array_compare_inA + RR)
-        RR - 1 => RR    :JMPN(array_div_short_inA_to_compare2, array_div_short_result_to_compare)
+        A               :MLOAD(array_div_short_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_short_end, array_div_short_check_result_eq_inA1)
 
-array_div_short_inA_to_compare2:
-        $ => A          :MLOAD(array_div_short_inA + E)
-        A               :MSTORE(array_compare_inB + E)
-        E - 1 => E      :JMPN(array_div_short_compare_result_inA, array_div_short_inA_to_compare2)
 
-array_div_short_compare_result_inA:
-                        :CALL(array_compare)
+; Path with remainder equal to 0
+array_div_short_rem_is_zero:
+        0               :ASSERT, MSTORE(array_div_short_rem)
 
-        %MAX_CNT_STEPS - STEP - 4      :JMPN(outOfCountersStep)
+        ; The length of q·b must be the same as the input of a
+        $ => C          :MLOAD(array_div_short_len_inA)
+        C               :MLOAD(array_mul_short_len_out)
 
-        1               :MLOAD(array_compare_result)
+        ; Check that a == q·b + 0
+        C - 1 => RR
+array_div_short_check_result_eq_inA2:
+        $ => A          :MLOAD(array_mul_short_out + RR)
+        A               :MLOAD(array_div_short_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_short_end, array_div_short_check_result_eq_inA2)
 
 array_div_short_end:
         $ => RR         :MLOAD(array_div_short_RR)
