@@ -159,9 +159,8 @@ modexp_out_to_mul_short:
         RR - 1 => RR    :JMPN(modexp_B_to_mul_short, modexp_out_to_mul_short)
 
 modexp_B_to_mul_short:
-        $ => A          :MLOAD(modexp_B + E)
-        A               :MSTORE(array_mul_short_inB + E)
-        E - 1 => E      :JMPN(modexp_mul_short_out_and_B, modexp_B_to_mul_short)
+        $ => A          :MLOAD(modexp_B)
+        A               :MSTORE(array_mul_short_inB)
 
 modexp_mul_short_out_and_B:
                         :CALL(array_mul_short)
@@ -184,12 +183,22 @@ modexp_mul_long_out_and_B:
         %MAX_CNT_STEPS - STEP - 5         :JMPN(outOfCountersStep)
 
 modexp_out_to_div_prep1:
-        1 => C
+        $ => C          :MLOAD(array_mul_short_len_out)
         $ => D          :MLOAD(modexp_Mlen)
-        $ => A          :MLOAD(array_mul_short_out)
-        A               :MSTORE(array_div_short_inA)
+        C - 1 => RR
+        D - 1 => E      :JMPNZ(modexp_set_to_div_long)
 
-        D - 1           :JMPZ(modexp_M_to_div_short2, modexp_M_to_div_long2)
+;--------------------------------
+modexp_set_to_div_short:
+        $ => A          :MLOAD(array_mul_short_out + RR)
+        A               :MSTORE(array_div_short_inA + RR)
+        RR - 1 => RR    :JMPN(modexp_M_to_div_short2, modexp_set_to_div_short)
+
+modexp_set_to_div_long:
+        $ => A          :MLOAD(array_mul_short_out + RR)
+        A               :MSTORE(array_div_long_inA + RR)
+        RR - 1 => RR    :JMPN(modexp_M_to_div_long2, modexp_set_to_div_long)
+;--------------------------------
 
 modexp_out_to_div_prep2:
         $ => C          :MLOAD(array_mul_long_len_out)
@@ -209,9 +218,8 @@ modexp_out_to_div_short1:
         RR - 1 => RR    :JMPN(modexp_M_to_div_short2, modexp_out_to_div_short1)
 
 modexp_M_to_div_short2:
-        $ => A          :MLOAD(modexp_M + E)
-        A               :MSTORE(array_div_short_inB + E)
-        E - 1 => E      :JMPN(modexp_div_short_out_and_M1, modexp_M_to_div_short2)
+        $ => A          :MLOAD(modexp_M)
+        A               :MSTORE(array_div_short_inB)
 
 modexp_div_short_out_and_M1:
                         :CALL(array_div_short)

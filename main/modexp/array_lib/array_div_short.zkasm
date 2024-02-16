@@ -55,36 +55,41 @@ array_div_short:
         1 => B
         ; 1] Is C == 1 and inA == 0?
         C - B           :JMPNZ(__array_div_short_inA_continue)
-        $ => A          :MLOAD(array_div_short_inA)
+        $ => A          :MLOAD(array_div_short_inA); Here, len(inA) = len(inB) = 1
         $               :LT, JMPC(array_div_short_inA_is_zero)
                         __array_div_short_inA_continue:
 
         ; 2] Check if inA = inB, inA < inB or inA > inB
-        C - 1 => RR
-        1 => D
-array_div_short_inA_to_compare1:
-        $ => A          :MLOAD(array_div_short_inA + RR)
-        A               :MSTORE(array_compare_inA + RR)
-        RR - 1 => RR    :JMPN(array_div_short_inB_to_compare, array_div_short_inA_to_compare1)
 
-array_div_short_inB_to_compare:
+        ; Start by comparing the lengths of the arrays
+        1 - C           :JMPN(array_div_short_inAGTinB)
+        ; Here, C = 1
+
+        ; If the lengths are equal, then we must compare the only chunk
+        $0{getFirstDiffChunkSigned(addr.array_div_short_inA,addr.array_div_short_inB,1)} => RR :JMPZ(array_div_short_check_same_input)
+
+        ; The function does the following:
+        ; --------------------------------
+        ; if inA < inB => return -1
+        ; if inA > inB => return +1
+        ; if inA = inB => return  0
+        ; --------------------------------
+        1 - RR      :JMPN(failAssert)
+        RR + 1      :JMPN(failAssert)
+
+        RR          :JMPN(array_div_short_check_inALTinB)
+
+        ; Ensure that the chunk is higher
         $ => A          :MLOAD(array_div_short_inB)
-        A               :MSTORE(array_compare_inB)
+        $ => B          :MLOAD(array_div_short_inA)
+        1               :LT
 
-array_div_short_compare_inA_inB:
-                        :CALL(array_compare)
-
-        %MAX_CNT_BINARY - CNT_BINARY - 1                                :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 10 - 4*%ARRAY_MAX_LEN - 3  :JMPN(outOfCountersStep)
-
-        $ => A          :MLOAD(array_compare_result), JMPZ(array_div_short_inALTinB)
-        A - 1           :JMPZ(array_div_short_same_input)
+array_div_short_inAGTinB:
         ; From here, inA > inB
 
         ; Strategy: Divide outside and check the result inside
         $${MPdiv_short(addr.array_div_short_inA,mem.array_div_short_len_inA,mem.array_div_short_inB)}
-
-                        :JMP(array_div_short_prepare_mul_quo_inB)
+        :JMP(array_div_short_prepare_mul_quo_inB)
 
 ; Begin of edge cases
 array_div_short_inA_is_zero:
@@ -93,11 +98,20 @@ array_div_short_inA_is_zero:
         0               :MSTORE(array_div_short_rem)
         1               :MSTORE(array_div_short_len_quo), JMP(array_div_short_end)
 
+array_div_short_check_same_input:
+        $ => A          :MLOAD(array_div_short_inA)
+        A               :MLOAD(array_div_short_inB)
+
 array_div_short_same_input:
         ; If inA = inB, then the result is [1,0] since inA = 1·inB + 0
         1               :MSTORE(array_div_short_quo)
         1               :MSTORE(array_div_short_len_quo)
         0               :MSTORE(array_div_short_rem), JMP(array_div_short_end)
+
+array_div_short_check_inALTinB:
+        $ => A          :MLOAD(array_div_short_inA)
+        $ => B          :MLOAD(array_div_short_inB)
+        1               :LT
 
 array_div_short_inALTinB:
         ; If inA < inB, then the result is [0, inA] since inA = 0·inB + inA
@@ -108,14 +122,14 @@ array_div_short_inALTinB:
 ; End of edge cases
 
 array_div_short_prepare_mul_quo_inB:
-        $0{receiveLenQuotient_short()} => C
+        $0{receiveLenQuotient_short()} => C ; It cannot be zero because q=0 happens only when inA < inB
 
-        ; The received length must be between 1 and %ARRAY_MAX_LEN
-        C - 1 => RR             :JMPN(failAssert) ; If C = 0, then fail
-        %ARRAY_MAX_LEN - C      :JMPN(failAssert) ; If C > %ARRAY_MAX_LEN, then fail
-        ; From here, 1 <= C <= %ARRAY_MAX_LEN
+        ; 1] The received length must satisfy 1 <= len(Q) <= len(inA)
+        C - 1 => RR                     :JMPN(failAssert)
+        $ => A                          :MLOAD(array_div_short_len_inA)
+        A - C                           :JMPN(failAssert)
 
-        ; To avoid non-determinism, we must ensure that the quotient is trimmed
+        ; 2] To avoid non-determinism, we must ensure that the quotient is trimmed
         ; i.e., that its last chunk is not 0
         ${receiveQuotientChunk_short(RR)} => A
         0 => B

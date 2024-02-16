@@ -58,8 +58,8 @@ array_div_long:
         0 => B
         ; 1] Is C == 1 and inA == 0?
         C - 1           :JMPNZ(__array_div_long_inA_continue)
-        $ => A          :MLOAD(array_div_long_inA)
-        $               :EQ, JMPC(array_div_long_inA_is_zero)
+        $ => A          :MLOAD(array_div_long_inA) ; Here, len(inA) = 1 and len(inB) >= 2
+        $               :EQ, JMPC(array_div_long_inA_is_zero, array_div_long_prep_inALTinB)
                         __array_div_long_inA_continue:
 
         ; 2] Check if inA = inB, inA < inB or inA > inB
@@ -82,13 +82,12 @@ array_div_long:
         ; --------------------------------
         ; where i is the first different chunk from 0 to len(inA)
 
-        C - RR      :JMPN(failAssert)
-        RR + C      :JMPN(failAssert)
-
         RR          :JMPN(array_div_long_check_inALTinB)
 
-        RR - 1 => RR
-        ; Ensure that the received chunk is higher
+        C - RR      :JMPN(failAssert) ; C - RR < 0 <-> C < RR
+
+        RR - 1 => RR ; Moving from i+1 to i
+        ; Ensure the received chunk is higher
         $ => A          :MLOAD(array_div_long_inB + RR)
         $ => B          :MLOAD(array_div_long_inA + RR)
         1               :LT
@@ -134,7 +133,9 @@ array_div_long_same_input:
         1               :MSTORE(array_div_long_len_rem), JMP(array_div_long_end)
 
 array_div_long_check_inALTinB:
-        -RR - 1 => RR
+        RR + C          :JMPN(failAssert) ; RR + C < 0 <-> RR < -C
+
+        -RR - 1 => RR  ; Moving from -i-1 to i
         ; Ensure that the received chunk is lower
         $ => A          :MLOAD(array_div_long_inA + RR)
         $ => B          :MLOAD(array_div_long_inB + RR)
@@ -166,28 +167,26 @@ array_div_long_inALTinB:
 array_div_long_prepare_mul_quo_inB:
         $0{receiveLenQuotient()} => C ; It cannot be zero because q=0 happens only when inA < inB
 
+        ; 1] len(Q) + len(inB) - 1 <= len(Q·inB) <= len(Q) + len(inB) (generic for multiplication of two integers)
+        ; 2] 1 <= len(R) <= len(inB)
+        ;               inA = Q·inB + R
+        ; max{len(Q·inB),len(R)} <= len(inA)
+        ; len(Q) + len(inB) - 1 <= len(Q·inB) <= len(inA)
+
         ; 1] The received length must satisfy 1 <= len(Q) <= len(inA) - len(inB) + 1
-        C - 1 => RR                             :JMPN(failAssert)
+        C - 1 => RR                             :JMPN(failAssert) ; if len(Q) < 1 ERROR
         $ => A                                  :MLOAD(array_div_long_len_inA)
         $ => B                                  :MLOAD(array_div_long_len_inB)
-        A - B + 1 - C                           :JMPN(failAssert)
+        A - B + 1 - C                           :JMPN(failAssert) ; if len(inA) - len(inB) + 1 < len(Q) ERROR
 
         ; 2] To avoid non-determinism, we must ensure that the quotient is trimmed
         ; i.e., that its last chunk is not 0
-        ${receiveQuotientChunk(RR)} => A
+        ${receiveQuotientChunk(RR)} => A ; It cannot be zero because q=0 happens only when inA < inB
         0 => B
-        0               :EQ, MSTORE(array_mul_long_last_chunk_is_zero)
+        0               :EQ
         ; From here, the quotient is trimmed
 
         ; 3] Let's multiply the quotient by inB
-
-        ; If len(Q) = len(inA) - len(inB) + 1 we must check that the last chunk of the
-        ; multiplication is zero
-        A - B + 1 - C   :JMPNZ(__array_div_long_check2)
-        ;-----------------
-        1               :MSTORE(array_mul_long_last_chunk_is_zero)
-                        __array_div_long_check2:
-        ;-----------------
 
         C               :MSTORE(array_div_long_len_quo)
         $ => D          :MLOAD(array_div_long_len_inB)
@@ -221,13 +220,13 @@ array_div_long_mul_quo_inB:
         $0{receiveLenRemainder()} => D          :JMPZ(array_div_long_rem_is_zero)
 
         ; 1] The received length must satisfy 1 <= len(R) <= len(inB) <= len(inA)
-        D - 1 => E              :JMPN(failAssert)
+        D - 1 => E              :JMPN(failAssert) ; if len(R) < 1 ERROR
         $ => C                  :MLOAD(array_div_long_len_inB)
-        C - D                   :JMPN(failAssert)
+        C - D                   :JMPN(failAssert) ; if len(inB) < len(R) ERROR
 
         ; 2] To avoid non-determinism, we must ensure that the remainder is trimmed
-        ; i.e., that its last chunk is not 0; EXCEPT if the remainder is 0
-        ${receiveRemainderChunk(D-1)} => A
+        ; i.e., that its last chunk is not 0
+        ${receiveRemainderChunk(E)} => A
         0 => B
         0               :EQ
         ; From here, the remainder is trimmed
@@ -244,9 +243,9 @@ array_div_long_mul_quo_inB:
 
         ; If len(R) == len(B), then we must compare them chunk by chunk
         ${getFirstDiffChunkRem(addr.array_div_long_inB,mem.array_div_long_len_inB)} => RR :JMPN(failAssert)
-        D - 1 - RR      :JMPN(failAssert)
+        D - 1 - RR      :JMPN(failAssert) ; if D - 1 < RR ERROR
 
-        ; if there are no more chunks, then we are done
+        ; if it is the last chunk, then we are done
         E - RR          :JMPZ(array_div_long_compare_rem_first)
 
 array_div_long_compare_rem: ; TODO: Find a test that enters here
@@ -261,40 +260,24 @@ array_div_long_compare_rem_first:
         1               :LT
 
 array_div_long_rem_lower:
+        ; From here, we have checked that the R < inB
+        E - 1 => E                       :JMPN(array_div_long_add_check)
+        ${receiveRemainderChunk(E)} => A :MSTORE(array_div_long_rem + E)
+        A                                :MSTORE(array_add_AGTB_inB + E)
+        E                                :JMPNZ(array_div_long_rem_lower)
+
+array_div_long_add_check:
+
         %MAX_CNT_STEPS - STEP - 5 - 3*%ARRAY_MAX_LEN_DOUBLED - 4*%ARRAY_MAX_LEN_DOUBLED - 1        :JMPN(outOfCountersStep)
 
         ; 4] Let's add the remainder to the multiplication result
-
-        ; First, the computed length len(Q·B) must be between len(inA) - 1 and len(inA)
-        ; TODO: Is this check necessary? I already checked that len(Q) <= len(inA) - len(inB) + 1
-        $ => A          :MLOAD(array_div_long_len_inA)
-        $ => B          :MLOAD(array_mul_long_len_out)
-        B - A + 1       :JMPN(failAssert)
-        A - B           :JMPN(failAssert)
-
-        ; Second, if max{len(R),len(Q·inB)} = len(inA) we must check that the last chunk of the
-        ; addition is zero
-        D - A           :JMPZ(__array_div_long_check3)
-        B - A           :JMPZ(__array_div_long_check3)
-        ;-----------------
-        0               :MSTORE(array_add_AGTB_last_chunk_is_zero), JMP(__array_div_long_check4)
-                        __array_div_long_check3:
-        1               :MSTORE(array_add_AGTB_last_chunk_is_zero)
-                        __array_div_long_check4:
-        ;-----------------
 
         $ => C          :MLOAD(array_mul_long_len_out)
         C - 1 => RR
 array_div_long_res_to_add:
         $ => A          :MLOAD(array_mul_long_out + RR)
         A               :MSTORE(array_add_AGTB_inA + RR)
-        RR - 1 => RR    :JMPN(array_div_long_rem_to_add, array_div_long_res_to_add)
-
-array_div_long_rem_to_add:
-        E - 1 => E                       :JMPN(array_div_long_add_res_rem)
-        ${receiveRemainderChunk(E)} => A :MSTORE(array_div_long_rem + E)
-        A                                :MSTORE(array_add_AGTB_inB + E)
-        E                                :JMPNZ(array_div_long_rem_to_add)
+        RR - 1 => RR    :JMPN(array_div_long_add_res_rem, array_div_long_res_to_add)
 
 array_div_long_add_res_rem:
                         :CALL(array_add_AGTB)
@@ -302,12 +285,11 @@ array_div_long_add_res_rem:
         %MAX_CNT_STEPS - STEP - 3      :JMPN(outOfCountersStep)
 
         ; The length of q·b + r must be the same as the input of a
-        ; TODO: Is this check necessary? I think its redundant
-        $ => A          :MLOAD(array_add_AGTB_len_out)
-        A               :MLOAD(array_div_long_len_inA)
-        A - 1 => RR
+        $ => C          :MLOAD(array_add_AGTB_len_out)
+        C               :MLOAD(array_div_long_len_inA)
+        C - 1 => RR
 
-        %MAX_CNT_STEPS - STEP - 3*A - 2    :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 3*C - 2    :JMPN(outOfCountersStep)
 
 ; Check that a == q·b + r
 array_div_long_check_result_eq_inA1:
