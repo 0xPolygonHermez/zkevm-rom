@@ -5,7 +5,7 @@
 ;; array_mul_long:
 ;;             in:
 ;;                  · C ∈ [1, 64], the len of inA
-;;                  · D ∈ [1, 32], the len of inB
+;;                  · D ∈ [2, 32], the len of inB
 ;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
 ;;                  · inB ∈ [0, 2²⁵⁶ - 1]^D, the second input array
 ;;
@@ -34,14 +34,12 @@
 
 VAR GLOBAL array_mul_long_inA[%ARRAY_MAX_LEN_DOUBLED]
 VAR GLOBAL array_mul_long_inB[%ARRAY_MAX_LEN]
-VAR GLOBAL array_mul_long_out[%ARRAY_MAX_LEN_TRIP]
+VAR GLOBAL array_mul_long_out[%ARRAY_MAX_LEN_DOUBLED] ; This cannot be bigger because we use it for division checking
 VAR GLOBAL array_mul_long_len_inA
 VAR GLOBAL array_mul_long_len_inB
 VAR GLOBAL array_mul_long_len_out
 
 VAR GLOBAL array_mul_long_out_chunk_2
-
-VAR GLOBAL array_mul_long_last_chunk_is_zero ; label to jump to if the last chunk is zero
 
 VAR GLOBAL array_mul_long_RR
 
@@ -65,11 +63,8 @@ array_mul_long:
 
         C               :MSTORE(array_mul_long_len_inA)
         D               :MSTORE(array_mul_long_len_inB)
-        C + D           :MSTORE(array_mul_long_len_out)
 
-        C + D - 1 => E  ; auxiliar index
-        0 => RCX        ; first index in loops
-        0 => RR         ; second index in loops
+        0 => RCX,RR     ; first and second indexes in loops
 
         ; Load a[0] for the first row computation
         $ => A          :MLOAD(array_mul_long_inA)
@@ -78,17 +73,17 @@ array_mul_long_first_iteration_first_row:
         ; The result will be stored as D·base + C
 
         ; a[0]·b[0], where a[0],b[0] ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
-        $ => B          :MLOAD(array_mul_long_inB + RR)
+        $ => B          :MLOAD(array_mul_long_inB)
         0 => C
         $${var _arrayLongMul_AB = A*B}
         ${_arrayLongMul_AB >> 256} => D
         ${_arrayLongMul_AB} => C :ARITH
 
         ; out[0] = product - carry·B
-        C               :MSTORE(array_mul_long_out + RR)
+        C               :MSTORE(array_mul_long_out)
 
         ; out[1] = carry
-        RR + 1 => RR
+        1 => RR
         D               :MSTORE(array_mul_long_out + RR)
 
 array_mul_long_finish_first_row:
@@ -105,20 +100,21 @@ array_mul_long_finish_first_row:
         C               :MSTORE(array_mul_long_out + RR)
 
         ; out[j+1] = carry
-        RR + 1 => RR
+        RR + 1 => RR,E
         D               :MSTORE(array_mul_long_out + RR)
 
         $ => B          :MLOAD(array_mul_long_len_inB)
-        B - RR          :JMPZ(array_mul_long_loop_index_check, array_mul_long_finish_first_row)
+        B - RR          :JMPNZ(array_mul_long_finish_first_row)
 
 ; Begin of branching
 array_mul_long_loop_index_check:
         RCX + 1 => RCX
-        $ => B          :MLOAD(array_mul_long_len_inA)
-        B - RCX         :JMPZ(array_mul_long_prep_trim)
+        $ => A          :MLOAD(array_mul_long_len_inA)
+        A - RCX         :JMPZ(array_mul_long_prep_trim)
+
+        0               :MSTORE(array_mul_long_out_chunk_2)     ; reset the out chunk 2
 
         0 => RR                                                 ; reset the second index
-        0               :MSTORE(array_mul_long_out_chunk_2)     ; reset the out chunk 2
 ; End of branching
 
 array_mul_long_loopZero2inB:
@@ -195,22 +191,17 @@ array_mul_long_last_column:
         D               :MSTORE(array_mul_long_out + E), JMP(array_mul_long_loop_index_check)
 
 array_mul_long_prep_trim:
-        $ => C          :MLOAD(array_mul_long_len_out)
-        C - 1 => E
-        $ => A          :MLOAD(array_mul_long_out + E)
-
-        ; if the last_chunk_is_zero flag is activated, go directly to check that the last chunk is zero
-        $               :MLOAD(array_mul_long_last_chunk_is_zero), JMPNZ(array_mul_long_trim)
-
-        ; otherwise, check whether the last chunk is zero
-        ${A == 0}       :JMPNZ(array_mul_long_trim)
-
+        D => A
         0 => B
-        0               :EQ, JMP(array_mul_long_end)
+        $               :EQ, JMPNZ(array_mul_long_trim)
+
+        ; Carry path
+        E - %ARRAY_MAX_LEN_DOUBLED  :JMPZ(failAssert)
+
+        E + 1 => E
 
 array_mul_long_trim:
-        0               :ASSERT
-        C - 1           :MSTORE(array_mul_long_len_out)
+        E               :MSTORE(array_mul_long_len_out)
 
 array_mul_long_end:
         $ => RR         :MLOAD(array_mul_long_RR)
