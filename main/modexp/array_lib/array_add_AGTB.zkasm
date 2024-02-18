@@ -58,65 +58,79 @@ array_add_AGTB:
         C               :MSTORE(array_add_AGTB_len_inA)
         D               :MSTORE(array_add_AGTB_len_inB)
 
-        0 => E ; index in loops
-        0               :MSTORE(array_add_AGTB_carry)
-
-array_add_AGTB_loopZero2inB:
-        ; The result will be stored as D·base + C
-
-        0 => D  ; reset the carry chunk
-
-        ; a[i] + b[i], where a[i],b[i] ∈ [0,base-1]: This number cannot be GT base + (base - 2), two chunks
-        $ => A          :MLOAD(array_add_AGTB_inA + E)
-        $ => B          :MLOAD(array_add_AGTB_inB + E)
-        $ => C          :ADD, JMPNC(__array_add_AGTB_continue_1)
+array_add_AGTB_first_iteration:
+        ; a[0] + b[0], where a[0],b[0] ∈ [0,base-1]: This number cannot be GT base + (base - 2), two chunks
+        $ => A          :MLOAD(array_add_AGTB_inA)
+        $ => B          :MLOAD(array_add_AGTB_inB)
+        $               :ADD, MSTORE(array_add_AGTB_out), JMPNC(__array_add_AGTB_continue_1)
         ;-----------------
-        1 => D
+        1 => D          :MSTORE(array_add_AGTB_carry), JMP(__array_add_AGTB_continue_2)
                         __array_add_AGTB_continue_1:
-        ;-----------------
-
-        ; sum = (a[i] + b[i]) + carry: This number cannot be GT base + (base - 1), two chunks
-        $ => A          :MLOAD(array_add_AGTB_carry)
-        C => B
-        $ => C          :ADD, JMPNC(__array_add_AGTB_continue_2)
-        ;-----------------
-        1 => D
+        0 => D          :MSTORE(array_add_AGTB_carry)
                         __array_add_AGTB_continue_2:
         ;-----------------
 
-        C               :MSTORE(array_add_AGTB_out + E)
-        D               :MSTORE(array_add_AGTB_carry)
-
-        E + 1 => E,A
+        1 => E
         $ => B          :MLOAD(array_add_AGTB_len_inB)
-        B - A           :JMPZ(array_add_AGTB_loop_index_check, array_add_AGTB_loopZero2inB)
+        B - E           :JMPZ(array_add_AGTB_loop_index_check)
 
-array_add_AGTB_loop_index_check:
-        $ => B          :MLOAD(array_add_AGTB_len_inA)
-        B - A           :JMPZ(array_add_AGTB_check_carry)
-
-array_add_AGTB_loopInB2InA:
-        0 => D ; reset the carry chunk
-
-        ; sum = a[i] + carry: This number cannot be GT base, two chunks
+array_add_AGTB_loopZero2inB:
+        ; a[i] + b[i], where a[i],b[i] ∈ [0,base-1]: This number cannot be GT base + (base - 2), two chunks
         $ => A          :MLOAD(array_add_AGTB_inA + E)
-        $ => B          :MLOAD(array_add_AGTB_carry)
-        $ => C          :ADD, JMPNC(__array_add_AGTB_continue_3)
+        $ => B          :MLOAD(array_add_AGTB_inB + E)
+        $ => B          :ADD, JMPNC(__array_add_AGTB_continue_3)
+        ;-----------------
+        1 => D          :JMP(__array_add_AGTB_continue_4)
+                        __array_add_AGTB_continue_3:
+        0 => D
+                        __array_add_AGTB_continue_4:
+        ;-----------------
+
+        ; sum = (a[i] + b[i]) + carry, where carry ∈ [0,1]: This number cannot be GT base + (base - 1), two chunks
+        $ => A          :MLOAD(array_add_AGTB_carry)
+        $               :ADD, MSTORE(array_add_AGTB_out + E), JMPNC(__array_add_AGTB_continue_5)
         ;-----------------
         1 => D
-                        __array_add_AGTB_continue_3:
+                        __array_add_AGTB_continue_5:
         ;-----------------
 
-        C               :MSTORE(array_add_AGTB_out + E)
+        ; NOTE: It cannot happen that a[i] + b[i] produces carry and (a[i] + b[i]) + carry as well at the same time
+
         D               :MSTORE(array_add_AGTB_carry)
 
-        E + 1 => E,A
-        $ => B          :MLOAD(array_add_AGTB_len_inA)
-        B - A           :JMPZ(array_add_AGTB_check_carry, array_add_AGTB_loopInB2InA)
+        E + 1 => E
+        $ => B          :MLOAD(array_add_AGTB_len_inB)
+        B - E           :JMPZ(array_add_AGTB_loop_index_check, array_add_AGTB_loopZero2inB)
+
+array_add_AGTB_loop_index_check:
+        $ => C          :MLOAD(array_add_AGTB_len_inA)
+        C - E           :JMPZ(array_add_AGTB_check_carry)
+
+array_add_AGTB_last_two_additions:
+        ; sum = a[i] + carry: This number cannot be GT base, two chunks
+        ; This sum can produce, at most, one additional carry
+        $ => A          :MLOAD(array_add_AGTB_inA + E)
+        D => B
+        $               :ADD, MSTORE(array_add_AGTB_out + E), JMPNC(array_add_AGTB_set)
+
+        E + 1 => E
+        C - E           :JMPZ(array_add_AGTB_is_carry)
+
+        $ => A          :MLOAD(array_add_AGTB_inA + E)
+        1 => B
+        $               :ADD, MSTORE(array_add_AGTB_out + E)
+
+array_add_AGTB_set:
+        E + 1 => E
+        $ => A          :MLOAD(array_add_AGTB_len_inA)
+        A - E           :JMPZ(array_add_AGTB_trim)
+        $ => A          :MLOAD(array_add_AGTB_inA + E)
+        A               :MSTORE(array_add_AGTB_out + E), JMP(array_add_AGTB_set)
 
 array_add_AGTB_check_carry:
         D               :JMPZ(array_add_AGTB_trim)
 
+array_add_AGTB_is_carry:
         ; Carry path
         E - %ARRAY_MAX_LEN_DOUBLED  :JMPZ(failAssert)
 
