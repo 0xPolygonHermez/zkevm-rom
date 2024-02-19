@@ -44,20 +44,11 @@ VAR GLOBAL array_mul_long_out_chunk_2
 VAR GLOBAL array_mul_long_RR
 
 array_mul_long:
-        %MAX_CNT_ARITH - CNT_ARITH - 1        :JMPN(outOfCountersArith)
-        %MAX_CNT_STEPS - STEP      - 9        :JMPN(outOfCountersStep)
+        ; big loop costs (len(inA) - 1)*((len(inB) - 1) * [steps: 21, binary: 2, arith: 1] + [steps: 18, binary: 1, arith: 1])
 
-        C => A
-        D => B
-        0 => C,D
-        ${A*B} => E :ARITH
-        A => C
-        B => D
-        ; E holds C*D
-
-        %MAX_CNT_BINARY - CNT_BINARY                 - 4*E                :JMPN(outOfCountersBinary)
-        %MAX_CNT_ARITH - CNT_ARITH                   - E                  :JMPN(outOfCountersArith)
-        %MAX_CNT_STEPS - STEP        - 7 - 2*C - 2*D - 33*E - 2 - 3*C - 1 :JMPN(outOfCountersStep)
+        %MAX_CNT_ARITH - CNT_ARITH   -  1 -   %ARRAY_MAX_LEN_MINUS_ONE -    %ARRAY_MAX_LEN_TIMES_DOUBLED -    %ARRAY_MAX_LEN_DOUBLED_MINUS_ONE       :JMPN(outOfCountersArith)
+        %MAX_CNT_BINARY - CNT_BINARY                                   -  2*%ARRAY_MAX_LEN_TIMES_DOUBLED -    %ARRAY_MAX_LEN_DOUBLED_MINUS_ONE - 1   :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 12 - 9*%ARRAY_MAX_LEN_MINUS_ONE - 21*%ARRAY_MAX_LEN_TIMES_DOUBLED - 18*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE - 7   :JMPN(outOfCountersStep)
 
         RR              :MSTORE(array_mul_long_RR)
 
@@ -118,6 +109,8 @@ array_mul_long_loop_index_check:
 ; End of branching
 
 array_mul_long_loopZero2inB:
+        ; costs [steps: 21, binary: 2, arith: 1]
+
         ; The result will be stored as D·base + C
 
         RCX => E
@@ -162,6 +155,8 @@ array_mul_long_loopZero2inB:
         B - RR - 1      :JMPZ(array_mul_long_last_column, array_mul_long_loopZero2inB)
 
 array_mul_long_last_column:
+        ; costs [steps: 13, binary: 1, arith: 1]
+
         ; The result will be stored as D·base + C
 
         RCX => E

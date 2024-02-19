@@ -45,18 +45,12 @@ VAR GLOBAL array_square_out_chunk_2
 VAR GLOBAL array_square_RR
 
 array_square:
-        %MAX_CNT_ARITH - CNT_ARITH - 1        :JMPN(outOfCountersArith)
-        %MAX_CNT_STEPS - STEP      - 7        :JMPN(outOfCountersStep)
-
-        C => A,B
-        0 => C,D
-        ${A*A} => E :ARITH
-        A => C
-        ; E holds C*C
-
-        %MAX_CNT_BINARY - CNT_BINARY            -  9*E          :JMPN(outOfCountersBinary)
-        %MAX_CNT_ARITH - CNT_ARITH   - 1        -  2*E          :JMPN(outOfCountersArith)
-        %MAX_CNT_STEPS - STEP        - 5 - 2*C  - 68*E - 2      :JMPN(outOfCountersStep)
+        ; costs: [steps: 6, binary: 0, arith: 0] + [steps: 9, binary: 0, arith: 1] + (len(in) - 1)*[steps: 35, binary: 6, arith: 1] <--- Init and first row
+        ;      + (len(in) - 1)*([steps: 7, binary: 0, arith: 0] + [steps: 6, binary: 0, arith: 1] + [steps: 29, binary: 3, arith: 1] + (len(in) - 1)*[steps: 51, binary: 9, arith: 1]) <--- Rest of the rows
+        ;        [steps: 8, binary: 1, arith: 0] <--- Ending
+        %MAX_CNT_ARITH - CNT_ARITH   - 1  -    %ARRAY_MAX_LEN_MINUS_ONE -  2*%ARRAY_MAX_LEN_MINUS_ONE -   %ARRAY_MAX_LEN_SQ      :JMPN(outOfCountersArith)
+        %MAX_CNT_BINARY - CNT_BINARY      -  6*%ARRAY_MAX_LEN_MINUS_ONE -  3*%ARRAY_MAX_LEN_MINUS_ONE -  9*%ARRAY_MAX_LEN_SQ - 1 :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 15 - 35*%ARRAY_MAX_LEN_MINUS_ONE - 42*%ARRAY_MAX_LEN_MINUS_ONE - 51*%ARRAY_MAX_LEN_SQ - 8 :JMPN(outOfCountersStep)
 
         RR              :MSTORE(array_square_RR)
 
@@ -70,6 +64,8 @@ array_square:
 
 ; Begin of branching
 array_square_loop_index_check:
+        ; costs [steps: 7, binary: 0, arith: 0]
+
         ; out[i + len] = carry
         $ => A          :MLOAD(array_square_carry_chunk_1)
         RCX + B => E
@@ -85,6 +81,8 @@ array_square_loop_index_check:
 
 ; Begin of first row
 array_square_first_iteration_first_row:
+        ; costs [steps: 9, binary: 0, arith: 1]
+
         ; The result will be stored as D·base + C
 
         ; 1] a[0]·a[0]
@@ -106,6 +104,8 @@ array_square_first_iteration_first_row:
         B - RR          :JMPZ(array_square_loop_index_check)
 
 array_square_finish_first_row:
+        ; costs [steps: 35, binary: 6, arith: 1]
+
         ; The result will be stored as D·base + C
 
         ; 1] a[0]·a[j]
@@ -174,6 +174,8 @@ array_square_finish_first_row:
 ; End of first row
 
 array_square_ai_times_ai:
+        ; costs [steps: 6, binary: 0, arith: 1]
+
         ; carry = 0 - a[i]·a[i]
         ; a[i]·a[i], where a[i] ∈ [0,base-1]: This number cannot be GT (base - 2)·base + 1, two chunks
         $ => A,B       :MLOAD(array_square_in + RR)
@@ -185,6 +187,8 @@ array_square_ai_times_ai:
         D               :MSTORE(array_square_carry_chunk_2)
 
 array_square_first_iteration_loopRR2len:
+        ; costs [steps: 29, binary: 3, arith: 1]
+
         ; product = a[i]·a[i] + out[2i] (in the worst case, this is a 3-chunk number)
         ; The result will be stored as array_square_chunk_3·base² + D·base + C
 
@@ -239,6 +243,8 @@ array_square_first_iteration_loopRR2len:
         B - RR          :JMPZ(array_square_loop_index_check)
 
 array_square_loopRR2len:
+        ; costs [steps: 51, binary: 9, arith: 1]
+
         ; product = 2·(a[i]·a[j]) + out[i+j] + carry (in the worst case, this is a 3-chunk number)
         ; The result will be stored as array_square_chunk_3·base² + D·base + C
 
@@ -338,6 +344,8 @@ array_square_loopRR2len:
         B - RR          :JMPZ(array_square_loop_index_check, array_square_loopRR2len)
 
 array_square_prep_trim:
+        ; costs [steps: 8, binary: 1, arith: 0]
+
         $ => C          :MLOAD(array_square_len_out)
         C - 1 => E
         $ => A          :MLOAD(array_square_out + E)

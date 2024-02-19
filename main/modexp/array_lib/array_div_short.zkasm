@@ -43,8 +43,10 @@ VAR GLOBAL array_div_short_len_quo
 VAR GLOBAL array_div_short_RR
 
 array_div_short:
-        %MAX_CNT_BINARY - CNT_BINARY - 2             :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 11 - 3*C - 3  :JMPN(outOfCountersStep)
+        ; w.c. is when len(inA) >> len(inB)
+
+        %MAX_CNT_BINARY - CNT_BINARY -  2                                  :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 20 - 4*%ARRAY_MAX_LEN_MINUS_ONE - 3 :JMPN(outOfCountersStep) ; till array_mul_short
 
         RR              :MSTORE(array_div_short_RR)
 
@@ -54,15 +56,17 @@ array_div_short:
         ; Let's cover the edge cases
         0 => B
         ; 1] Is C == 1 and inA == 0?
-        C - B           :JMPNZ(__array_div_short_inA_continue)
+        C - 1           :JMPNZ(__array_div_short_inA_continue)
         $ => A          :MLOAD(array_div_short_inA); Here, len(inA) = len(inB) = 1
-        $               :EQ, JMPC(array_div_short_inA_is_zero, array_div_short_inALTinB)
+        $               :EQ, JMPC(array_div_short_inA_is_zero, array_div_short_equal_len)
                         __array_div_short_inA_continue:
 
         ; 2] Check if inA = inB, inA < inB or inA > inB
 
         ; If len(inA) > 1, then we already know that inA > inB
         1 - C           :JMPN(array_div_short_inAGTinB)
+
+array_div_short_equal_len:
         ; Here, C = 1
 
         ; If the lengths are equal, then we must compare the only chunk
@@ -82,14 +86,7 @@ array_div_short:
         ; Ensure that the chunk is higher
         $ => A          :MLOAD(array_div_short_inB)
         $ => B          :MLOAD(array_div_short_inA)
-        1               :LT
-
-array_div_short_inAGTinB:
-        ; From here, inA > inB
-
-        ; Strategy: Divide outside and check the result inside
-        $${MPdiv_short(addr.array_div_short_inA,mem.array_div_short_len_inA,mem.array_div_short_inB)}
-        :JMP(array_div_short_prepare_mul_quo_inB)
+        1               :LT, JMP(array_div_short_inAGTinB)
 
 ; Begin of edge cases
 array_div_short_inA_is_zero:
@@ -123,7 +120,12 @@ array_div_short_inALTinB:
         A               :MSTORE(array_div_short_rem), JMP(array_div_short_end)
 ; End of edge cases
 
-array_div_short_prepare_mul_quo_inB:
+array_div_short_inAGTinB:
+        ; From here, inA > inB
+
+        ; Strategy: Divide outside and check the result inside
+        $${MPdiv_short(addr.array_div_short_inA,mem.array_div_short_len_inA,mem.array_div_short_inB)}
+
         $0{receiveLenQuotient_short()} => C ; It cannot be zero because q=0 happens only when inA < inB
 
         ; 1] The received length must satisfy 1 <= len(Q) <= len(inA)
@@ -161,6 +163,10 @@ array_div_short_inB_to_mul:
 array_div_short_mul_quo_inB:
                         :CALL(array_mul_short)
 
+        ; w.c. is when rem is not zero
+        %MAX_CNT_BINARY - CNT_BINARY -  2                                  :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 10 - 3*%ARRAY_MAX_LEN_MINUS_ONE - 1 :JMPN(outOfCountersStep) ; till array_add_short
+
         ; Check the remainder
         ${receiveRemainderChunk_short()} => A
 
@@ -187,7 +193,7 @@ array_div_short_result_to_add:
 array_div_short_add_result_rem:
                         :CALL(array_add_short)
 
-        %MAX_CNT_STEPS - STEP - 5      :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 3 - 3*%ARRAY_MAX_LEN - 2 :JMPN(outOfCountersStep)
 
         ; The length of q·b + r must be the same as the input of a
         $ => C          :MLOAD(array_add_short_len_out)
