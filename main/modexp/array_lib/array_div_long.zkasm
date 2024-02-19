@@ -46,8 +46,10 @@ VAR GLOBAL array_div_long_len_rem
 VAR GLOBAL array_div_long_RR
 
 array_div_long:
-        %MAX_CNT_BINARY - CNT_BINARY - 2                  :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 12 - 3*C - 3*D - 1 :JMPN(outOfCountersStep)
+        ; w.c. is when inA > inB and len(inA) >> len(inB)
+
+        %MAX_CNT_BINARY - CNT_BINARY - 2                                                              :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 24 - 4*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE - 3*%ARRAY_MAX_LEN - 1 :JMPN(outOfCountersStep) ; till array_mul_long
 
         RR              :MSTORE(array_div_long_RR)
 
@@ -100,16 +102,6 @@ array_div_long_check_inAGTinB_loop:
         A               :MLOAD(array_div_long_inB + E)
         E - 1 => E      :JMP(array_div_long_check_inAGTinB_loop)
 
-array_div_long_inAGTinB:
-        ; From here, inA > inB
-
-        %MAX_CNT_BINARY - CNT_BINARY - 1                                        :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 12 - 4*%ARRAY_MAX_LEN_DOUBLED - 3*D - 1  :JMPN(outOfCountersStep)
-
-        ; Strategy: Divide outside and check the result inside
-        $${MPdiv(addr.array_div_long_inA,mem.array_div_long_len_inA,addr.array_div_long_inB,mem.array_div_long_len_inB)}
-        :JMP(array_div_long_prepare_mul_quo_inB)
-
 ; Begin of edge cases
 array_div_long_inA_is_zero:
         ; Return [q,r] = [0,0] and len(q) = 1, len(r) = 1
@@ -154,9 +146,6 @@ array_div_long_prep_inALTinB:
         0               :MSTORE(array_div_long_quo)
         1               :MSTORE(array_div_long_len_quo)
         C               :MSTORE(array_div_long_len_rem)
-
-        %MAX_CNT_STEPS - STEP  - 1 - 3*C - 2        :JMPN(outOfCountersStep)
-
         C - 1 => RR
 array_div_long_inALTinB:
         $ => A          :MLOAD(array_div_long_inA + RR)
@@ -164,7 +153,12 @@ array_div_long_inALTinB:
         RR - 1 => RR    :JMPN(array_div_long_end, array_div_long_inALTinB)
 ; End of edge cases
 
-array_div_long_prepare_mul_quo_inB:
+array_div_long_inAGTinB:
+        ; From here, inA > inB
+
+        ; Strategy: Divide outside and check the result inside
+        $${MPdiv(addr.array_div_long_inA,mem.array_div_long_len_inA,addr.array_div_long_inB,mem.array_div_long_len_inB)}
+
         $0{receiveLenQuotient()} => C ; It cannot be zero because q=0 happens only when inA < inB
 
         ; 1] len(Q) + len(inB) - 1 <= len(Q·inB) <= len(Q) + len(inB) (generic for multiplication of two integers)
@@ -212,9 +206,9 @@ array_div_long_inB_to_mul:
 array_div_long_mul_quo_inB:
                         :CALL(array_mul_long)
 
-        ; $ => C          :MLOAD(array_div_long_len_inB)
-        ; %MAX_CNT_BINARY - CNT_BINARY - 1                                        :JMPN(outOfCountersBinary)
-        ; %MAX_CNT_STEPS - STEP        - 8 - 3*%ARRAY_MAX_LEN - 3*C - 1           :JMPN(outOfCountersStep)
+        ; w.c. is when rem is not zero
+        %MAX_CNT_BINARY - CNT_BINARY - 1                               - 1                                    :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 14 - 5*%ARRAY_MAX_LEN_MINUS_ONE - 2 - 3 - 3*%ARRAY_MAX_LEN_DOUBLED - 1 :JMPN(outOfCountersStep) ; till array_add_AGTB
 
         ; Check the remainder
         $0{receiveLenRemainder()} => D          :JMPZ(array_div_long_rem_is_zero)
@@ -248,7 +242,7 @@ array_div_long_mul_quo_inB:
         ; if it is the last chunk, then we are done
         E - RR          :JMPZ(array_div_long_compare_rem_first)
 
-array_div_long_compare_rem: ; TODO: Find a test that enters here
+array_div_long_compare_rem:
         A                                :MLOAD(array_div_long_inB + E)
         E - 1 => E
         ${receiveRemainderChunk(E)} => A :MSTORE(array_div_long_rem + E)
@@ -268,8 +262,6 @@ array_div_long_rem_lower:
 
 array_div_long_add_check:
 
-        %MAX_CNT_STEPS - STEP - 5 - 3*%ARRAY_MAX_LEN_DOUBLED - 4*%ARRAY_MAX_LEN_DOUBLED - 1        :JMPN(outOfCountersStep)
-
         ; 4] Let's add the remainder to the multiplication result
 
         $ => C          :MLOAD(array_mul_long_len_out)
@@ -282,14 +274,12 @@ array_div_long_res_to_add:
 array_div_long_add_res_rem:
                         :CALL(array_add_AGTB)
 
-        %MAX_CNT_STEPS - STEP - 3      :JMPN(outOfCountersStep)
+        %MAX_CNT_STEPS - STEP - 3 - 3*%ARRAY_MAX_LEN_DOUBLED - 2 :JMPN(outOfCountersStep)
 
         ; The length of q·b + r must be the same as the input of a
         $ => C          :MLOAD(array_add_AGTB_len_out)
         C               :MLOAD(array_div_long_len_inA)
         C - 1 => RR
-
-        %MAX_CNT_STEPS - STEP - 3*C - 2    :JMPN(outOfCountersStep)
 
 ; Check that a == q·b + r
 array_div_long_check_result_eq_inA1:
