@@ -314,11 +314,10 @@ opCODECOPYloop:
 
 ; @info Load 0 if read bytecode position is above bytecode length
 opCODECOPYLoadBytes:
-    0 => A
-    $ => B          :MLOAD(codecopyBytecodeLength)
-    $               :EQ, JMPC(readZero)
-    HASHPOS => A
-    $               :LT, JMPC(readValueBytecode)
+    ; codecopyBytecodeLength is less than 32 bits, length obtained from storage, max bytecode of a contract is 24kbytes
+    $ => B          :MLOAD(codecopyBytecodeLength), JMPZ(readZero)
+    ; if HASPOS < B, read value, else, read zero
+    HASHPOS - B     :JMPN(readValueBytecode)
 readZero:
     0 => B          :RETURN
 readValueBytecode:
@@ -414,7 +413,7 @@ opEXTCODECOPY2:
     A => HASHPOS
     $ => D          :MLOAD(tmpContractHashId)
     D               :MSTORE(codecopyHashId) ; set hashId to get bytes from
-    B               :MSTORE(codecopyBytecodeLength) ; set contract bytecode length
+    B               :MSTORE(codecopyBytecodeLength) ; set contract bytecode length, less than 32 bits
     C               :MSTORE(memOffset)
     E               :MSTORE(remainingBytes), JMP(opCODECOPYloopInit)
 
