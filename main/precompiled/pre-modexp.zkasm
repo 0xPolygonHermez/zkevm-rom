@@ -41,7 +41,6 @@ VAR GLOBAL modexp_returnFirstIndex
 VAR GLOBAL modexp_returnIndexRem
 VAR GLOBAL expLenBits
 VAR GLOBAL retCopyLen
-VAR GLOBAL lastBytesModexp
 
 funcModexp:
 
@@ -282,14 +281,15 @@ finalMODEXPreturn:
     32                                  :MSTORE(arithB), CALL(divARITH)
     $ => E                              :MLOAD(arithRes1)
     E                                   :MSTORE(modexp_returnFirstIndex)
-    $ => A                              :MLOAD(arithRes2),JMPZ(memoryLoop)
-
+    $ => A                              :MLOAD(arithRes2)
+    A                                   :MSTORE(modexp_returnIndexRem),JMPZ(memoryLoop)
+    
     ; if Msize % 32 > 0, copy last bytes, else --> memoryLoop
     A => C
     $ => A                              :MLOAD(modexp_out+E)
     32 - C => D                         :CALL(SHLarith)
     A                                   :MSTORE(bytesToStore)
-    A                                   :MSTORE(lastBytesModexp)
+    A                                   :MSTORE(modexp_out+E)
     B => E
                                         :CALL(MSTOREX) ; in: [bytesToStore, E: offset, C: length] out: [E: new offset]
     E => B
@@ -332,7 +332,11 @@ modexpReturn:
     32                                  :MSTORE(arithB), CALL(divARITH)
     $ => A                              :MLOAD(arithRes2), JMPZ(returnLoop)
     A => C
-    $ => A                              :MLOAD(lastBytesModexp)
+    $ => A                              :MLOAD(modexp_returnIndexRem),JMPNZ(returnInit)
+    E - 1 => E
+
+returnInit:
+    $ => A                              :MLOAD(modexp_out+E)
     A                                   :MSTORE(bytesToStore)
     B => E
                                         :CALL(MSTOREX) ; in: [bytesToStore, E: offset, C: length] out: [E: new offset]
