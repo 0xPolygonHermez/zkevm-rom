@@ -41,6 +41,7 @@ VAR GLOBAL modexp_returnFirstIndex
 VAR GLOBAL modexp_returnIndexRem
 VAR GLOBAL expLenBits
 VAR GLOBAL retCopyLen
+VAR GLOBAL lastBytesModexp
 
 funcModexp:
 
@@ -281,13 +282,14 @@ finalMODEXPreturn:
     32                                  :MSTORE(arithB), CALL(divARITH)
     $ => E                              :MLOAD(arithRes1)
     E                                   :MSTORE(modexp_returnFirstIndex)
-    $ => A                              :MLOAD(arithRes2)
-    A                                   :MSTORE(modexp_returnIndexRem), JMPZ(memoryLoop)
+    $ => A                              :MLOAD(arithRes2),JMPZ(memoryLoop)
+
     ; if Msize % 32 > 0, copy last bytes, else --> memoryLoop
     A => C
     $ => A                              :MLOAD(modexp_out+E)
     32 - C => D                         :CALL(SHLarith)
     A                                   :MSTORE(bytesToStore)
+    A                                   :MSTORE(lastBytesModexp)
     B => E
                                         :CALL(MSTOREX) ; in: [bytesToStore, E: offset, C: length] out: [E: new offset]
     E => B
@@ -323,12 +325,14 @@ modexpReturn:
     A => CTX
     E                                   :MSTORE(retDataCTX)
 
-    $ => C                              :MLOAD(retCopyLen)
     $ => E                              :MLOAD(modexp_returnFirstIndex)
-    $ => A                              :MLOAD(modexp_returnIndexRem), JMPZ(returnLoop)
+
+    $ => C                              :MLOAD(retCopyLen)
+    C                                   :MSTORE(arithA)
+    32                                  :MSTORE(arithB), CALL(divARITH)
+    $ => A                              :MLOAD(arithRes2), JMPZ(returnLoop)
     A => C
-    $ => A                              :MLOAD(modexp_out+E)
-    32 - C => D                         :CALL(SHLarith)
+    $ => A                              :MLOAD(lastBytesModexp)
     A                                   :MSTORE(bytesToStore)
     B => E
                                         :CALL(MSTOREX) ; in: [bytesToStore, E: offset, C: length] out: [E: new offset]
@@ -353,7 +357,6 @@ returnLoop:
 
 returnLoopFinal:
     $ => A                              :MLOAD(modexp_out+E)
-    32 - C => D                         :CALL(SHLarith)
     A                                   :MSTORE(bytesToStore)
     B => E
                                         :CALL(MSTOREX) ; in: [bytesToStore, E: offset, C: length] out: [E: new offset]
