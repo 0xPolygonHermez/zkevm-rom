@@ -1,6 +1,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; PRE: C is not alias-free
-;; POST: The result C is not alias-free (on MAP)
+;; POST: The result C is alias-free
 ;;
 ;; squareFpSecp256k1:
 ;;             in: C
@@ -9,22 +9,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; RESOURCES:
-;   2 arith + 8 steps
+;   1 arith + 5 steps
 
 squareFpSecp256k1:
 
-        ; 1] Compute and check the square over Z
-        ; A·A + 0 = [D]·2²⁵⁶ + [E]
+        ; C·C + 0 = op (mod SECP256K1_P)
         C => A,B
-        0n => C
-        $${var _squareFpSecp256k1_AA = A * A}
-        ${_squareFpSecp256k1_AA >> 256} => D
-        ${_squareFpSecp256k1_AA} => E :ARITH
+        0 => C
+        %SECP256K1_P => D
+        ${(A*B + C) % D} => E   :ARITH_MOD
 
-        ; 2] Check it over Fp, that is, it must be satisfied that:
-        ; p·[A² / p] + [A² % p] = D·2²⁵⁶ + E
-        ${_squareFpSecp256k1_AA / const.SECP256K1_P} => B        ; quotient (256 bits)
-        ${_squareFpSecp256k1_AA % const.SECP256K1_P} => C        ; residue  (256 bits)
-        %SECP256K1_P => A
-
-        E       :ARITH, RETURN
+        E => C                  :RETURN

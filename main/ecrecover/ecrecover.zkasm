@@ -34,11 +34,11 @@ INCLUDE "constSecp256k1.zkasm"
 ; MAP: MAlicious Prover
 
 ; RESOURCES:
-;   PATH without root:                   [steps: 4601, bin: 8,  arith: 1010]
-;   PATH with root:                      [steps: 6383, bin: 17, arith: 527, keccak: 1]
-;   PATH with result of dbl is infinity: [steps: 6368, bin: 16, arith: 527]
+;   PATH without root:                   [steps: 3073, bin: 8, arith: 505]
+;   PATH with root:                      [steps: 6343, bin: 13, arith: 520, keccak: 1]
+;   PATH with result of dbl is infinity: [steps: 6332, bin: 12, arith: 520]
 ; --------------------------------------------------------------------------------------
-;  worst case:                           [steps: 6383, bin: 17, arith: 1010]
+;  worst case:                           [steps: 6343, bin: 13, arith: 520, keccak: 1]
 
 ecrecover_precompiled:
         %SECP256K1_N_MINUS_ONE :MSTORE(ecrecover_s_upperlimit), JMP(ecrecover_store_args)
@@ -101,35 +101,35 @@ ecrecover_v_ok:
         ;
         ; A·B·A + 7 = calculate y from x
         ;
-        $ => A,B    :MLOAD(ecrecover_r), CALL(mulFpSecp256k1) ;   2 arith + 8 steps
+        $ => C      :MLOAD(ecrecover_r), CALL(squareFpSecp256k1) ;   1 arith + 5 steps
 
         C => A
-        $ => B      :MLOAD(ecrecover_r), CALL(mulFpSecp256k1) ;   2 arith + 8 steps
+        $ => B      :MLOAD(ecrecover_r), CALL(mulFpSecp256k1) ;   1 arith + 4 steps
 
-        7 => A      :CALL(addFpSecp256k1) ;   2 ariths + 8 steps
+        7 => A      :CALL(addFpSecp256k1) ;   1 ariths + 4 steps
 
         ; load on A parity expected
-        ; [steps: 53, bin: 6, arith: 6]
+        ; [steps: 42, bin: 6, arith: 3]
         $ => A      :MLOAD(ecrecover_v_parity)
-        C           :MSTORE(ecrecover_y2), CALL(sqrtFpSecp256k1) ;   with sqrt: [steps: 15, bin: 1, arith: 2]
-                                                                 ;without sqrt: [steps: 15, bin: 1, arith: 0]
+        C           :MSTORE(ecrecover_y2), CALL(sqrtFpSecp256k1) ;   with sqrt: [steps: 9, bin: 1, arith: 1]
+                                                                 ;without sqrt: [steps: 4, bin: 1, arith: 0]
 
         ; If it has root B = 1, else B = 0
         ; If B = 1 => C is alias-free (see sqrtFpSecp256k1)
 
         B           :JMPNZ(ecrecover_has_sqrt)
-        ; [steps: 71, bin: 7, arith: 6]
+        ; [steps: 49, bin: 7, arith: 3]
 
         ; hasn't sqrt, now verify
 
-        $ => C      :MLOAD(ecrecover_y2), CALL(checkSqrtFpSecp256k1) ; [steps: 4524, bin: 1, arith: 1004]
+        $ => C      :MLOAD(ecrecover_y2), CALL(checkSqrtFpSecp256k1) ; [steps: 3018, bin: 1, arith: 502]
         ; check must return on A register 1, because the root has no solution
 
         1           :ASSERT, JMP(ecrecover_not_exists_sqrt_of_y)
-        ; till the end -> [steps: 4601, bin: 8, arith: 1010]
+        ; till the end -> [steps: 3073, bin: 8, arith: 505]
 
 ecrecover_has_sqrt:
-        ; before -> [steps: 71, bin: 7, arith: 8]
+        ; before -> [steps: 53, bin: 7, arith: 4]
         ; (v == 1b) ecrecover_y_parity = 0x00
         ; (v == 1c) ecrecover_y_parity = 0x01
 
@@ -148,19 +148,19 @@ ecrecover_has_sqrt:
         C           :MSTORE(ecrecover_y)
 
         ; compute r inverse
-        $ => A      :MLOAD(ecrecover_r), CALL(invFnSecp256k1) ; 2 ariths + 2 binaries + 13 steps
+        $ => A      :MLOAD(ecrecover_r), CALL(invFnSecp256k1) ; 1 ariths + 4 steps
         B           :MSTORE(ecrecover_r_inv)
 
         ; calculate C as (hash * inv_r) % SECP256K1_N
-        $ => A      :MLOAD(ecrecover_hash), CALL(mulFnSecp256k1) ;   2 arith + 8 steps
+        $ => A      :MLOAD(ecrecover_hash), CALL(mulFnSecp256k1) ;   1 arith + 4 steps
 
         ; calculate k1 as (SECP256K1_N - hash * inv_r) % SECP256K1_N
-        ; C = (hash * inv_r) % SECP256K1_N no alias free (MAP)
+        ; C = (hash * inv_r) % SECP256K1_N is alias free
         C => A
         0 => B
         ; C is zero, special case
         $   :EQ, JMPNC(k1_c_is_not_zero)
-        ; [steps: 103, bin: 11, arith: 12]
+        ; [steps: 72, bin: 9, arith: 6]
 
 k1_c_is_zero:
         ; k1 = 0 is alias-free
@@ -168,12 +168,9 @@ k1_c_is_zero:
 
 
 k1_c_is_not_zero:
-        ; before (w.c.) -> [steps: 103, bin: 11, arith: 12]
+        ; before (w.c.) -> [steps: 72, bin: 9, arith: 6]
 
         ; A,C = (hash * inv_r) % SECP256K1_N
-        ; check A is alias-free, if not MAP ==> proof fails
-        %SECP256K1_N => B
-        1   :LT         ; ASSERT A < SECP256K1_N
 
         ; SECP256K1_N - A = SECP256K1_N - (hash * inv_r) % SECP256K1_N
         A => B
@@ -181,21 +178,15 @@ k1_c_is_not_zero:
         ; B != 0 ==> dblScalarMulSecp256k1_k1 = SECP256K1_N - B
         ; k1 is alias-free
         $   :SUB, MSTORE(dblScalarMulSecp256k1_k1)
-        ; [steps: 109, bin: 13, arith: 12]
 
 k1_calculated:
         $ => A      :MLOAD(ecrecover_s)
 
-        ; [steps: 106, bin: 13, arith: 13]
-        $ => B      :MLOAD(ecrecover_r_inv), CALL(mulFnSecp256k1) ;   2 arith + 8 steps
+        $ => B      :MLOAD(ecrecover_r_inv), CALL(mulFnSecp256k1) ;   1 arith + 4 steps
 
         ;   C = (s * inv_r) % SECP256K1_N => k2
-        ; [steps: 114, bin: 13, arith: 15]
-        C => A      :MSTORE(dblScalarMulSecp256k1_k2)
-        %SECP256K1_N => B
-
-        ; ASSERT(k2 is alias free)
-        1           :LT
+        ; [steps: 81, bin: 10, arith: 7]
+        C           :MSTORE(dblScalarMulSecp256k1_k2)
 
         %SECP256K1_GX       :MSTORE(dblScalarMulSecp256k1_p1_x)
         %SECP256K1_GY       :MSTORE(dblScalarMulSecp256k1_p1_y)
@@ -207,12 +198,11 @@ k1_calculated:
         ; y isn't an alias because was checked before
         ; (r,y) is a point of curve because it satisfies the curve equation
         $ => A      :MLOAD(ecrecover_y)
-        ; [steps: 127, bin: 14, arith: 14]
         A           :MSTORE(dblScalarMulSecp256k1_p2_y), CALL(dblScalarMulSecp256k1) ; 513 arith + 2 binaries + 6239 steps
 
         ; check if result of dblScalarMulSecp256k1 is point at infinity
         $           :MLOAD(dblScalarMulSecp256k1_p3_is_zero), JMPNZ(ecrecover_p3_point_at_infinity)
-        ; [steps: 6368, bin: 16, arith: 527]
+        ; [steps: 6328, bin: 12, arith: 520]
 
         ; generate keccak of public key to obtain ethereum address
         $ => E         :MLOAD(nextHashKId)
@@ -232,7 +222,7 @@ k1_calculated:
         ; for address take only last 20 bytes
         0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn => B
         $ => A         :AND
-        ; till the end -> [steps: 6383, bin: 17, arith: 527]
+        ; till the end -> [steps: 6343, bin: 13, arith: 520]
         0 => B         :JMP(ecrecover_end)
 
 ; ERRORS
