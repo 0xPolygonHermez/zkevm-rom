@@ -9,28 +9,13 @@
 
 ; RESOURCES:
 ; -----------------------------
-; [steps: 13, bin: 1, arith: 2]
+; [steps: 5, bin: 0, arith: 1]
 ; -----------------------------
 
 squareFpBN254:
-        ; 1] Compute and check the inverse over Z
-        ; A·A + [0] = [D]·2²⁵⁶ + [E]
+        ; A·A + 0 = op (mod BN254_P)
         A => B
         0 => C
-        $${var _squareFpBN254_AA = A * A}
-        ${_squareFpBN254_AA >> 256} => D
-        ${_squareFpBN254_AA} => E :ARITH
-
-        ; 2] Check it over Fp, that is, it must be satisfied that:
-        ; [BN254_P]·[A² / p] + [A² % p] = D·2²⁵⁶ + E
-        ; where C < BN254_P
-        %BN254_P => A
-        ${_squareFpBN254_AA / const.BN254_P} => B        ; quotient  (256 bits)
-        ${_squareFpBN254_AA % const.BN254_P} => C        ; residue  (256 bits)
-        E :ARITH
-
-        ; 3] Check that the result is lower than BN254_P
-        A => B
-        C => A
-        1       :LT
-        A => B  :RETURN
+        %BN254_P => D
+        ${(A*A) % D} => E       :ARITH_MOD
+        E => B                  :RETURN

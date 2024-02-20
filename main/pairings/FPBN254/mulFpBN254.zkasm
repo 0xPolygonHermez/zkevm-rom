@@ -9,26 +9,12 @@
 
 ; RESOURCES:
 ; -----------------------------
-; [steps: 11, bin: 1, arith: 2]
+; [steps: 4, bin: 0, arith: 1]
 ; -----------------------------
 
 mulFpBN254:
-        ; 1] Compute and check the sum over Z
-        ; A·B + [0] = [D]·2²⁵⁶ + [E]
+        ; A·B + 0 = op (mod BN254_P)
         0 => C
-        $${var _mulFpBN254_AB = A*B}
-        ${_mulFpBN254_AB >> 256} => D
-        ${_mulFpBN254_AB} => E :ARITH
-
-        ; 2] Check it over Fp, that is, it must be satisfied that:
-        ; [BN254_P]·[(A·B) / p] + [C / p] = D·2²⁵⁶ + E
-        ; where C < BN254_P
-        %BN254_P => A
-        ${_mulFpBN254_AB / const.BN254_P} => B        ; quotient  (256 bits)
-        ${_mulFpBN254_AB % const.BN254_P} => C        ; residue (256 bits)
-        E :ARITH
-
-        ; 3] Check that the result is lower than BN254_P
-        A => B
-        C => A
-        1       :LT, RETURN
+        %BN254_P => D
+        ${(A*B) % D} => E       :ARITH_MOD
+        E => C                  :RETURN

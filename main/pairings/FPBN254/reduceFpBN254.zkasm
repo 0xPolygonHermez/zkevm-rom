@@ -11,20 +11,13 @@ VAR GLOBAL reduceFpBN254_tmp
 
 ; RESOURCES:
 ; -----------------------------
-; [steps: 9, bin: 1, arith: 1]
+; [steps: 5, bin: 0, arith: 1]
 ; -----------------------------
 
 reduceFpBN254:
-        ; 1] It must be satisfied that:
-        ; [BN254_P]·[A / p] + [A % p] = [0]·2²⁵⁶ + A
-        A       :MSTORE(reduceFpBN254_tmp)
-        ${A / const.BN254_P} => B        ; quotient  (256 bits)
-        ${A % const.BN254_P} => C        ; residue (256 bits)
-        %BN254_P => A
-        0n => D
-        $       :MLOAD(reduceFpBN254_tmp), ARITH
-
-        ; 2] Check the the residue is less than p
-        A => B
-        C => A
-        1       :LT, RETURN
+        ; A·1 + 0 = op (mod BN254_P)
+        1 => B
+        0 => C
+        %BN254_P => D
+        ${A % D} => E         :ARITH_MOD
+        E => A                  :RETURN

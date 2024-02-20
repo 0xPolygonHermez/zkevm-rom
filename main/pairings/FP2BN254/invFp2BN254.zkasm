@@ -1,4 +1,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  PRE: A,B are assumed to be in the range [0,BN254_P)
 ;; POST: ARITH_BN254_MULFP2 ensures that the result is in the range [0,BN254_P)
 ;;
 ;; invFp2BN254
@@ -10,75 +11,27 @@
 
 ; RESOURCES:
 ; -------------------------------------------
-; PATH 1 A,B < p: [steps: 3,  bin: 1] + [steps: 4,  bin: 1] +
-;       PATH 1.1 A == 0 (p): [steps: 5, bin: 2] +
-;               PATH 1.1.1 B == 0 (p): [steps: 3]
-;               PATH 1.1.2 B != 0 (p): [steps: 8, bin: 0, arith: 1] + [steps: 3] = [steps: 23, bin: 4, arith: 1]
-;       PATH 1.2 A != 0 (p): [steps: 3, bin: 1] +
-;               PATH 1.2.1 B == 0 (p): [steps: 8, bin: 0, arith: 1] + [steps: 3]
-;               PATH 1.2.2 B != 0 (p): [steps: 8, bin: 0, arith: 1] + [steps: 3]
-
-; PATH 2 A < p, B > p: [steps: 3,  bin: 1] + [steps: 14, bin: 2, arith: 1] +
-;       PATH 2.1 A == 0 (p): [steps: 5, bin: 2] +
-;               PATH 2.1.1 B == 0 (p): [steps: 3]
-;               PATH 2.1.2 B != 0 (p): [steps: 8, bin: 0, arith: 1] + [steps: 3]
-;       PATH 2.2 A != 0 (p): [steps: 3, bin: 1] +
-;               PATH 2.2.1 B == 0 (p): [steps: 8, bin: 0, arith: 1] + [steps: 3]
-;               PATH 2.2.2 B != 0 (p): [steps: 8, bin: 0, arith: 1] + [steps: 3]
-
-; PATH 3 A > p, B < p: [steps: 13, bin: 2, arith: 1] + [steps: 4,  bin: 1] +
-;       PATH 3.1 A == 0 (p): [steps: 5, bin: 2] +
-;               PATH 3.1.1 B == 0 (p): [steps: 3]
-;               PATH 3.1.2 B != 0 (p): [steps: 8, bin: 0, arith: 1] + [steps: 3]
-;       PATH 3.2 A != 0 (p): [steps: 3, bin: 1] +
-;               PATH 3.2.1 B == 0 (p): [steps: 8, bin: 0, arith: 1] + [steps: 3]
-;               PATH 3.2.2 B != 0 (p): [steps: 8, bin: 0, arith: 1] + [steps: 3]
-
-; PATH 4 A,B > p: [steps: 13, bin: 2, arith: 1] + [steps: 14, bin: 2, arith: 1] +
-;       PATH 4.1 A == 0 (p): [steps: 5, bin: 2] +
-;               PATH 4.1.1 B == 0 (p): [steps: 3]
-;               PATH 4.1.2 B != 0 (p): [steps: 8, bin: 0, arith: 1] + [steps: 3] = [steps: 43, bin: 6, arith: 3] <--- w.c.
-;       PATH 4.2 A != 0 (p): [steps: 3, bin: 1] +
-;               PATH 4.2.1 B == 0 (p): [steps: 8, bin: 0, arith: 1] + [steps: 3]
-;               PATH 4.2.2 B != 0 (p): [steps: 8, bin: 0, arith: 1] + [steps: 3]
+; PATH 1 A,B == 0:       [steps: 3,  bin: 0, arith: 0]
+; PATH 2 A != 0, B == 0: [steps: 16, bin: 3, arith: 1]
+; PATH 3 A,B != 0:       [steps: 18, bin: 4, arith: 1] <-- w.c.
 ; -------------------------------------------
-
-; TODO: Add flag in reduceFp to reduce that xiva if the result is 0 or not
 
 VAR GLOBAL invFp2BN254_x
 VAR GLOBAL invFp2BN254_y
 
-VAR GLOBAL invFp2BN254_RR
-
 invFp2BN254:
-        RR              :MSTORE(invFp2BN254_RR)
+        ; Check if A = B = 0, and if so, return 0
+        ${checkIfZero(A,B)}     :JMPNZ(invFp2BN254_input_is_zero)
 
         A               :MSTORE(invFp2BN254_x)
         B               :MSTORE(invFp2BN254_y)
 
-        ; Normalization of A
-        %BN254_P => B
-        $               :LT, JMPC(__invFp2BN254_reduce_A_continue)
-                        :CALL(reduceFpBN254)
-        A               :MSTORE(invFp2BN254_x)
-                        __invFp2BN254_reduce_A_continue:
-
-        ; Normalization of B
-        $ => A          :MLOAD(invFp2BN254_y)
-        %BN254_P => B
-        $               :LT, JMPC(__invFp2BN254_reduce_B_continue)
-                        :CALL(reduceFpBN254)
-        A               :MSTORE(invFp2BN254_y)
-                        __invFp2BN254_reduce_B_continue:
-        ; From here, it is guaranteed that A,B ∈ [0,BN254_P)
-
 invFp2BN254_zero_check:
-        ; Check if A = B = 0, and if so, return 0
-        $ => B          :MLOAD(invFp2BN254_x)
+
         0 => A
         $               :EQ, JMPNC(invFp2BN254_normalized)
-        $ => B          :MLOAD(invFp2BN254_y)
-        $               :EQ, JMPC(invFp2BN254_input_is_zero)
+        $ => B          :MLOAD(invFp2BN254_x)
+        0               :EQ
         ; From here, either A != 0 or B != 0
 
 invFp2BN254_normalized:
@@ -98,11 +51,8 @@ invFp2BN254_normalized:
         C => A
         1               :LT
         D => A
-        1               :LT, JMP(invFp2BN254_end)
+        1               :LT, RETURN
 
 invFp2BN254_input_is_zero:
-        0 => C,D
-
-invFp2BN254_end:
-        $ => RR         :MLOAD(invFp2BN254_RR)
-                        :RETURN
+        0 => C,D        :ASSERT
+        B               :ASSERT, RETURN
