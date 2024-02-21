@@ -23,6 +23,7 @@ const checkerDir = path.join(__dirname, 'checker.txt');
 const inputPath = '%%INPUT_PATH%%';
 const nameFile = path.basename(inputPath);
 const input = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
+const skipVcounters = '%%SKIP_VCOUNTERS%%';
 
 it(`${nameFile}`, async () => {
     if (fs.existsSync(checkerDir)) {
@@ -55,7 +56,9 @@ async function runTest(cmPols, steps) {
         };
 
         const res = await smMain.execute(cmPols.Main, input, rom, config);
-        compareCounters(input.virtualCounters, res.counters);
+        if (skipVcounters !== 'yes') {
+            compareCounters(input.virtualCounters, res.counters);
+        }
     } catch (err) {
         fs.writeFileSync(checkerDir, `Failed test ${inputPath} - ${err}}`);
         throw err;
@@ -105,7 +108,7 @@ function compareCounters(virtualCounters, result) {
             diff: getPercentageDiff(virtualCounters.sha256, Number(result.cntSha256F)),
         },
     };
-    fs.appendFileSync(path.join(__dirname, '../countersDiffs.csv'), `${nameFile},${countersDiff.steps.virtual},${countersDiff.steps.real},${String(countersDiff.steps.diff).replace('.', ',')},${countersDiff.arith.virtual},${countersDiff.arith.real},${String(countersDiff.arith.diff).replace('.', ',')},${countersDiff.binary.virtual},${countersDiff.binary.real},${String(countersDiff.binary.diff).replace('.', ',')},${countersDiff.memAlign.virtual},${countersDiff.memAlign.real},${String(countersDiff.memAlign.diff).replace('.', ',')},${countersDiff.keccaks.virtual},${countersDiff.keccaks.real},${String(countersDiff.keccaks.diff).replace('.', ',')},${countersDiff.poseidon.virtual},${countersDiff.poseidon.real},${String(countersDiff.poseidon.diff).replace('.', ',')},${countersDiff.padding.virtual},${countersDiff.padding.real},${String(countersDiff.padding.diff).replace('.', ',')},${countersDiff.sha256.virtual},${countersDiff.sha256.real},${String(countersDiff.sha256.diff).replace('.', ',')}\n`);
+    fs.appendFileSync(path.join(__dirname, '../countersDiffs.csv'), `${nameFile},${countersDiff.steps.virtual},${countersDiff.steps.real},"${String(countersDiff.steps.diff).replace('.', ',')}",${countersDiff.arith.virtual},${countersDiff.arith.real},"${String(countersDiff.arith.diff).replace('.', ',')}",${countersDiff.binary.virtual},${countersDiff.binary.real},"${String(countersDiff.binary.diff).replace('.', ',')}",${countersDiff.memAlign.virtual},${countersDiff.memAlign.real},"${String(countersDiff.memAlign.diff).replace('.', ',')}",${countersDiff.keccaks.virtual},${countersDiff.keccaks.real},"${String(countersDiff.keccaks.diff).replace('.', ',')}",${countersDiff.poseidon.virtual},${countersDiff.poseidon.real},"${String(countersDiff.poseidon.diff).replace('.', ',')}",${countersDiff.padding.virtual},${countersDiff.padding.real},"${String(countersDiff.padding.diff).replace('.', ',')}",${countersDiff.sha256.virtual},${countersDiff.sha256.real},"${String(countersDiff.sha256.diff).replace('.', ',')}"\n`);
     // Check percentages are greater than 0
     Object.keys(countersDiff).forEach((key) => {
         if (Number(countersDiff[key].diff) < 0) {
