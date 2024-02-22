@@ -1,0 +1,158 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PRE: P ∈ E'(Fp2)\{𝒪}
+;; POST: The resulting coordinates are in the range [0,BN254_P) because if falls back to addPointFP2BN254
+;;
+;;
+;; scalarMulPointBy6X2FP2BN254:
+;;             in: P = (P.x1 + P.x2·u, P.y1 + P.y2·u) ∈ E'(Fp2)
+;;             out: [6x²]·P = (Q.x1 + Q.x2·u, Q.y1 + Q.y2·u) ∈ E'(Fp2), where 6x² == %BN254_SIX_TIMES_X_SQ
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Since the curve is E'/Fp2: y² = x³ + 3/(9+u), there is no issue in representing the point at infinity as (0, 0).
+
+VAR GLOBAL scalarMulPointBy6X2FP2BN254_P_x1
+VAR GLOBAL scalarMulPointBy6X2FP2BN254_P_x2
+VAR GLOBAL scalarMulPointBy6X2FP2BN254_P_y1
+VAR GLOBAL scalarMulPointBy6X2FP2BN254_P_y2
+VAR GLOBAL scalarMulPointBy6X2FP2BN254_Q_x1
+VAR GLOBAL scalarMulPointBy6X2FP2BN254_Q_x2
+VAR GLOBAL scalarMulPointBy6X2FP2BN254_Q_y1
+VAR GLOBAL scalarMulPointBy6X2FP2BN254_Q_y2
+
+VAR GLOBAL scalarMulPointBy6X2FP2BN254_RR
+
+; RESOURCES:
+; -------------------------------------------
+;  [steps: 10]                                          // setup
+;   + 128 * [steps: 124, bin: 3, arith: 11]             // doubles
+;   + 19 * [steps: 126, bin: 3, arith: 10]              // additions
+;   + 20 * [steps: 127, bin: 5, arith: 10]              // subtractions
+;   + [steps: 3]                                        // last iteration + end
+; total (w.c.): [steps: 20819 bin: 541, arith: 1798]    // [10 + 128*124 + 19*126 + 20*127 + 3,
+;                                                                128*3   + 19*3   + 20*5,
+;                                                                128*11  + 19*10  + 20*10]
+; -------------------------------------------
+
+scalarMulPointBy6X2FP2BN254:
+        RR      :MSTORE(scalarMulPointBy6X2FP2BN254_RR)
+
+        128 => RCX
+
+        $ => A  :MLOAD(scalarMulPointBy6X2FP2BN254_P_x1)
+        $ => B  :MLOAD(scalarMulPointBy6X2FP2BN254_P_x2)
+        $ => C  :MLOAD(scalarMulPointBy6X2FP2BN254_P_y1)
+        $ => D  :MLOAD(scalarMulPointBy6X2FP2BN254_P_y2)
+        A       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_x1)
+        B       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_x2)
+        C       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_y1)
+        D       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_y2)
+        ; [steps: 10, bin: 0, arith: 0]
+
+scalarMulPointBy6X2FP2BN254_loop:
+        ; block costs:
+        ;       no_last: [steps: 124, bin: 3, arith: 11]
+        ;       last:    [steps: 1]
+
+        RCX - 1 => RCX    :JMPZ(scalarMulPointBy6X2FP2BN254_end)
+
+        ; We always double
+        $ => A  :MLOAD(scalarMulPointBy6X2FP2BN254_Q_x1)
+        $ => B  :MLOAD(scalarMulPointBy6X2FP2BN254_Q_x2)
+        $ => C  :MLOAD(scalarMulPointBy6X2FP2BN254_Q_y1)
+        $ => D  :MLOAD(scalarMulPointBy6X2FP2BN254_Q_y2)
+        A       :MSTORE(doublePointFP2BN254_P_x1)
+        B       :MSTORE(doublePointFP2BN254_P_x2)
+        C       :MSTORE(doublePointFP2BN254_P_y1)
+        D       :MSTORE(doublePointFP2BN254_P_y2), CALL(doublePointFP2BN254)
+        ; Q = Q + Q
+
+        $ => A  :MLOAD(doublePointFP2BN254_Q_x1)
+        $ => B  :MLOAD(doublePointFP2BN254_Q_x2)
+        $ => C  :MLOAD(doublePointFP2BN254_Q_y1)
+        $ => D  :MLOAD(doublePointFP2BN254_Q_y2)
+        A       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_x1)
+        B       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_x2)
+        C       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_y1)
+        D       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_y2)
+
+        ; We check if the MSB b of x is either 1 or 0
+        RCX - 1 => RR
+                        :CALL(@sixX2 + RR)
+
+        ; if bit = -1, then sub
+        B           :JMPN(scalarMulPointBy6X2FP2BN254_sub)
+        ; if bit = 0, then repeat
+        B           :JMPZ(scalarMulPointBy6X2FP2BN254_loop)
+        ; if bit = 1, then add
+
+scalarMulPointBy6X2FP2BN254_add:
+        ; block costs: [steps: 126, bin: 3, arith: 10]
+
+        ; We add
+        $ => A  :MLOAD(scalarMulPointBy6X2FP2BN254_Q_x1)
+        $ => B  :MLOAD(scalarMulPointBy6X2FP2BN254_Q_x2)
+        $ => C  :MLOAD(scalarMulPointBy6X2FP2BN254_Q_y1)
+        $ => D  :MLOAD(scalarMulPointBy6X2FP2BN254_Q_y2)
+        A       :MSTORE(addPointFP2BN254_P1_x1)
+        B       :MSTORE(addPointFP2BN254_P1_x2)
+        C       :MSTORE(addPointFP2BN254_P1_y1)
+        D       :MSTORE(addPointFP2BN254_P1_y2)
+
+        $ => A  :MLOAD(scalarMulPointBy6X2FP2BN254_P_x1)
+        $ => B  :MLOAD(scalarMulPointBy6X2FP2BN254_P_x2)
+        $ => C  :MLOAD(scalarMulPointBy6X2FP2BN254_P_y1)
+        $ => D  :MLOAD(scalarMulPointBy6X2FP2BN254_P_y2)
+        A       :MSTORE(addPointFP2BN254_P2_x1)
+        B       :MSTORE(addPointFP2BN254_P2_x2)
+        C       :MSTORE(addPointFP2BN254_P2_y1)
+        D       :MSTORE(addPointFP2BN254_P2_y2)
+        1       :MSTORE(addPointFP2BN254_diff), CALL(addPointFP2BN254)
+        ; Q = Q + P
+
+        $ => A  :MLOAD(addPointFP2BN254_P3_x1)
+        $ => B  :MLOAD(addPointFP2BN254_P3_x2)
+        $ => C  :MLOAD(addPointFP2BN254_P3_y1)
+        $ => D  :MLOAD(addPointFP2BN254_P3_y2)
+        A       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_x1)
+        B       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_x2)
+        C       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_y1)
+        D       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_y2), JMP(scalarMulPointBy6X2FP2BN254_loop)
+
+scalarMulPointBy6X2FP2BN254_sub:
+        ; block costs: [steps: 127, bin: 5, arith: 10]
+
+        ; We subtract Q = Q - P
+        $ => A  :MLOAD(scalarMulPointBy6X2FP2BN254_Q_x1)
+        $ => B  :MLOAD(scalarMulPointBy6X2FP2BN254_Q_x2)
+        $ => C  :MLOAD(scalarMulPointBy6X2FP2BN254_Q_y1)
+        $ => D  :MLOAD(scalarMulPointBy6X2FP2BN254_Q_y2)
+        A       :MSTORE(addPointFP2BN254_P1_x1)
+        B       :MSTORE(addPointFP2BN254_P1_x2)
+        C       :MSTORE(addPointFP2BN254_P1_y1)
+        D       :MSTORE(addPointFP2BN254_P1_y2)
+
+        $ => A      :MLOAD(scalarMulPointBy6X2FP2BN254_P_x1)
+        $ => B      :MLOAD(scalarMulPointBy6X2FP2BN254_P_x2)
+        A           :MSTORE(addPointFP2BN254_P2_x1)
+        B           :MSTORE(addPointFP2BN254_P2_x2)
+        %BN254_P => A
+        $ => B      :MLOAD(scalarMulPointBy6X2FP2BN254_P_y1)
+        $           :SUB, MSTORE(addPointFP2BN254_P2_y1)
+        $ => B      :MLOAD(scalarMulPointBy6X2FP2BN254_P_y2)
+        $           :SUB, MSTORE(addPointFP2BN254_P2_y2)
+        1           :MSTORE(addPointFP2BN254_diff), CALL(addPointFP2BN254)
+        ; Q = Q - P
+
+        $ => A  :MLOAD(addPointFP2BN254_P3_x1)
+        $ => B  :MLOAD(addPointFP2BN254_P3_x2)
+        $ => C  :MLOAD(addPointFP2BN254_P3_y1)
+        $ => D  :MLOAD(addPointFP2BN254_P3_y2)
+        A       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_x1)
+        B       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_x2)
+        C       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_y1)
+        D       :MSTORE(scalarMulPointBy6X2FP2BN254_Q_y2), JMP(scalarMulPointBy6X2FP2BN254_loop)
+
+scalarMulPointBy6X2FP2BN254_end:
+        $ => RR         :MLOAD(scalarMulPointBy6X2FP2BN254_RR)
+                        :RETURN

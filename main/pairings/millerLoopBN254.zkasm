@@ -1,11 +1,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  PRE: P ∈ G1\{𝒪} and Q ∈ G2\{𝒪}
 ;; POST: The result is in the range [0,BN254_P) because if falls back to FP12 arithmetic
 ;;
 ;;  millerLoopBN254:
 ;;          input: P ∈ G1 and Q ∈ G2
-;;          output: f_{r,Q}(P) ∈ Fp12
+;;          output: f_{6·x+2,Q}(P) ∈ Fp12
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; TODO: Precompute -Q
 
 VAR GLOBAL millerLoopBN254_P_x
 VAR GLOBAL millerLoopBN254_P_y
@@ -52,6 +55,18 @@ VAR GLOBAL millerLoopBN254_fsquare23_y
 
 VAR GLOBAL millerLoopBN254_RR
 
+; RESOURCES:
+; -------------------------------------------
+;  [steps: 22, bin: 0, arith: 0]                          // setup
+;   + 65 * [steps: 1937, bin: 4, arith: 149]              // doubles
+;   + 17 * [steps: 930, bin: 4, arith: 68]                // additions
+;   + 8 * [steps: 934, bin: 8, arith: 68]                 // subtractions
+;   + [steps: 1777, bin: 8, arith: 130]                   // last iteration + last two lines
+; total (w.c.): [steps: 150986 bin: 400, arith: 11515]    // [22 + 65*1937 + 17*930 + 8*934 + 1777,
+;                                                                  65*4    + 17*4   + 8*8   + 8,
+;                                                                  65*149  + 17*68  + 8*68  + 130]
+; -------------------------------------------
+
 millerLoopBN254:
     RR          :MSTORE(millerLoopBN254_RR)
 
@@ -78,13 +93,18 @@ millerLoopBN254:
     0n          :MSTORE(millerLoopBN254_f22_y)
     0n          :MSTORE(millerLoopBN254_f23_x)
     0n          :MSTORE(millerLoopBN254_f23_y)
+    ; [steps: 22, bin: 0, arith: 0]
 
 millerLoopBN254_loop:
+    ; block costs:
+    ;       no_last: [steps: 1937, bin: 4, arith: 149]
+    ;       last:    [steps: 1]
+
     RCX - 1 => RCX    :JMPZ(millerLoopBN254_last_two_lines)
 
     ; 1] f = f² · line_{twist(R),twist(R)}(P)
 
-    ; f²
+    ; 1.1] f²
     $ => A      :MLOAD(millerLoopBN254_f11_x)
     $ => B      :MLOAD(millerLoopBN254_f11_y)
     A           :MSTORE(squareFp12BN254_a11_x)
@@ -109,6 +129,7 @@ millerLoopBN254_loop:
     $ => B      :MLOAD(millerLoopBN254_f23_y)
     A           :MSTORE(squareFp12BN254_a23_x)
     B           :MSTORE(squareFp12BN254_a23_y), CALL(squareFp12BN254)
+    ; [steps: 901, bin: 0, arith: 69]
 
     $ => A      :MLOAD(squareFp12BN254_c11_x)
     $ => B      :MLOAD(squareFp12BN254_c11_y)
@@ -135,7 +156,7 @@ millerLoopBN254_loop:
     A           :MSTORE(millerLoopBN254_fsquare23_x)
     B           :MSTORE(millerLoopBN254_fsquare23_y)
 
-    ; line_{twist(R),twist(R)}(P)
+    ; 1.2] line_{twist(R),twist(R)}(P)
     $ => A      :MLOAD(millerLoopBN254_R_x1)
     $ => B      :MLOAD(millerLoopBN254_R_x2)
     $ => C      :MLOAD(millerLoopBN254_R_y1)
@@ -148,6 +169,7 @@ millerLoopBN254_loop:
     $ => B      :MLOAD(millerLoopBN254_P_y)
     A           :MSTORE(lineSamePointsBN254_Q_x)
     B           :MSTORE(lineSamePointsBN254_Q_y), CALL(lineSamePointsBN254)
+    ; [steps: 1037, bin: 0, arith: 82]
 
     $ => A      :MLOAD(millerLoopBN254_fsquare11_x)
     $ => B      :MLOAD(millerLoopBN254_fsquare11_y)
@@ -174,7 +196,7 @@ millerLoopBN254_loop:
     A           :MSTORE(sparseMulBFp12BN254_a23_x)
     B           :MSTORE(sparseMulBFp12BN254_a23_y)
 
-    ; f² · line_{twist(R),twist(R)}(P)
+    ; 1.3] f² · line_{twist(R),twist(R)}(P)
     $ => A      :MLOAD(lineSamePointsBN254_l11_x)
     $ => B      :MLOAD(lineSamePointsBN254_l11_y)
     A           :MSTORE(sparseMulBFp12BN254_b11_x)
@@ -187,6 +209,7 @@ millerLoopBN254_loop:
     $ => B      :MLOAD(lineSamePointsBN254_l22_y)
     A           :MSTORE(sparseMulBFp12BN254_b22_x)
     B           :MSTORE(sparseMulBFp12BN254_b22_y), CALL(sparseMulBFp12BN254)
+    ; [steps: 1786, bin: 0, arith: 138]
 
     $ => A      :MLOAD(sparseMulBFp12BN254_c11_x)
     $ => B      :MLOAD(sparseMulBFp12BN254_c11_y)
@@ -218,19 +241,16 @@ millerLoopBN254_loop:
     $ => B      :MLOAD(millerLoopBN254_R_x2)
     $ => C      :MLOAD(millerLoopBN254_R_y1)
     $ => D      :MLOAD(millerLoopBN254_R_y2)
-    A           :MSTORE(addPointBN254_P1_x1)
-    A           :MSTORE(addPointBN254_P2_x1)
-    B           :MSTORE(addPointBN254_P1_x2)
-    B           :MSTORE(addPointBN254_P2_x2)
-    C           :MSTORE(addPointBN254_P1_y1)
-    C           :MSTORE(addPointBN254_P2_y1)
-    D           :MSTORE(addPointBN254_P1_y2)
-    D           :MSTORE(addPointBN254_P2_y2), CALL(addPointBN254)
+    A           :MSTORE(doublePointFP2BN254_P_x1)
+    B           :MSTORE(doublePointFP2BN254_P_x2)
+    C           :MSTORE(doublePointFP2BN254_P_y1)
+    D           :MSTORE(doublePointFP2BN254_P_y2), CALL(doublePointFP2BN254)
+    ; [steps: 1924, bin: 4, arith: 149]
 
-    $ => A      :MLOAD(addPointBN254_P3_x1)
-    $ => B      :MLOAD(addPointBN254_P3_x2)
-    $ => C      :MLOAD(addPointBN254_P3_y1)
-    $ => D      :MLOAD(addPointBN254_P3_y2)
+    $ => A      :MLOAD(doublePointFP2BN254_Q_x1)
+    $ => B      :MLOAD(doublePointFP2BN254_Q_x2)
+    $ => C      :MLOAD(doublePointFP2BN254_Q_y1)
+    $ => D      :MLOAD(doublePointFP2BN254_Q_y2)
     A           :MSTORE(millerLoopBN254_R_x1)
     B           :MSTORE(millerLoopBN254_R_x2)
     C           :MSTORE(millerLoopBN254_R_y1)
@@ -241,15 +261,19 @@ millerLoopBN254_loop:
 
     ; if bit = -1, then sub
     B           :JMPN(millerLoopBN254_sub)
+    ; [steps: 1936, bin: 4, arith: 149]
 
     ; if bit = 0, then repeat
     B           :JMPZ(millerLoopBN254_loop)
+    ; [steps: 1937, bin: 4, arith: 149]
 
     ; if bit = 1, then add
 
 millerLoopBN254_add:
+    ; block costs: [steps: 930, bin: 4, arith: 68]
+
     ; 1] f = f · line_{twist(R),twist(Q)}(P)
-    ; line_{twist(R),twist(Q)}(P)
+    ; 1.1] line_{twist(R),twist(Q)}(P)
     $ => A      :MLOAD(millerLoopBN254_R_x1)
     $ => B      :MLOAD(millerLoopBN254_R_x2)
     $ => C      :MLOAD(millerLoopBN254_R_y1)
@@ -270,6 +294,7 @@ millerLoopBN254_add:
     $ => B      :MLOAD(millerLoopBN254_P_y)
     A           :MSTORE(lineDiffPointsBN254_Q_x)
     B           :MSTORE(lineDiffPointsBN254_Q_y), CALL(lineDiffPointsBN254)
+    ; [steps: 80, bin: 0, arith: 7]
 
     $ => A      :MLOAD(millerLoopBN254_f11_x)
     $ => B      :MLOAD(millerLoopBN254_f11_y)
@@ -296,7 +321,7 @@ millerLoopBN254_add:
     A           :MSTORE(sparseMulAFp12BN254_a23_x)
     B           :MSTORE(sparseMulAFp12BN254_a23_y)
 
-    ; f · line_{twist(R),twist(Q)}(P)
+    ; 1.2] f · line_{twist(R),twist(Q)}(P)
     $ => A      :MLOAD(lineDiffPointsBN254_l12_x)
     $ => B      :MLOAD(lineDiffPointsBN254_l12_y)
     A           :MSTORE(sparseMulAFp12BN254_b12_x)
@@ -309,6 +334,7 @@ millerLoopBN254_add:
     $ => B      :MLOAD(lineDiffPointsBN254_l23_y)
     A           :MSTORE(sparseMulAFp12BN254_b23_x)
     B           :MSTORE(sparseMulAFp12BN254_b23_y), CALL(sparseMulAFp12BN254)
+    ; [steps: 780, bin: 0, arith: 58]
 
     $ => A      :MLOAD(sparseMulAFp12BN254_c11_x)
     $ => B      :MLOAD(sparseMulAFp12BN254_c11_y)
@@ -340,34 +366,35 @@ millerLoopBN254_add:
     $ => B      :MLOAD(millerLoopBN254_R_x2)
     $ => C      :MLOAD(millerLoopBN254_R_y1)
     $ => D      :MLOAD(millerLoopBN254_R_y2)
-    A           :MSTORE(addPointBN254_P1_x1)
-    B           :MSTORE(addPointBN254_P1_x2)
-    C           :MSTORE(addPointBN254_P1_y1)
-    D           :MSTORE(addPointBN254_P1_y2)
+    A           :MSTORE(addPointFP2BN254_P1_x1)
+    B           :MSTORE(addPointFP2BN254_P1_x2)
+    C           :MSTORE(addPointFP2BN254_P1_y1)
+    D           :MSTORE(addPointFP2BN254_P1_y2)
     $ => A      :MLOAD(millerLoopBN254_Q_x1)
     $ => B      :MLOAD(millerLoopBN254_Q_x2)
     $ => C      :MLOAD(millerLoopBN254_Q_y1)
     $ => D      :MLOAD(millerLoopBN254_Q_y2)
-    A           :MSTORE(addPointBN254_P2_x1)
-    B           :MSTORE(addPointBN254_P2_x2)
-    C           :MSTORE(addPointBN254_P2_y1)
-    D           :MSTORE(addPointBN254_P2_y2), CALL(addPointBN254)
+    A           :MSTORE(addPointFP2BN254_P2_x1)
+    B           :MSTORE(addPointFP2BN254_P2_x2)
+    C           :MSTORE(addPointFP2BN254_P2_y1)
+    D           :MSTORE(addPointFP2BN254_P2_y2)
+    1           :MSTORE(addPointFP2BN254_diff), CALL(addPointFP2BN254)
 
-    $ => A      :MLOAD(addPointBN254_P3_x1)
-    $ => B      :MLOAD(addPointBN254_P3_x2)
-    $ => C      :MLOAD(addPointBN254_P3_y1)
-    $ => D      :MLOAD(addPointBN254_P3_y2)
+    $ => A      :MLOAD(addPointFP2BN254_P3_x1)
+    $ => B      :MLOAD(addPointFP2BN254_P3_x2)
+    $ => C      :MLOAD(addPointFP2BN254_P3_y1)
+    $ => D      :MLOAD(addPointFP2BN254_P3_y2)
     A           :MSTORE(millerLoopBN254_R_x1)
     B           :MSTORE(millerLoopBN254_R_x2)
     C           :MSTORE(millerLoopBN254_R_y1)
-    D           :MSTORE(millerLoopBN254_R_y2)
-
-                :JMP(millerLoopBN254_loop)
-
+    D           :MSTORE(millerLoopBN254_R_y2), JMP(millerLoopBN254_loop)
+    ; [steps: 930, bin: 4, arith: 68]
 
 millerLoopBN254_sub:
+    ; block costs: [steps: 934, bin: 8, arith: 68]
+
     ; 1] f = f · line_{twist(R),twist(-Q)}(P)
-    ; line_{twist(R),twist(-Q)}(P)
+    ; 1.1] line_{twist(R),twist(-Q)}(P)
     $ => A      :MLOAD(millerLoopBN254_R_x1)
     $ => B      :MLOAD(millerLoopBN254_R_x2)
     $ => C      :MLOAD(millerLoopBN254_R_y1)
@@ -392,6 +419,7 @@ millerLoopBN254_sub:
     $ => B      :MLOAD(millerLoopBN254_P_y)
     A           :MSTORE(lineDiffPointsBN254_Q_x)
     B           :MSTORE(lineDiffPointsBN254_Q_y), CALL(lineDiffPointsBN254)
+    ; [steps: 82, bin: 2, arith: 7]
 
     $ => A      :MLOAD(millerLoopBN254_f11_x)
     $ => B      :MLOAD(millerLoopBN254_f11_y)
@@ -418,7 +446,7 @@ millerLoopBN254_sub:
     A           :MSTORE(sparseMulAFp12BN254_a23_x)
     B           :MSTORE(sparseMulAFp12BN254_a23_y)
 
-    ; ; f · line_{twist(R),twist(-Q)}(P)
+    ; 1.2] f · line_{twist(R),twist(-Q)}(P)
     $ => A      :MLOAD(lineDiffPointsBN254_l12_x)
     $ => B      :MLOAD(lineDiffPointsBN254_l12_y)
     A           :MSTORE(sparseMulAFp12BN254_b12_x)
@@ -431,6 +459,7 @@ millerLoopBN254_sub:
     $ => B      :MLOAD(lineDiffPointsBN254_l23_y)
     A           :MSTORE(sparseMulAFp12BN254_b23_x)
     B           :MSTORE(sparseMulAFp12BN254_b23_y), CALL(sparseMulAFp12BN254)
+    ; [steps: 782, bin: 2, arith: 58]
 
     $ => A      :MLOAD(sparseMulAFp12BN254_c11_x)
     $ => B      :MLOAD(sparseMulAFp12BN254_c11_y)
@@ -462,34 +491,35 @@ millerLoopBN254_sub:
     $ => B      :MLOAD(millerLoopBN254_R_x2)
     $ => C      :MLOAD(millerLoopBN254_R_y1)
     $ => D      :MLOAD(millerLoopBN254_R_y2)
-    A           :MSTORE(addPointBN254_P1_x1)
-    B           :MSTORE(addPointBN254_P1_x2)
-    C           :MSTORE(addPointBN254_P1_y1)
-    D           :MSTORE(addPointBN254_P1_y2)
+    A           :MSTORE(addPointFP2BN254_P1_x1)
+    B           :MSTORE(addPointFP2BN254_P1_x2)
+    C           :MSTORE(addPointFP2BN254_P1_y1)
+    D           :MSTORE(addPointFP2BN254_P1_y2)
     $ => A      :MLOAD(millerLoopBN254_Q_x1)
     $ => B      :MLOAD(millerLoopBN254_Q_x2)
-    A           :MSTORE(addPointBN254_P2_x1)
-    B           :MSTORE(addPointBN254_P2_x2)
+    A           :MSTORE(addPointFP2BN254_P2_x1)
+    B           :MSTORE(addPointFP2BN254_P2_x2)
     %BN254_P => A
     $ => B      :MLOAD(millerLoopBN254_Q_y1)
-    $           :SUB, MSTORE(addPointBN254_P2_y1)
+    $           :SUB, MSTORE(addPointFP2BN254_P2_y1)
     %BN254_P => A
     $ => B      :MLOAD(millerLoopBN254_Q_y2)
-    $           :SUB, MSTORE(addPointBN254_P2_y2), CALL(addPointBN254)
+    $           :SUB, MSTORE(addPointFP2BN254_P2_y2)
+    1           :MSTORE(addPointFP2BN254_diff), CALL(addPointFP2BN254)
 
-
-    $ => A      :MLOAD(addPointBN254_P3_x1)
-    $ => B      :MLOAD(addPointBN254_P3_x2)
-    $ => C      :MLOAD(addPointBN254_P3_y1)
-    $ => D      :MLOAD(addPointBN254_P3_y2)
+    $ => A      :MLOAD(addPointFP2BN254_P3_x1)
+    $ => B      :MLOAD(addPointFP2BN254_P3_x2)
+    $ => C      :MLOAD(addPointFP2BN254_P3_y1)
+    $ => D      :MLOAD(addPointFP2BN254_P3_y2)
     A           :MSTORE(millerLoopBN254_R_x1)
     B           :MSTORE(millerLoopBN254_R_x2)
     C           :MSTORE(millerLoopBN254_R_y1)
-    D           :MSTORE(millerLoopBN254_R_y2)
-
-                :JMP(millerLoopBN254_loop)
+    D           :MSTORE(millerLoopBN254_R_y2), JMP(millerLoopBN254_loop)
+    ; [steps: 934, bin: 8, arith: 68]
 
 millerLoopBN254_last_two_lines:
+    ; block costs till end: [steps: 1776, bin: 8, arith: 130]
+
     ; 1] Given Q = (x,y) with x,y ∈ Fp2, compute Frobenius1(Q) = (\gamma12·x̄, \gamma13·ȳ)
     %BN254_P => A
     $ => B      :MLOAD(millerLoopBN254_Q_x2)
@@ -497,6 +527,7 @@ millerLoopBN254_last_two_lines:
     $ => A      :MLOAD(millerLoopBN254_Q_x1)
     %FROBENIUS_GAMMA121 => C
     %FROBENIUS_GAMMA122 => D    :CALL(mulFp2BN254)
+    ; [steps: 9, bin: 1, arith: 1]
 
     E           :MSTORE(millerLoopBN254_Frobenius1_Q_x1)
     C           :MSTORE(millerLoopBN254_Frobenius1_Q_x2)
@@ -507,10 +538,10 @@ millerLoopBN254_last_two_lines:
     $ => A      :MLOAD(millerLoopBN254_Q_y1)
     %FROBENIUS_GAMMA131 => C
     %FROBENIUS_GAMMA132 => D    :CALL(mulFp2BN254)
+    ; [steps: 18, bin: 2, arith: 2]
 
     E           :MSTORE(millerLoopBN254_Frobenius1_Q_y1)
     C           :MSTORE(millerLoopBN254_Frobenius1_Q_y2)
-
 
     ; 2] f = f · line_{twist(R),twist(Frobenius1(Q))}(P)
     ; line_{twist(R),twist(Frobenius1(Q))}(P)
@@ -535,6 +566,7 @@ millerLoopBN254_last_two_lines:
     $ => B      :MLOAD(millerLoopBN254_P_y)
     A           :MSTORE(lineDiffPointsBN254_Q_x)
     B           :MSTORE(lineDiffPointsBN254_Q_y), CALL(lineDiffPointsBN254)
+    ; [steps: 100, bin: 2, arith: 9]
 
     $ => A      :MLOAD(millerLoopBN254_f11_x)
     $ => B      :MLOAD(millerLoopBN254_f11_y)
@@ -574,6 +606,7 @@ millerLoopBN254_last_two_lines:
     $ => B      :MLOAD(lineDiffPointsBN254_l23_y)
     A           :MSTORE(sparseMulAFp12BN254_b23_x)
     B           :MSTORE(sparseMulAFp12BN254_b23_y), CALL(sparseMulAFp12BN254)
+    ; [steps: 800, bin: 2, arith: 60]
 
     $ => A      :MLOAD(sparseMulAFp12BN254_c11_x)
     $ => B      :MLOAD(sparseMulAFp12BN254_c11_y)
@@ -605,23 +638,25 @@ millerLoopBN254_last_two_lines:
     $ => B      :MLOAD(millerLoopBN254_R_x2)
     $ => C      :MLOAD(millerLoopBN254_R_y1)
     $ => D      :MLOAD(millerLoopBN254_R_y2)
-    A           :MSTORE(addPointBN254_P1_x1)
-    B           :MSTORE(addPointBN254_P1_x2)
-    C           :MSTORE(addPointBN254_P1_y1)
-    D           :MSTORE(addPointBN254_P1_y2)
+    A           :MSTORE(addPointFP2BN254_P1_x1)
+    B           :MSTORE(addPointFP2BN254_P1_x2)
+    C           :MSTORE(addPointFP2BN254_P1_y1)
+    D           :MSTORE(addPointFP2BN254_P1_y2)
     $ => A      :MLOAD(millerLoopBN254_Frobenius1_Q_x1)
     $ => B      :MLOAD(millerLoopBN254_Frobenius1_Q_x2)
     $ => C      :MLOAD(millerLoopBN254_Frobenius1_Q_y1)
     $ => D      :MLOAD(millerLoopBN254_Frobenius1_Q_y2)
-    A           :MSTORE(addPointBN254_P2_x1)
-    B           :MSTORE(addPointBN254_P2_x2)
-    C           :MSTORE(addPointBN254_P2_y1)
-    D           :MSTORE(addPointBN254_P2_y2), CALL(addPointBN254)
+    A           :MSTORE(addPointFP2BN254_P2_x1)
+    B           :MSTORE(addPointFP2BN254_P2_x2)
+    C           :MSTORE(addPointFP2BN254_P2_y1)
+    D           :MSTORE(addPointFP2BN254_P2_y2)
+    1           :MSTORE(addPointFP2BN254_diff), CALL(addPointFP2BN254)
+    ; [steps: 942, bin: 6, arith: 70]
 
-    $ => A      :MLOAD(addPointBN254_P3_x1)
-    $ => B      :MLOAD(addPointBN254_P3_x2)
-    $ => C      :MLOAD(addPointBN254_P3_y1)
-    $ => D      :MLOAD(addPointBN254_P3_y2)
+    $ => A      :MLOAD(addPointFP2BN254_P3_x1)
+    $ => B      :MLOAD(addPointFP2BN254_P3_x2)
+    $ => C      :MLOAD(addPointFP2BN254_P3_y1)
+    $ => D      :MLOAD(addPointFP2BN254_P3_y2)
     A           :MSTORE(millerLoopBN254_R_x1)
     B           :MSTORE(millerLoopBN254_R_x2)
     C           :MSTORE(millerLoopBN254_R_y1)
@@ -635,10 +670,10 @@ millerLoopBN254_last_two_lines:
     $ => A      :MLOAD(millerLoopBN254_Frobenius1_Q_x1)
     %FROBENIUS_GAMMA121 => C
     %FROBENIUS_GAMMA122 => D    :CALL(mulFp2BN254)
+    ; [steps: 959, bin: 7, arith: 71]
 
     E           :MSTORE(millerLoopBN254_nFrobenius2_Q_x1)
     C           :MSTORE(millerLoopBN254_nFrobenius2_Q_x2)
-
 
     %BN254_P => A
     $ => B      :MLOAD(millerLoopBN254_Frobenius1_Q_y2)
@@ -646,6 +681,7 @@ millerLoopBN254_last_two_lines:
     $ => A      :MLOAD(millerLoopBN254_Frobenius1_Q_y1)
     %FROBENIUS_GAMMA131_NEGATED => C
     %FROBENIUS_GAMMA132_NEGATED => D :CALL(mulFp2BN254)
+    ; [steps: 970, bin: 8, arith: 72]
 
 
     ; 5] f = f · line_{twist(R),twist(-Frobenius2(Q))}(P)
@@ -671,6 +707,7 @@ millerLoopBN254_last_two_lines:
     $ => B      :MLOAD(millerLoopBN254_P_y)
     A           :MSTORE(lineDiffPointsBN254_Q_x)
     B           :MSTORE(lineDiffPointsBN254_Q_y), CALL(lineDiffPointsBN254)
+    ; [steps: 1050, bin: 8, arith: 79]
 
     $ => A      :MLOAD(millerLoopBN254_f11_x)
     $ => B      :MLOAD(millerLoopBN254_f11_y)
@@ -710,6 +747,7 @@ millerLoopBN254_last_two_lines:
     $ => B      :MLOAD(lineDiffPointsBN254_l23_y)
     A           :MSTORE(sparseMulAFp12BN254_b23_x)
     B           :MSTORE(sparseMulAFp12BN254_b23_y), CALL(sparseMulAFp12BN254)
+    ; [steps: 1750, bin: 8, arith: 130]
 
     $ => A      :MLOAD(sparseMulAFp12BN254_c11_x)
     $ => B      :MLOAD(sparseMulAFp12BN254_c11_y)
@@ -735,6 +773,8 @@ millerLoopBN254_last_two_lines:
     $ => B      :MLOAD(sparseMulAFp12BN254_c23_y)
     A           :MSTORE(millerLoopBN254_f23_x)
     B           :MSTORE(millerLoopBN254_f23_y)
+
+    ; till end -> [steps: 1776, bin: 8, arith: 130]
 
 millerLoopBN254_end:
         $ => RR     :MLOAD(millerLoopBN254_RR)

@@ -1,4 +1,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  PRE: A,C are assumed to be in the range [0,BN254_P)
 ;; POST: The result is in the range [0,BN254_P)
 ;;
 ;; subFpBN254:
@@ -7,30 +8,25 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; RESOURCES:
+; -----------------------------
+; PATH A >= C:  [steps: 3, bin: 1, arith: 0]
+; PATH A < C:   [steps: 7, bin: 3, arith: 0] <-- w.c.
+; -----------------------------
+
 subFpBN254:
-        ; 0] Negate C
-        A => D
-        %BN254_P => A
         C => B
-        $ => C      :SUB
-        D => A
+        $ => C  :SUB, JMPC(subFpBN254_add_alias)
+                :RETURN
+subFpBN254_add_alias:
+        ; if A < C, then we must compute A + BN254_P - C
 
-        ; 1] Compute and check the sub over Z
-        ; A·[1] + [BN254_P-C] = [D]·2²⁵⁶ + [E]
-        1 => B
-        $${var _subFpBN254_AC = A + C}
-        ${_subFpBN254_AC >> 256} => D
-        ${_subFpBN254_AC} => E :ARITH
+        ; NOTE: 5·BN254_P < 2²⁵⁶ < 6·BN254_P
 
-        ; 2] Check it over Fp, that is, it must be satisfied that:
-        ; [BN254_P]·[(A - C) / p] + [(A - C) % p] = D·2²⁵⁶ + E
-        ; where C < BN254_P
-        %BN254_P => A
-        ${_subFpBN254_AC / const.BN254_P} => B        ; quotient  (256 bits)
-        ${_subFpBN254_AC % const.BN254_P} => C        ; residue (256 bits)
-        E :ARITH
+        B => C ; save for later use
 
-        ; 3] Check that the result is lower than BN254_P
-        A => B
-        C => A
-        1       :LT, RETURN
+        %BN254_P => B
+        $ => A  :ADD ; It cannot overflow under the PRE condition
+
+        C => B
+        $ => C  :SUB, RETURN

@@ -1,0 +1,56 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; POST: The result is in the range [0,BN254_P) because if falls back to FP2 arithmetic
+;;
+;; scalarMulFp6BN254:
+;;             in: b ∈ Fp, (a1 + a2·v + a3·v²) ∈ Fp6, where ai ∈ Fp2
+;;             out: (c1 + c2·v + c3·v²) = (a1·b) + (a2·b)·v + (a3·b)·v² ∈ Fp6
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+VAR GLOBAL scalarMulFp6BN254_a1_x
+VAR GLOBAL scalarMulFp6BN254_a1_y
+VAR GLOBAL scalarMulFp6BN254_a2_x
+VAR GLOBAL scalarMulFp6BN254_a2_y
+VAR GLOBAL scalarMulFp6BN254_a3_x
+VAR GLOBAL scalarMulFp6BN254_a3_y
+VAR GLOBAL scalarMulFp6BN254_b
+VAR GLOBAL scalarMulFp6BN254_c1_x
+VAR GLOBAL scalarMulFp6BN254_c1_y
+VAR GLOBAL scalarMulFp6BN254_c2_x
+VAR GLOBAL scalarMulFp6BN254_c2_y
+VAR GLOBAL scalarMulFp6BN254_c3_x
+VAR GLOBAL scalarMulFp6BN254_c3_y
+
+VAR GLOBAL scalarMulFp6BN254_RR
+
+; RESOURCES:
+; -----------------------------
+; [steps: 30, bin: 0, arith: 3]
+; -----------------------------
+
+scalarMulFp6BN254:
+        RR              :MSTORE(scalarMulFp6BN254_RR)
+
+        ; 1] c1 = a1·b
+        $ => A          :MLOAD(scalarMulFp6BN254_b)
+        $ => C          :MLOAD(scalarMulFp6BN254_a1_x)
+        $ => D          :MLOAD(scalarMulFp6BN254_a1_y), CALL(scalarMulFp2BN254)
+        E               :MSTORE(scalarMulFp6BN254_c1_x)
+        C               :MSTORE(scalarMulFp6BN254_c1_y)
+
+        ; 2] c2 = a2·b
+        $ => A          :MLOAD(scalarMulFp6BN254_b)
+        $ => C          :MLOAD(scalarMulFp6BN254_a2_x)
+        $ => D          :MLOAD(scalarMulFp6BN254_a2_y), CALL(scalarMulFp2BN254)
+        E               :MSTORE(scalarMulFp6BN254_c2_x)
+        C               :MSTORE(scalarMulFp6BN254_c2_y)
+
+        ; 3] c3 = a3·b
+        $ => A          :MLOAD(scalarMulFp6BN254_b)
+        $ => C          :MLOAD(scalarMulFp6BN254_a3_x)
+        $ => D          :MLOAD(scalarMulFp6BN254_a3_y), CALL(scalarMulFp2BN254)
+        E               :MSTORE(scalarMulFp6BN254_c3_x)
+        C               :MSTORE(scalarMulFp6BN254_c3_y)
+
+        $ => RR         :MLOAD(scalarMulFp6BN254_RR)
+                        :RETURN

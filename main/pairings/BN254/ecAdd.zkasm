@@ -18,6 +18,8 @@ VAR GLOBAL ecAdd_P3_x
 VAR GLOBAL ecAdd_P3_y
 VAR GLOBAL ecAdd_lambda
 
+VAR GLOBAL ecAdd_diff ; 1 if one can assume that P1 != P2 and P1,P2 != 𝒪, 0 otherwise
+
 VAR GLOBAL ecAdd_RR
 
 ; ERROR CODES (B)
@@ -29,9 +31,23 @@ VAR GLOBAL ecAdd_RR
 ; 5 - P1 is not in E(Fp)
 ; 6 - P2 is not in E(Fp)
 
+; RESOURCES (not considering error paths):
+; -------------------------------------------
+; PATH 1 ecAdd_diff = 0:
+;       · PATH 1.1 P1 == 𝒪 and P2 == 𝒪:         [steps: 26, bin: 8]
+;       · PATH 1.2 P1 == 𝒪 and P2 != 𝒪:         [steps: 84, bin: 13, arith: 8]
+;       · PATH 1.3 P1 != 𝒪 and P2 == 𝒪:         [steps: 84, bin: 13, arith: 8]
+;       · PATH 1.4 P1,P2 != 𝒪 and P1 == P2:     [steps: 323, bin: 33, arith: 40] <--- w.c.
+;       · PATH 1.5 P1,P2 != 𝒪 and P1 == -P2:    [steps: 144, bin: 20, arith: 16]
+;       · PATH 1.6 P1,P2 != 𝒪 and P1 != P2,-P2: [steps: 298, bin: 31, arith: 36]
+; PATH 2 ecAdd_diff = 1: [steps: 164, bin: 12, arith: 20]
+; -------------------------------------------
 ecAdd:
         RR      :MSTORE(ecAdd_RR)
 
+        $       :MLOAD(ecAdd_diff), JMPNZ(ecAdd_different)
+
+        ; Check whether the points coordinates are in the range [0, BN254_P)
         %BN254_P_MINUS_ONE => A
         $ => B      :MLOAD(ecAdd_P1_x)
         $           :LT, JMPC(ecAdd_P1x_too_big)
@@ -41,104 +57,125 @@ ecAdd:
         $           :LT, JMPC(ecAdd_P2x_too_big)
         $ => B      :MLOAD(ecAdd_P2_y)
         $           :LT, JMPC(ecAdd_P2y_too_big)
+        ; [steps: 11, bin: 4]
 
-        ; Is P1 = O?
+        ; Is P1 = 𝒪?
         0n => B
         $ => A  :MLOAD(ecAdd_P1_x)
         $       :EQ, JMPNC(__ecAdd_P1_continue)
         $ => A  :MLOAD(ecAdd_P1_y)
         $       :EQ, JMPC(ecAdd_P1_is_zero)
                 __ecAdd_P1_continue:
+        ; [steps: 16, bin: 6]
 
-        ; Is P2 = O?
+        ; Is P2 = 𝒪?
         0n => B
         $ => A  :MLOAD(ecAdd_P2_x)
         $       :EQ, JMPNC(__ecAdd_P2_continue1)
         $ => A  :MLOAD(ecAdd_P2_y)
         $       :EQ, JMPC(ecAdd_P2_is_zero)
                 __ecAdd_P2_continue1:
+        ; [steps: 21, bin: 8]
+        ; P1 and P2 are not 𝒪 from here
 
-        ; 1] Check if P1 is in E(Fp)
+        ; 1] Check if P1 ∈ E(Fp)
         ; P1 in E iff (P1.y)² == (P1.x)³ + 3 (mod p)
         ; 1.1] Compute LHS and RHS
         $ => A    :MLOAD(ecAdd_P1_x), CALL(squareFpBN254)
         ; B = (P1.x)²
+        ; [steps: 35, bin: 9, arith: 2]
 
         $ => A      :MLOAD(ecAdd_P1_x), CALL(mulFpBN254)
         ; C = (P1.x)³
+        ; [steps: 47, bin: 10, arith: 4]
 
         %BN254_E_B => A     :CALL(addFpBN254)
         ; C = (P1.x)³ + 3
         C           :MSTORE(ecAdd_P3_x)
+        ; [steps: 60, bin: 11, arith: 6]
 
         $ => A    :MLOAD(ecAdd_P1_y), CALL(squareFpBN254)
         ; B = (Py)²
+        ; [steps: 74, bin: 12, arith: 8]
 
         ; 1.2] Check if LHS == RHS
         B => A
         $ => B      :MLOAD(ecAdd_P3_x)
         $           :EQ, JMPNC(ecAdd_P1_is_not_in_E)
+        ; [steps: 77, bin: 13, arith: 8]
 
-        ; 2] check if P2 is in E(Fp)
+        ; 2] check if P2 ∈ E(Fp)
         ; P2 in E iff (P2.y)² == (P2.x)³ + 3 (mod p)
         ; 2.1] Compute LHS and RHS
         $ => A    :MLOAD(ecAdd_P2_x), CALL(squareFpBN254)
         ; B = (P2.x)²
+        ; [steps: 91, bin: 14, arith: 10]
 
         $ => A      :MLOAD(ecAdd_P2_x), CALL(mulFpBN254)
         ; C = (P2.x)³
+        ; [steps: 103, bin: 15, arith: 12]
 
         %BN254_E_B => A     :CALL(addFpBN254)
         ; C = (P2.x)³ + 3
         C           :MSTORE(ecAdd_P3_x)
+        ; [steps: 116, bin: 16, arith: 14]
 
         $ => A    :MLOAD(ecAdd_P2_y), CALL(squareFpBN254)
         ; B = (Py)²
+        ; [steps: 130, bin: 17, arith: 16]
 
         ; 2.2] Check if LHS == RHS
         B => A
         $ => B      :MLOAD(ecAdd_P3_x)
         $           :EQ, JMPNC(ecAdd_P2_is_not_in_E)
+        ; P1,P2 ∈ E(Fp) from here
 
-        ; P1 and P2 are not 0, let's check whether they are different points, the same point or inverses of each other
+        ; P1 and P2 are not 𝒪, let's check whether they are different points, the same point or inverses of each other
         $ => A          :MLOAD(ecAdd_P1_x)
         $ => B          :MLOAD(ecAdd_P2_x)
 
         ; Is P1.x == P2.x?
         $               :EQ, JMPNC(ecAdd_different)
+        ; [steps: 136, bin: 19, arith: 16]
 
         $ => A          :MLOAD(ecAdd_P1_y)
         $ => B          :MLOAD(ecAdd_P2_y)
 
         ; Is P1.y == P2.y?
-        $               :EQ, JMPNC(ecAdd_P1_and_P2_are_inverted)
+        $               :EQ, JMPC(ecAdd_same, ecAdd_P1_and_P2_are_inverted)
+        ; [steps: 139, bin: 20, arith: 16]
 
-        ; P1 == P2
-                        :JMP(ecAdd_same)
-
+; Begin of branching
 ecAdd_P1_is_zero:
-        ; Is P2 = 0?
+        ; before (w.c.) -> [steps: 16, bin: 6]
+
+        ; Is P2 = 𝒪?
         0n => B
         $ => A  :MLOAD(ecAdd_P2_x)
         $       :EQ, JMPNC(__ecAdd_P2_continue2)
         $ => A  :MLOAD(ecAdd_P2_y)
         $       :EQ, JMPC(ecAdd_P1_and_P2_are_zero)
                 __ecAdd_P2_continue2:
+        ; [steps: 21, bin: 8]
 
         ; P2 in E iff (P2.y)² == (P2.x)³ + 3 (mod p)
         ; 1] Compute LHS and RHS
         $ => A    :MLOAD(ecAdd_P2_x), CALL(squareFpBN254)
         ; B = (P2.x)²
+        ; [steps: 35, bin: 9, arith: 2]
 
         $ => A      :MLOAD(ecAdd_P2_x), CALL(mulFpBN254)
         ; C = (P2.x)³
+        ; [steps: 47, bin: 10, arith: 4]
 
         %BN254_E_B => A     :CALL(addFpBN254)
         ; C = (P2.x)³ + 3
         C           :MSTORE(ecAdd_P3_x)
+        ; [steps: 60, bin: 11, arith: 6]
 
         $ => A    :MLOAD(ecAdd_P2_y), CALL(squareFpBN254)
         ; B = (Py)²
+        ; [steps: 74, bin: 12, arith: 8]
 
         ; 2] Check if LHS == RHS
         B => A
@@ -149,25 +186,31 @@ ecAdd_P1_is_zero:
         $ => A  :MLOAD(ecAdd_P2_x)
         $ => B  :MLOAD(ecAdd_P2_y)
         A       :MSTORE(ecAdd_P3_x)
-        B       :MSTORE(ecAdd_P3_y)
+        B       :MSTORE(ecAdd_P3_y), JMP(ecAdd_correct)
 
-                :JMP(ecAdd_correct)
+        ; till the end -> [steps: 84, bin: 13, arith: 8]
 
 ecAdd_P2_is_zero:
+        ; before (w.c.) -> [steps: 21, bin: 8]
+
         ; P1 in E iff (P1.y)² == (P1.x)³ + 3 (mod p)
         ; 1] Compute LHS and RHS
         $ => A    :MLOAD(ecAdd_P1_x), CALL(squareFpBN254)
         ; B = (P1.x)²
+        ; [steps: 35, bin: 9, arith: 2]
 
         $ => A      :MLOAD(ecAdd_P1_x), CALL(mulFpBN254)
         ; C = (P1.x)³
+        ; [steps: 47, bin: 10, arith: 4]
 
         %BN254_E_B => A     :CALL(addFpBN254)
         ; C = (P1.x)³ + 3
         C           :MSTORE(ecAdd_P3_x)
+        ; [steps: 60, bin: 11, arith: 6]
 
         $ => A    :MLOAD(ecAdd_P1_y), CALL(squareFpBN254)
         ; B = (Py)²
+        ; [steps: 74, bin: 12, arith: 8]
 
         ; 2] Check if LHS == RHS
         B => A
@@ -178,109 +221,129 @@ ecAdd_P2_is_zero:
         $ => A  :MLOAD(ecAdd_P1_x)
         $ => B  :MLOAD(ecAdd_P1_y)
         A       :MSTORE(ecAdd_P3_x)
-        B       :MSTORE(ecAdd_P3_y)
+        B       :MSTORE(ecAdd_P3_y), JMP(ecAdd_correct)
 
-                :JMP(ecAdd_correct)
+        ; till the end -> [steps: 84, bin: 13, arith: 8]
 
 ecAdd_P1_and_P2_are_zero:
-        ; P3 = 0
-        0n      :MSTORE(ecAdd_P3_x)
-        0n      :MSTORE(ecAdd_P3_y)
+        ; before (w.c.) -> [steps: 21, bin: 8]
 
-                :JMP(ecAdd_correct)
+        ; P3 = 𝒪
+        0n      :MSTORE(ecAdd_P3_x)
+        0n      :MSTORE(ecAdd_P3_y), JMP(ecAdd_correct)
+
+        ; till the end -> [steps: 26, bin: 8]
 
 ecAdd_P1_and_P2_are_inverted:
-        ; P3 = 0
-        0n              :MSTORE(ecAdd_P3_x)
-        0n              :MSTORE(ecAdd_P3_y)
+        ; before (w.c.) -> [steps: 139, bin: 20, arith: 16]
 
-                        :JMP(ecAdd_correct)
+        ; P3 = 𝒪
+        0n      :MSTORE(ecAdd_P3_x)
+        0n      :MSTORE(ecAdd_P3_y), JMP(ecAdd_correct)
+
+        ; till the end -> [steps: 144, bin: 20, arith: 16]
+; End of branching
 
 ecAdd_same:
+        ; before (w.c.) -> [steps: 139, bin: 20, arith: 16]
+
         $ => A  :MLOAD(ecAdd_P1_y)
         $ => C  :MLOAD(ecAdd_P1_y), CALL(addFpBN254)
         ; C = 2y
+        ; [steps: 152, bin: 21, arith: 18]
 
         C => A  :CALL(invFpBN254)
         ; B = 1 / 2y
         B       :MSTORE(ecAdd_P1_y_inv)
+        ; [steps: 174, bin: 24, arith: 20]
 
         B => A,C :CALL(addFpBN254)
         C => A
         $ => C  :MLOAD(ecAdd_P1_y_inv), CALL(addFpBN254)
         ; C = 3/2y
+        ; [steps: 199, bin: 25, arith: 24]
 
         C => A
         $ => B  :MLOAD(ecAdd_P1_x), CALL(mulFpBN254)
         ; C = 3x/2y
+        ; [steps: 212, bin: 26, arith: 26]
 
         C => A
         $ => B  :MLOAD(ecAdd_P1_x), CALL(mulFpBN254)
         ; C = lambda = 3x²/2y
 
-        C       :MSTORE(ecAdd_lambda)
+        C       :MSTORE(ecAdd_lambda), JMP(ecAdd_common_calculate)
         ; C = lambda
-
-        C => A  :CALL(squareFpBN254)
-        ; B = lambda²
-
-        B => A
-        $ => C  :MLOAD(ecAdd_P1_x), CALL(subFpBN254)
-        ; C = lambda² - x
-
-        C => A
-        $ => C  :MLOAD(ecAdd_P1_x), CALL(subFpBN254)
-        ; C = lambda² - x - x
-
-                :JMP(ecAdd_common_calculate)
+        ; [steps: 226, bin: 27, arith: 28]
 
 ecAdd_different:
+        ; block costs: [steps: 65, bin: 6, arith: 8]
+
+        ; before (w.c.) -> [steps: 136, bin: 19, arith: 16]
+
         $ => A  :MLOAD(ecAdd_P2_x)
         $ => C  :MLOAD(ecAdd_P1_x), CALL(subFpBN254)
         ; C = P2.x - P1.x
+        ; [steps: 150, bin: 20, arith: 18]
 
         C => A  :CALL(invFpBN254)
         ; B = 1 / (P2.x - P1.x)
         B       :MSTORE(ecAdd_lambda)
+        ; [steps: 172, bin: 23, arith: 20]
 
         $ => A  :MLOAD(ecAdd_P2_y)
         $ => C  :MLOAD(ecAdd_P1_y), CALL(subFpBN254)
         ; C = P2.y - P1.y
+        ; [steps: 186, bin: 24, arith: 22]
 
         C => A
         $ => B  :MLOAD(ecAdd_lambda), CALL(mulFpBN254)
         ; C = lambda = (P2.y - P1.y) / (P2.x - P1.x)
+
         C       :MSTORE(ecAdd_lambda)
+        ; C = lambda
+
+        0       :MSTORE(ecAdd_diff) ; Reset the flag
+        ; [steps: 201, bin: 25, arith: 24]
+
+ecAdd_common_calculate:
+        ; block costs: [steps: 97, bin: 6, arith: 12]
 
         C => A  :CALL(squareFpBN254)
         ; B = lambda²
+        ; [steps: 14, bin: 1, arith: 2]
 
         B => A
         $ => C  :MLOAD(ecAdd_P1_x), CALL(subFpBN254)
         ; C = lambda² - P1.x
+        ; [steps: 28, bin: 2, arith: 4]
 
         C => A
         $ => C  :MLOAD(ecAdd_P2_x), CALL(subFpBN254)
         ; C = lambda² - P1.x - P2.x
+        ; [steps: 42, bin: 3, arith: 6]
 
-ecAdd_common_calculate:
         C           :MSTORE(ecAdd_P3_x)
         ; P3.x = lambda² - P1.x - P2.x
 
         $ => A  :MLOAD(ecAdd_P1_x), CALL(subFpBN254)
         ; C = P1.x - P3.x
+        ; [steps: 66, bin: 4, arith: 8]
 
         $ => A  :MLOAD(ecAdd_lambda)
         C => B  :CALL(mulFpBN254)
         ; C = lambda·(P1.x - P3.x)
+        ; [steps: 79, bin: 5, arith: 10]
 
         C => A
         $ => C  :MLOAD(ecAdd_P1_y), CALL(subFpBN254)
         ; C = lambda·(P1.x - P3.x) - P1.y
+        ; [steps: 93, bin: 6, arith: 12]
 
-        C           :MSTORE(ecAdd_P3_y)
+        C       :MSTORE(ecAdd_P3_y), JMP(ecAdd_correct)
+        ; P3.y = lambda·(P1.x - P3.x) - P1.y
 
-                :JMP(ecAdd_correct)
+        ; till the end -> [steps: 97, bin: 6, arith: 12]
 
 ; ERRORS
 ecAdd_P1x_too_big:

@@ -56,6 +56,14 @@ VAR GLOBAL decompressFp12BN254_sum_y
 
 VAR GLOBAL decompressFp12BN254_RR
 
+; TODO: Add flags to avoid the a2 == 0 check
+
+; RESOURCES:
+; -----------------------------
+; PATH 1 a2 == 0: [steps: 132, bin: 6, arith: 12]
+; PATH 2 a2 != 0: [steps: 190, bin: 5, arith: 20] <--- w.c.
+; -----------------------------
+
 decompressFp12BN254:
         RR              :MSTORE(decompressFp12BN254_RR)
 
@@ -85,7 +93,7 @@ decompressFp12BN254:
         $       :EQ, JMPC(decompressFp12BN254_Ca2_is_zero)
                 __decompressFp12BN254_Ca2_continue:
 
-                        :JMP(decompressFp12BN254_Ca2_is_not_zero)
+                :JMP(decompressFp12BN254_Ca2_is_not_zero)
 
 decompressFp12BN254_Ca2_is_zero:
         ; 1] Compute a1 = (2·a4·a5)/a3
@@ -96,7 +104,7 @@ decompressFp12BN254_Ca2_is_zero:
 
         2n => A
         $ => C          :MLOAD(decompressFp12BN254_Ca4_x)
-        $ => D          :MLOAD(decompressFp12BN254_Ca4_y), CALL(escalarMulFp2BN254)
+        $ => D          :MLOAD(decompressFp12BN254_Ca4_y), CALL(scalarMulFp2BN254)
         E => A
         C => B
         $ => C          :MLOAD(decompressFp12BN254_Ca5_x)
@@ -113,13 +121,13 @@ decompressFp12BN254_Ca2_is_zero:
         $ => B          :MLOAD(decompressFp12BN254_a1_y), CALL(squareFp2BN254)
         2n => A
         C => D
-        E => C          :CALL(escalarMulFp2BN254)
+        E => C          :CALL(scalarMulFp2BN254)
         E               :MSTORE(decompressFp12BN254_twoCa1sq_x)
         C               :MSTORE(decompressFp12BN254_twoCa1sq_y)
 
         3n => A
         $ => C          :MLOAD(decompressFp12BN254_Ca3_x)
-        $ => D          :MLOAD(decompressFp12BN254_Ca3_y), CALL(escalarMulFp2BN254)
+        $ => D          :MLOAD(decompressFp12BN254_Ca3_y), CALL(scalarMulFp2BN254)
         E => A
         C => B
         $ => C          :MLOAD(decompressFp12BN254_Ca4_x)
@@ -147,7 +155,7 @@ decompressFp12BN254_Ca2_is_not_zero:
         ; 1] Compute a1 = (a5²·(9+u) + 3·a4² - 2·a3)/(4·a2)
         4n => A
         $ => C          :MLOAD(decompressFp12BN254_Ca2_x)
-        $ => D          :MLOAD(decompressFp12BN254_Ca2_y), CALL(escalarMulFp2BN254)
+        $ => D          :MLOAD(decompressFp12BN254_Ca2_y), CALL(scalarMulFp2BN254)
         E => A
         C => B          :CALL(invFp2BN254)
         C               :MSTORE(decompressFp12BN254_fourCa2inv_x)
@@ -166,13 +174,13 @@ decompressFp12BN254_Ca2_is_not_zero:
         $ => B          :MLOAD(decompressFp12BN254_Ca4_y), CALL(squareFp2BN254)
         3n => A
         C => D
-        E => C          :CALL(escalarMulFp2BN254)
+        E => C          :CALL(scalarMulFp2BN254)
         E               :MSTORE(decompressFp12BN254_threeCa4sq_x)
         C               :MSTORE(decompressFp12BN254_threeCa4sq_y)
 
         2n => A
         $ => C          :MLOAD(decompressFp12BN254_Ca3_x)
-        $ => D          :MLOAD(decompressFp12BN254_Ca3_y), CALL(escalarMulFp2BN254)
+        $ => D          :MLOAD(decompressFp12BN254_Ca3_y), CALL(scalarMulFp2BN254)
         $ => A          :MLOAD(decompressFp12BN254_threeCa4sq_x)
         $ => B          :MLOAD(decompressFp12BN254_threeCa4sq_y)
         C => D
@@ -193,7 +201,7 @@ decompressFp12BN254_Ca2_is_not_zero:
         $ => B          :MLOAD(decompressFp12BN254_a1_y), CALL(squareFp2BN254)
         2n => A
         C => D
-        E => C          :CALL(escalarMulFp2BN254)
+        E => C          :CALL(scalarMulFp2BN254)
         E               :MSTORE(decompressFp12BN254_twoCa1sq2_x)
         C               :MSTORE(decompressFp12BN254_twoCa1sq2_y)
 
@@ -215,7 +223,7 @@ decompressFp12BN254_Ca2_is_not_zero:
         $ => D          :MLOAD(decompressFp12BN254_Ca4_y), CALL(mulFp2BN254)
         3n => A
         C => D
-        E => C          :CALL(escalarMulFp2BN254)
+        E => C          :CALL(scalarMulFp2BN254)
         $ => A          :MLOAD(decompressFp12BN254_sum_x)
         $ => B          :MLOAD(decompressFp12BN254_sum_y)
         C => D
@@ -228,8 +236,6 @@ decompressFp12BN254_Ca2_is_not_zero:
         E => A
         1n => C         :CALL(addFpBN254)
         C               :MSTORE(decompressFp12BN254_a0_x)
-
-                        :JMP(decompressFp12BN254_end)
 
 decompressFp12BN254_end:
         $ => RR         :MLOAD(decompressFp12BN254_RR)

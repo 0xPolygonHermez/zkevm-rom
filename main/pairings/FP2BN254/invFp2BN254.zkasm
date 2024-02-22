@@ -1,5 +1,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; POST: The result is in the range [0,BN254_P)
+;;  PRE: A,B are assumed to be in the range [0,BN254_P)
+;; POST: ARITH_BN254_MULFP2 ensures that the result is in the range [0,BN254_P)
 ;;
 ;; invFp2BN254
 ;;             in: (A + B·u) ∈ Fp2, where A,B ∈ Fp
@@ -8,36 +9,30 @@
 ;; NOTE: On input 0, it returns 0
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; RESOURCES:
+; -------------------------------------------
+; PATH 1 A,B == 0:       [steps: 3,  bin: 0, arith: 0]
+; PATH 2 A != 0, B == 0: [steps: 16, bin: 3, arith: 1]
+; PATH 3 A,B != 0:       [steps: 18, bin: 4, arith: 1] <-- w.c.
+; -------------------------------------------
+
 VAR GLOBAL invFp2BN254_x
 VAR GLOBAL invFp2BN254_y
 
-VAR GLOBAL invFp2BN254_RR
-
 invFp2BN254:
-        RR              :MSTORE(invFp2BN254_RR)
+        ; Check if A = B = 0, and if so, return 0
+        ${checkIfZero(A,B)}     :JMPNZ(invFp2BN254_input_is_zero)
 
-        B               :MSTORE(invFp2BN254_y)
-        ; Normalization of A,B
-        %BN254_P => B
-        $               :LT, JMPC(__invFp2BN254_reduce_A_continue)
-                        :CALL(reduceFpBN254)
-                        __invFp2BN254_reduce_A_continue:
         A               :MSTORE(invFp2BN254_x)
-        $ => A          :MLOAD(invFp2BN254_y)
-        %BN254_P => B
-        $               :LT, JMPC(__invFp2BN254_reduce_B_continue)
-                        :CALL(reduceFpBN254)
-                        __invFp2BN254_reduce_B_continue:
-        A               :MSTORE(invFp2BN254_y)
-        ; From here, it is guaranteed that A,B ∈ [0,BN254_P)
+        B               :MSTORE(invFp2BN254_y)
 
 invFp2BN254_zero_check:
-        ; Check if A = B = 0, and if so, return 0
-        $ => B          :MLOAD(invFp2BN254_x)
+
         0 => A
         $               :EQ, JMPNC(invFp2BN254_normalized)
-        $ => B          :MLOAD(invFp2BN254_y)
-        $               :EQ, JMPC(invFp2BN254_input_is_zero)
+        $ => B          :MLOAD(invFp2BN254_x)
+        0               :EQ
+        ; From here, either A != 0 or B != 0
 
 invFp2BN254_normalized:
         $ => A          :MLOAD(invFp2BN254_x)
@@ -56,11 +51,8 @@ invFp2BN254_normalized:
         C => A
         1               :LT
         D => A
-        1               :LT, JMP(invFp2BN254_end)
+        1               :LT, RETURN
 
 invFp2BN254_input_is_zero:
-        0 => C,D
-
-invFp2BN254_end:
-        $ => RR         :MLOAD(invFp2BN254_RR)
-                        :RETURN
+        0 => C,D        :ASSERT
+        B               :ASSERT, RETURN

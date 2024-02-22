@@ -5,9 +5,12 @@
 ;;          input: P1,...,Pn ∈ G1 and Q1,...,Qn ∈ G2, where G1 = E(Fp)[r] = E(Fp), G2 = E'(Fp2)[r] and
 ;;                 the curves are E/Fp: y² = x³ + 3 and E'/Fp2: y² = x³ + 3/(9+u)
 ;;          output: 1 if e(P1,Q1)·...·e(Pn,Qn) = 1, 0 otherwise; where e: G1 x G2 -> GT is
-;;                      the optimal Ate pairing over the BN254 curve and GT = mu_r (the r-th roots of unity over Fp12*
+;;                      the optimal Ate pairing over the BN254 curve and GT = μ_r (the r-th roots of unity over Fp12*
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; TODO: If nInputs = 1, output 1 iff P or Q are 0. Optimization
+; TODO: If some Pi,Qi is 0, then set e(Pi,Qi)=1 and do not multiply by this naive element
 
 VAR GLOBAL ecPairing_ninputs
 
@@ -32,6 +35,21 @@ VAR GLOBAL ecPairing_RR
 ; 0 - no error
 ; 1 - error found in some input
 
+; RESOURCES (not considering error or trivial paths):
+; -------------------------------------------
+;  [steps: 15]                                            // setup
+;   + niputs * [steps: 173154,  bin: 966, arith: 13415]   // half_paring
+;   + [steps: 170762, bin: 498, arith: 15411]             // final_exponentiation + end
+; total (w.c.): [steps: 15 + niputs*173154 + 170762,
+;                  bin:      niputs*966    + 498,
+;                arith:      niputs*13415  + 15411]
+;
+; Examples:
+;       · ninputs = 2: [517085, 2430, 42241]
+;       · ninputs = 3: [690239, 3396, 55656]
+;       · ninputs = 4: [863393, 4362, 69071]
+; -------------------------------------------
+
 ecPairing:
         RR              :MSTORE(ecPairing_RR)
 
@@ -39,6 +57,7 @@ ecPairing:
         0n              :MSTORE(ecPairing_result)
 
         $ => A          :MLOAD(ecPairing_ninputs), JMPZ(ecPairing_0_inputs)
+        ; [steps: 3,  bin: 0, arith: 0]
 
         ; Initialize the multiplication with 1
         1n              :MSTORE(ecPairing_mul_f11_x)
@@ -53,14 +72,11 @@ ecPairing:
         0n              :MSTORE(ecPairing_mul_f22_y)
         0n              :MSTORE(ecPairing_mul_f23_x)
         0n              :MSTORE(ecPairing_mul_f23_y)
-
-                        :JMP(ecPairing_Miller_loop)
-
-ecPairing_0_inputs:
-        1               :MSTORE(ecPairing_result)
-                        :JMP(ecPairing_correct)
+        ; [steps: 15,  bin: 0, arith: 0]
 
 ecPairing_Miller_loop:
+        ; block costs: [steps: 173154,  bin: 966, arith: 13415]
+
         $ => E          :MLOAD(readXFromCalldataOffset)
         32              :MSTORE(readXFromCalldataLength)
         E + 32 => E     :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
@@ -81,6 +97,7 @@ ecPairing_Miller_loop:
         E + 32 => E     :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
         $ => A          :MLOAD(readXFromCalldataResult)
         A               :MSTORE(halfPairingBN254_Q_y1), CALL(halfPairingBN254)
+        ; [steps: 172029,  bin: 966, arith: 13327]
 
         ; Check if the error code (B) of halfPairingBN254 is not 0, meaning there is an error in some of the inputs
         B               :JMPNZ(ecPairing_input_error)
@@ -134,6 +151,7 @@ ecPairing_Miller_loop:
         B               :MSTORE(mulFp12BN254_b22_y)
         C               :MSTORE(mulFp12BN254_b23_x)
         D               :MSTORE(mulFp12BN254_b23_y), CALL(mulFp12BN254)
+        ; [steps: 173127,  bin: 966, arith: 13415]
 
         $ => A          :MLOAD(mulFp12BN254_c11_x)
         $ => B          :MLOAD(mulFp12BN254_c11_y)
@@ -162,10 +180,12 @@ ecPairing_Miller_loop:
 
         $ => A          :MLOAD(ecPairing_ninputs)
         A - 1 => A      :JMPZ(ecPairing_final_exponentiation)
-        A               :MSTORE(ecPairing_ninputs)
-                        :JMP(ecPairing_Miller_loop)
+        A               :MSTORE(ecPairing_ninputs), JMP(ecPairing_Miller_loop)
+        ; [steps: 173154,  bin: 966, arith: 13415]
 
 ecPairing_final_exponentiation:
+        ; block costs: [steps: 170762, bin: 498, arith: 15411]
+
         $ => A          :MLOAD(mulFp12BN254_c11_x)
         $ => B          :MLOAD(mulFp12BN254_c11_y)
         $ => C          :MLOAD(mulFp12BN254_c12_x)
@@ -190,6 +210,7 @@ ecPairing_final_exponentiation:
         B               :MSTORE(finalExpBN254_f22_y)
         C               :MSTORE(finalExpBN254_f23_x)
         D               :MSTORE(finalExpBN254_f23_y), CALL(finalExpBN254)
+        ; [steps: 170731, bin: 486, arith: 15411]
 
         ; Check whether the result is 1 or not
         1n => B
@@ -219,6 +240,7 @@ ecPairing_final_exponentiation:
         $ => A  :MLOAD(finalExpBN254_f23_y)
         $       :EQ, JMPC(ecPairing_equation_is_satisfied)
                 __finalExpBN254_result_continue:
+        ; till end -> [steps: 170762, bin: 498, arith: 15411]
 
         ; the pairing equation is not satisfied, then output 0
         0               :MSTORE(ecPairing_result)
@@ -232,6 +254,9 @@ ecPairing_equation_is_satisfied:
 ; ERRORS
 ecPairing_input_error:
         1 => B          :JMP(ecPairing_error)
+
+ecPairing_0_inputs:
+        1               :MSTORE(ecPairing_result)
 
 ecPairing_correct:
         0 => B          :JMP(ecPairing_end)
