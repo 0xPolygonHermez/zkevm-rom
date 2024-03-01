@@ -1,23 +1,17 @@
-;@info: Add 'data' bytes to batchHashData. batchHashData = H_keccak( transactions )
-;@in: D: length of the hash
-addBatchHashData:
-        $ => HASHPOS                    :MLOAD(batchHashPos)
-        $ => E                          :MLOAD(batchHashDataId)
-        A                               :HASHK(E)
-        HASHPOS                         :MSTORE(batchHashPos)
-        C => HASHPOS
-        $ => E                          :MLOAD(lastHashKIdUsed), RETURN
-
-;; get D bytes from transaction bytes
+;; get D bytes from batchL2Data
 ;@in D: number of bytes to get
 ;@in C: current data parsed pointer
-;@out A: D bytes from batch data at offset C
-getTxBytes:
+;@out A: D bytes from batchL2Data at offset C
+getBatchL2DataBytes:
         $ => A                          :MLOAD(batchL2DataLength)
         $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${p = p + D}
+        $ => E                          :MLOAD(batchHashDataPointer)
+        $ => HASHPOS                    :MLOAD(batchHashPos)
+        $ => A                          :HASHP(E)
+        HASHPOS                         :MSTORE(batchHashPos)
+        C => HASHPOS
+        $ => E                          :MLOAD(lastHashKIdUsed)
                                         :RETURN
 
 ;; Add bytes to generate ethereum signed message
@@ -30,8 +24,12 @@ addHashTxBegin:
         $ => A                          :MLOAD(batchL2DataLength)
         $ => B                          :MLOAD(batchL2DataParsed)
         A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${p = p + D}
+        $ => E                          :MLOAD(batchHashDataPointer)
+        $ => HASHPOS                    :MLOAD(batchHashPos)
+        $ => A                          :HASHP(E)
+        HASHPOS                         :MSTORE(batchHashPos)
+        $ => E                          :MLOAD(lastHashKIdUsed)
+        C => HASHPOS
         A                               :HASHK(E)
         C + D => C                      :RETURN
 

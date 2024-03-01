@@ -885,9 +885,6 @@ handleError:
 handleBatchError:
     ; restore init state root and finish batch
     $ => SR                     :MLOAD(batchSR)
-    ; if batch error is triggered while parsing the RLP, it jumps to 'appendTxsInit'
-    ; to fill the missing bytes to complete 'batchDataHash'
-    $                           :MLOAD(isLoadingRLP),JMPNZ(appendTxsInit)
     $${eventLog(onFinishTx)}    :JMP(finalizeBatch)
 
 errorAtFirstContext:
@@ -1271,43 +1268,6 @@ readPushBytes_1:
 
     $ => D                      :MLOAD(pushBytes), RETURN
 
-VAR GLOBAL tmpVarDaddB
-VAR GLOBAL tmpVarBaddB
-VAR GLOBAL tmpZkPCaddB
-VAR GLOBAL auxBytes
-
-;@info: adds data to batchHashdata byte by byte
-;@in: A: bytes to add
-;@in D: bytes length
-addBatchHashByteByByte:
-        %MAX_CNT_STEPS - STEP - 10      :JMPN(outOfCountersStep)
-        RR                              :MSTORE(tmpZkPCaddB)
-        A                               :MSTORE(auxBytes)
-        D                               :MSTORE(tmpVarDaddB)
-        B                               :MSTORE(tmpVarBaddB)
-        1 => D
-
-utilsAddBatchHashBytebyByteLoop:
-        %MAX_CNT_STEPS - STEP - 50          :JMPN(outOfCountersStep)
-        %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
-        32 - D => D
-        $ => A                          :MLOAD(auxBytes), CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-        ; get last byte in A
-        0xFFn => B
-        $ => A                          :AND
-        D => B
-        ; add last byte to batchHashData
-        1 => D                          :CALL(addBatchHashData); in:[D: length of the hash]
-        ; check loop
-        B => D
-        ; D + 1 => D, we set 33 instead of 32 to earn 1 step
-        33 - D => D
-        $ => B                          :MLOAD(tmpVarDaddB)
-        D - B - 1                       :JMPN(utilsAddBatchHashBytebyByteLoop)
-        $ => B                          :MLOAD(tmpVarBaddB)
-        $ => RR                         :MLOAD(tmpZkPCaddB)
-                                        :RETURN
-
 VAR GLOBAL startsWithEF
 VAR GLOBAL tmpVarAEF
 VAR GLOBAL tmpVarBEF
@@ -1653,10 +1613,8 @@ VAR GLOBAL tmpZkPCVerifyMerkleProof
 ;@in C: timestamp
 verifyMerkleProof:
     ; check zk-counters
-    $ => E                                      :MLOAD(cntKeccakPreProcess)
-
     ; 1 keccak for the leaf and 32 for the L1InfoTree
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - E - 33   :JMPN(outOfCountersKeccak)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 33       :JMPN(outOfCountersKeccak)
     ; 7 steps at most per bit + 21 statics
     %MAX_CNT_STEPS - STEP - 7 * 32 - 21         :JMPN(outOfCountersStep)
 

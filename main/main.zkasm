@@ -34,7 +34,7 @@ start: ; main zkROM entry point
         ${getTimestampLimit()}                  :MSTORE(timestampLimit)
         ${getTxsLen()}                          :MSTORE(batchL2DataLength) ; less than 120000 bytes. Enforced by the smart contract
         ${getForcedBlockHashL1()} => A          :MSTORE(forcedBlockHashL1)
-
+        ${getBatchHashData()}                   :MSTORE(batchHashData)
         ;set initial state root
         $ => SR                                 :MLOAD(oldStateRoot)
         SR                                      :MSTORE(batchSR)
@@ -42,41 +42,78 @@ start: ; main zkROM entry point
         SP + 1                                  :MSTORE(newNumBatch)
         ; compute isForced flag
         0 => B
-        $                                       :EQ, JMPC(computeKeccaks)
+        $                                       :EQ, JMPC(computeNewAccInputHash)
         1                                       :MSTORE(isForced)
 
 ;;;;;;;;;;;;;;;;;;
-;; B - Compute keccaks needed to finish the batch
+;; B - Compute newAccInputHash, load newLocalExitRoot and timestamp
 ;;;;;;;;;;;;;;;;;;
-computeKeccaks:
+computeNewAccInputHash:
         $${eventLog(onStartBatch, C)}
+        0 => HASHPOS
 
-        ; Compute necessary keccak counters to finish batch
-        $ => A                                  :MLOAD(batchL2DataLength)
-        ; Divide the total data length + 1 by 136 to obtain the keccak counter increment.
-        ; 136 is the value used by the prover to increment keccak counters
-        A + 1                                   :MSTORE(arithA)
-        136                                     :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-        $ => B                                  :MLOAD(arithRes1)
-        ; Compute minimum necessary keccaks to finish the batch
-        B + 1 + %MIN_CNT_KECCAK_BATCH => B      :MSTORE(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B    :JMPN(outOfCountersKeccak)
+        32 => D
+        $ => A                          :MLOAD(oldAccInputHash)
+        A                               :HASHK(0)
 
+        $ => A                          :MLOAD(batchHashData)
+        A                               :HASHK(0)
+
+        $ => A                          :MLOAD(l1InfoRoot)
+        A                               :HASHK(0)
+
+        8 => D
+        $ => A                          :MLOAD(timestampLimit)
+        A                               :HASHK(0)
+
+        20 => D
+        $ => A                          :MLOAD(sequencerAddr)
+        A                               :HASHK(0)
+
+        32 => D
+        $ => A                          :MLOAD(forcedBlockHashL1)
+        A                               :HASHK(0)
+
+        ; finish accInputHash
+        HASHPOS                         :HASHKLEN(0)
+
+        $ => C                          :HASHKDIGEST(0)
+        C                               :MSTORE(newAccInputHash)
+        ; Compute batchHashData (loaded at smt from executor)
+        $ => E                          :MLOAD(nextHashPId)
+        E                               :MSTORE(batchHashDataPointer)
+        E + 1                           :MSTORE(nextHashPId)
+        ; Initialize batchHashPos to zero (CHECK: is this necessary?)
+        0                               :MSTORE(batchHashPos)
+        $ => A                          :MLOAD(batchHashData)
+        ; No need to compute poseidon consumption, max batchL2Data length is 120000 bytes and this is the beginning of the execution, will always have enough poseidons
+        A                               :HASHPDIGEST(E)
+        ; Check batchL2DataLength (CHECK: is it necessary to check this? Is a correct behavior? Is possible to get the length from hashplen?)
+        $ => HASHPOS                    :MLOAD(batchL2DataLength)
+        HASHPOS                         :HASHPLEN(E)
+
+        ;; Get local exit root
+        ; Read 'localExitRoot' variable from GLOBAL_EXIT_ROOT_MANAGER_L2 and store
+        ; it to the 'newLocalExitRoot' input, will be used to compute newAccInputHash
+        %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2  => A
+        %SMT_KEY_SC_STORAGE => B
+        %LOCAL_EXIT_ROOT_STORAGE_POS => C
+        $ => A                                  :SLOAD
+        A                                       :MSTORE(newLocalExitRoot)
+
+        ; Load current timestamp
+        %TIMESTAMP_STORAGE_POS => C
+        %ADDRESS_SYSTEM => A
+        %SMT_KEY_SC_STORAGE => B
+        $ => A                              :SLOAD, MSTORE(timestamp)
 ;;;;;;;;;;;;;;;;;;
 ;; C - Loop parsing RLP transactions
 ;;      - Load transaction RLP data and ensure it has correct RLP encoding
 ;;      - If an error is found in any transaction, the batch will not process any transaction
 ;;;;;;;;;;;;;;;;;;
-
-        1 => E                                  :MSTORE(lastHashKIdUsed)
-        0                                       :MSTORE(batchHashPos)
-        E                                       :MSTORE(batchHashDataId)
         $ => A                                  :MLOAD(lastCtxUsed)
         A + %CALLDATA_RESERVED_CTX => A         :MSTORE(ctxTxToUse) ; Points at first context to be used when processing transactions. We reserve ctx = 1 for calldata
         A                                       :MSTORE(lastCtxUsed)
-        $${var p = 0}
-        ; set flag isLoadingRLP to 1
-        1                                       :MSTORE(isLoadingRLP)
 
 txLoopRLP:
         $ => A                                  :MLOAD(lastCtxUsed)
@@ -84,11 +121,7 @@ txLoopRLP:
         ; If batchL2DataLength is zero, we finalize batch
         $ => A                                  :MLOAD(batchL2DataLength), JMPZ(finalizeBatch)
         $ => C                                  :MLOAD(batchL2DataParsed)
-        C - A                                   :JMPN(loadTx_rlp, endCheckRLP)
-
-endCheckRLP:
-        ; set flag isLoadingRLP to 0
-        0                                       :MSTORE(isLoadingRLP)
+        C - A                                   :JMPN(loadTx_rlp, setBlockNum)
 
 ;;;;;;;;;;;;;;;;;;
 ;; D - Load blockNum variable
@@ -139,71 +172,8 @@ processTxsEnd:
 finalizeBatch:
 
 ;;;;;;;;;;;;;;;;;;
-;; E - Batch asserts & computations:
-;;      - get newLocalExitRoot
-;;      - assert transactions size
-;;      - compute batchHashData
-;;      - compute newAccInputHash
+;; E - Finalize execution: set output values at corresponding registers
 ;;;;;;;;;;;;;;;;;;
-
-;; Batch must be always end correctly
-;; Meaning that enough zk-counters should be available to finalize it
-;;   - 'keccaks' are reserved at the very beginning of the batch in order to be able to perform the final 'accInputHash' hash
-;;   - the rest of counters will not overflow since it is added a %SAFE_RANGE bandwith
-
-;; Get local exit root
-        ; Read 'localExitRoot' variable from GLOBAL_EXIT_ROOT_MANAGER_L2 and store
-        ; it to the 'newLocalExitRoot' input
-        %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2  => A
-        %SMT_KEY_SC_STORAGE => B
-        %LOCAL_EXIT_ROOT_STORAGE_POS => C
-        $ => A                                  :SLOAD
-        A                                       :MSTORE(newLocalExitRoot)
-
-;; Transactions size verification
-        ; Ensure bytes added to compute the 'batchHashData' matches the number of bytes loaded from input
-        $ => A                                  :MLOAD(batchHashPos)
-        $                                       :MLOAD(batchL2DataLength), ASSERT
-
-;; Compute 'batchHashData'
-        A => HASHPOS
-        $ => E                                  :MLOAD(batchHashDataId)
-
-        HASHPOS                                 :HASHKLEN(E)
-        $ => A                                  :HASHKDIGEST(E)
-
-        A                                       :MSTORE(batchHashData)
-
-;; Compute 'newAccInputHash'
-        0 => HASHPOS
-
-        32 => D
-        $ => A                          :MLOAD(oldAccInputHash)
-        A                               :HASHK(0)
-
-        $ => A                          :MLOAD(batchHashData)
-        A                               :HASHK(0)
-
-        $ => A                          :MLOAD(l1InfoRoot)
-        A                               :HASHK(0)
-
-        8 => D
-        $ => A                          :MLOAD(timestampLimit)
-        A                               :HASHK(0)
-
-        20 => D
-        $ => A                          :MLOAD(sequencerAddr)
-        A                               :HASHK(0)
-
-        32 => D
-        $ => A                          :MLOAD(forcedBlockHashL1)
-        A                               :HASHK(0)
-
-        ; finish accInputHash
-        HASHPOS                         :HASHKLEN(0)
-
-        $ => C                          :HASHKDIGEST(0)
-        C                               :MSTORE(newAccInputHash)
         $${eventLog(onFinishBatch)}
 
 ;;;;;;;;;;;;;;;;;;
