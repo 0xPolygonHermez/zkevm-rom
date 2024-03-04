@@ -33,6 +33,43 @@ addHashTxBegin:
         A                               :HASHK(E)
         C + D => C                      :RETURN
 
+;; Add bytes to generate ethereum signed message byte by byte
+; It's done byte by byte to get 1 byte access to hashp during execution
+;; - legacy transaction: signedMessage = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data, chainId, 0, 0))
+;; - pre EIP-155: signedMessage = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data))
+addHashTxFromFreeInput:
+        $ => A                          :MLOAD(txRLPLength)
+        A - HASHPOS - D                 :JMPN(invalidTxRLP)
+        $ => A                          :MLOAD(batchL2DataLength)
+        $ => B                          :MLOAD(batchL2DataParsed)
+        A - B - C - D                   :JMPN(invalidTxRLP)
+        B + C => A
+        ; Read data from free input
+        ${getTxs(A,D)} => A, B
+        $ => E                          :MLOAD(lastHashKIdUsed)
+        C => HASHPOS
+        ; Insert data into txhash (hashk)
+        A                               :HASHK(E)
+        C + D => C
+        ; Save current registers
+        A                               :SAVE(B,C,D,E,RR,RCX)
+        $ => E                          :MLOAD(batchHashDataPointer)
+        $ => HASHPOS                    :MLOAD(batchHashPos)
+        1 => C ; Current pointer
+        D => RCX ; total bytes
+        ; Validate free input
+validateFreeInputLoop:
+        RCX - C                           :JMPN(validateFreeInputLoopEnd)
+        ; Get free input byte by byte
+        RCX - C => D                      :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+        $                               :HASHP1(E), ASSERT
+        ; The remainder of divArith used at SHRarith is the following bytes I want to check
+        $ => A                          :MLOAD(arithRes2)
+        C + 1 => C                      :JMP(validateFreeInputLoop)
+validateFreeInputLoopEnd:
+        HASHPOS                         :MSTORE(batchHashPos)
+        $ => A                          :RESTORE
+        C => HASHPOS                    :RETURN
 
 ;; Check short value is over 127. Error RLP: single byte < 0x80 are not prefixed
 checkShortRLP:

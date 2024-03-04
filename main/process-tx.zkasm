@@ -119,43 +119,43 @@ endCheckChainId:
         %TX_GAS_LIMIT => A
         $                               :LT,JMPC(invalidIntrinsicBatchGasLimit)
 
-        ; Intrinsic gas --> gas Limit >= 21000 + calldata cost + deployment cost
-        %BASE_TX_GAS => E ; Store init intrinsic gas at E
+              ; Intrinsic gas --> gas Limit >= 21000 + calldata cost + deployment cost
+          ; Intrinsic gas --> gas Limit >= 21000 + calldata cost + deployment cost
+        %BASE_TX_GAS => B ; Store init intrinsic gas at E
         $ => A                          :MLOAD(isCreateContract), JMPNZ(addDeploymentGasCost, getCalldataGasCost)
 
 addDeploymentGasCost:
-        %BASE_TX_DEPLOY_GAS => E ; 53000 gas if transaction is a create
+        %BASE_TX_DEPLOY_GAS => B ; 53000 gas if transaction is a create
 
 getCalldataGasCost:
         $ => A                          :MLOAD(txCalldataLen), JMPZ(endCalldataIntrinsicGas) ; less than 32 bits. Enforced by memory expansion gas cost & smart contract batchL2DataHash
 
 addGas:
         $ => HASHPOS                    :MLOAD(dataStarts)
-        0 => C                          :JMP(loopBytes)
+        $ => E                          :MLOAD(batchHashDataPointer)
+        0 => C
+        %MAX_CNT_STEPS - STEP - 10*A    :JMPN(outOfCountersStep)
 
 loopBytes:
-        %MAX_CNT_STEPS - STEP - 10      :JMPN(outOfCountersStep)
         A - C - 1                       :JMPN(endCalldataIntrinsicGas)
-        E => B
-        $ => E                          :MLOAD(batchHashDataPointer)
         $ => D                          :HASHP1(E)
-        B => E
         C + 1 => C
         D - 1                           :JMPN(add4Gas, add16Gas)
 
 add4Gas:
-        E + 4 => E                      :JMP(loopBytes)
+        B + 4 => B                      :JMP(loopBytes)
 
 add16Gas:
-        E + 16 => E                     :JMP(loopBytes)
+        B + 16 => B                     :JMP(loopBytes)
 
 endCalldataIntrinsicGas:
+        ; Restore current context
+        $ => CTX                        :MLOAD(currentCTX)
         ; Compare gas limit >= intrinsic gas
         $ => A                          :MLOAD(txGasLimit)
-        E => B
         $                               :LT, JMPC(invalidIntrinsicTxGasLimit)
         ; Store calculated gas for later usage
-        E                               :MSTORE(gasCalldata)
+        B                               :MSTORE(gasCalldata)
 
         ; Check upfront cost: balance >= gas price * gas limit + value
         ; gas price * gas limit
@@ -366,9 +366,10 @@ readDeployBytecode:
         $ => HASHPOS                    :MLOAD(dataStarts)
         HASHPOS + PC => HASHPOS
         $ => E                          :MLOAD(batchHashDataPointer)
-        $ => RR                         :HASHK1(E)
+        $ => RR                         :HASHP1(E)
         $${eventLog(onOpcode(RR))}
         PC + 1 => PC                    :JMP(@mapping_opcodes + RR)
+
 
 ;; read calldata bytes of a CREATE/CREATE2 call and process them
 readDeployBytecodeCreate:
@@ -378,9 +379,9 @@ readDeployBytecodeCreate:
         E - PC - 1                      :JMPN(readDeployBytecodeCreateDefault)
         $ => E                          :MLOAD(argsOffsetCall)
         E + PC => E
-        1 => C                          :CALL(MLOADX)
+        1 => C                          :CALL(MLOADX) ; in: [E: offset, C: length] out: [A: value, E: new offset]
         $ => CTX                        :MLOAD(currentCTX)
-        31 => D                         :CALL(SHRarith)
+        31 => D                         :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
         A => RR
         $${eventLog(onOpcode(RR))}
         PC + 1 => PC                    :JMP(@mapping_opcodes + RR)
