@@ -18,6 +18,7 @@ const pathMainPil = path.join(__dirname, '../../node_modules/@0xpolygonhermez/zk
 const inputs = [];
 const testsFolder = path.join(__dirname, 'parallel-tests');
 const sampleDir = path.join(__dirname, 'parallel-tests-sample/sample.test.js');
+const { argv } = require('yargs');
 
 async function genTestsFiles() {
     if (!fs.existsSync(testsFolder)) {
@@ -26,7 +27,11 @@ async function genTestsFiles() {
     for (const inputPath of inputs) {
         const name = inputPath.split('/').slice(-1)[0].replace('json', 'test.js');
         const sample = fs.readFileSync(sampleDir, 'utf-8');
-        const test = sample.replace('%%INPUT_PATH%%', `${inputPath}`);
+        let test = sample.replace('%%INPUT_PATH%%', `${inputPath}`);
+        // Replace skip vcounters flag
+        if (argv.skipVCounters) {
+            test = test.replace('%%SKIP_VCOUNTERS%%', 'yes');
+        }
         fs.writeFileSync(`${testsFolder}/${name}`, test);
     }
     expect(true).to.be.equal(true);
