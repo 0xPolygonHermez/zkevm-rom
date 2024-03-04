@@ -229,7 +229,7 @@ shortData:
                                         :JMP(readData)
 
 longData:
-        A - 0xb7 => D                   :CALL(addHashTx)
+        A - 0xb7 => D                   :CALL(addHashTxFromFreeInput)
                                         :CALL(checkLongRLP)
                                         :CALL(checkNonLeadingZeros)
         $ => D                          :MLOAD(batchHashPos)
@@ -239,7 +239,7 @@ longData:
 readData:
         32 => D
         B - D                           :JMPN(readDataFinal)
-        B - D                           :MSTORE(txDataRead), CALL(addHashTx)
+        B - D                           :MSTORE(txDataRead), CALL(addHashTxFromFreeInput)
         $ => E                          :MLOAD(globalCalldataMemoryOffset), CALL(addL2HashTx)
         ; Store current CTX
         CTX => B
@@ -253,8 +253,9 @@ readData:
 
 readDataFinal:
         B - 1                           :JMPN(endData)
-        B => D                          :CALL(addHashTx)
+        B => D                          :CALL(addHashTxFromFreeInput)
                                         :CALL(addL2HashTx)
+                                        :CALL(checkShortDataRLP)
         32 - D => D                     :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
         $ => E                          :MLOAD(globalCalldataMemoryOffset)
         ; Store current CTX
@@ -265,7 +266,6 @@ readDataFinal:
         ; Restore current CTX
         B => CTX
         E + 1                           :MSTORE(globalCalldataMemoryOffset)
-                                        :CALL(checkShortDataRLP)
                                         :JMP(endData)
 
 zeroBytesData:
@@ -305,6 +305,7 @@ endChainId:
 
 setPreEIP155Flag:
         1                               :MSTORE(isPreEIP155)
+        $ => E                          :MLOAD(lastHashKIdUsed)
 ;; size verification
         ; checks RLP length read at the RLP header with bytes read during RLP parsing
 sizeVerification:
