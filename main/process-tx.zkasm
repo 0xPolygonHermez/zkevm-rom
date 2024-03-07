@@ -139,8 +139,8 @@ loopBytes:
         %MAX_CNT_STEPS - STEP - 10      :JMPN(outOfCountersStep)
         A - C - 1                       :JMPN(endCalldataIntrinsicGas)
         E => B
-        $ => E                          :MLOAD(batchHashDataId)
-        $ => D                          :HASHK1(E)
+        $ => E                          :MLOAD(batchHashDataPointer)
+        $ => D                          :HASHP1(E)
         B => E
         C + 1 => C
         D - 1                           :JMPN(add4Gas, add16Gas)
@@ -230,8 +230,7 @@ getContractAddress:
         ; Check if create is with CREATE2 opcode
         $ => A                          :MLOAD(isCreate2), JMPNZ(create2)
         ; Check keccak counters
-        $ => A                          :MLOAD(cntKeccakPreProcess)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1:JMPN(outOfCountersKeccak)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1:JMPN(outOfCountersKeccak)
         $ => A                          :MLOAD(txNonce)
         0x80 => B
         $                               :LT,JMPC(nonce1byte)
@@ -271,9 +270,8 @@ create2:
         C + 1                           :MSTORE(arithA)
         136                             :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
         $ => B                          :MLOAD(arithRes1)
-        $ => A                          :MLOAD(cntKeccakPreProcess)
         ; -2 because we will use one more keccak for generating contract address
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2 - B :JMPN(outOfCountersKeccak)
+        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 2 - B :JMPN(outOfCountersKeccak)
 
         $ => CTX                        :MLOAD(originCTX)
         $ => B                          :MLOAD(argsOffsetCall)
@@ -369,7 +367,7 @@ readDeployBytecode:
         B - PC - 1                      :JMPN(defaultOpCode)
         $ => HASHPOS                    :MLOAD(dataStarts)
         HASHPOS + PC => HASHPOS
-        $ => E                          :MLOAD(batchHashDataId)
+        $ => E                          :MLOAD(batchHashDataPointer)
         $ => RR                         :HASHK1(E)
         $${eventLog(onOpcode(RR))}
         PC + 1 => PC                    :JMP(@mapping_opcodes + RR)
