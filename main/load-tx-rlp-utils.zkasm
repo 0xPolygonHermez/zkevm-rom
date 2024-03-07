@@ -11,7 +11,7 @@ getBatchL2DataBytes:
         $ => A                          :HASHP(E)
         HASHPOS                         :MSTORE(batchHashPos)
         C => HASHPOS
-        $ => E                          :MLOAD(lastHashKIdUsed)
+        $ => E                          :MLOAD(txHashPointer)
                                         :RETURN
 
 ;; Add bytes to generate ethereum signed message
@@ -28,7 +28,7 @@ addHashTxBegin:
         $ => HASHPOS                    :MLOAD(batchHashPos)
         $ => A                          :HASHP(E)
         HASHPOS                         :MSTORE(batchHashPos)
-        $ => E                          :MLOAD(lastHashKIdUsed)
+        $ => E                          :MLOAD(txHashPointer)
         C => HASHPOS
         A                               :HASHK(E)
         C + D => C                      :RETURN
@@ -46,7 +46,7 @@ addHashTxFromFreeInput:
         B + C => A
         ; Read data from free input
         ${getTxs(A,D)} => A, B
-        $ => E                          :MLOAD(lastHashKIdUsed)
+        $ => E                          :MLOAD(txHashPointer)
         C => HASHPOS
         ; Insert data into txhash (hashk)
         A                               :HASHK(E)
@@ -57,11 +57,13 @@ addHashTxFromFreeInput:
         $ => HASHPOS                    :MLOAD(batchHashPos)
         1 => C ; Current pointer
         D => RCX ; total bytes
+        ; Set default remainder to 0, in case SHRarith is not using arithDiv because is shifting zero bytes
+        0                               :MSTORE(arithRes2)
         ; Validate free input
 validateFreeInputLoop:
-        RCX - C                           :JMPN(validateFreeInputLoopEnd)
+        RCX - C                         :JMPN(validateFreeInputLoopEnd)
         ; Get free input byte by byte
-        RCX - C => D                      :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+        RCX - C => D                    :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
         $                               :HASHP1(E), ASSERT
         ; The remainder of divArith used at SHRarith is the following bytes I want to check
         $ => A                          :MLOAD(arithRes2)
