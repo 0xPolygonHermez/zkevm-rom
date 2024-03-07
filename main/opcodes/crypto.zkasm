@@ -47,8 +47,9 @@ opSHA3:
     %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1 - B :JMPN(outOfCountersKeccak)
 
     ; new hash id
-    $ => B           :MLOAD(lastHashKIdUsed)
-    B + 1 => B       :MSTORE(lastHashKIdUsed)
+    $ => B           :MLOAD(nextHashKId)
+    B                :MSTORE(sha3Pointer)
+    B + 1            :MSTORE(nextHashKId)
     ; set bytes to hash at D
     32 => D
     ; A new hash with position 0 is started
@@ -65,7 +66,7 @@ opSHA3Loop:
     ; save new offset at B
     E => B
     ; get current hash pointer
-    $ => E          :MLOAD(lastHashKIdUsed)
+    $ => E          :MLOAD(sha3Pointer)
     ; append A to hash pointer E
     A               :HASHK(E)
     ; restore new offset at E
@@ -78,7 +79,7 @@ opSHA3Final:
     ; set #bytes to right shift
     32 - C => D     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     ; get current hash pointer
-    $ => E          :MLOAD(lastHashKIdUsed)
+    $ => E          :MLOAD(sha3Pointer)
     ; set remaining bytes length to hash at D
     C => D
     ; append A to hash pointer E
@@ -86,7 +87,7 @@ opSHA3Final:
 
 opSHA3End:
     ; get current hash pointer
-    $ => E          :MLOAD(lastHashKIdUsed)
+    $ => E          :MLOAD(sha3Pointer)
     ; append A to hash pointer E
     HASHPOS         :HASHKLEN(E)
     ; compute hash

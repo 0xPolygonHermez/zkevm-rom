@@ -128,9 +128,7 @@ addDeploymentGasCost:
         %BASE_TX_DEPLOY_GAS => B ; 53000 gas if transaction is a create
 
 getCalldataGasCost:
-        $ => A                          :MLOAD(txCalldataLen)
-        0 => B
-        $                               :EQ,JMPC(endCalldataIntrinsicGas)
+        $ => A                          :MLOAD(txCalldataLen), JMPZ(endCalldataIntrinsicGas) ; less than 32 bits. Enforced by memory expansion gas cost & smart contract batchL2DataHash
 
 addGas:
         $ => HASHPOS                    :MLOAD(dataStarts)
@@ -225,8 +223,9 @@ getContractAddress:
         ; A new hash with position 0 is started
         0 => HASHPOS
         ; We get a new hashId
-        $ => E                          :MLOAD(lastHashKIdUsed)
-        E+1 => E                        :MSTORE(lastHashKIdUsed)
+        $ => E                          :MLOAD(nextHashKId)
+        E                               :MSTORE(createAddressPointer)
+        E + 1                           :MSTORE(nextHashKId)
         ; Check if create is with CREATE2 opcode
         $ => A                          :MLOAD(isCreate2), JMPNZ(create2)
         ; Check keccak counters
@@ -285,7 +284,7 @@ loopCreate2:
         B => E                          :CALL(MLOAD32)
         E => B
         32 => D
-        $ => E                          :MLOAD(lastHashKIdUsed)
+        $ => E                          :MLOAD(createAddressPointer)
         A                               :HASHK(E)
         C - 32 => C                     :JMP(loopCreate2)
 
@@ -293,7 +292,7 @@ endloopCreate2:
         B => E                          :CALL(MLOADX)
         32 - C => D                     :CALL(SHRarith)
         C => D
-        $ => E                          :MLOAD(lastHashKIdUsed)
+        $ => E                          :MLOAD(createAddressPointer)
         A                               :HASHK(E)
 
 create2end:
@@ -303,8 +302,8 @@ create2end:
 
         ; new hash with position 0 is started
         0 => HASHPOS
-        $ => E                          :MLOAD(lastHashKIdUsed)
-        E+1 => E                        :MSTORE(lastHashKIdUsed)
+        $ => E                          :MLOAD(nextHashKId)
+        E + 1                           :MSTORE(nextHashKId)
         0xff                            :HASHK1(E)
         20 => D
         $ => A                          :MLOAD(txSrcAddr)
