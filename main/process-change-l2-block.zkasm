@@ -48,7 +48,6 @@ continueProcessChangeL2Block:
 
     ; Load current timestamp
     $ => A                              :MLOAD(timestamp) ; currentTimestamp => A
-    $ => B                              :MLOAD(timestampLimit) ; timestampLimit => B
 
     ; If it is NOT a forced tx ==> verify Timestamp & L1InfoRoot
     $                                   :MLOAD(isForced), JMPZ(verifyTimestampAndL1InfoRoot)
@@ -56,7 +55,7 @@ continueProcessChangeL2Block:
     ; forced batch
     ;   - update timestamp only if currentTimestamp < limitTimestamp
     ;   - set blockHash to default
-    $ => C                              :MLOAD(forcedBlockHashL1)
+    $ => C                              :MLOAD(forcedHashData)
     C                                   :MSTORE(blockHashL1InfoTree)
     A                                   :MSTORE(timestamp)
     $                                   :LT, JMPNC(initSetGERL1InfoTree)
@@ -68,10 +67,6 @@ verifyTimestampAndL1InfoRoot:
     $ => B                              :MLOAD(deltaTimestamp)
     ; Addition of two values of 8 bytes [B: currentTimestamp(A) + deltaTimestamp(B)]
     $ => B                              :ADD, MSTORE(timestamp)
-
-    ; Verify (currentTimestamp + deltaTimestamp) <= limitTimestamp
-    $ => A                              :MLOAD(timestampLimit)
-    $                                   :LT, JMPC(invalidChangeL2BlockLimitTimestamp)
 
     ; Set new timestamp
     %TIMESTAMP_STORAGE_POS => C

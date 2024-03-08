@@ -2,11 +2,11 @@ INCLUDE "constants.zkasm"
 INCLUDE "vars.zkasm"
 
 ; Blocks zkROM
-;       A - Load initial registers into memory: oldStateRoot (B), oldAccInputHash (C), oldNumBatch (SP) & chainID (GAS)
+;       A - Load initial registers into memory: oldStateRoot (B), oldBatchAccInputHash (C), & chainID (GAS)
 ;       B - Compute keccaks needed to finish the batch
 ;       C - Loop parsing RLP transactions
 ;       D - Load blockNum variable & Loop processing transactions
-;       E - Batch computations: get newLocalExitRoot, assert transactions size, compute batchHashData & compute newAccInputHash
+;       E - Batch computations: get newLocalExitRoot, assert transactions size, compute batchHashData & compute newBatchAccInputHash
 ;       F - Finalize execution
 
 start: ; main zkROM entry point
@@ -16,56 +16,65 @@ start: ; main zkROM entry point
         STEP => A
         0                                       :ASSERT ; Ensure it is the beginning of the execution
 
-        CTX                                     :MSTORE(forkID)
+        CTX                                     :MSTORE(forkID) ; Fork id from CTX
         CTX - %FORK_ID                          :JMPNZ(failAssert)
 
-        B => A                                  :MSTORE(oldStateRoot)
+        SR => A                                  :MSTORE(oldStateRoot) ; oldStateRoot from SR
 
         ; safety check that the input root is indeed inside the range limit of 4 goldilocks fields elements
         %FOUR_GOLDILOCKS => B
         1                                       :LT4
 
-        C                                       :MSTORE(oldAccInputHash)
-        SP                                      :MSTORE(oldNumBatch)
-        GAS                                     :MSTORE(chainID) ; assumed to be less than 32 bits
+        C                                       :MSTORE(oldBatchAccInputHash) ; oldBatchAccInputHash from C
+        D                                       :MSTORE(oldL1InfoTreeRoot) ; oldL1InfoTreeRoot from D
+        D                                       :MSTORE(l1InfoRoot)
+        RCX                                     :MSTORE(oldL1InfoTreeIndex) ; oldL1InfoTreeIndex from E
+        RCX                                     :MSTORE(l1InfoTreeIndex)
+        GAS                                     :MSTORE(chainID) ; chainID from GAS, assumed to be less than 32 bits
+        SR                                      :SAVE(B,C,D,E,RR,RCX)
 
-        ${getL1InfoRoot()}                      :MSTORE(l1InfoRoot)
         ${getSequencerAddr()}                   :MSTORE(sequencerAddr)
-        ${getTimestampLimit()}                  :MSTORE(timestampLimit)
         ${getTxsLen()}                          :MSTORE(batchL2DataLength) ; less than 120000 bytes. Enforced by the smart contract
-        ${getForcedBlockHashL1()} => A          :MSTORE(forcedBlockHashL1)
         ${getBatchHashData()}                   :MSTORE(batchHashData)
-        ;set initial state root
-        $ => SR                                 :MLOAD(oldStateRoot)
-        SR                                      :MSTORE(batchSR)
-        ; Increase batch number
-        SP + 1                                  :MSTORE(newNumBatch)
-        ; compute isForced flag
-        0 => B
-        $                                       :EQ, JMPC(computeNewAccInputHash)
-        1                                       :MSTORE(isForced)
+        $0{getType()} => A                      :MSTORE(type)
 
+        ; If is not forced, forcedHashData is zero, CHECK: remove?
+        0                                       :MSTORE(forcedHashData)
+        A - 2                                   :JMPNZ(computeNewBatchAccInputHash)
+        1                                       :MSTORE(isForced)
+        ; compute isForced flag
+        ${getGER()}                             :MSTORE(gerL1InfoTree)
+        ${getBlockHashL1()}                     :MSTORE(blockHashL1InfoTree)
+        ${getMinTimestamp()}                    :MSTORE(timestampL1InfoTree)
+        ; Compute forcedHashData
+        $ => E                                  :MLOAD(nextHashKId)
+        E + 1                                   :MSTORE(nextHashKId)
+        32 => D
+        $ => A                                  :MLOAD(gerL1InfoTree)
+        A                                       :HASHK(E)
+        $ => A                                  :MLOAD(blockHashL1InfoTree)
+        A                                       :HASHK(E)
+        8 => D
+        $ => A                                  :MLOAD(timestampL1InfoTree)
+        A                                       :HASHK(E)
+        HASHPOS                                 :HASHKLEN(E)
+        ; CHECK: need to assert with a forcedHashData obtained from free input?
+        $ => C                                  :HASHKDIGEST(E)
+        C                                       :MSTORE(forcedHashData)
+;;;;;;;;;;;;;;;;;
+;; B - Compute newBatchAccInputHash, load newLocalExitRoot and timestamp
 ;;;;;;;;;;;;;;;;;;
-;; B - Compute newAccInputHash, load newLocalExitRoot and timestamp
-;;;;;;;;;;;;;;;;;;
-computeNewAccInputHash:
+computeNewBatchAccInputHash:
         $ => E                          :MLOAD(nextHashKId)
         E + 1                           :MSTORE(nextHashKId)
         $${eventLog(onStartBatch, C)}
         0 => HASHPOS
 
         32 => D
-        $ => A                          :MLOAD(oldAccInputHash)
+        $ => A                          :MLOAD(oldBatchAccInputHash)
         A                               :HASHK(E)
 
         $ => A                          :MLOAD(batchHashData)
-        A                               :HASHK(E)
-
-        $ => A                          :MLOAD(l1InfoRoot)
-        A                               :HASHK(E)
-
-        8 => D
-        $ => A                          :MLOAD(timestampLimit)
         A                               :HASHK(E)
 
         20 => D
@@ -73,14 +82,19 @@ computeNewAccInputHash:
         A                               :HASHK(E)
 
         32 => D
-        $ => A                          :MLOAD(forcedBlockHashL1)
+        $ => A                          :MLOAD(forcedHashData)
+        A                               :HASHK(E)
+
+        1 => D
+        $ => A                          :MLOAD(type)
         A                               :HASHK(E)
 
         ; finish accInputHash
         HASHPOS                         :HASHKLEN(E)
 
         $ => C                          :HASHKDIGEST(E)
-        C                               :MSTORE(newAccInputHash)
+        C                               :MSTORE(newBatchAccInputHash)
+
         ; Compute batchHashData (loaded at smt from executor)
         $ => E                          :MLOAD(nextHashPId)
         E                               :MSTORE(batchHashDataPointer)
@@ -96,7 +110,7 @@ computeNewAccInputHash:
 
         ;; Get local exit root
         ; Read 'localExitRoot' variable from GLOBAL_EXIT_ROOT_MANAGER_L2 and store
-        ; it to the 'newLocalExitRoot' input, will be used to compute newAccInputHash
+        ; it to the 'newLocalExitRoot' input, will be used to compute newBatchAccInputHash
         %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2  => A
         %SMT_KEY_SC_STORAGE => B
         %LOCAL_EXIT_ROOT_STORAGE_POS => C
@@ -181,22 +195,24 @@ finalizeBatch:
 ;;;;;;;;;;;;;;;;;;
 ;; F - Finalize execution
 ;;;;;;;;;;;;;;;;;;
+
         ; safety check that the output root is indeed inside the range limit of 4 goldilocks fields elements
-        SR => A
+        SR => A ; newStateRoot at A
         %FOUR_GOLDILOCKS => B
         1                               :LT4
 
         ; Set output registers
-        $ => D                          :MLOAD(newAccInputHash)
-        $ => E                          :MLOAD(newLocalExitRoot)
-        $ => PC                         :MLOAD(newNumBatch)
+        $ => RR                         :MLOAD(timestamp) ; Timestamp at RR
+        $ => RCX                        :MLOAD(l1InfoTreeIndex) ; l1InfoTreeIndex at RCX
+        $ => D                          :MLOAD(l1InfoRoot) ; l1InfoTreeIndex at D
+        $ => C                          :MLOAD(newBatchAccInputHash) ; newBatchAccInputHash at C
+        $ => E                          :MLOAD(newLocalExitRoot) ; NewLocalExitRoot at E
+        ; SR is already at SR reg
 
         ; Set registers to its initials values
         $ => CTX                        :MLOAD(forkID)
-        $ => B                          :MLOAD(oldStateRoot)
-        $ => C                          :MLOAD(oldAccInputHash)
-        $ => SP                         :MLOAD(oldNumBatch)
         $ => GAS                        :MLOAD(chainID)
+
         finalizeExecution:
                                         :JMP(finalWait)
 
