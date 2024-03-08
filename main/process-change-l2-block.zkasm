@@ -55,13 +55,10 @@ continueProcessChangeL2Block:
     ; forced batch
     ;   - update timestamp only if currentTimestamp < limitTimestamp
     ;   - set blockHash to default
-    $ => C                              :MLOAD(forcedHashData)
+    $ => C                              :MLOAD(forcedBlockHashL1InfoTree)
     C                                   :MSTORE(blockHashL1InfoTree)
-    A                                   :MSTORE(timestamp)
-    $                                   :LT, JMPNC(initSetGERL1InfoTree)
-
-newForcedTimestamp:
-    B                                   :MSTORE(timestamp), JMP(setNewTimestamp)
+    $ => B                              :MLOAD(getForcedTimestamp)
+    $                                   :LT, JMPC(setMinTimestamp, initSetGERL1InfoTree)
 
 verifyTimestampAndL1InfoRoot:
     $ => B                              :MLOAD(deltaTimestamp)
@@ -88,20 +85,20 @@ ${getL1InfoTimestamp(mem.indexL1InfoTree)} => C     :MSTORE(timestampL1InfoTree)
     $ => B                                          :MLOAD(timestampL1InfoTree)
     $                                               :LT, JMPC(invalidChangeL2BlockMinTimestamp, initSetGERL1InfoTree)
 
-setNewTimestamp:
-    ; Set new timestamp
+setMinTimestamp:
+    ; Set getForcedTimestamp (now new Timestamp) from forced batch data
     %TIMESTAMP_STORAGE_POS => C
     %ADDRESS_SYSTEM => A
+    B => D                                  :MSTORE(timestamp)
     %SMT_KEY_SC_STORAGE => B
-    $ => D                                  :MLOAD(timestamp)
     $ => SR                                 :SSTORE
 
 initSetGERL1InfoTree:
     ; Set new GER
     $ => A                                  :MLOAD(gerL1InfoTree)
-    ; If it is a forced tx ==> gerL1InfoTree = l1InfoRoot
+    ; If it is a forced tx ==> gerL1InfoTree = forcedGER
     $                                       :MLOAD(isForced), JMPZ(setGERL1InfoTree)
-    $ => A                                  :MLOAD(l1InfoRoot)
+    $ => A                                  :MLOAD(forcedGER)
     A                                       :MSTORE(gerL1InfoTree)
 
 setGERL1InfoTree:

@@ -31,7 +31,6 @@ start: ; main zkROM entry point
         RCX                                     :MSTORE(oldL1InfoTreeIndex) ; oldL1InfoTreeIndex from E
         RCX                                     :MSTORE(l1InfoTreeIndex)
         GAS                                     :MSTORE(chainID) ; chainID from GAS, assumed to be less than 32 bits
-        SR                                      :SAVE(B,C,D,E,RR,RCX)
 
         ${getSequencerAddr()}                   :MSTORE(sequencerAddr)
         ${getTxsLen()}                          :MSTORE(batchL2DataLength) ; less than 120000 bytes. Enforced by the smart contract
@@ -43,19 +42,16 @@ start: ; main zkROM entry point
         A - 2                                   :JMPNZ(computeNewBatchAccInputHash)
         1                                       :MSTORE(isForced)
         ; compute isForced flag
-        ${getGER()}                             :MSTORE(gerL1InfoTree)
-        ${getBlockHashL1()}                     :MSTORE(blockHashL1InfoTree)
-        ${getMinTimestamp()}                    :MSTORE(timestampL1InfoTree)
         ; Compute forcedHashData
         $ => E                                  :MLOAD(nextHashKId)
         E + 1                                   :MSTORE(nextHashKId)
         32 => D
-        $ => A                                  :MLOAD(gerL1InfoTree)
+        ${getForcedGER()} => A                  :MSTORE(forcedGER)
         A                                       :HASHK(E)
-        $ => A                                  :MLOAD(blockHashL1InfoTree)
+        ${getForcedBlockHashL1()} => A          :MSTORE(forcedBlockHashL1InfoTree)
         A                                       :HASHK(E)
         8 => D
-        $ => A                                  :MLOAD(timestampL1InfoTree)
+        ${getForcedTimestamp()} => A            :MSTORE(getForcedTimestamp)
         A                                       :HASHK(E)
         HASHPOS                                 :HASHKLEN(E)
         ; CHECK: need to assert with a forcedHashData obtained from free input?
@@ -214,6 +210,12 @@ finalizeBatch:
         $ => GAS                        :MLOAD(chainID)
 
         finalizeExecution:
+        ; Save inputs to RESTORE at last - 1 step
+        $ => SR                         :MLOAD(oldStateRoot) ; oldStateRoot from SR
+        $ => C                          :MLOAD(oldBatchAccInputHash) ; oldBatchAccInputHash from C
+        $ => D                          :MLOAD(oldL1InfoTreeRoot) ; oldL1InfoTreeRoot from D
+        $ => RCX                        :MLOAD(oldL1InfoTreeIndex) ; oldL1InfoTreeIndex from E
+        SR                              :SAVE(B,C,D,E,RR,RCX)
                                         :JMP(finalWait)
 
 INCLUDE "end.zkasm"
