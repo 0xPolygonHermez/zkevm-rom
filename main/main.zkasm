@@ -20,16 +20,16 @@ start: ; main zkROM entry point
         CTX - %FORK_ID                          :JMPNZ(failAssert)
 
         SR => A                                  :MSTORE(oldStateRoot) ; oldStateRoot from SR
-
+        SR                                       :MSTORE(batchSR)
         ; safety check that the input root is indeed inside the range limit of 4 goldilocks fields elements
         %FOUR_GOLDILOCKS => B
         1                                       :LT4
 
         C                                       :MSTORE(oldBatchAccInputHash) ; oldBatchAccInputHash from C
-        D                                       :MSTORE(oldL1InfoTreeRoot) ; oldL1InfoTreeRoot from D
-        D                                       :MSTORE(l1InfoRoot)
-        RCX                                     :MSTORE(oldL1InfoTreeIndex) ; oldL1InfoTreeIndex from E
-        RCX                                     :MSTORE(l1InfoTreeIndex)
+        D                                       :MSTORE(previousL1InfoTreeRoot) ; previousL1InfoTreeRoot from D
+        D                                       :MSTORE(currentL1InfoTreeRoot)
+        RCX                                     :MSTORE(previousL1InfoTreeIndex) ; previousL1InfoTreeIndex from E
+        RCX                                     :MSTORE(currentL1InfoTreeIndex)
         GAS                                     :MSTORE(chainID) ; chainID from GAS, assumed to be less than 32 bits
 
         ${getSequencerAddr()}                   :MSTORE(sequencerAddr)
@@ -51,7 +51,7 @@ start: ; main zkROM entry point
         ${getForcedBlockHashL1()} => A          :MSTORE(forcedBlockHashL1InfoTree)
         A                                       :HASHK(E)
         8 => D
-        ${getForcedTimestamp()} => A            :MSTORE(getForcedTimestamp)
+        ${getForcedTimestamp()} => A            :MSTORE(forcedTimestamp)
         A                                       :HASHK(E)
         HASHPOS                                 :HASHKLEN(E)
         ; CHECK: need to assert with a forcedHashData obtained from free input?
@@ -61,34 +61,35 @@ start: ; main zkROM entry point
 ;; B - Compute newBatchAccInputHash, load newLocalExitRoot and timestamp
 ;;;;;;;;;;;;;;;;;;
 computeNewBatchAccInputHash:
-        $ => E                          :MLOAD(nextHashKId)
-        E + 1                           :MSTORE(nextHashKId)
+        ; newBatchAccInputHash = LinearPoseidon(oldBatchAccInputHash, batchHashData, sequencerAddress, forcedHashData, type))
+        $ => E                          :MLOAD(nextHashPId)
+        E + 1                           :MSTORE(nextHashPId)
         $${eventLog(onStartBatch, C)}
         0 => HASHPOS
 
         32 => D
         $ => A                          :MLOAD(oldBatchAccInputHash)
-        A                               :HASHK(E)
+        A                               :HASHP(E)
 
         $ => A                          :MLOAD(batchHashData)
-        A                               :HASHK(E)
+        A                               :HASHP(E)
 
         20 => D
         $ => A                          :MLOAD(sequencerAddr)
-        A                               :HASHK(E)
+        A                               :HASHP(E)
 
         32 => D
         $ => A                          :MLOAD(forcedHashData)
-        A                               :HASHK(E)
+        A                               :HASHP(E)
 
         1 => D
         $ => A                          :MLOAD(type)
-        A                               :HASHK(E)
+        A                               :HASHP(E)
 
         ; finish accInputHash
-        HASHPOS                         :HASHKLEN(E)
+        HASHPOS                         :HASHPLEN(E)
 
-        $ => C                          :HASHKDIGEST(E)
+        $ => C                          :HASHPDIGEST(E)
         C                               :MSTORE(newBatchAccInputHash)
 
         ; Compute batchHashData (loaded at smt from executor)
@@ -145,7 +146,7 @@ setBlockNum:
         %LAST_BLOCK_STORAGE_POS => C
         %ADDRESS_SYSTEM => A
         %SMT_KEY_SC_STORAGE => B
-        $                                       :SLOAD,MSTORE(blockNum)
+        $ => A                                       :SLOAD,MSTORE(blockNum)
         ; If forced batch ==> process a forced changeL2BlockTx
         $                                       :MLOAD(isForced), JMPZ(txLoop, handleForcedBatch)
 
@@ -199,8 +200,8 @@ finalizeBatch:
 
         ; Set output registers
         $ => RR                         :MLOAD(timestamp) ; Timestamp at RR
-        $ => RCX                        :MLOAD(l1InfoTreeIndex) ; l1InfoTreeIndex at RCX
-        $ => D                          :MLOAD(l1InfoRoot) ; l1InfoTreeIndex at D
+        $ => RCX                        :MLOAD(currentL1InfoTreeIndex) ; currentL1InfoTreeIndex at RCX
+        $ => D                          :MLOAD(currentL1InfoTreeRoot) ; currentL1InfoTreeRoot at D
         $ => C                          :MLOAD(newBatchAccInputHash) ; newBatchAccInputHash at C
         $ => E                          :MLOAD(newLocalExitRoot) ; NewLocalExitRoot at E
         ; SR is already at SR reg
@@ -213,8 +214,8 @@ finalizeBatch:
         ; Save inputs to RESTORE at last - 1 step
         $ => SR                         :MLOAD(oldStateRoot) ; oldStateRoot from SR
         $ => C                          :MLOAD(oldBatchAccInputHash) ; oldBatchAccInputHash from C
-        $ => D                          :MLOAD(oldL1InfoTreeRoot) ; oldL1InfoTreeRoot from D
-        $ => RCX                        :MLOAD(oldL1InfoTreeIndex) ; oldL1InfoTreeIndex from E
+        $ => D                          :MLOAD(previousL1InfoTreeRoot) ; previousL1InfoTreeRoot from D
+        $ => RCX                        :MLOAD(previousL1InfoTreeIndex) ; previousL1InfoTreeIndex from E
         SR                              :SAVE(B,C,D,E,RR,RCX)
                                         :JMP(finalWait)
 
