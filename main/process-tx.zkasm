@@ -149,8 +149,6 @@ add16Gas:
         B + 16 => B                     :JMP(loopBytes)
 
 endCalldataIntrinsicGas:
-        ; Restore current context
-        $ => CTX                        :MLOAD(currentCTX)
         ; Compare gas limit >= intrinsic gas
         $ => A                          :MLOAD(txGasLimit)
         $                               :LT, JMPC(invalidIntrinsicTxGasLimit)
@@ -230,6 +228,7 @@ getContractAddress:
         $ => A                          :MLOAD(isCreate2), JMPNZ(create2)
         ; Check keccak counters
         %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1:JMPN(outOfCountersKeccak)
+        %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
         $ => A                          :MLOAD(txNonce)
         0x80 => B
         $                               :LT,JMPC(nonce1byte)
@@ -289,7 +288,7 @@ loopCreate2:
         C - 32 => C                     :JMP(loopCreate2)
 
 endloopCreate2:
-        B => E                          :CALL(MLOADX)
+        B => E                          :CALL(MLOADX)  ; in: [E: offset, C: length] out: [A: value, E: new offset]
         32 - C => D                     :CALL(SHRarith)
         C => D
         $ => E                          :MLOAD(createAddressPointer)

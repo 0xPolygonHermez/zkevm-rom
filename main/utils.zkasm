@@ -1611,49 +1611,22 @@ expADend:
 failAssert:
     A - 1           :ASSERT
 
-VAR GLOBAL tmpZkPCVerifyMerkleProof
-;@info verifies L1Info data with sibilings
-;@in A: ger
-;@in B: blockhashL1
-;@in C: timestamp
-verifyMerkleProof:
+VAR GLOBAL tmpZkPCComputeMerkleProof
+;@info Computes merkle root with from currentL1InfoTreeRoot, currentL1InfoTreeIndex and sibilings
+;@out C: merkle tree root
+computeMerkleProof:
     ; check zk-counters
     ; 1 keccak for the leaf and 32 for the L1InfoTree
     %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 33       :JMPN(outOfCountersKeccak)
     ; 7 steps at most per bit + 21 statics
     %MAX_CNT_STEPS - STEP - 7 * 32 - 21         :JMPN(outOfCountersStep)
 
-    RR                                          :MSTORE(tmpZkPCVerifyMerkleProof)
-
-    ;;;;;;;;;;;;;;;;;;;;;
-    ;; compute leaf value
-    ;;;;;;;;;;;;;;;;;;;;;
-
-    ; new keccak address
-    $ => E                                  :MLOAD(nextHashKId)
-    E + 1                                   :MSTORE(nextHashKId)
-
-    ; add gerL1InfoTree (32 bytes)
-    0 => HASHPOS
-    32 => D
-    A                                       :HASHK(E)
-
-    ; add blockHashL1 (32 bytes)
-    B                                       :HASHK(E)
-
-    ; add timestamp (8 bytes)
-    8 => D
-    C                                       :HASHK(E)
-
-    ; compute l1InfoTree Leaf value
-    HASHPOS                                 :HASHKLEN(E)
-    $ => C                                  :HASHKDIGEST(E) ; initial value
-
+    RR                                          :MSTORE(tmpZkPCComputeMerkleProof)
     ; initialization registers for smt verify
     0 => D, A
 
-    $ => B                                  :MLOAD(indexL1InfoTree)
-
+    $ => B                                  :MLOAD(currentL1InfoTreeIndex)
+    $ => C                                  :MLOAD(currentL1InfoTreeRoot)
     ; prepare new hash
     $ => E                                  :MLOAD(nextHashKId)
     E + 1                                   :MSTORE(nextHashKId)
@@ -1668,13 +1641,13 @@ verifyMerkleProof:
     ${B & 0x00000001}                           :JMPZ(hashLeft0)
 
 hashRight0:
-    ${getSmtProof(mem.indexL1InfoTree, 0)}      :HASHK(E+0)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 0)}      :HASHK(E+0)
     C                                           :HASHK(E+0)
     A + 0x00000001 => A                         :JMP(hashBranchEnd0)
 
 hashLeft0:
     C                                           :HASHK(E+0)
-    ${getSmtProof(mem.indexL1InfoTree, 0)}      :HASHK(E+0)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 0)}      :HASHK(E+0)
 
 hashBranchEnd0:
     HASHPOS                                     :HASHKLEN(E+0)
@@ -1685,13 +1658,13 @@ hashBranchEnd0:
     ${B & 0x00000002}                           :JMPZ(hashLeft1)
 
 hashRight1:
-    ${getSmtProof(mem.indexL1InfoTree, 1)}      :HASHK(E+1)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 1)}      :HASHK(E+1)
     C                                           :HASHK(E+1)
     A + 0x00000002 => A                         :JMP(hashBranchEnd1)
 
 hashLeft1:
     C                                           :HASHK(E+1)
-    ${getSmtProof(mem.indexL1InfoTree, 1)}      :HASHK(E+1)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 1)}      :HASHK(E+1)
 
 hashBranchEnd1:
     HASHPOS                                     :HASHKLEN(E+1)
@@ -1702,13 +1675,13 @@ hashBranchEnd1:
     ${B & 0x00000004}                           :JMPZ(hashLeft2)
 
 hashRight2:
-    ${getSmtProof(mem.indexL1InfoTree, 2)}      :HASHK(E+2)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 2)}      :HASHK(E+2)
     C                                           :HASHK(E+2)
     A + 0x00000004 => A                         :JMP(hashBranchEnd2)
 
 hashLeft2:
     C                                           :HASHK(E+2)
-    ${getSmtProof(mem.indexL1InfoTree, 2)}      :HASHK(E+2)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 2)}      :HASHK(E+2)
 
 hashBranchEnd2:
     HASHPOS                                     :HASHKLEN(E+2)
@@ -1719,13 +1692,13 @@ hashBranchEnd2:
     ${B & 0x00000008}                           :JMPZ(hashLeft3)
 
 hashRight3:
-    ${getSmtProof(mem.indexL1InfoTree, 3)}      :HASHK(E+3)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 3)}      :HASHK(E+3)
     C                                           :HASHK(E+3)
     A + 0x00000008 => A                         :JMP(hashBranchEnd3)
 
 hashLeft3:
     C                                           :HASHK(E+3)
-    ${getSmtProof(mem.indexL1InfoTree, 3)}      :HASHK(E+3)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 3)}      :HASHK(E+3)
 
 hashBranchEnd3:
     HASHPOS                                     :HASHKLEN(E+3)
@@ -1736,13 +1709,13 @@ hashBranchEnd3:
     ${B & 0x00000010}                           :JMPZ(hashLeft4)
 
 hashRight4:
-    ${getSmtProof(mem.indexL1InfoTree, 4)}      :HASHK(E+4)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 4)}      :HASHK(E+4)
     C                                           :HASHK(E+4)
     A + 0x00000010 => A                         :JMP(hashBranchEnd4)
 
 hashLeft4:
     C                                           :HASHK(E+4)
-    ${getSmtProof(mem.indexL1InfoTree, 4)}      :HASHK(E+4)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 4)}      :HASHK(E+4)
 
 hashBranchEnd4:
     HASHPOS                                     :HASHKLEN(E+4)
@@ -1753,13 +1726,13 @@ hashBranchEnd4:
     ${B & 0x00000020}                           :JMPZ(hashLeft5)
 
 hashRight5:
-    ${getSmtProof(mem.indexL1InfoTree, 5)}      :HASHK(E+5)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 5)}      :HASHK(E+5)
     C                                           :HASHK(E+5)
     A + 0x00000020 => A                         :JMP(hashBranchEnd5)
 
 hashLeft5:
     C                                           :HASHK(E+5)
-    ${getSmtProof(mem.indexL1InfoTree, 5)}      :HASHK(E+5)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 5)}      :HASHK(E+5)
 
 hashBranchEnd5:
     HASHPOS                                     :HASHKLEN(E+5)
@@ -1770,13 +1743,13 @@ hashBranchEnd5:
     ${B & 0x00000040}                           :JMPZ(hashLeft6)
 
 hashRight6:
-    ${getSmtProof(mem.indexL1InfoTree, 6)}      :HASHK(E+6)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 6)}      :HASHK(E+6)
     C                                           :HASHK(E+6)
     A + 0x00000040 => A                         :JMP(hashBranchEnd6)
 
 hashLeft6:
     C                                           :HASHK(E+6)
-    ${getSmtProof(mem.indexL1InfoTree, 6)}      :HASHK(E+6)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 6)}      :HASHK(E+6)
 
 hashBranchEnd6:
     HASHPOS                                     :HASHKLEN(E+6)
@@ -1787,13 +1760,13 @@ hashBranchEnd6:
     ${B & 0x00000080}   :JMPZ(hashLeft7)
 
 hashRight7:
-    ${getSmtProof(mem.indexL1InfoTree, 7)}      :HASHK(E+7)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 7)}      :HASHK(E+7)
     C                                           :HASHK(E+7)
     A + 0x00000080 => A                         :JMP(hashBranchEnd7)
 
 hashLeft7:
     C                                           :HASHK(E+7)
-    ${getSmtProof(mem.indexL1InfoTree, 7)}      :HASHK(E+7)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 7)}      :HASHK(E+7)
 
 hashBranchEnd7:
     HASHPOS                                     :HASHKLEN(E+7)
@@ -1804,13 +1777,13 @@ hashBranchEnd7:
     ${B & 0x00000100}                           :JMPZ(hashLeft8)
 
 hashRight8:
-    ${getSmtProof(mem.indexL1InfoTree, 8)}      :HASHK(E+8)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 8)}      :HASHK(E+8)
     C                                           :HASHK(E+8)
     A + 0x00000100 => A                         :JMP(hashBranchEnd8)
 
 hashLeft8:
     C                                           :HASHK(E+8)
-    ${getSmtProof(mem.indexL1InfoTree, 8)}      :HASHK(E+8)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 8)}      :HASHK(E+8)
 
 hashBranchEnd8:
     HASHPOS                                     :HASHKLEN(E+8)
@@ -1821,13 +1794,13 @@ hashBranchEnd8:
     ${B & 0x00000200}                           :JMPZ(hashLeft9)
 
 hashRight9:
-    ${getSmtProof(mem.indexL1InfoTree, 9)}      :HASHK(E+9)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 9)}      :HASHK(E+9)
     C                                           :HASHK(E+9)
     A + 0x00000200 => A                         :JMP(hashBranchEnd9)
 
 hashLeft9:
     C                                           :HASHK(E+9)
-    ${getSmtProof(mem.indexL1InfoTree, 9)}      :HASHK(E+9)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 9)}      :HASHK(E+9)
 
 hashBranchEnd9:
     HASHPOS                                     :HASHKLEN(E+9)
@@ -1838,13 +1811,13 @@ hashBranchEnd9:
     ${B & 0x00000400}                           :JMPZ(hashLeft10)
 
 hashRight10:
-    ${getSmtProof(mem.indexL1InfoTree, 10)}     :HASHK(E+10)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 10)}     :HASHK(E+10)
     C                                           :HASHK(E+10)
     A + 0x00000400 => A                         :JMP(hashBranchEnd10)
 
 hashLeft10:
     C                                           :HASHK(E+10)
-    ${getSmtProof(mem.indexL1InfoTree, 10)}     :HASHK(E+10)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 10)}     :HASHK(E+10)
 
 hashBranchEnd10:
     HASHPOS                                     :HASHKLEN(E+10)
@@ -1855,13 +1828,13 @@ hashBranchEnd10:
     ${B & 0x00000800}                           :JMPZ(hashLeft11)
 
 hashRight11:
-    ${getSmtProof(mem.indexL1InfoTree, 11)}     :HASHK(E+11)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 11)}     :HASHK(E+11)
     C                                           :HASHK(E+11)
     A + 0x00000800 => A                         :JMP(hashBranchEnd11)
 
 hashLeft11:
     C                                           :HASHK(E+11)
-    ${getSmtProof(mem.indexL1InfoTree, 11)}     :HASHK(E+11)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 11)}     :HASHK(E+11)
 
 hashBranchEnd11:
     HASHPOS                                     :HASHKLEN(E+11)
@@ -1873,13 +1846,13 @@ hashBranchEnd11:
     ${B & 0x00001000}                           :JMPZ(hashLeft12)
 
 hashRight12:
-    ${getSmtProof(mem.indexL1InfoTree, 12)}     :HASHK(E+12)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 12)}     :HASHK(E+12)
     C                                           :HASHK(E+12)
     A + 0x00001000 => A                         :JMP(hashBranchEnd12)
 
 hashLeft12:
     C                                           :HASHK(E+12)
-    ${getSmtProof(mem.indexL1InfoTree, 12)}     :HASHK(E+12)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 12)}     :HASHK(E+12)
 
 hashBranchEnd12:
     HASHPOS                                     :HASHKLEN(E+12)
@@ -1890,13 +1863,13 @@ hashBranchEnd12:
     ${B & 0x00002000}                           :JMPZ(hashLeft13)
 
 hashRight13:
-    ${getSmtProof(mem.indexL1InfoTree, 13)}     :HASHK(E+13)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 13)}     :HASHK(E+13)
     C                                           :HASHK(E+13)
     A + 0x00002000 => A                         :JMP(hashBranchEnd13)
 
 hashLeft13:
     C                                           :HASHK(E+13)
-    ${getSmtProof(mem.indexL1InfoTree, 13)}     :HASHK(E+13)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 13)}     :HASHK(E+13)
 
 hashBranchEnd13:
     HASHPOS                                     :HASHKLEN(E+13)
@@ -1907,13 +1880,13 @@ hashBranchEnd13:
     ${B & 0x00004000}                           :JMPZ(hashLeft14)
 
 hashRight14:
-    ${getSmtProof(mem.indexL1InfoTree, 14)}     :HASHK(E+14)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 14)}     :HASHK(E+14)
     C                                           :HASHK(E+14)
     A + 0x00004000 => A                         :JMP(hashBranchEnd14)
 
 hashLeft14:
     C                                           :HASHK(E+14)
-    ${getSmtProof(mem.indexL1InfoTree, 14)}     :HASHK(E+14)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 14)}     :HASHK(E+14)
 
 hashBranchEnd14:
     HASHPOS                                     :HASHKLEN(E+14)
@@ -1924,13 +1897,13 @@ hashBranchEnd14:
     ${B & 0x00008000}                           :JMPZ(hashLeft15)
 
 hashRight15:
-    ${getSmtProof(mem.indexL1InfoTree, 15)}     :HASHK(E+15)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 15)}     :HASHK(E+15)
     C                                           :HASHK(E+15)
     A + 0x00008000 => A                         :JMP(hashBranchEnd15)
 
 hashLeft15:
     C                                           :HASHK(E+15)
-    ${getSmtProof(mem.indexL1InfoTree, 15)}     :HASHK(E+15)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 15)}     :HASHK(E+15)
 
 hashBranchEnd15:
     HASHPOS                                     :HASHKLEN(E+15)
@@ -1941,13 +1914,13 @@ hashBranchEnd15:
     ${B & 0x00010000}                           :JMPZ(hashLeft16)
 
 hashRight16:
-    ${getSmtProof(mem.indexL1InfoTree, 16)}     :HASHK(E+16)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 16)}     :HASHK(E+16)
     C                                           :HASHK(E+16)
     A + 0x00010000 => A                         :JMP(hashBranchEnd16)
 
 hashLeft16:
     C                                           :HASHK(E+16)
-    ${getSmtProof(mem.indexL1InfoTree, 16)}     :HASHK(E+16)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 16)}     :HASHK(E+16)
 
 hashBranchEnd16:
     HASHPOS                                     :HASHKLEN(E+16)
@@ -1958,13 +1931,13 @@ hashBranchEnd16:
     ${B & 0x00020000}                           :JMPZ(hashLeft17)
 
 hashRight17:
-    ${getSmtProof(mem.indexL1InfoTree, 17)}     :HASHK(E+17)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 17)}     :HASHK(E+17)
     C                                           :HASHK(E+17)
     A + 0x00020000 => A                         :JMP(hashBranchEnd17)
 
 hashLeft17:
     C                                           :HASHK(E+17)
-    ${getSmtProof(mem.indexL1InfoTree, 17)}     :HASHK(E+17)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 17)}     :HASHK(E+17)
 
 hashBranchEnd17:
     HASHPOS                                     :HASHKLEN(E+17)
@@ -1975,13 +1948,13 @@ hashBranchEnd17:
     ${B & 0x00040000}                           :JMPZ(hashLeft18)
 
 hashRight18:
-    ${getSmtProof(mem.indexL1InfoTree, 18)}     :HASHK(E+18)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 18)}     :HASHK(E+18)
     C                                           :HASHK(E+18)
     A + 0x00040000 => A                         :JMP(hashBranchEnd18)
 
 hashLeft18:
     C                                           :HASHK(E+18)
-    ${getSmtProof(mem.indexL1InfoTree, 18)}     :HASHK(E+18)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 18)}     :HASHK(E+18)
 
 hashBranchEnd18:
     HASHPOS                                     :HASHKLEN(E+18)
@@ -1992,13 +1965,13 @@ hashBranchEnd18:
     ${B & 0x00080000}                           :JMPZ(hashLeft19)
 
 hashRight19:
-    ${getSmtProof(mem.indexL1InfoTree, 19)}     :HASHK(E+19)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 19)}     :HASHK(E+19)
     C                                           :HASHK(E+19)
     A + 0x00080000 => A                         :JMP(hashBranchEnd19)
 
 hashLeft19:
     C                                           :HASHK(E+19)
-    ${getSmtProof(mem.indexL1InfoTree, 19)}     :HASHK(E+19)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 19)}     :HASHK(E+19)
 
 hashBranchEnd19:
     HASHPOS                                     :HASHKLEN(E+19)
@@ -2009,13 +1982,13 @@ hashBranchEnd19:
     ${B & 0x00100000}                           :JMPZ(hashLeft20)
 
 hashRight20:
-    ${getSmtProof(mem.indexL1InfoTree, 20)}     :HASHK(E+20)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 20)}     :HASHK(E+20)
     C                                           :HASHK(E+20)
     A + 0x00100000 => A                         :JMP(hashBranchEnd20)
 
 hashLeft20:
     C                                           :HASHK(E+20)
-    ${getSmtProof(mem.indexL1InfoTree, 20)}     :HASHK(E+20)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 20)}     :HASHK(E+20)
 
 hashBranchEnd20:
     HASHPOS                                     :HASHKLEN(E+20)
@@ -2026,13 +1999,13 @@ hashBranchEnd20:
     ${B & 0x00200000}                           :JMPZ(hashLeft21)
 
 hashRight21:
-    ${getSmtProof(mem.indexL1InfoTree, 21)}     :HASHK(E+21)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 21)}     :HASHK(E+21)
     C                                           :HASHK(E+21)
     A + 0x00200000 => A                         :JMP(hashBranchEnd21)
 
 hashLeft21:
     C                                           :HASHK(E+21)
-    ${getSmtProof(mem.indexL1InfoTree, 21)}     :HASHK(E+21)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 21)}     :HASHK(E+21)
 
 hashBranchEnd21:
     HASHPOS                                     :HASHKLEN(E+21)
@@ -2043,13 +2016,13 @@ hashBranchEnd21:
     ${B & 0x00400000}                           :JMPZ(hashLeft22)
 
 hashRight22:
-    ${getSmtProof(mem.indexL1InfoTree, 22)}     :HASHK(E+22)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 22)}     :HASHK(E+22)
     C                                           :HASHK(E+22)
     A + 0x00400000 => A                         :JMP(hashBranchEnd22)
 
 hashLeft22:
     C                                           :HASHK(E+22)
-    ${getSmtProof(mem.indexL1InfoTree, 22)}     :HASHK(E+22)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 22)}     :HASHK(E+22)
 
 hashBranchEnd22:
     HASHPOS                                     :HASHKLEN(E+22)
@@ -2060,13 +2033,13 @@ hashBranchEnd22:
     ${B & 0x00800000}                           :JMPZ(hashLeft23)
 
 hashRight23:
-    ${getSmtProof(mem.indexL1InfoTree, 23)}     :HASHK(E+23)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 23)}     :HASHK(E+23)
     C                                           :HASHK(E+23)
     A + 0x00800000 => A                         :JMP(hashBranchEnd23)
 
 hashLeft23:
     C                                           :HASHK(E+23)
-    ${getSmtProof(mem.indexL1InfoTree, 23)}     :HASHK(E+23)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 23)}     :HASHK(E+23)
 
 hashBranchEnd23:
     HASHPOS                                     :HASHKLEN(E+23)
@@ -2077,13 +2050,13 @@ hashBranchEnd23:
     ${B & 0x01000000}                           :JMPZ(hashLeft24)
 
 hashRight24:
-    ${getSmtProof(mem.indexL1InfoTree, 24)}     :HASHK(E+24)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 24)}     :HASHK(E+24)
     C                                           :HASHK(E+24)
     A + 0x01000000 => A                         :JMP(hashBranchEnd24)
 
 hashLeft24:
     C                                           :HASHK(E+24)
-    ${getSmtProof(mem.indexL1InfoTree, 24)}     :HASHK(E+24)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 24)}     :HASHK(E+24)
 
 hashBranchEnd24:
     HASHPOS                                     :HASHKLEN(E+24)
@@ -2094,13 +2067,13 @@ hashBranchEnd24:
     ${B & 0x02000000}                           :JMPZ(hashLeft25)
 
 hashRight25:
-    ${getSmtProof(mem.indexL1InfoTree, 25)}     :HASHK(E+25)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 25)}     :HASHK(E+25)
     C                                           :HASHK(E+25)
     A + 0x02000000 => A                         :JMP(hashBranchEnd25)
 
 hashLeft25:
     C                                           :HASHK(E+25)
-    ${getSmtProof(mem.indexL1InfoTree, 25)}     :HASHK(E+25)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 25)}     :HASHK(E+25)
 
 hashBranchEnd25:
     HASHPOS                                     :HASHKLEN(E+25)
@@ -2111,13 +2084,13 @@ hashBranchEnd25:
     ${B & 0x04000000}                           :JMPZ(hashLeft26)
 
 hashRight26:
-    ${getSmtProof(mem.indexL1InfoTree, 26)}     :HASHK(E+26)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 26)}     :HASHK(E+26)
     C                                           :HASHK(E+26)
     A + 0x04000000 => A                         :JMP(hashBranchEnd26)
 
 hashLeft26:
     C                                           :HASHK(E+26)
-    ${getSmtProof(mem.indexL1InfoTree, 26)}     :HASHK(E+26)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 26)}     :HASHK(E+26)
 
 hashBranchEnd26:
     HASHPOS                                     :HASHKLEN(E+26)
@@ -2128,13 +2101,13 @@ hashBranchEnd26:
     ${B & 0x08000000}                           :JMPZ(hashLeft27)
 
 hashRight27:
-    ${getSmtProof(mem.indexL1InfoTree, 27)}     :HASHK(E+27)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 27)}     :HASHK(E+27)
     C                                           :HASHK(E+27)
     A + 0x08000000 => A                         :JMP(hashBranchEnd27)
 
 hashLeft27:
     C                                           :HASHK(E+27)
-    ${getSmtProof(mem.indexL1InfoTree, 27)}     :HASHK(E+27)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 27)}     :HASHK(E+27)
 
 hashBranchEnd27:
     HASHPOS                                     :HASHKLEN(E+27)
@@ -2145,13 +2118,13 @@ hashBranchEnd27:
     ${B & 0x10000000}                           :JMPZ(hashLeft28)
 
 hashRight28:
-    ${getSmtProof(mem.indexL1InfoTree, 28)}     :HASHK(E+28)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 28)}     :HASHK(E+28)
     C                                           :HASHK(E+28)
     A + 0x10000000 => A                         :JMP(hashBranchEnd28)
 
 hashLeft28:
     C                                           :HASHK(E+28)
-    ${getSmtProof(mem.indexL1InfoTree, 28)}     :HASHK(E+28)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 28)}     :HASHK(E+28)
 
 hashBranchEnd28:
     HASHPOS                                     :HASHKLEN(E+28)
@@ -2162,13 +2135,13 @@ hashBranchEnd28:
     ${B & 0x20000000}                           :JMPZ(hashLeft29)
 
 hashRight29:
-    ${getSmtProof(mem.indexL1InfoTree, 29)}     :HASHK(E+29)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 29)}     :HASHK(E+29)
     C                                           :HASHK(E+29)
     A + 0x20000000 => A                         :JMP(hashBranchEnd29)
 
 hashLeft29:
     C                                           :HASHK(E+29)
-    ${getSmtProof(mem.indexL1InfoTree, 29)}     :HASHK(E+29)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 29)}     :HASHK(E+29)
 
 hashBranchEnd29:
     HASHPOS                                     :HASHKLEN(E+29)
@@ -2179,13 +2152,13 @@ hashBranchEnd29:
     ${B & 0x40000000}                           :JMPZ(hashLeft30)
 
 hashRight30:
-    ${getSmtProof(mem.indexL1InfoTree, 30)}     :HASHK(E+30)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 30)}     :HASHK(E+30)
     C                                           :HASHK(E+30)
     A + 0x40000000 => A                         :JMP(hashBranchEnd30)
 
 hashLeft30:
     C                                           :HASHK(E+30)
-    ${getSmtProof(mem.indexL1InfoTree, 30)}     :HASHK(E+30)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 30)}     :HASHK(E+30)
 
 hashBranchEnd30:
     HASHPOS                                     :HASHKLEN(E+30)
@@ -2196,30 +2169,26 @@ hashBranchEnd30:
     ${B & 0x80000000}                           :JMPZ(hashLeft31)
 
 hashRight31:
-    ${getSmtProof(mem.indexL1InfoTree, 31)}     :HASHK(E+31)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 31)}     :HASHK(E+31)
     C                                           :HASHK(E+31)
     A + 0x80000000 => A                         :JMP(hashBranchEnd31)
 
 hashLeft31:
     C                                           :HASHK(E+31)
-    ${getSmtProof(mem.indexL1InfoTree, 31)}     :HASHK(E+31)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 31)}     :HASHK(E+31)
 
 hashBranchEnd31:
     HASHPOS                                     :HASHKLEN(E+31)
+    ; Merkle root at C
     $ => C                                      :HASHKDIGEST(E+31)
 
     ; verify linear combination of 'indexL1InfoTree'
-    B                                       :ASSERT
-    E + 32 => E                             :MSTORE(nextHashKId)
+    B                                           :ASSERT
+    E + 32 => E                                 :MSTORE(nextHashKId)
 
-
-verifyMerkleProofEnd:
-    $ => A                        :MLOAD(l1InfoRoot)
-    C                             :ASSERT
-
-verifyMerkleProofReturn:
-    $ => RR                       :MLOAD(tmpZkPCVerifyMerkleProof)
-                                  :RETURN
+computeMerkleProofReturn:
+    $ => RR                                     :MLOAD(tmpZkPCComputeMerkleProof)
+                                                :RETURN
 
 VAR GLOBAL tmpZkPCreadXFromOffset
 VAR GLOBAL readXFromCalldataOffset
