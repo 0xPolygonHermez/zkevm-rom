@@ -56,21 +56,18 @@ array_div_short:
         ; Let's cover the edge cases
         0 => B
         ; 1] Is C == 1 and inA == 0?
-        C - 1           :JMPNZ(__array_div_short_inA_continue)
+        C - 1           :JMPNZ(array_div_short_inAGTinB) ; If len(inA) > 1, then we already know that inA > inB
         $ => A          :MLOAD(array_div_short_inA); Here, len(inA) = len(inB) = 1
         $               :EQ, JMPC(array_div_short_inA_is_zero, array_div_short_equal_len)
                         __array_div_short_inA_continue:
 
         ; 2] Check if inA = inB, inA < inB or inA > inB
 
-        ; If len(inA) > 1, then we already know that inA > inB
-        1 - C           :JMPN(array_div_short_inAGTinB)
-
 array_div_short_equal_len:
         ; Here, C = 1
 
         ; If the lengths are equal, then we must compare the only chunk
-        $0{getFirstDiffChunkSigned(addr.array_div_short_inA,addr.array_div_short_inB,1)} => RR :JMPZ(array_div_short_check_same_input)
+        $0{signedComparison(addr.array_div_short_inA,addr.array_div_short_inB)} => RR :JMPZ(array_div_short_check_same_input)
 
         ; The function does the following:
         ; --------------------------------
