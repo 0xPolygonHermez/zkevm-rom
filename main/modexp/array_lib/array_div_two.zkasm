@@ -26,7 +26,7 @@ array_div_two:
         ; w.c. is when len(in) >> len(2)
 
         %MAX_CNT_BINARY - CNT_BINARY -  2                                  :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 20 - 4*%ARRAY_MAX_LEN_MINUS_ONE - 3 :JMPN(outOfCountersStep) ; till array_mul_short
+        %MAX_CNT_STEPS - STEP        - 20 - 4*%ARRAY_MAX_LEN_MINUS_ONE - 3 :JMPN(outOfCountersStep) ; till array_mul_two
 
         RR              :MSTORE(array_div_two_RR)
 
@@ -107,24 +107,22 @@ array_div_two_inAGTinB:
         ; 3] Let's multiply the quotient by 2
 
         C               :MSTORE(array_div_two_len_quo)
+        C => D
         C - 1 => RR
 
         ; save the first non-zero chunk of quo
         A               :MSTORE(array_div_two_quo + RR)
-        A               :MSTORE(array_mul_short_inA + RR)
-        RR - 1 => RR    :JMPN(array_div_two_to_mul)
+        A               :MSTORE(array_mul_two_in + RR)
+        RR - 1 => RR    :JMPN(array_div_two_mul_quo_inB)
 
 array_div_two_quo_to_mul:
         ${receiveQuotientChunk_short(RR)} => A
         A               :MSTORE(array_div_two_quo + RR)
-        A               :MSTORE(array_mul_short_inA + RR)
-        RR - 1 => RR    :JMPN(array_div_two_to_mul, array_div_two_quo_to_mul)
-
-array_div_two_to_mul:
-        2               :MSTORE(array_mul_short_inB)
+        A               :MSTORE(array_mul_two_in + RR)
+        RR - 1 => RR    :JMPN(array_div_two_mul_quo_inB, array_div_two_quo_to_mul)
 
 array_div_two_mul_quo_inB:
-                        :CALL(array_mul_short)
+                        :CALL(array_mul_two)
 
         ; w.c. is when rem is not zero
         %MAX_CNT_BINARY - CNT_BINARY -  2                                  :JMPN(outOfCountersBinary)
@@ -145,10 +143,10 @@ array_div_two_mul_quo_inB:
 
         A               :MSTORE(array_add_short_inB)
 
-        $ => C          :MLOAD(array_mul_short_len_out)
+        $ => C          :MLOAD(array_mul_two_len_out)
         C - 1 => RR
 array_div_two_result_to_add:
-        $ => A          :MLOAD(array_mul_short_out + RR)
+        $ => A          :MLOAD(array_mul_two_out + RR)
         A               :MSTORE(array_add_short_inA + RR)
         RR - 1 => RR    :JMPN(array_div_two_add_result_rem, array_div_two_result_to_add)
 
@@ -162,7 +160,7 @@ array_div_two_add_result_rem:
         C               :MLOAD(array_div_two_len_in)
         C - 1 => RR
 
-; Check that a == q·b + r
+; Check that in == 2·q + r
 array_div_two_check_result_eq_inA1:
         $ => A          :MLOAD(array_add_short_out + RR)
         A               :MLOAD(array_div_two_in + RR)
@@ -175,12 +173,12 @@ array_div_two_rem_is_zero:
 
         ; The length of q·b must be the same as the input of a
         $ => C          :MLOAD(array_div_two_len_in)
-        C               :MLOAD(array_mul_short_len_out)
+        C               :MLOAD(array_mul_two_len_out)
 
-        ; Check that a == q·b + 0
+        ; Check that input == 2·quo + 0
         C - 1 => RR
 array_div_two_check_result_eq_inA2:
-        $ => A          :MLOAD(array_mul_short_out + RR)
+        $ => A          :MLOAD(array_mul_two_out + RR)
         A               :MLOAD(array_div_two_in + RR)
         RR - 1 => RR    :JMPN(array_div_two_end, array_div_two_check_result_eq_inA2)
 
