@@ -1,0 +1,189 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  PRE: The input array has been trimmed.
+;; POST: The quotient is trimmed.
+;;
+;; array_div_two:
+;;           input:
+;;                  · C ∈ [1, 32], the len of in
+;;                  · in ∈ [0, 2²⁵⁶ - 1]^C, the first input array
+;;
+;;          output:
+;;                  · quo = in // 2, with len(quo) <= C
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; NOTE: This function receives the actual result from the helper (avoiding the need of computing divisions);
+;       checks the correctness of the result and returns the result to the caller
+
+VAR GLOBAL array_div_two_in[%ARRAY_MAX_LEN]
+VAR GLOBAL array_div_two_quo[%ARRAY_MAX_LEN]
+
+VAR GLOBAL array_div_two_len_in
+VAR GLOBAL array_div_two_len_quo
+
+VAR GLOBAL array_div_two_RR
+
+array_div_two:
+        ; w.c. is when len(in) >> len(2)
+
+        %MAX_CNT_BINARY - CNT_BINARY -  2                                  :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 20 - 4*%ARRAY_MAX_LEN_MINUS_ONE - 3 :JMPN(outOfCountersStep) ; till array_mul_short
+
+        RR              :MSTORE(array_div_two_RR)
+
+        C               :MSTORE(array_div_two_len_in)
+        C               :MSTORE(array_div_two_len_quo)
+
+        ; Let's cover the edge cases
+        0 => B
+        ; 1] Is C == 1 and in == 0?
+        C - 1           :JMPNZ(array_div_two_inAGTinB) ; If len(in) > 1, then we already know that in > 2
+        $ => A          :MLOAD(array_div_two_in); Here, len(in) = 1
+        $               :EQ, JMPC(array_div_two_inALTinB)
+                        __array_div_two_inA_continue:
+        ; Here, len(in) = 1
+
+        ; 2] Check if in = 2, in < 2 or in > 2
+        ; If the lengths are equal, then we must compare the only chunk
+        $0{signedComparisonWithConst(addr.array_div_two_in,2)} => RR :JMPZ(array_div_two_check_same_input)
+
+        ; The function does the following:
+        ; --------------------------------
+        ; if in < 2 => return -1
+        ; if in > 2 => return  1
+        ; if in = 2 => return  0
+        ; --------------------------------
+
+        RR          :JMPN(array_div_two_check_inALTtwo)
+
+        1 - RR      :JMPN(failAssert) ; if 1 < RR ERROR
+
+        ; Ensure that the chunk is higher
+        2 => A
+        $ => B          :MLOAD(array_div_two_in)
+        1               :LT, JMP(array_div_two_inAGTinB)
+
+; Begin of edge cases
+array_div_two_check_same_input:
+        2               :MLOAD(array_div_two_in)
+
+array_div_two_same_input:
+        ; If in = 2, then the result is 1
+        1               :MSTORE(array_div_two_quo)
+        1               :MSTORE(array_div_two_len_quo), JMP(array_div_two_end)
+
+array_div_two_check_inALTtwo:
+        RR + 1          :JMPN(failAssert) ; if RR < -1 ERROR
+
+        $ => A          :MLOAD(array_div_two_in)
+        2 => B
+        1               :LT
+
+array_div_two_inALTinB:
+        ; If in < 2, then the result is 0
+        0               :MSTORE(array_div_two_quo)
+        1               :MSTORE(array_div_two_len_quo), JMP(array_div_two_end)
+; End of edge cases
+
+array_div_two_inAGTinB:
+        ; From here, in > 2
+
+        ; Strategy: Divide outside and check the result inside
+        $${MPdiv_short(addr.array_div_two_in,mem.array_div_two_len_in,2)}
+
+        $0{receiveLenQuotient_short()} => C ; It cannot be zero because q=0 happens only when in < 2
+
+        ; 1] The received length must satisfy 1 <= len(Q) <= len(in)
+        C - 1 => RR                     :JMPN(failAssert) ; if len(Q) < 1 ERROR
+        $ => A                          :MLOAD(array_div_two_len_in)
+        A - C                           :JMPN(failAssert) ; if len(in) < len(Q) ERROR
+
+        ; 2] To avoid non-determinism, we must ensure that the quotient is trimmed
+        ; i.e., that its last chunk is not 0
+        ${receiveQuotientChunk_short(RR)} => A ; It cannot be zero because q=0 happens only when in < 2
+        0 => B
+        0               :EQ
+        ; From here, the quotient is trimmed
+
+        ; 3] Let's multiply the quotient by 2
+
+        C               :MSTORE(array_div_two_len_quo)
+        C - 1 => RR
+
+        ; save the first non-zero chunk of quo
+        A               :MSTORE(array_div_two_quo + RR)
+        A               :MSTORE(array_mul_short_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_two_to_mul)
+
+array_div_two_quo_to_mul:
+        ${receiveQuotientChunk_short(RR)} => A
+        A               :MSTORE(array_div_two_quo + RR)
+        A               :MSTORE(array_mul_short_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_two_to_mul, array_div_two_quo_to_mul)
+
+array_div_two_to_mul:
+        2               :MSTORE(array_mul_short_inB)
+
+array_div_two_mul_quo_inB:
+                        :CALL(array_mul_short)
+
+        ; w.c. is when rem is not zero
+        %MAX_CNT_BINARY - CNT_BINARY -  2                                  :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 10 - 3*%ARRAY_MAX_LEN_MINUS_ONE - 1 :JMPN(outOfCountersStep) ; till array_add_short
+
+        ; Check the remainder
+        ${receiveRemainderChunk_short()} => A
+
+        ${A == 0}       :JMPNZ(array_div_two_rem_is_zero)
+
+        ; Check that the remainder is not zero
+        0 => B
+        0               :EQ
+
+        ; We must ensure the the remaider is lower than 2
+        2 => B
+        1               :LT
+
+        A               :MSTORE(array_add_short_inB)
+
+        $ => C          :MLOAD(array_mul_short_len_out)
+        C - 1 => RR
+array_div_two_result_to_add:
+        $ => A          :MLOAD(array_mul_short_out + RR)
+        A               :MSTORE(array_add_short_inA + RR)
+        RR - 1 => RR    :JMPN(array_div_two_add_result_rem, array_div_two_result_to_add)
+
+array_div_two_add_result_rem:
+                        :CALL(array_add_short)
+
+        %MAX_CNT_STEPS - STEP - 3 - 3*%ARRAY_MAX_LEN - 2 :JMPN(outOfCountersStep)
+
+        ; The length of q·b + r must be the same as the input of a
+        $ => C          :MLOAD(array_add_short_len_out)
+        C               :MLOAD(array_div_two_len_in)
+        C - 1 => RR
+
+; Check that a == q·b + r
+array_div_two_check_result_eq_inA1:
+        $ => A          :MLOAD(array_add_short_out + RR)
+        A               :MLOAD(array_div_two_in + RR)
+        RR - 1 => RR    :JMPN(array_div_two_end, array_div_two_check_result_eq_inA1)
+
+
+; Path with remainder equal to 0
+array_div_two_rem_is_zero:
+        0               :ASSERT
+
+        ; The length of q·b must be the same as the input of a
+        $ => C          :MLOAD(array_div_two_len_in)
+        C               :MLOAD(array_mul_short_len_out)
+
+        ; Check that a == q·b + 0
+        C - 1 => RR
+array_div_two_check_result_eq_inA2:
+        $ => A          :MLOAD(array_mul_short_out + RR)
+        A               :MLOAD(array_div_two_in + RR)
+        RR - 1 => RR    :JMPN(array_div_two_end, array_div_two_check_result_eq_inA2)
+
+array_div_two_end:
+        $ => RR         :MLOAD(array_div_two_RR)
+                        :RETURN

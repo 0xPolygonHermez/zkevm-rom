@@ -30,7 +30,7 @@
 ;;         if (isOdd(exp)) {
 ;;             r = array_div(array_mul(r, base),mod)[1];
 ;;         }
-;;         exp = array_div_short(exp, 2n[0];
+;;         exp = array_div_two(exp);
 ;;         base = array_div(array_square(base),mod)[1];
 ;;     }
 ;;     return r;
@@ -277,25 +277,24 @@ modexp_loop:
 
 ; Compute E = E // 2
 ; -------------------
-modexp_E_to_div_short:
+modexp_E_to_div_two:
         $ => A          :MLOAD(modexp_E + RR)
-        A               :MSTORE(array_div_short_inA + RR)
-        RR - 1 => RR    :JMPN(modexp_div_E_and_2, modexp_E_to_div_short)
+        A               :MSTORE(array_div_two_in + RR)
+        RR - 1 => RR    :JMPN(modexp_div_E_and_two, modexp_E_to_div_two)
 
-modexp_div_E_and_2:
-        2               :MSTORE(array_div_short_inB)
-                        :CALL(array_div_short)
+modexp_div_E_and_two:
+                        :CALL(array_div_two)
 
         %MAX_CNT_STEPS - STEP - 3 - 3*%ARRAY_MAX_LEN - 2 - 3*%ARRAY_MAX_LEN - 1   :JMPN(outOfCountersStep) ; till array_square
 
-        $ => C          :MLOAD(array_div_short_len_quo)
+        $ => C          :MLOAD(array_div_two_len_quo)
         C               :MSTORE(modexp_Elen)
         C - 1 => RR
 
-modexp_quo_from_div_short:
-        $ => A          :MLOAD(array_div_short_quo + RR)
+modexp_quo_from_div_two:
+        $ => A          :MLOAD(array_div_two_quo + RR)
         A               :MSTORE(modexp_E + RR)
-        RR - 1 => RR    :JMPN(modexp_pre_B_square, modexp_quo_from_div_short)
+        RR - 1 => RR    :JMPN(modexp_pre_B_square, modexp_quo_from_div_two)
 ; -------------------
 
 ; Compute B^2

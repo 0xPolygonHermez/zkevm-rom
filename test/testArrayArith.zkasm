@@ -1,7 +1,9 @@
 ; constants needed by executor C++
 INCLUDE "../main/constants.zkasm"
+INCLUDE "../main/modexp/constants.zkasm"
 
 CONSTL %ARRAY_BASE_MINUS_ONE = 115792089237316195423570985008687907853269984665640564039457584007913129639935n ; 2^256
+CONST %ARRAY_MAX_LEN_DIV_BY_TWO = %ARRAY_MAX_LEN / 2
 
 VAR GLOBAL lastHashKId
 VAR GLOBAL lastHashPId
@@ -835,6 +837,62 @@ start:
         115792089237316195423570985008687907853269984665640564039457584007913129639932n :MLOAD(array_div_quo + E)
         ; ---------------------------------------------------------------
 
+        ; division by two
+        ; ---------------------------------------------------------------
+        ; 1] [0n]
+        1 => C
+        0n                                                                              :MSTORE(array_div_two_in)
+                                                                                        :CALL(array_div_two)
+        0n                                                                              :MLOAD(array_div_two_quo)
+        1                                                                               :MLOAD(array_div_two_len_quo)
+
+        ; 2] [1n]
+        1 => C
+        1n                                                                              :MSTORE(array_div_two_in)
+                                                                                        :CALL(array_div_two)
+        0n                                                                              :MLOAD(array_div_two_quo)
+        1                                                                               :MLOAD(array_div_two_len_quo)
+
+        ; 3] [2n]
+        1 => C
+        2n                                                                              :MSTORE(array_div_two_in)
+                                                                                        :CALL(array_div_two)
+        1n                                                                              :MLOAD(array_div_two_quo)
+        1                                                                               :MLOAD(array_div_two_len_quo)
+
+        ; 4] [4n]
+        1 => C
+        4n                                                                              :MSTORE(array_div_two_in)
+                                                                                        :CALL(array_div_two)
+        2n                                                                              :MLOAD(array_div_two_quo)
+        1                                                                               :MLOAD(array_div_two_len_quo)
+
+        ; 5] [4n, 4n]
+        2 => C
+        4n                                                                              :MSTORE(array_div_two_in)
+        1 => E
+        4n                                                                              :MSTORE(array_div_two_in + E)
+                                                                                        :CALL(array_div_two)
+        2n                                                                              :MLOAD(array_div_two_quo)
+        1 => E
+        2n                                                                              :MLOAD(array_div_two_quo + E)
+        2                                                                               :MLOAD(array_div_two_len_quo)
+
+        ; 6] [4n] * %ARRAY_MAX_LEN
+        %ARRAY_MAX_LEN => C
+        C - 1 => E
+        array_div_two_test6:
+        4n                                                                              :MSTORE(array_div_two_in + E)
+        E - 1 => E                                                                      :JMPN(array_div_two_test6_compute,array_div_two_test6)
+        array_div_two_test6_compute:
+                                                                                        :CALL(array_div_two)
+        %ARRAY_MAX_LEN => E                                                             :MLOAD(array_div_two_len_quo)
+        E - 1 => E
+        array_div_two_test6_check:
+        2n                                                                              :MLOAD(array_div_two_quo + E)
+        E - 1 => E                                                                      :JMPN(array_div_two_test6_end,array_div_two_test6_check)
+        array_div_two_test6_end:
+
         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
         ;; UNUSED
         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1108,8 +1166,6 @@ opINVALID:
 checkAndSaveFrom:
                          :JMP(opINVALID)
 
-INCLUDE "../main/modexp/constants.zkasm"
-
 INCLUDE "../main/modexp/array_lib/array_add_short.zkasm"
 INCLUDE "../main/modexp/array_lib/array_add_AGTB.zkasm"
 INCLUDE "../main/modexp/array_lib/array_mul_long.zkasm"
@@ -1117,6 +1173,7 @@ INCLUDE "../main/modexp/array_lib/array_mul_short.zkasm"
 INCLUDE "../main/modexp/array_lib/array_square.zkasm"
 INCLUDE "../main/modexp/array_lib/array_div_long.zkasm"
 INCLUDE "../main/modexp/array_lib/array_div_short.zkasm"
+INCLUDE "../main/modexp/array_lib/array_div_two.zkasm"
 
 INCLUDE "../main/modexp/array_lib/unused/array_compare.zkasm"
 INCLUDE "../main/modexp/array_lib/unused/array_trim.zkasm"
