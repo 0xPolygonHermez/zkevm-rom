@@ -686,14 +686,13 @@ SHRarith_0:
 
 
 SHLarith:
-    %MAX_CNT_STEPS - STEP - 7               :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 6               :JMPN(outOfCountersStep)
 
     31 - D      :JMPN(SHLarith_32)
-    D           :JMPZ(SHLarith_0)
+
+    D => C      :SAVE(B,C,D,E,RCX,RR),JMPZ(SHLarith_0)
 
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
-
-    D => C      :SAVE(B,C,D,E,RCX,RR)
     0 => B
     $ => A      :MEM_ALIGN_RD
                 :RESTORE, RETURN
@@ -701,7 +700,7 @@ SHLarith:
 SHLarith_32:
     0 => A      :RETURN
 SHLarith_0:
-                :RETURN
+                :RESTORE, RETURN
 
 ; @info Shift right D bits to A
 ; @in A
@@ -712,21 +711,22 @@ SHRarithBit:
     %MAX_CNT_STEPS - STEP - 9   :JMPN(outOfCountersStep)
     255 - D                     :JMPN(SHRarithBit_A0)
 
-    D => RR,RCX                 :SAVE(B,C,D,E,RCX,RR)
+    D => RR                     :SAVE(B,C,D,E,RCX,RR),JMPZ(SHRarithBit_D0)
     0 => C,B                    :JMP(@SHRarithBit_table + RR)
 
 SHRarithBit_arith:
     %MAX_CNT_ARITH - CNT_ARITH - 1  :JMPN(outOfCountersArith)
 
-    ${(A >> RCX) & const.MAX_UINT_256} => D
-    ${(A << (256 - RCX)) & const.MAX_UINT_256} :ARITH
-    D => A
-                                :RESTORE, RETURN
+    ${(A >> RR) & const.MAX_UINT_256} => D
+    ${(A << (256 - RR)) & const.MAX_UINT_256} :ARITH
+    D => A                      :RESTORE, RETURN
+
 SHRarithBit_memalign:
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
     A => B
     0 => A
     $ => A                      :MEM_ALIGN_RD
+SHRarithBit_D0:
                                 :RESTORE, RETURN
 SHRarithBit_A0:
     0 => A                      :RETURN
@@ -740,21 +740,23 @@ INCLUDE "tables/shr_bits_table.zkasm"
 ; @out A - (A << D) => A
 
 SHLarithBit:
-    %MAX_CNT_STEPS - STEP - 9   :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 8   :JMPN(outOfCountersStep)
     255 - D                     :JMPN(SHLarithBit_A0)
 
-    D => RR,RCX                 :SAVE(B,C,D,E,RCX,RR)
+    D => RR                     :SAVE(B,C,D,E,RCX,RR),JMPZ(SHLarithBit_D0)
     0 => C,B                    :JMP(@SHLarithBit_table + RR)
 
 SHLarithBit_arith:
     %MAX_CNT_ARITH - CNT_ARITH - 1  :JMPN(outOfCountersArith)
 
-    ${(A >> (256 - RCX)) & const.MAX_UINT_256} => D
-    ${(A << RCX) & const.MAX_UINT_256} => A             :ARITH
-                                                        :RESTORE, RETURN
+    ${(A >> (256 - RR)) & const.MAX_UINT_256} => D
+    ${(A << RR) & const.MAX_UINT_256} => A             :ARITH
+                                                       :RESTORE, RETURN
 SHLarithBit_memalign:
     %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
     $ => A                                  :MEM_ALIGN_RD
+
+SHLarithBit_D0:
                                 :RESTORE, RETURN
 SHLarithBit_A0:
     0 => A                      :RETURN    
