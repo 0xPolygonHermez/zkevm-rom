@@ -655,156 +655,111 @@ divisorSmallerDiv:
     E               :MSTORE(arithRes2)
     $ => A          :RESTORE, RETURN
 
-VAR GLOBAL tmpSHXZkPC
-VAR GLOBAL tmpSHXZkPC2
+; @info Shift right D bytes to A
+; @in A
+; @in D
+; @out A - A >> (8*D) => A
 
-VAR GLOBAL tmpVarBSHX
-VAR GLOBAL tmpVarCSHX
-VAR GLOBAL tmpVarDSHX
-VAR GLOBAL tmpVarESHX
-
-VAR GLOBAL result
-;@info Shift right D bytes to A
-;@in A - (A >> D)
-;@in D - (A >> D) D bytes
-;@out A - A >> D => A
 SHRarith:
-    ; check zk-counters
-    %MAX_CNT_STEPS - STEP - 50       :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
-    %MAX_CNT_ARITH - CNT_ARITH - 1   :JMPN(outOfCountersArith)
+    %MAX_CNT_STEPS - STEP - 8               :JMPN(outOfCountersStep)
 
-    RR                      :MSTORE(tmpSHXZkPC2)
-    B                       :MSTORE(tmpVarBSHX)
-    C                       :MSTORE(tmpVarCSHX)
-    D                       :MSTORE(tmpVarDSHX)
-    E                       :MSTORE(tmpVarESHX)
-    ; E init number
-    A => E
-    ; A bytes
-    D => A
-    ; B = 8 (1 byte = 8 bits)
-    8 => B
-    0 => C
-    0 => D
-    ; A * B = op --> D = op (D bits)
-    ${A*B} => D             :ARITH
-    ; A init number
-    E => A                  :JMP(SHRarithinit)
+    31 - D      :JMPN(SHRarith_32)
+    D           :JMPZ(SHRarith_0)
 
-;@in A - (A >> D)
-;@in D - (A >> D) D bits
-;@out A -  A >> D => A
-SHRarithBit:
-    ; check zk-counters
-    %MAX_CNT_STEPS - STEP - 30       :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
-    RR                      :MSTORE(tmpSHXZkPC2)
-    B                       :MSTORE(tmpVarBSHX)
-    C                       :MSTORE(tmpVarCSHX)
-    D                       :MSTORE(tmpVarDSHX)
-    E                       :MSTORE(tmpVarESHX)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
 
-SHRarithinit:
-    0 => B
-    ; if A == 0 --> no shift
-    $                       :EQ,JMPC(SHRarithfinal)
-    ; E init number
-    A => E
-    ; B bits
-    D => B
-    255 => A
-    ; A < B, 255 < bits
-    $                       :LT,JMPC(SHRarith0)
-    D => RR
-    E => A                  :MSTORE(arithA)
-                            :CALL(@exp_num + RR); out:[B: 2**RR]
-    B                       :MSTORE(arithB),CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => A                  :MLOAD(arithRes1),JMP(SHRarithfinal)
-
-SHRarith0:
+    32 - D => C :SAVE(B,C,D,E,RCX,RR)
+    A => B
     0 => A
+    $ => A      :MEM_ALIGN_RD
+                :RESTORE, RETURN
 
-SHRarithfinal:
-    $ => B                  :MLOAD(tmpVarBSHX)
-    $ => C                  :MLOAD(tmpVarCSHX)
-    $ => D                  :MLOAD(tmpVarDSHX)
-    $ => RR                 :MLOAD(tmpSHXZkPC2)
-    $ => E                  :MLOAD(tmpVarESHX), RETURN
+SHRarith_32:
+    0 => A      :RETURN
+SHRarith_0:
+                :RETURN
 
-;@info Shift left D bytes to A
-;@in A - (A << D)
-;@in D - (A << D) D bytes
-;@out A -  A << D => A
+; @info Shift right D bytes to A
+; @in A
+; @in D
+; @out A - A >> (8*D)) => A
+
+
 SHLarith:
-    ; check zk-counters
-    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 4    :JMPN(outOfCountersBinary)
-    %MAX_CNT_ARITH - CNT_ARITH - 2      :JMPN(outOfCountersArith)
-    RR                      :MSTORE(tmpSHXZkPC2)
-    B                       :MSTORE(tmpVarBSHX)
-    C                       :MSTORE(tmpVarCSHX)
-    D                       :MSTORE(tmpVarDSHX)
-    E                       :MSTORE(tmpVarESHX)
-    ; E init number
-    A => E
-    ; A bytes
+    %MAX_CNT_STEPS - STEP - 7               :JMPN(outOfCountersStep)
+
+    31 - D      :JMPN(SHRarith_32)
+    D           :JMPZ(SHRarith_0)
+
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
+
+    D => C      :SAVE(B,C,D,E,RCX,RR)
+    0 => B
+    $ => A      :MEM_ALIGN_RD
+                :RESTORE, RETURN
+
+SHRarith_32:
+    0 => A      :RETURN
+SHRarith_0:
+                :RETURN
+
+; @info Shift right D bits to A
+; @in A
+; @in D
+; @out A - (A >> D) => A
+
+SHRarithBit:
+    %MAX_CNT_STEPS - STEP - 9   :JMPN(outOfCountersStep)
+    255 - D                     :JMPN(SHRarithBit_A0)
+
+    D => RR,RCX                 :SAVE(B,C,D,E,RCX,RR)
+    0 => C,B                    :JMP(@SHRarithBit_table + RR)
+
+SHRarithBit_arith:
+    %MAX_CNT_ARITH - CNT_ARITH - 1  :JMPN(outOfCountersArith)
+
+    ${(A >> RCX) & const.MAX_UINT_256} => D
+    ${(A << (256 - RCX)) & const.MAX_UINT_256} :ARITH
     D => A
-    8 => B
-    0 => C, D
-    ; D = A * 8, D bits
-    ${A*B} => D             :ARITH
-    ; A init number
-    E => A
-                            :JMP(SHLarithinit)
-SHLarithBit:
-    ; check zk-counters
-    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 2    :JMPN(outOfCountersBinary)
-    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
-    RR                      :MSTORE(tmpSHXZkPC2)
-    B                       :MSTORE(tmpVarBSHX)
-    C                       :MSTORE(tmpVarCSHX)
-    D                       :MSTORE(tmpVarDSHX)
-    E                       :MSTORE(tmpVarESHX)
-
-SHLarithinit:
-    ; E init number
-    A => E
+                                :RESTORE, RETURN
+SHRarithBit_memalign:
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
+    A => B
     0 => A
-    ; D --> B bits
-    D => B
-    ; if D == 0 --> no shift
-    $                       :EQ,JMPC(SHLarithfinal)
-    255 => A
-     ; A < B, 255 < bits
-    $                       :LT,JMPC(SHLarith0)
+    $ => A                      :MEM_ALIGN_RD
+                                :RESTORE, RETURN
+SHRarithBit_A0:
+    0 => A                      :RETURN
 
-    D => RR
-    ; A init number and calculate B = 2**D
-    E => A                  :CALL(@exp_num + RR); out:[B: 2**RR]
-    ; E = init number * 2**D (result)
-    ${A*B} => E
-    E                       :MSTORE(result)
-    ; D = 256 - D
-    256 - D => D, RR
-    B => C                  :CALL(@exp_num + RR); out:[B: 2**RR]
-    ${A/B} => D
-    C => B
-    0 => C
-    E                       :ARITH, JMP(SHLarithfinal)
+INCLUDE "tables/shr_bits_table.zkasm"
 
-SHLarith0:
-    0 => E
-                            :JMP(SHLarithfinal)
 
-SHLarithfinal:
-    E => A
-    $ => B                  :MLOAD(tmpVarBSHX)
-    $ => C                  :MLOAD(tmpVarCSHX)
-    $ => D                  :MLOAD(tmpVarDSHX)
-    $ => RR                 :MLOAD(tmpSHXZkPC2)
-    $ => E                  :MLOAD(tmpVarESHX), RETURN
+; @info Shift left D bits to A
+; @in A
+; @in D
+; @out A - (A << D) => A
+
+SHLarithBit:
+    %MAX_CNT_STEPS - STEP - 9   :JMPN(outOfCountersStep)
+    255 - D                     :JMPN(SHLarithBit_A0)
+
+    D => RR,RCX                 :SAVE(B,C,D,E,RCX,RR)
+    0 => C,B                    :JMP(@SHLarithBit_table + RR)
+
+SHLarithBit_arith:
+    %MAX_CNT_ARITH - CNT_ARITH - 1  :JMPN(outOfCountersArith)
+
+    ${(A >> (256 - RCX)) & const.MAX_UINT_256} => D
+    ${(A << RCX) & const.MAX_UINT_256} => A             :ARITH
+                                                        :RESTORE, RETURN
+SHLarithBit_memalign:
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
+    $ => A                                  :MEM_ALIGN_RD
+                                :RESTORE, RETURN
+SHLarithBit_A0:
+    0 => A                      :RETURN    
+
+INCLUDE "tables/shl_bits_table.zkasm"
 
 ; out of counters full tracer event trigger
 outOfCountersStep:
