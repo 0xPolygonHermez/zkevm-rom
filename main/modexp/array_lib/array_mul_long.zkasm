@@ -13,6 +13,10 @@
 ;;                  · out = inA·inB, with len(out) <= C + D
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; WARNING: This function is tailored for the array_div_long function in the worst case, i.e.
+;;          when len(inA) == %ARRAY_MAX_LEN_DOUBLED. DO NOT use it for other purposes in such case.
+;;          In other words, there is an implicit assumption that len(inA) + len(inB) - 1 == %ARRAY_MAX_LEN_DOUBLED.
+
 ; function array_mul_long(a: bigint[], b: bigint[], base: bigint): bigint[] {
 ;     const alen = a.length;
 ;     const blen = b.length;
@@ -101,7 +105,7 @@ array_mul_long_finish_first_row:
 array_mul_long_loop_index_check:
         RCX + 1 => RCX
         $ => A          :MLOAD(array_mul_long_len_inA)
-        A - RCX         :JMPZ(array_mul_long_prep_trim)
+        A - RCX         :JMPZ(array_mul_long_check_carry)
 
         0               :MSTORE(array_mul_long_out_chunk_2)     ; reset the out chunk 2
 
@@ -183,9 +187,13 @@ array_mul_long_last_column:
 
         ; out[i+lenB+1] = carry, where carry ∈ [0,base-1]
         E + 1 => E
+
+        ; In the exceptional case where we reached the allowed limit, we proceed to the carry check
+        E - %ARRAY_MAX_LEN_DOUBLED  :JMPZ(array_mul_long_check_carry)
+
         D               :MSTORE(array_mul_long_out + E), JMP(array_mul_long_loop_index_check)
 
-array_mul_long_prep_trim:
+array_mul_long_check_carry:
         D => A
         0 => B
         $               :EQ, JMPNZ(array_mul_long_trim)
