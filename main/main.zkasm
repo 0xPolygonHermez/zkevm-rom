@@ -176,9 +176,24 @@ processTxsEnd:
 finalizeBatch:
 
 ;;;;;;;;;;;;;;;;;;
-;; E - Finalize execution: set output values at corresponding registers
+;; E - Check all save/restore have been consumed
+;;   - Retrieve newLocalExitRoot
+;;   - Finalize execution: set output values at corresponding registers
 ;;;;;;;;;;;;;;;;;;
         $${eventLog(onFinishBatch)}
+        ;Each save must be restored precisely once. At the end of the program, all saves without restoration must be cleaned because if not, proof generation fails.
+                                                :SAVE(B,C,D,E,RR,RCX)
+        RID                                     :MSTORE(lastRID)
+        ; CHECK: maybe only the loop needed? Why doing one more save/restore?
+clearPendingRestores_loop:
+        ${getPendingRID(mem.lastRID)} => RID    :JMPN(clearPendingRestores_end)
+                                                :RESTORE, JMP(clearPendingRestores_loop)
+
+clearPendingRestores_end:
+        $ => RID                :MLOAD(lastRID)
+                                :RESTORE
+        0 => RID
+
         ; Retrieve newLocalExitRoot
         ; Read 'localExitRoot' variable from GLOBAL_EXIT_ROOT_MANAGER_L2 and store
         ; it to the 'newLocalExitRoot' var

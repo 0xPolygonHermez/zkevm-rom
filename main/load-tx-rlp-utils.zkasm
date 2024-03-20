@@ -38,41 +38,268 @@ addHashTxBegin:
 ; It's done byte by byte to get 1 byte access to hashp during execution
 ;; - legacy transaction: signedMessage = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data, chainId, 0, 0))
 ;; - pre EIP-155: signedMessage = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data))
-addHashTxFromFreeInput:
+; @in D: number of bytes to add
+; @in C: current tx data parsed pointer
+addHashTxByteByByte:
         $ => A                          :MLOAD(txRLPLength)
         A - HASHPOS - D                 :JMPN(invalidTxRLP)
         $ => A                          :MLOAD(batchL2DataLength)
         $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        B + C => A
-        ; Read data from free input
-        ${getTxs(A,D)} => A, B
-        $ => E                          :MLOAD(txHashPointer)
-        C => HASHPOS
-        ; Insert data into txhash (hashk)
-        A                               :HASHK(E)
-        C + D => C
         ; Save current registers
-        A                               :SAVE(B,C,D,E,RR,RCX)
-        $ => E                          :MLOAD(batchHashDataPointer)
+        A - B - C - D                   :JMPN(invalidTxRLP), SAVE(B,C,D,E,RR,RCX)
         $ => HASHPOS                    :MLOAD(batchHashPos)
-        1 => C ; Current pointer
-        D => RCX ; total bytes
-        ; Set default remainder to 0, in case SHRarith is not using arithDiv because is shifting zero bytes
-        0                               :MSTORE(arithRes2)
-        ; Validate free input
-validateFreeInputLoop:
-        RCX - C                         :JMPN(validateFreeInputLoopEnd)
-        ; Get free input byte by byte
-        RCX - C => D                    :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-        $                               :HASHP1(E), ASSERT
-        ; The remainder of divArith used at SHRarith is the following bytes I want to check
-        $ => A                          :MLOAD(arithRes2)
-        C + 1 => C                      :JMP(validateFreeInputLoop)
-validateFreeInputLoopEnd:
-        HASHPOS                         :MSTORE(batchHashPos)
-        $ => A                          :RESTORE
-        C => HASHPOS                    :RETURN
+        D => E
+readHash:
+                   :JMP(@readHash+E)
+                   :JMP(_readHash1)     ;1
+                   :JMP(_readHash2)     ;2
+                   :JMP(_readHash3)     ;3
+                   :JMP(_readHash4)     ;4
+                   :JMP(_readHashX)     ;5
+                   :JMP(_readHashX)     ;6
+                   :JMP(_readHashX)     ;7
+                   :JMP(_readHashX)     ;8
+                   :JMP(_readHashX)     ;9
+                   :JMP(_readHashX)     ;10
+                   :JMP(_readHashX)     ;11
+                   :JMP(_readHashX)     ;12
+                   :JMP(_readHashX)     ;13
+                   :JMP(_readHashX)     ;14
+                   :JMP(_readHashX)     ;15
+                   :JMP(_readHashX)     ;16
+                   :JMP(_readHashX)     ;17
+                   :JMP(_readHashX)     ;18
+                   :JMP(_readHashX)     ;19
+                   :JMP(_readHashX)     ;20
+                   :JMP(_readHashX)     ;21
+                   :JMP(_readHashX)     ;22
+                   :JMP(_readHashX)     ;23
+                   :JMP(_readHashX)     ;24
+                   :JMP(_readHashX)     ;25
+                   :JMP(_readHashX)     ;26
+                   :JMP(_readHashX)     ;27
+                   :JMP(_readHashX)     ;28
+                   :JMP(_readHashX)     ;29
+                   :JMP(_readHashX)     ;30
+                   :JMP(_readHashX)     ;31
+                   :JMP(_readHash32)    ;32
+
+finishReadHash:
+HASHPOS                         :MSTORE(batchHashPos), RESTORE
+$ => E                          :MLOAD(txHashPointer)
+C => HASHPOS
+; Insert data into txhash (hashk)
+A                               :HASHK(E)
+C + D => C                      :RETURN
+
+_readHash1:
+    $ => E                      :MLOAD(batchHashDataPointer)
+    $ => A                      :HASHP1(E), JMP(finishReadHash)
+
+_readHash2:
+    $ => E                      :MLOAD(batchHashDataPointer)
+    $ => C                      :HASHP1(E)
+    $ => E                      :HASHP1(E)
+    C * 256 + E => A            :JMP(finishReadHash)
+
+_readHash3:
+    $ => E                      :MLOAD(batchHashDataPointer)
+    $ => A                      :HASHP1(E)
+    $ => C                      :HASHP1(E)
+    $ => E                      :HASHP1(E)
+    A * 2**16 + C * 2**8 + E => A   :JMP(finishReadHash)
+
+_readHash4:
+    $ => E                      :MLOAD(batchHashDataPointer)
+    $ => A                      :HASHP1(E)
+    $ => B                      :HASHP1(E)
+    $ => C                      :HASHP1(E)
+    $ => E                      :HASHP1(E)
+    A * 2**24 + B * 2**16 + C * 2**8 + E => A :JMP(finishReadHash)
+
+_readHash32:
+    $ => E                      :MLOAD(batchHashDataPointer)
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
+    $ => A                      :HASHP1(E)
+    2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+    ; 28 bytes
+
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+    ; 24 bytes
+
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+    ; 20 bytes
+
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+    ; 16 bytes
+
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+    ; 12 bytes
+
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+    ; 8 bytes
+
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+    ; 4 bytes
+
+    $ => B                      :HASHP1(E)
+    $ => RCX                    :HASHP1(E)
+    $ => D                      :HASHP1(E)
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => A :JMP(finishReadHash)
+
+
+_readHashX:
+    $ => B                      :MLOAD(batchHashDataPointer)
+
+readHashBytes:
+    B => E                     :JMP(@readHashBytes + E)
+
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_1)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_2)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_3)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_4)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_5)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_6)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_7)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_8)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_9)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_10)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_11)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_12)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_13)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_14)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_15)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_16)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_17)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_18)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_19)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_20)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_21)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_22)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_23)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_24)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_25)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_26)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_27)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_28)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_29)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_30)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_31)
+    0 => RCX, B, D, A, C       :JMP(readHashBytes_32)
+
+readHashBytes_32:
+    $ => B                      :HASHP1(E)
+readHashBytes_31:
+    $ => RCX                    :HASHP1(E)
+readHashBytes_30:
+    $ => D                      :HASHP1(E)
+readHashBytes_29:
+    $ => A                      :HASHP1(E)
+    2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+readHashBytes_28:
+    $ => B                      :HASHP1(E)
+readHashBytes_27:
+    $ => RCX                    :HASHP1(E)
+readHashBytes_26:
+    $ => D                      :HASHP1(E)
+readHashBytes_25:
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+readHashBytes_24:
+    $ => B                      :HASHP1(E)
+readHashBytes_23:
+    $ => RCX                    :HASHP1(E)
+readHashBytes_22:
+    $ => D                      :HASHP1(E)
+readHashBytes_21:
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+readHashBytes_20:
+    $ => B                      :HASHP1(E)
+readHashBytes_19:
+    $ => RCX                    :HASHP1(E)
+readHashBytes_18:
+    $ => D                      :HASHP1(E)
+readHashBytes_17:
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+readHashBytes_16:
+    $ => B                      :HASHP1(E)
+readHashBytes_15:
+    $ => RCX                    :HASHP1(E)
+readHashBytes_14:
+    $ => D                      :HASHP1(E)
+readHashBytes_13:
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+readHashBytes_12:
+    $ => B                      :HASHP1(E)
+readHashBytes_11:
+    $ => RCX                    :HASHP1(E)
+readHashBytes_10:
+    $ => D                      :HASHP1(E)
+readHashBytes_9:
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+readHashBytes_8:
+    $ => B                      :HASHP1(E)
+readHashBytes_7:
+    $ => RCX                    :HASHP1(E)
+readHashBytes_6:
+    $ => D                      :HASHP1(E)
+readHashBytes_5:
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => C
+
+readHashBytes_4:
+    $ => B                      :HASHP1(E)
+readHashBytes_3:
+    $ => RCX                    :HASHP1(E)
+readHashBytes_2:
+    $ => D                      :HASHP1(E)
+readHashBytes_1:
+    $ => A                      :HASHP1(E)
+    ROTL_C + 2**24 * B + 2**16 * RCX + 2**8 * D + A => A :JMP(finishReadHash)
 
 ;; Check short value is over 127. Error RLP: single byte < 0x80 are not prefixed
 checkShortRLP:
