@@ -33,7 +33,7 @@ start: ; main zkROM entry point
         GAS                                     :MSTORE(chainID) ; chainID from GAS, assumed to be less than 32 bits
 
         ${getSequencerAddr()}                   :MSTORE(sequencerAddr)
-        ${getTxsLen()}                          :MSTORE(batchL2DataLength) ; less than 120000 bytes. Enforced by the smart contract
+        $0{getTxsLen()}                          :MSTORE(batchL2DataLength) ; less than 120000 bytes. Enforced by the smart contract
         ${getBatchHashData()}                   :MSTORE(batchHashData)
         $0{getType()} => A                      :MSTORE(type)
 
@@ -105,20 +105,18 @@ computeNewBatchAccInputHash:
         $ => HASHPOS                    :MLOAD(batchL2DataLength)
         HASHPOS                         :HASHPLEN(E)
 
-        ;; Get local exit root
-        ; Read 'localExitRoot' variable from GLOBAL_EXIT_ROOT_MANAGER_L2 and store
-        ; it to the 'newLocalExitRoot' input, will be used to compute newBatchAccInputHash
-        %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2  => A
-        %SMT_KEY_SC_STORAGE => B
-        %LOCAL_EXIT_ROOT_STORAGE_POS => C
-        $ => A                                  :SLOAD
-        A                                       :MSTORE(newLocalExitRoot)
-
         ; Load current timestamp
         %TIMESTAMP_STORAGE_POS => C
         %ADDRESS_SYSTEM => A
         %SMT_KEY_SC_STORAGE => B
         $ => A                              :SLOAD, MSTORE(timestamp)
+
+setBlockNum:
+        %LAST_BLOCK_STORAGE_POS => C
+        %ADDRESS_SYSTEM => A
+        %SMT_KEY_SC_STORAGE => B
+        $ => A                              :SLOAD,MSTORE(blockNum)
+
 ;;;;;;;;;;;;;;;;;;
 ;; C - Loop parsing RLP transactions
 ;;      - Load transaction RLP data and ensure it has correct RLP encoding
@@ -134,22 +132,15 @@ txLoopRLP:
         ; If batchL2DataLength is zero, we finalize batch
         $ => A                                  :MLOAD(batchL2DataLength), JMPZ(finalizeBatch)
         $ => C                                  :MLOAD(batchL2DataParsed)
-        C - A                                   :JMPN(loadTx_rlp, setBlockNum)
+        C - A                                   :JMPN(loadTx_rlp)
 
 ;;;;;;;;;;;;;;;;;;
-;; D - Load blockNum variable
-;;     - Loop processing transactions
+;; D   - Loop processing transactions
 ;;     - Load transaction data and interpret it
 ;;;;;;;;;;;;;;;;;;
 
-setBlockNum:
-        %LAST_BLOCK_STORAGE_POS => C
-        %ADDRESS_SYSTEM => A
-        %SMT_KEY_SC_STORAGE => B
-        $ => A                                       :SLOAD,MSTORE(blockNum)
         ; If forced batch ==> process a forced changeL2BlockTx
         $                                       :MLOAD(isForced), JMPZ(txLoop, handleForcedBatch)
-
 handleForcedBatch:
         1                                       :MSTORE(currentTx), JMP(processChangeL2Block)
 
@@ -188,12 +179,32 @@ finalizeBatch:
 ;; E - Finalize execution: set output values at corresponding registers
 ;;;;;;;;;;;;;;;;;;
         $${eventLog(onFinishBatch)}
+        ; Retrieve newLocalExitRoot
+        ; Read 'localExitRoot' variable from GLOBAL_EXIT_ROOT_MANAGER_L2 and store
+        ; it to the 'newLocalExitRoot' var
+        %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE     :JMPN(outOfCountersPoseidon)
+        %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2  => A
+        %SMT_KEY_SC_STORAGE => B
+        %LOCAL_EXIT_ROOT_STORAGE_POS => C
+        $ => A                                  :SLOAD
+        A                                       :MSTORE(newLocalExitRoot)
 
-;;;;;;;;;;;;;;;;;;
-;; F - Finalize execution
-;;;;;;;;;;;;;;;;;;
+        SR                              :MSTORE(auxNewSR) ; Store final SR to recover at output setting phase
+        ; Set registers to its initials values
+        ; Save inputs to RESTORE at last - 1 step
+        $ => SR                         :MLOAD(oldStateRoot) ; oldStateRoot from SR
+        $ => C                          :MLOAD(oldBatchAccInputHash) ; oldBatchAccInputHash from C
+        $ => D                          :MLOAD(previousL1InfoTreeRoot) ; previousL1InfoTreeRoot from D
+        $ => RCX                        :MLOAD(previousL1InfoTreeIndex) ; previousL1InfoTreeIndex from E
+        ; Set all registers to 0 except inputs: SR (oldStateRoot), C (oldBatchAccInputHash), D (previousL1InfoTreeRoot), RCX (previousL1InfoTreeIndex), GAS (chainID) & CTX (forkID)
+        0 => A, B, E, PC, SP, HASHPOS, RR, zkPC
+        SR                              :SAVE(B,C,D,E,RR,RCX)
+        $ => CTX                        :MLOAD(forkID)
+        $ => GAS                        :MLOAD(chainID)
 
+        ; Set output registers
         ; safety check that the output root is indeed inside the range limit of 4 goldilocks fields elements
+        $ => SR                         :MLOAD(auxNewSR) ; newStateRoot at SR
         SR => A ; newStateRoot at A
         %FOUR_GOLDILOCKS => B
         1                               :LT4
@@ -205,18 +216,7 @@ finalizeBatch:
         $ => C                          :MLOAD(newBatchAccInputHash) ; newBatchAccInputHash at C
         $ => E                          :MLOAD(newLocalExitRoot) ; NewLocalExitRoot at E
         ; SR is already at SR reg
-
-        ; Set registers to its initials values
-        $ => CTX                        :MLOAD(forkID)
-        $ => GAS                        :MLOAD(chainID)
-
         finalizeExecution:
-        ; Save inputs to RESTORE at last - 1 step
-        $ => SR                         :MLOAD(oldStateRoot) ; oldStateRoot from SR
-        $ => C                          :MLOAD(oldBatchAccInputHash) ; oldBatchAccInputHash from C
-        $ => D                          :MLOAD(previousL1InfoTreeRoot) ; previousL1InfoTreeRoot from D
-        $ => RCX                        :MLOAD(previousL1InfoTreeIndex) ; previousL1InfoTreeIndex from E
-        SR                              :SAVE(B,C,D,E,RR,RCX)
                                         :JMP(finalWait)
 
 INCLUDE "end.zkasm"

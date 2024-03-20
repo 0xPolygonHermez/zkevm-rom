@@ -76,16 +76,10 @@ shortList:
         A - 0xc0 => A
 
 endList:
-        A + C => B                      :MSTORE(txRLPLength)
-        ; Check enough keccak zk counters to digest tx hash
-        ; We don't check poseidon counters spent for l2 tx hash computing because the number of poseidon counters available is x100 the number of keccak available
-        ; so while rlp parsing, keccaks will always be the bottleneck
-        ; CHECK: we can assume we will always have enough keccaks at this point of batch processing, so maybe there is no need to check
-        B + 1                           :MSTORE(arithA)
-        136                             :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-        $ => B                          :MLOAD(arithRes1)
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - B - 1    :JMPN(outOfCountersKeccak)
-                                        :CALL (initL2HashTx)
+        ; We can assume we will always have enough keccaks at this point of batch processing, so there is no need to check outOfCountersKeccak.
+        ; Max amount of bytes is 120k and this is the first hashkdigest of the batch so max consumed keccaks is 120k / 136 = 883 keccaks << keccaks available (2257)
+        ; In case malicious prover lies in the rlp length, the batch will be discarded after reaching this max length (120 kb)
+        A + C => B                      :MSTORE(txRLPLength), CALL (initL2HashTx)
 
 ;; Read RLP 'nonce'
         ; 64 bits max
@@ -231,7 +225,7 @@ shortData:
                                         :JMP(readData)
 
 longData:
-        A - 0xb7 => D                   :CALL(addHashTxFromFreeInput)
+        A - 0xb7 => D                   :CALL(addHashTx)
                                         :CALL(checkLongRLP)
                                         :CALL(checkNonLeadingZeros)
         $ => D                          :MLOAD(batchHashPos)
@@ -257,6 +251,7 @@ readDataFinal:
         B - 1                           :JMPN(endData)
         B => D                          :CALL(addHashTxFromFreeInput)
                                         :CALL(addL2HashTx)
+                                        ; WARNING: check checkShortDataRLP correctness
                                         :CALL(checkShortDataRLP)
         32 - D => D                     :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
         $ => E                          :MLOAD(globalCalldataMemoryOffset)
@@ -307,7 +302,6 @@ endChainId:
 
 setPreEIP155Flag:
         1                               :MSTORE(isPreEIP155)
-        $ => E                          :MLOAD(txHashPointer)
 ;; size verification
         ; checks RLP length read at the RLP header with bytes read during RLP parsing
 sizeVerification:
@@ -315,6 +309,7 @@ sizeVerification:
         $ => B                          :MLOAD(txRLPLength)
         C - B                           :JMPZ(sizeVerificationSuccess, invalidTxRLP)
 sizeVerificationSuccess:
+        $ => E                          :MLOAD(txHashPointer)
         HASHPOS                         :HASHKLEN(E)
 
 ;;;;;;;;;;;;;;;;;;

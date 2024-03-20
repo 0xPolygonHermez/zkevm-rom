@@ -359,12 +359,10 @@ deploy:
 ;; read calldata bytes of a deploy transaction and process them
 readDeployBytecode:
         ; check transaction is a deploy transaction
-        $ => B                          :MLOAD(isCreate), JMPNZ(readDeployBytecodeCreate)
+        $                               :MLOAD(isCreate), JMPNZ(readDeployBytecodeCreate)
         ; check enough bytes to read in calldata
-        $ => B                          :MLOAD(txCalldataLen)
-        B - PC - 1                      :JMPN(defaultOpCode)
-        $ => HASHPOS                    :MLOAD(dataStarts)
-        HASHPOS + PC => HASHPOS
+        $ - PC - 1                      :F_MLOAD(txCalldataLen), JMPN(defaultOpCode)
+        $ + PC => HASHPOS               :F_MLOAD(dataStarts)
         $ => E                          :MLOAD(batchHashDataPointer)
         $ => RR                         :HASHP1(E)
         $${eventLog(onOpcode(RR))}
@@ -377,8 +375,7 @@ readDeployBytecodeCreate:
         $ => CTX                        :MLOAD(originCTX)
         ; check enough bytes to read in memory
         E - PC - 1                      :JMPN(readDeployBytecodeCreateDefault)
-        $ => E                          :MLOAD(argsOffsetCall)
-        E + PC => E
+        $ + PC => E                     :F_MLOAD(argsOffsetCall)
         1 => C                          :CALL(MLOADX) ; in: [E: offset, C: length] out: [A: value, E: new offset]
         $ => CTX                        :MLOAD(currentCTX)
         31 => D                         :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
