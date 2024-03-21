@@ -534,7 +534,6 @@ VAR GLOBAL tmpVarBArith
 VAR GLOBAL tmpVarCArith
 VAR GLOBAL tmpVarDArith
 VAR GLOBAL tmpVarEArith
-VAR GLOBAL tmpZkPCArith
 VAR GLOBAL arithA
 VAR GLOBAL arithB
 VAR GLOBAL arithRes1
@@ -547,7 +546,7 @@ VAR GLOBAL addArithOverflow
 ; @out: arithRes1: arithA + arithB
 addARITH:
 
-    RR              :MSTORE(tmpZkPCArith), CALL(storeTmp)
+    A               :SAVE(B,C,D,E,RR,RCX)
     $ => A          :MLOAD(arithA)
     $ => B          :MLOAD(arithB)
     $ => E          :ADD, MSTORE(arithRes1), JMPC(setAddArithOverflow)
@@ -557,19 +556,20 @@ setAddArithOverflow:
     1               :MSTORE(addArithOverflow)
 
 finishAddArith:
-    $ => RR         :MLOAD(tmpZkPCArith), JMP(loadTmp)
+    $ => A          :RESTORE, RETURN
 
 ; @info binary subtraction
 ; @in: arithA: minuend value
 ; @in: arithB: subtrahend value
 ; @out: arithRes1: arithA - arithB
 subARITH:
-
-    RR              :MSTORE(tmpZkPCArith),CALL(storeTmp)
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 10       :JMPN(outOfCountersStep)
+    A               :SAVE(B,C,D,E,RR,RCX)
     $ => A          :MLOAD(arithA)
     $ => B          :MLOAD(arithB)
     $ => A          :SUB,MSTORE(arithRes1)
-    $ => RR         :MLOAD(tmpZkPCArith),JMP(loadTmp)
+    $ => A          :RESTORE, RETURN
 
 VAR GLOBAL mulArithOverflowValue
 VAR GLOBAL mulArithOverflowFlag
@@ -585,7 +585,7 @@ mulARITH:
     %MAX_CNT_ARITH - CNT_ARITH - 1   :JMPN(outOfCountersArith)
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
 
-    RR              :MSTORE(tmpZkPCArith), CALL(storeTmp)
+    A               :SAVE(B,C,D,E,RR,RCX)
     $ => A          :MLOAD(arithA)
     $ => B          :MLOAD(arithB)
     0 => C
@@ -604,7 +604,7 @@ setMulArithOverflow:
     1               :MSTORE(mulArithOverflowFlag)
 
 finishMulArith:
-    $ => RR        :MLOAD(tmpZkPCArith),JMP(loadTmp)
+    $ => A          :RESTORE, RETURN
 
 ; @info arithmetic division
 ; @in: arithA: dividend value
@@ -616,8 +616,7 @@ divARITH:
     %MAX_CNT_STEPS - STEP - 50       :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCountersBinary)
     %MAX_CNT_ARITH - CNT_ARITH - 1   :JMPN(outOfCountersArith)
-
-    RR              :MSTORE(tmpZkPCArith), CALL(storeTmp)
+    A               :SAVE(B,C,D,E,RR,RCX)
     $ => E          :MLOAD(arithA)
     $ => A          :MLOAD(arithB)
     ; Check denominator(A) is not zero
@@ -643,35 +642,18 @@ divARITH:
     A => B ; divisor
     C => A ; remainder
     $ => A          :LT
-    1               :ASSERT,CALL(loadTmp)
-    $ => RR         :MLOAD(tmpZkPCArith)
-                    :RETURN
+    1               :ASSERT
+    $ => A          :RESTORE, RETURN
 
 zeroDiv:
     0               :MSTORE(arithRes1)
-    0               :MSTORE(arithRes2), CALL(loadTmp)
-    $ => RR         :MLOAD(tmpZkPCArith)
-                    :RETURN
+    0               :MSTORE(arithRes2)
+    $ => A          :RESTORE, RETURN
 
 divisorSmallerDiv:
     0               :MSTORE(arithRes1)
-    E               :MSTORE(arithRes2), CALL(loadTmp)
-    $ => RR         :MLOAD(tmpZkPCArith)
-                    :RETURN
-
-loadTmp:
-    $ => A          :MLOAD(tmpVarAArith)
-    $ => B          :MLOAD(tmpVarBArith)
-    $ => C          :MLOAD(tmpVarCArith)
-    $ => D          :MLOAD(tmpVarDArith)
-    $ => E          :MLOAD(tmpVarEArith), RETURN
-
-storeTmp:
-    A               :MSTORE(tmpVarAArith)
-    B               :MSTORE(tmpVarBArith)
-    C               :MSTORE(tmpVarCArith)
-    D               :MSTORE(tmpVarDArith)
-    E               :MSTORE(tmpVarEArith), RETURN
+    E               :MSTORE(arithRes2)
+    $ => A          :RESTORE, RETURN
 
 VAR GLOBAL tmpSHXZkPC
 VAR GLOBAL tmpSHXZkPC2
