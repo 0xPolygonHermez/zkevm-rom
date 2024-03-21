@@ -33,15 +33,14 @@ start: ; main zkROM entry point
         GAS                                     :MSTORE(chainID) ; chainID from GAS, assumed to be less than 32 bits
 
         ${getSequencerAddr()}                   :MSTORE(sequencerAddr)
-        $0{getTxsLen()}                          :MSTORE(batchL2DataLength) ; less than 120000 bytes. Enforced by the smart contract
+        $0{getTxsLen()}                         :MSTORE(batchL2DataLength) ; less than 120000 bytes. Enforced by the smart contract
         ${getBatchHashData()}                   :MSTORE(batchHashData)
-        $0{getType()} => A                      :MSTORE(type)
-
-        ; If is not forced, forcedHashData is zero, CHECK: remove?
-        0                                       :MSTORE(forcedHashData)
-        A - 2                                   :JMPNZ(computeNewBatchAccInputHash)
+        ${getForcedHashData()} => A             :MSTORE(forcedHashData)
+        0 => B
+        $                                       :EQ, JMPC(computeNewBatchAccInputHash)
+        ; If forcedHashData ist no zero, is a forced batch
+        ; Set forced batch flag
         1                                       :MSTORE(isForced)
-        ; compute isForced flag
         ; Compute forcedHashData
         $ => E                                  :MLOAD(nextHashKId)
         E + 1                                   :MSTORE(nextHashKId)
@@ -54,14 +53,14 @@ start: ; main zkROM entry point
         ${getForcedTimestamp()} => A            :MSTORE(forcedTimestamp)
         A                                       :HASHK(E)
         HASHPOS                                 :HASHKLEN(E)
-        ; CHECK: need to assert with a forcedHashData obtained from free input?
-        $ => C                                  :HASHKDIGEST(E)
-        C                                       :MSTORE(forcedHashData)
+        ; Assert forcedHashData computed matches with forcedHashData obtained from free input
+        $ => A                                  :HASHKDIGEST(E)
+        $                                       :MLOAD(forcedHashData), ASSERT
 ;;;;;;;;;;;;;;;;;
 ;; B - Compute newBatchAccInputHash, load newLocalExitRoot and timestamp
 ;;;;;;;;;;;;;;;;;;
 computeNewBatchAccInputHash:
-        ; newBatchAccInputHash = LinearPoseidon(oldBatchAccInputHash, batchHashData, sequencerAddress, forcedHashData, type))
+        ; newBatchAccInputHash = LinearPoseidon(oldBatchAccInputHash, batchHashData, sequencerAddress, forcedHashData))
         $ => E                          :MLOAD(nextHashPId)
         E + 1                           :MSTORE(nextHashPId)
         $${eventLog(onStartBatch, C)}
@@ -80,10 +79,6 @@ computeNewBatchAccInputHash:
 
         32 => D
         $ => A                          :MLOAD(forcedHashData)
-        A                               :HASHP(E)
-
-        1 => D
-        $ => A                          :MLOAD(type)
         A                               :HASHP(E)
 
         ; finish accInputHash
