@@ -33,7 +33,6 @@ start: ; main zkROM entry point
         GAS                                     :MSTORE(chainID) ; chainID from GAS, assumed to be less than 32 bits
 
         ${getSequencerAddr()}                   :MSTORE(sequencerAddr)
-        $0{getTxsLen()}                         :MSTORE(batchL2DataLength) ; less than 120000 bytes. Enforced by the smart contract
         ${getBatchHashData()}                   :MSTORE(batchHashData)
         ${getForcedHashData()} => A             :MSTORE(forcedHashData)
         0 => B
@@ -96,9 +95,8 @@ computeNewBatchAccInputHash:
         $ => A                          :MLOAD(batchHashData)
         ; No need to compute poseidon consumption, max batchL2Data length is 120000 bytes and this is the beginning of the execution, will always have enough poseidons
         A                               :HASHPDIGEST(E)
-        ; Check batchL2DataLength (CHECK: is it necessary to check this? Is a correct behavior? Is possible to get the length from hashplen?)
-        $ => HASHPOS                    :MLOAD(batchL2DataLength)
-        HASHPOS                         :HASHPLEN(E)
+        ; store batchL2DataLength, less than 120000 bytes. Enforced by the smart contract
+        $                               :HASHPLEN(E), MSTORE(batchL2DataLength)
 
         ; Load current timestamp
         %TIMESTAMP_STORAGE_POS => C
