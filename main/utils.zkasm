@@ -18,10 +18,6 @@ absIsNeg:
     $ => A          :SUB
     1 => B          :RETURN
 
-VAR GLOBAL tmpVarBgetLen
-VAR GLOBAL tmpVarCgetLen
-VAR GLOBAL tmpVarDgetLen
-VAR GLOBAL tmpZkPCgetLen
 ; @info byte length of B
 ; @in B => number
 ; @out A => bytes length
@@ -29,10 +25,7 @@ getLenBytes:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     ; store current registries
-    RR              :MSTORE(tmpZkPCgetLen)
-    B               :MSTORE(tmpVarBgetLen)
-    C               :MSTORE(tmpVarCgetLen)
-    D               :MSTORE(tmpVarDgetLen)
+                               :SAVE(B,C,D,E,RR,RCX)
     ; set C as counter to 0
     0 => C
     B => A
@@ -46,8 +39,7 @@ getLenBytesLoop:
     ; if A is zero, finish counter
     $               :EQ,JMPC(getLenEnd)
     ; right shift one byte
-    1 => D
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    1 => D          :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
     ; increase counter
     C + 1 => C      :JMP(getLenBytesLoop)
 
@@ -55,10 +47,7 @@ getLenEnd:
     ; counter to A
     C => A
     ; recover registries
-    $ => B          :MLOAD(tmpVarBgetLen)
-    $ => C          :MLOAD(tmpVarCgetLen)
-    $ => RR         :MLOAD(tmpZkPCgetLen)
-    $ => D          :MLOAD(tmpVarDgetLen), RETURN
+                    :RESTORE, RETURN
 
 ; @info bits length of B
 ; @in B => number
@@ -67,10 +56,7 @@ getLenBits:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
     ; store current registries
-    RR              :MSTORE(tmpZkPCgetLen)
-    B               :MSTORE(tmpVarBgetLen)
-    C               :MSTORE(tmpVarCgetLen)
-    D               :MSTORE(tmpVarDgetLen)
+                               :SAVE(B,C,D,E,RR,RCX)
     ; set C as counter to 0
     0 => C
     B => A
@@ -94,166 +80,267 @@ getLenBitsEnd:
     ; counter to A
     C => A
     ; recover registries
-    $ => B          :MLOAD(tmpVarBgetLen)
-    $ => C          :MLOAD(tmpVarCgetLen)
-    $ => RR         :MLOAD(tmpZkPCgetLen)
-    $ => D          :MLOAD(tmpVarDgetLen), RETURN
+                    :RESTORE, RETURN
 
-VAR GLOBAL tmpVarAmstore
-VAR GLOBAL tmpVarBmstore
-VAR GLOBAL tmpVarCmstore
-VAR GLOBAL tmpVarDmstore
-VAR GLOBAL tmpVarEmstore
-VAR GLOBAL tmpZkPCmstore
+VAR GLOBAL tmpVarA_mstore
+VAR GLOBAL tmpVarB_mstore
+VAR GLOBAL tmpVarD_mstore
+VAR GLOBAL tmpVarRR_mstore
+VAR GLOBAL tmpVarLength_mstore
+VAR GLOBAL tmpVarOffset_mstore
+VAR GLOBAL tmpVar32BytesToStore_mstore
 
 VAR GLOBAL bytesToStore
-VAR GLOBAL isMSTOREX
-; @info save value to memory < 32 bytes with offset
-; @in bytesToStore => bytes to store in memory
-; @in E => offset
-; @in C => length
-; @out E => new offset
+
 MSTOREX:
-    %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
-    C               :JMPZ(endMSTOREX)
-    32 - C          :JMPN(errorMLOADMSTORE)
-    32 - C - 1      :JMPN(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
-    1               :MSTORE(isMSTOREX)
+        ; check if C == 32 then go to MSTORE32
+        C - 32              :JMPZ(MSTORE32) ; in: [bytesToStore, E: offset] out: [E: new offset]
+
+        ; store C with length (bytes), if length == 0 then nothing to do, go to __MSTOREX_end
+        C                   :MSTORE(tmpVarLength_mstore),JMPZ(__MSTOREX_end)
+
+        ; check step counters
+        %MAX_CNT_STEPS - STEP - 40 :JMPN(outOfCountersStep)
+
+        ; if length > 32 then ERROR
+        32 - C              :JMPN(errorMLOADMSTORE)
+
+        ; saving registers used
+        A                   :MSTORE(tmpVarA_mstore)
+        B                   :MSTORE(tmpVarB_mstore)
+        D                   :MSTORE(tmpVarD_mstore)
+        RR                  :MSTORE(tmpVarRR_mstore)
+
+        ; A = offset in bytes of byte-address, no trust, if offset = 0 then go __MSTOREX_offset0
+        ; on __MSTOREX_offset0 must be verified value of A.
+        $0{E % 32} => A     :MSTORE(tmpVarOffset_mstore), JMPZ(__MSTOREX_offset0)
+
+        ; check MemAlign counters
+        %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 3  :JMPN(outOfCountersMemalign)
+
+        A => C              :JMPN(failAssert)    ; check A,C is positive 32 bits (A7..A1 = 0 because use $0)
+        31 - C              :JMPN(failAssert)    ; check C < 32, if not MAP
+
+        $0{E / 32} => RR    :JMPN(failAssert)    ; address (ASSERT RR is 32-bit value) 4G x 32 bytes = 128GB
+        RR * 32 + C => A                         ; rebuild address to check that is same.
+        E                   :ASSERT
+
+        ;
+        ; [STEP 1]: Obtain a copy of memory (as a backup) of a 32-byte word that will be partially overwritten.
+        ;
+        ; =========================== A (M0_addr) ========================######################### B (M0_addr+1) ########################
+        ;                           :                                                              :
+        ; |<-------- offset ------->======================================##########################  => B,oldvalue
+        ;                           |<--------------------------- 32 bytes ----------------------->|
+        ;
+
+        $ => A      :MLOAD(MEM:RR)          ; M0
+        $ => B      :MLOAD(MEM:RR+1)        ; M1
+        ; C = offset,
+        ; B = 32 current bytes of memory
+        $ => B      :MEM_ALIGN_RD ; read this 32 bytes with offset
+
+        ;
+        ; [STEP 2]: clear not used bytes of bytesToStore and oldvalue at same time.
+        ; A short-example with 3 bytes instead of 32.
+        ;
+        ;   bytesToStore = ABCDEF
+        ;   B (memory backup) = 123456
+        ;   length = 2
+        ;
+        ; In this operation is cleared two things:
+        ;  - bytes of bytesToStore out of length: ABCDEF => AB0000
+        ;  - on bytes read from memory, clean where we put bytesToStore: 123456 => 003456
+        ;
+        ;   bytesToStore =      AB0000
+        ;   B (memory backup) = 003456
+        ;
+        ; Now we put bytesToStore and B side-by-side
+        ;
+        ;   bytesToStore  | B  =  ABCDEF123456
+        ;                              ↓  write 0, with offset = 2
+        ;   bytesToStore' | B' =  AB0000003456
+        ;
+        ; This operation is like a MEM_ALIGN_WR where M0 = bytesToStore, M1 = B, V = 0, offset = bytes = 2, W0 = bytesToStore', W1 = B'
+        ;
+        ;
+        ; Graphical example:
+        ;
+        ; ******************* A (bytesToStore) ***************************======================================##########################
+        ;                                     :                                                              :
+        ; |<----------- length  ------------->0000000000000000000000000000000000000000000000000000000000000000
+        ;                                     |<--------------------------- 32 bytes ----------------------->|
+        ; ************************************0000000000000000000000000000                                   :                             => D
+        ;                                                                 000000000000000000000000000000000000==########################## => E
+        ;
+
+        $ => A  :MLOAD(bytesToStore)
+        ; B contains bytes of memory before write
+        $ => C  :MLOAD(tmpVarLength_mstore)
+        ${memAlignWR_W0(A,0,C)} => D ; no trust calculate W0
+        ${memAlignWR_W1(B,0,C)} => E ; no trust calculate W1
+        0       :MEM_ALIGN_WR
+
+        ; D    ************************************0000000000000000000000000000
+        ; E    000000000000000000000000000000000000==##########################
+        ; D+E  ************************************==########################## => tmpVar32BytesToStore_mstore
+        ; D and E are  bit-disjoint, addition as logical-or
+
+        D + E   :MSTORE(tmpVar32BytesToStore_mstore)
+
+        ;
+        ; [STEP 3]: store 32 bytes of this mix of bytes, first "length" bytes comes from bytesToStore, and others bytes comes current value
+        ;           in memory, before write.
+        ;
+        ; =========================== A (M0_addr) ========================######################### B (M0_addr+1) ########################
+        ;                           :                                                              :
+        ; |<-------- offset ------->************************************==##########################
+        ;                           |<--------------------------- 32 bytes ----------------------->|
+        ;
+        ; ==========================************************************==################################################################
+
+        $ => A          :MLOAD(MEM:RR)       ;M0
+        $ => B          :MLOAD(MEM:RR+1)     ;M1
+        $ => C          :MLOAD(tmpVarOffset_mstore)
+
+        ${memAlignWR_W0(A,mem.tmpVar32BytesToStore_mstore,C)} => D ; no trust calculate W0
+        ${memAlignWR_W1(B,mem.tmpVar32BytesToStore_mstore,C)} => E ; no trust calculate W1
+        $               :MEM_ALIGN_WR,MLOAD(tmpVar32BytesToStore_mstore)
+
+        ; write values on memory
+        D               :MSTORE(MEM:RR)
+        E               :MSTORE(MEM:RR+1)
+
+        ; recalculate result on E as address + length. At this point E = 256-bit address * 32 + offset (C)
+        ; pending add length
+        RR * 32 + C => E
+
+        ; restore C with length and add it to E
+        $ => C          :MLOAD(tmpVarLength_mstore)
+        E + C => E
+
+        ; restore used registers and return
+        $ => RR         :MLOAD(tmpVarRR_mstore)
+        $ => A          :MLOAD(tmpVarA_mstore)
+        $ => B          :MLOAD(tmpVarB_mstore)
+        $ => D          :MLOAD(tmpVarD_mstore),RETURN
+
+__MSTOREX_end:
+        ; trivial case if length(C) == 0
+        :RETURN
+
+__MSTOREX_offset0:
+        ; short path, offset == 0 (no trust)
+
+        %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
+
+        ; in this branch assume offset == 0, if offset != 0 ==> RR * 32 != E
+        $0{E / 32} => RR    :JMPN(failAssert)       ; address (ASSERT E is 32-bit value) 4G x 32 bytes = 128GB
+        RR * 32 - E         :JMPNZ(failAssert)      ; 32 bits * 32 (5 bits) = 37 bits is secure for FF
+
+        ; [STEP 1]: offset == 0, aligned read, memalign no needed.
+        $ => B              :MLOAD(MEM:RR)          ; M0
+
+        ; [STEP 2]: (see previous explanation)
+        $ => A              :MLOAD(bytesToStore)
+        ; B = current 32 bytes of memory
+        ; C = length
+        ${memAlignWR_W0(A,0,C)} => D ; no trust calculate W0
+        ${memAlignWR_W1(B,0,C)} => E ; no trust calculate W1
+        0                   :MEM_ALIGN_WR
+
+        ; [STEP 3]: trivial step, offset == 0 ==> aligned write,
+        ;           memalign no needed, directly store the logical-or of D and E
+        D + E               :MSTORE(MEM:RR)
+
+        ; Calculate output E = 256-bit address * 32 + length (C), offset = 0
+        RR * 32 + C => E
+
+        ; restore used registers, C contains original value (length)
+        $ => RR             :MLOAD(tmpVarRR_mstore)
+        $ => A              :MLOAD(tmpVarA_mstore)
+        $ => B              :MLOAD(tmpVarB_mstore)
+        $ => D              :MLOAD(tmpVarD_mstore),RETURN
 
 ; @info save value to memory 32 bytes with offset
 ; @in bytesToStore => bytes to store in memory
 ; @in E => offset
 ; @out E => new offset
+
 MSTORE32:
-    ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 50              :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 1        :JMPN(outOfCountersBinary)
-    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
-    ; store current registries
-    RR              :MSTORE(tmpZkPCmstore)
-    A               :MSTORE(tmpVarAmstore)
-    B               :MSTORE(tmpVarBmstore)
-    C               :MSTORE(tmpVarCmstore)
-    D               :MSTORE(tmpVarDmstore)
-    ; check offset is lower than max memory
-    E => A
-    %MAX_MEM_EXPANSION_BYTES => B
-    $               :LT,JMPC(initMSTORE, errorMLOADMSTORE)
+        ; store C (length)
+        A                   :MSTORE(tmpVarA_mstore)
 
-initMSTORE:
-    zkPC+1 => RR    :JMP(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
-    ; is storing <32 bytes, jump to store last bytes or finish if 0 bytes left
-    $ => B          :MLOAD(isMSTOREX), JMPZ(finalMSTORE)
-    ; if C has value, offset != 0
-    C               :JMPNZ(MSTOREX2)
-    $ => C          :MLOAD(tmpVarCmstore)
-    ; load bytes to store
-    $ => A          :MLOAD(bytesToStore)
-    32 - C => D
-    ; shift bytes to store
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    A => B
-    ; load from memory
-    $ => A          :MLOAD(MEM:E)
-    32 - D => D
-    ; shift loaded bytes
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    A + B           :MSTORE(bytesToStore)
-    A + B => A
-    0 => C          :JMP(finalMSTORE)
+        ; setting A as offset (no trust)
+        $0{E & 0x1F} => A   :JMPZ(__MSTORE32_offset_0)
 
-; used if bytesToStore.length < 32 && offset != 0
-MSTOREX2:
-    $ => D          :MLOAD(tmpVarCmstore)
-    C + D => D
-    32 - D          :JMPN(MSTOREX3)
-    ; if bytesToStore.length < 32 && memory to load is allocated in two different slots
-    ; load memory from slot E
-    $ => A          :MLOAD(MEM:E)
-    ; shift loaded memory from slot E
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    $ => D          :MLOAD(tmpVarCmstore)
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    A => B
-    ; load memory from slot E+1
-    $ => A          :MLOAD(MEM:E+1)
-    32 - C => D
-    ; right shift loaded memory from slot E+1
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    ; join both results
-    A + B => B
-    $ => A          :MLOAD(bytesToStore)
-    $ => D          :MLOAD(tmpVarCmstore)
-    32 - D => D
-    ; shift bytes to store
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    ; append loaded bytes from concurrent slots
-    A + B => A      :MSTORE(bytesToStore)
-                    :JMP(finalMSTORE)
+        ; at this point A != 0, but could be negative or positive
+        %MAX_CNT_STEPS - STEP - 30 :JMPN(outOfCountersStep)
+        %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
 
-; used if bytesToStore.length < 32 && memory to load is allocated in one slot
-MSTOREX3:
-    D - 32 => D
-    ; load memory from slot E+1
-    $ => A          :MLOAD(MEM:E+1)
-    ; shift bytes to store
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    $ => D          :MLOAD(tmpVarCmstore)
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    ; join both results
-    A => B
-    $ => A          :MLOAD(bytesToStore)
-    $ => D          :MLOAD(tmpVarCmstore)
-    32 - D => D
-    ; shift bytes to store
-    zkPC+1 => RR    :JMP(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-    zkPC+1 => RR    :JMP(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
-    ; append loaded bytes from concurrent slots
-    A + B => A      :MSTORE(bytesToStore)
+        ; store registers will be used
+        C                   :MSTORE(tmpVarLength_mstore)
+        RR                  :MSTORE(tmpVarRR_mstore)
+        B                   :MSTORE(tmpVarB_mstore)
+        D                   :MSTORE(tmpVarD_mstore)
 
-finalMSTORE:
-    C               :JMPNZ(memAlignOptionMSTORE)
-    $ => A          :MLOAD(bytesToStore)
-    A               :MSTORE(MEM:E)
-    E*32 => E
-    $               :MLOAD(isMSTOREX),JMPZ(offsetMSTORE32)
-    $ => C          :MLOAD(tmpVarCmstore)
-    E + C => E
-    0               :MSTORE(isMSTOREX),JMP(endMSTORE)
+        A => C              :JMPN(failAssert)        ; check C >= 0 (C7..C1 == 0 because use $0)
+        31 - C              :JMPN(failAssert)        ; assert(C < 32)
+        $0{E >> 5} => RR    :JMPN(failAssert)        ; RR must be a 32-bits positive value
+        E => A
+        RR * 32 + C         :ASSERT                  ; RR * 32 + C = E (use 38 bits secure)
+                                                     ; validated offset and 256-bit address
 
-memAlignOptionMSTORE:
-    E               :MSTORE(tmpVarEmstore)
+        ; [STEP 1]: unnecessary because length = 32 => directly MemAlign
+        ; [STEP 2]: unnecessary we don't need to mix anything => directly MemAlign
 
-    $ => A          :MLOAD(MEM:E)
-    $ => B          :MLOAD(MEM:E+1)
+        ; [STEP 3]: with MemAlign calculate (verify) W0,W1 to write on memory
+        $ => A              :MLOAD(MEM:RR)       ;M0
+        $ => B              :MLOAD(MEM:RR+1)     ;M1
+        ${memAlignWR_W0(A,mem.bytesToStore,C)} => D ; no trust calculate W0
+        ${memAlignWR_W1(B,mem.bytesToStore,C)} => E ; no trust calculate W1
+        $                   :MEM_ALIGN_WR,MLOAD(bytesToStore)
+        E                   :MSTORE(MEM:RR+1)
+        D                   :MSTORE(MEM:RR)
 
-    ${memAlignWR_W0(A,mem.bytesToStore,C)} => D                    ; no trust calculate W0
-    ${memAlignWR_W1(B,mem.bytesToStore,C)} => E                    ; no trust calculate W1
-    $               :MEM_ALIGN_WR,MLOAD(bytesToStore)
-    E => A
-    $ => E          :MLOAD(tmpVarEmstore)
-    D               :MSTORE(MEM:E)          ; write W0
-    A               :MSTORE(MEM:E+1)        ; write W1
-    E*32 + C => E
-    $ => A          :MLOAD(isMSTOREX), JMPZ(offsetMSTORE32)
-    $ => C          :MLOAD(tmpVarCmstore)
-    E + C => E
-    0               :MSTORE(isMSTOREX), JMP(endMSTORE)
+        ; restore saved registers
+        $ => A              :MLOAD(tmpVarA_mstore)
+        $ => B              :MLOAD(tmpVarB_mstore)
+        $ => D              :MLOAD(tmpVarD_mstore)
 
-offsetMSTORE32:
-    E + 32 => E
+        ; Calculate output E = 256-bit address * 32 + offset (C) + length (32)
+        RR * 32 + C + 32 => E
 
-endMSTORE:
-    $ => A          :MLOAD(tmpVarAmstore)
-    $ => B          :MLOAD(tmpVarBmstore)
-    $ => C          :MLOAD(tmpVarCmstore)
-    $ => RR         :MLOAD(tmpZkPCmstore)
-    $ => D          :MLOAD(tmpVarDmstore), RETURN
-endMSTOREX:
-                    :RETURN
+        ; restore RR and C, this last because C is overwritten with offset
+        $ => RR             :MLOAD(tmpVarRR_mstore)
+        $ => C              :MLOAD(tmpVarLength_mstore), RETURN
+
+
+__MSTORE32_offset_0:
+        ; short path, offset == 0 (no trust)
+        ; 32 bytes and offset == 0 ==> no mem align needed
+
+        %MAX_CNT_STEPS - STEP - 10 :JMPN(outOfCountersStep)
+
+        RR              :MSTORE(tmpVarRR_mstore)
+
+        ${E >> 5} => RR :JMPN(failAssert)   ; RR must be a 32-bits positive value
+
+        RR * 32 => A
+        E               :ASSERT             ; RR * 32 = E (use 37 bits secure) check offset = 0
+
+        ; if offset is 0, and length 32, directly store value on memory
+        $ => A          :MLOAD(bytesToStore)
+
+        ; stored on memory
+        A               :MSTORE(MEM:RR)
+
+        ; Calculate output E = 256-bit address * 32 + offset (0) + length (32)
+        RR * 32 + 32 => E
+
+        ; restore saved registers and return
+        $ => RR         :MLOAD(tmpVarRR_mstore)
+        $ => A          :MLOAD(tmpVarA_mstore), RETURN
 
 VAR GLOBAL tmpVarAmload
 VAR GLOBAL tmpVarBmload
@@ -338,14 +425,9 @@ endMLOAD:
 errorMLOADMSTORE:
                     :JMP(outOfGas)
 
-VAR GLOBAL tmpVarAemptyAcc
-VAR GLOBAL tmpVarBemptyAcc
-VAR GLOBAL tmpVarCemptyAcc
-VAR GLOBAL tmpVarDemptyAcc
-
 ; @info check account is empty ( balance == nonce == code == 0x )
-; @in E => address
-; @out E => isEmpty => 1 = true, 0 = false
+; @in A => address
+; @out A => isEmpty => 1 = true, 0 = false
 isEmptyAccount:
     ; check zk-counters
     %MAX_CNT_STEPS - STEP - 50                                              :JMPN(outOfCountersStep)
@@ -353,12 +435,8 @@ isEmptyAccount:
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*3 :JMPN(outOfCountersPoseidon)
 
     ; store current registries
-    A                           :MSTORE(tmpVarAemptyAcc)
-    B                           :MSTORE(tmpVarBemptyAcc)
-    C                           :MSTORE(tmpVarCemptyAcc)
-    D                           :MSTORE(tmpVarDemptyAcc)
-
-    E => A
+                                :SAVE(B,C,D,E,RR,RCX)
+    A => E
     ; read balance
     ; set key for smt balance query.
     %SMT_KEY_BALANCE => B
@@ -386,22 +464,14 @@ isEmptyAccount:
     0 => A
     ; if code is not zero, is not empty
     $                           :LT,JMPC(isNotEmptyAccount)
-    1 => E                      :JMP(ISEMPTYEnd)
+    1 => A                      :JMP(IsEmptyEnd)
 
 isNotEmptyAccount:
-    0 => E                      :JMP(ISEMPTYEnd)
+    0 => A                      :JMP(IsEmptyEnd)
 
-ISEMPTYEnd:
+IsEmptyEnd:
     ; recover registries
-    $ => A                      :MLOAD(tmpVarAemptyAcc)
-    $ => B                      :MLOAD(tmpVarBemptyAcc)
-    $ => C                      :MLOAD(tmpVarCemptyAcc)
-    $ => D                      :MLOAD(tmpVarDemptyAcc), RETURN
-
-VAR GLOBAL tmpVarBcompGas
-VAR GLOBAL tmpVarCcompGas
-VAR GLOBAL tmpVarDcompGas
-VAR GLOBAL tmpVarEcompGas
+                                :RESTORE,RETURN
 
 ; @info Compute gas to send to call following EIP 150
 ; @in gasCall: gas sent to call
@@ -411,11 +481,7 @@ computeGasSendCall:
     %MAX_CNT_STEPS - STEP - 30       :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
     ; save tmp vars
-    B                       :MSTORE(tmpVarBcompGas)
-    C                       :MSTORE(tmpVarCcompGas)
-    D                       :MSTORE(tmpVarDcompGas)
-    E                       :MSTORE(tmpVarEcompGas)
-
+                            :SAVE(B,C,D,E,RR,RCX)
     ; compute all_but_one_64th gas
     GAS => A
 
@@ -441,17 +507,8 @@ computeGasSendCall:
 
 computeGasSendCallEnd:
     ; restore stored values
-    $ => B                  :MLOAD(tmpVarBcompGas)
-    $ => C                  :MLOAD(tmpVarCcompGas)
-    $ => D                  :MLOAD(tmpVarDcompGas)
-    $ => E                  :MLOAD(tmpVarEcompGas), RETURN
+                            :RESTORE, RETURN
 
-VAR GLOBAL tmpVarAsaveMem
-VAR GLOBAL tmpVarBsaveMem
-VAR GLOBAL tmpVarCsaveMem
-VAR GLOBAL tmpVarDsaveMem
-VAR GLOBAL tmpVarEsaveMem
-VAR GLOBAL tmpZkPCsaveMem
 ; @info compute memory expansion gas cost
 ; @in: lastMemOffset: offset to copy bytes
 ; @in: lastMemLength: size of the bytes to copy
@@ -459,12 +516,7 @@ saveMem:
     ; check zk-counters
     %MAX_CNT_STEPS - STEP - 100      :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 5 :JMPN(outOfCountersBinary)
-    RR                          :MSTORE(tmpZkPCsaveMem)
-    A                           :MSTORE(tmpVarAsaveMem)
-    B                           :MSTORE(tmpVarBsaveMem)
-    C                           :MSTORE(tmpVarCsaveMem)
-    D                           :MSTORE(tmpVarDsaveMem)
-    E                           :MSTORE(tmpVarEsaveMem)
+    A                           :SAVE(B,C,D,E,RR,RCX)
     $ => A                      :MLOAD(lastMemLength)
     ; If no len, no memory expansion
     0 => B
@@ -522,19 +574,8 @@ saveMemGAS:
 
 saveMemEnd:
     ; restore stored values
-    $ => A                      :MLOAD(tmpVarAsaveMem)
-    $ => B                      :MLOAD(tmpVarBsaveMem)
-    $ => C                      :MLOAD(tmpVarCsaveMem)
-    $ => D                      :MLOAD(tmpVarDsaveMem)
-    $ => RR                     :MLOAD(tmpZkPCsaveMem)
-    $ => E                      :MLOAD(tmpVarEsaveMem), RETURN
+                                 :RESTORE, RETURN
 
-VAR GLOBAL tmpVarAArith
-VAR GLOBAL tmpVarBArith
-VAR GLOBAL tmpVarCArith
-VAR GLOBAL tmpVarDArith
-VAR GLOBAL tmpVarEArith
-VAR GLOBAL tmpZkPCArith
 VAR GLOBAL arithA
 VAR GLOBAL arithB
 VAR GLOBAL arithRes1
@@ -547,7 +588,7 @@ VAR GLOBAL addArithOverflow
 ; @out: arithRes1: arithA + arithB
 addARITH:
 
-    RR              :MSTORE(tmpZkPCArith), CALL(storeTmp)
+    A               :SAVE(B,C,D,E,RR,RCX)
     $ => A          :MLOAD(arithA)
     $ => B          :MLOAD(arithB)
     $ => E          :ADD, MSTORE(arithRes1), JMPC(setAddArithOverflow)
@@ -557,19 +598,20 @@ setAddArithOverflow:
     1               :MSTORE(addArithOverflow)
 
 finishAddArith:
-    $ => RR         :MLOAD(tmpZkPCArith), JMP(loadTmp)
+    $ => A          :RESTORE, RETURN
 
 ; @info binary subtraction
 ; @in: arithA: minuend value
 ; @in: arithB: subtrahend value
 ; @out: arithRes1: arithA - arithB
 subARITH:
-
-    RR              :MSTORE(tmpZkPCArith),CALL(storeTmp)
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
+    %MAX_CNT_STEPS - STEP - 10       :JMPN(outOfCountersStep)
+    A               :SAVE(B,C,D,E,RR,RCX)
     $ => A          :MLOAD(arithA)
     $ => B          :MLOAD(arithB)
     $ => A          :SUB,MSTORE(arithRes1)
-    $ => RR         :MLOAD(tmpZkPCArith),JMP(loadTmp)
+    $ => A          :RESTORE, RETURN
 
 VAR GLOBAL mulArithOverflowValue
 VAR GLOBAL mulArithOverflowFlag
@@ -585,7 +627,7 @@ mulARITH:
     %MAX_CNT_ARITH - CNT_ARITH - 1   :JMPN(outOfCountersArith)
     %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
 
-    RR              :MSTORE(tmpZkPCArith), CALL(storeTmp)
+    A               :SAVE(B,C,D,E,RR,RCX)
     $ => A          :MLOAD(arithA)
     $ => B          :MLOAD(arithB)
     0 => C
@@ -604,7 +646,7 @@ setMulArithOverflow:
     1               :MSTORE(mulArithOverflowFlag)
 
 finishMulArith:
-    $ => RR        :MLOAD(tmpZkPCArith),JMP(loadTmp)
+    $ => A          :RESTORE, RETURN
 
 ; @info arithmetic division
 ; @in: arithA: dividend value
@@ -616,8 +658,7 @@ divARITH:
     %MAX_CNT_STEPS - STEP - 50       :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 3 :JMPN(outOfCountersBinary)
     %MAX_CNT_ARITH - CNT_ARITH - 1   :JMPN(outOfCountersArith)
-
-    RR              :MSTORE(tmpZkPCArith), CALL(storeTmp)
+    A               :SAVE(B,C,D,E,RR,RCX)
     $ => E          :MLOAD(arithA)
     $ => A          :MLOAD(arithB)
     ; Check denominator(A) is not zero
@@ -643,186 +684,123 @@ divARITH:
     A => B ; divisor
     C => A ; remainder
     $ => A          :LT
-    1               :ASSERT,CALL(loadTmp)
-    $ => RR         :MLOAD(tmpZkPCArith)
-                    :RETURN
+    1               :ASSERT
+    $ => A          :RESTORE, RETURN
 
 zeroDiv:
     0               :MSTORE(arithRes1)
-    0               :MSTORE(arithRes2), CALL(loadTmp)
-    $ => RR         :MLOAD(tmpZkPCArith)
-                    :RETURN
+    0               :MSTORE(arithRes2)
+    $ => A          :RESTORE, RETURN
 
 divisorSmallerDiv:
     0               :MSTORE(arithRes1)
-    E               :MSTORE(arithRes2), CALL(loadTmp)
-    $ => RR         :MLOAD(tmpZkPCArith)
-                    :RETURN
+    E               :MSTORE(arithRes2)
+    $ => A          :RESTORE, RETURN
 
-loadTmp:
-    $ => A          :MLOAD(tmpVarAArith)
-    $ => B          :MLOAD(tmpVarBArith)
-    $ => C          :MLOAD(tmpVarCArith)
-    $ => D          :MLOAD(tmpVarDArith)
-    $ => E          :MLOAD(tmpVarEArith), RETURN
-
-storeTmp:
-    A               :MSTORE(tmpVarAArith)
-    B               :MSTORE(tmpVarBArith)
-    C               :MSTORE(tmpVarCArith)
-    D               :MSTORE(tmpVarDArith)
-    E               :MSTORE(tmpVarEArith), RETURN
-
-VAR GLOBAL tmpSHXZkPC
-VAR GLOBAL tmpSHXZkPC2
-
-VAR GLOBAL tmpVarBSHX
-VAR GLOBAL tmpVarCSHX
-VAR GLOBAL tmpVarDSHX
-VAR GLOBAL tmpVarESHX
-
-VAR GLOBAL result
-;@info Shift right D bytes to A
-;@in A - (A >> D)
-;@in D - (A >> D) D bytes
-;@out A - A >> D => A
+; @info Shift right D bytes to A
+; @in A
+; @in D -> WARNING: expect D to be less than 32 bits
+; @out A - A >> (8*D) => A
 SHRarith:
-    ; check zk-counters
-    %MAX_CNT_STEPS - STEP - 50       :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
-    %MAX_CNT_ARITH - CNT_ARITH - 1   :JMPN(outOfCountersArith)
+    %MAX_CNT_STEPS - STEP - 8               :JMPN(outOfCountersStep)
 
-    RR                      :MSTORE(tmpSHXZkPC2)
-    B                       :MSTORE(tmpVarBSHX)
-    C                       :MSTORE(tmpVarCSHX)
-    D                       :MSTORE(tmpVarDSHX)
-    E                       :MSTORE(tmpVarESHX)
-    ; E init number
-    A => E
-    ; A bytes
-    D => A
-    ; B = 8 (1 byte = 8 bits)
-    8 => B
-    0 => C
-    0 => D
-    ; A * B = op --> D = op (D bits)
-    ${A*B} => D             :ARITH
-    ; A init number
-    E => A                  :JMP(SHRarithinit)
+    31 - D      :JMPN(SHRarith_32)
+    D           :JMPZ(SHRarith_0)
 
-;@in A - (A >> D)
-;@in D - (A >> D) D bits
-;@out A -  A >> D => A
-SHRarithBit:
-    ; check zk-counters
-    %MAX_CNT_STEPS - STEP - 30       :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
-    RR                      :MSTORE(tmpSHXZkPC2)
-    B                       :MSTORE(tmpVarBSHX)
-    C                       :MSTORE(tmpVarCSHX)
-    D                       :MSTORE(tmpVarDSHX)
-    E                       :MSTORE(tmpVarESHX)
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
 
-SHRarithinit:
-    0 => B
-    ; if A == 0 --> no shift
-    $                       :EQ,JMPC(SHRarithfinal)
-    ; E init number
-    A => E
-    ; B bits
-    D => B
-    255 => A
-    ; A < B, 255 < bits
-    $                       :LT,JMPC(SHRarith0)
-    D => RR
-    E => A                  :MSTORE(arithA)
-                            :CALL(@exp_num + RR); out:[B: 2**RR]
-    B                       :MSTORE(arithB),CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => A                  :MLOAD(arithRes1),JMP(SHRarithfinal)
-
-SHRarith0:
+    32 - D => C :SAVE(B,C,D,E,RCX,RR)
+    A => B
     0 => A
+    $ => A      :MEM_ALIGN_RD
+                :RESTORE, RETURN
 
-SHRarithfinal:
-    $ => B                  :MLOAD(tmpVarBSHX)
-    $ => C                  :MLOAD(tmpVarCSHX)
-    $ => D                  :MLOAD(tmpVarDSHX)
-    $ => RR                 :MLOAD(tmpSHXZkPC2)
-    $ => E                  :MLOAD(tmpVarESHX), RETURN
+SHRarith_32:
+    0 => A      :RETURN
+SHRarith_0:
+                :RETURN
 
-;@info Shift left D bytes to A
-;@in A - (A << D)
-;@in D - (A << D) D bytes
-;@out A -  A << D => A
+; @info Shift left D bytes to A
+; @in A
+; @in D -> WARNING: expect D to be less than 32 bits
+; @out A - A << (8*D) => A
 SHLarith:
-    ; check zk-counters
-    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 4    :JMPN(outOfCountersBinary)
-    %MAX_CNT_ARITH - CNT_ARITH - 2      :JMPN(outOfCountersArith)
-    RR                      :MSTORE(tmpSHXZkPC2)
-    B                       :MSTORE(tmpVarBSHX)
-    C                       :MSTORE(tmpVarCSHX)
-    D                       :MSTORE(tmpVarDSHX)
-    E                       :MSTORE(tmpVarESHX)
-    ; E init number
-    A => E
-    ; A bytes
-    D => A
-    8 => B
-    0 => C, D
-    ; D = A * 8, D bits
-    ${A*B} => D             :ARITH
-    ; A init number
-    E => A
-                            :JMP(SHLarithinit)
-SHLarithBit:
-    ; check zk-counters
-    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 2    :JMPN(outOfCountersBinary)
-    %MAX_CNT_ARITH - CNT_ARITH - 1      :JMPN(outOfCountersArith)
-    RR                      :MSTORE(tmpSHXZkPC2)
-    B                       :MSTORE(tmpVarBSHX)
-    C                       :MSTORE(tmpVarCSHX)
-    D                       :MSTORE(tmpVarDSHX)
-    E                       :MSTORE(tmpVarESHX)
+    %MAX_CNT_STEPS - STEP - 6               :JMPN(outOfCountersStep)
 
-SHLarithinit:
-    ; E init number
-    A => E
+    31 - D      :JMPN(SHLarith_32)
+
+    D => C      :SAVE(B,C,D,E,RCX,RR),JMPZ(SHLarith_0)
+
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
+    0 => B
+    $ => A      :MEM_ALIGN_RD
+                :RESTORE, RETURN
+
+SHLarith_32:
+    0 => A      :RETURN
+SHLarith_0:
+                :RESTORE, RETURN
+
+; @info Shift right D bits to A
+; @in A
+; @in D -> WARNING: expect D to be less than 32 bits
+; @out A - (A >> D) => A
+
+SHRarithBit:
+    %MAX_CNT_STEPS - STEP - 9   :JMPN(outOfCountersStep)
+    255 - D                     :JMPN(SHRarithBit_A0)
+
+    D => RR                     :SAVE(B,C,D,E,RCX,RR),JMPZ(SHRarithBit_D0)
+    0 => C,B                    :JMP(@SHRarithBit_table + RR)
+
+SHRarithBit_arith:
+    %MAX_CNT_ARITH - CNT_ARITH - 1  :JMPN(outOfCountersArith)
+
+    ${(A >> RR) & const.MAX_UINT_256} => D
+    ${(A << (256 - RR)) & const.MAX_UINT_256} :ARITH
+    D => A                      :RESTORE, RETURN
+
+SHRarithBit_memalign:
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
+    A => B
     0 => A
-    ; D --> B bits
-    D => B
-    ; if D == 0 --> no shift
-    $                       :EQ,JMPC(SHLarithfinal)
-    255 => A
-     ; A < B, 255 < bits
-    $                       :LT,JMPC(SHLarith0)
+    $ => A                      :MEM_ALIGN_RD
+SHRarithBit_D0:
+                                :RESTORE, RETURN
+SHRarithBit_A0:
+    0 => A                      :RETURN
 
-    D => RR
-    ; A init number and calculate B = 2**D
-    E => A                  :CALL(@exp_num + RR); out:[B: 2**RR]
-    ; E = init number * 2**D (result)
-    ${A*B} => E
-    E                       :MSTORE(result)
-    ; D = 256 - D
-    256 - D => D, RR
-    B => C                  :CALL(@exp_num + RR); out:[B: 2**RR]
-    ${A/B} => D
-    C => B
-    0 => C
-    E                       :ARITH, JMP(SHLarithfinal)
+INCLUDE "tables/shr_bits_table.zkasm"
 
-SHLarith0:
-    0 => E
-                            :JMP(SHLarithfinal)
 
-SHLarithfinal:
-    E => A
-    $ => B                  :MLOAD(tmpVarBSHX)
-    $ => C                  :MLOAD(tmpVarCSHX)
-    $ => D                  :MLOAD(tmpVarDSHX)
-    $ => RR                 :MLOAD(tmpSHXZkPC2)
-    $ => E                  :MLOAD(tmpVarESHX), RETURN
+; @info Shift left D bits to A
+; @in A
+; @in D -> WARNING: expect D to be less than 32 bits
+; @out A - (A << D) => A
+
+SHLarithBit:
+    %MAX_CNT_STEPS - STEP - 8   :JMPN(outOfCountersStep)
+    255 - D                     :JMPN(SHLarithBit_A0)
+
+    D => RR                     :SAVE(B,C,D,E,RCX,RR),JMPZ(SHLarithBit_D0)
+    0 => C,B                    :JMP(@SHLarithBit_table + RR)
+
+SHLarithBit_arith:
+    %MAX_CNT_ARITH - CNT_ARITH - 1  :JMPN(outOfCountersArith)
+
+    ${(A >> (256 - RR)) & const.MAX_UINT_256} => D
+    ${(A << RR) & const.MAX_UINT_256} => A             :ARITH
+                                                       :RESTORE, RETURN
+SHLarithBit_memalign:
+    %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
+    $ => A                                  :MEM_ALIGN_RD
+
+SHLarithBit_D0:
+                                :RESTORE, RETURN
+SHLarithBit_A0:
+    0 => A                      :RETURN
+
+INCLUDE "tables/shl_bits_table.zkasm"
 
 ; out of counters full tracer event trigger
 outOfCountersStep:
@@ -841,10 +819,10 @@ outOfCountersPoseidon:
     $${eventLog(onError, OOCPO)}                    :JMP(handleBatchError)
 outOfCountersSha256:
     $${eventLog(onError, OOCSH)}                    :JMP(handleBatchError)
-invalidChangeL2BlockLimitTimestamp:
-    $${eventLog(onError, invalid_change_l2_block_limit_timestamp)}  :JMP(handleBatchError)
 invalidChangeL2BlockMinTimestamp:
     $${eventLog(onError, invalid_change_l2_block_min_timestamp)}    :JMP(handleBatchError)
+invalidL1InfoTreeIndex:
+    $${eventLog(onError, invalid_L1_info_tree_index)}    :JMP(handleBatchError)
 outOfGas:
     $${eventLog(onError, OOG)}                      :JMP(handleError)
 invalidJump:
@@ -885,9 +863,6 @@ handleError:
 handleBatchError:
     ; restore init state root and finish batch
     $ => SR                     :MLOAD(batchSR)
-    ; if batch error is triggered while parsing the RLP, it jumps to 'appendTxsInit'
-    ; to fill the missing bytes to complete 'batchDataHash'
-    $                           :MLOAD(isLoadingRLP),JMPNZ(appendTxsInit)
     $${eventLog(onFinishTx)}    :JMP(finalizeBatch)
 
 errorAtFirstContext:
@@ -898,34 +873,25 @@ errorAtFirstContext:
     ;remaining gas = 0
     0 => GAS        :JMP(sendGasSeq)
 
-VAR GLOBAL tmpVarAoffsetUtil
-VAR GLOBAL tmpVarBoffsetUtil
 ;Get offset/32 & offset%32
 ;@in A offset (offset is assumed to be less than %MAX_MEM_EXPANSION_BYTES)
 ;@out E offset/32
 ;@out C offset%32
 offsetUtil:
     %MAX_CNT_STEPS - STEP - 20          :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
-    A                                   :MSTORE(tmpVarAoffsetUtil)
-    B                                   :MSTORE(tmpVarBoffsetUtil)
 
     ; E = [e7, e6, ..., e0]
     ; JMPN instruction assures e0 is within the range [0, 2**32 - 1]
     ${A >> 5} => E                      :JMPN(failAssert)
-    ${A & 0x1F} => C
+    $0{A & 0x1F} => C                   ; C is 32 bits
 
     ; since C is assured to be less than 0x20
     ; it is enforced that [e7, e6, ..., e1] are 0 since there is no value multiplied by 32
     ; that equals the field
     ; Since e0 is assured to be less than 32 bits, e0 * 32 + c0 could not overflow the field
     E * 32 + C                          :ASSERT
-    C => A
-    0x20 => B
-    $                                   :LT,JMPNC(failAssert)
-
-    $ => A                              :MLOAD(tmpVarAoffsetUtil)
-    $ => B                              :MLOAD(tmpVarBoffsetUtil), RETURN
+    0x1F - C                            :JMPN(failAssert); If C is greater than 31, it is an error
+                                        :RETURN
 
 ;@info: move balances between two accounts
 ;@in: txSrcAddr: source address
@@ -1279,62 +1245,14 @@ readPushBytes_1:
 
     $ => D                      :MLOAD(pushBytes), RETURN
 
-VAR GLOBAL tmpVarDaddB
-VAR GLOBAL tmpVarBaddB
-VAR GLOBAL tmpZkPCaddB
-VAR GLOBAL auxBytes
-
-;@info: adds data to batchHashdata byte by byte
-;@in: A: bytes to add
-;@in D: bytes length
-addBatchHashByteByByte:
-        %MAX_CNT_STEPS - STEP - 10      :JMPN(outOfCountersStep)
-        RR                              :MSTORE(tmpZkPCaddB)
-        A                               :MSTORE(auxBytes)
-        D                               :MSTORE(tmpVarDaddB)
-        B                               :MSTORE(tmpVarBaddB)
-        1 => D
-
-utilsAddBatchHashBytebyByteLoop:
-        %MAX_CNT_STEPS - STEP - 50          :JMPN(outOfCountersStep)
-        %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
-        32 - D => D
-        $ => A                          :MLOAD(auxBytes), CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-        ; get last byte in A
-        0xFFn => B
-        $ => A                          :AND
-        D => B
-        ; add last byte to batchHashData
-        1 => D                          :CALL(addBatchHashData); in:[D: length of the hash]
-        ; check loop
-        B => D
-        ; D + 1 => D, we set 33 instead of 32 to earn 1 step
-        33 - D => D
-        $ => B                          :MLOAD(tmpVarDaddB)
-        D - B - 1                       :JMPN(utilsAddBatchHashBytebyByteLoop)
-        $ => B                          :MLOAD(tmpVarBaddB)
-        $ => RR                         :MLOAD(tmpZkPCaddB)
-                                        :RETURN
-
 VAR GLOBAL startsWithEF
-VAR GLOBAL tmpVarAEF
-VAR GLOBAL tmpVarBEF
-VAR GLOBAL tmpVarCEF
-VAR GLOBAL tmpVarDEF
-VAR GLOBAL tmpVarEEF
-VAR GLOBAL tmpZkPCEF
 ; @info check bytecode first byte != 0xEF as defined in EIP-3541 (https://eips.ethereum.org/EIPS/eip-3541)
 ; @internalParam {memOffset} memory offset to read bytes from
 ; @internalParam {startsWithEF} flag to indicate if first deployed byte on the bytecode is 0xEF
 checkBytecodeStartsEF:
     %MAX_CNT_STEPS - STEP - 50      :JMPN(outOfCountersStep)
     ; save temporary registers
-    A                               :MSTORE(tmpVarAEF)
-    B                               :MSTORE(tmpVarBEF)
-    C                               :MSTORE(tmpVarCEF)
-    D                               :MSTORE(tmpVarDEF)
-    E                               :MSTORE(tmpVarEEF)
-    RR                              :MSTORE(tmpZkPCEF)
+    A                               :SAVE(B,C,D,E,RCX,RR)
 
     ; set flag to 0
     0                               :MSTORE(startsWithEF)
@@ -1355,20 +1273,11 @@ checkBytecodeStartsEF:
 
 checkBytecodeStartsEFend:
     ; set back tmp registers
-    $ => RR         :MLOAD(tmpZkPCEF)
-    $ => A          :MLOAD(tmpVarAEF)
-    $ => B          :MLOAD(tmpVarBEF)
-    $ => C          :MLOAD(tmpVarCEF)
-    $ => D          :MLOAD(tmpVarDEF)
-    $ => E          :MLOAD(tmpVarEEF), RETURN
+    $ => A                          :RESTORE, RETURN
 
-VAR GLOBAL tmpVarAhashP
-VAR GLOBAL tmpVarBhashP
-VAR GLOBAL tmpVarChashP
-VAR GLOBAL tmpVarEhashP
-VAR GLOBAL tmpZkPChashP
 VAR GLOBAL memOffsetLinearPoseidon
 VAR GLOBAL memSizeLinearPoseidon
+VAR GLOBAL linearPoseidonOutD
 ; @info Computes hash bytecode from memory bytes
 ; @internalParam {memOffset} memory offset to read bytes from
 ; @internalParam {memSize} memory size to read bytes from
@@ -1376,11 +1285,7 @@ VAR GLOBAL memSizeLinearPoseidon
 hashPoseidonLinearFromMemory:
     %MAX_CNT_STEPS - STEP - 50          :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
-    A                               :MSTORE(tmpVarAhashP)
-    B                               :MSTORE(tmpVarBhashP)
-    C                               :MSTORE(tmpVarChashP)
-    E                               :MSTORE(tmpVarEhashP)
-    RR                              :MSTORE(tmpZkPChashP)
+    A                               :SAVE(B,C,D,E,RCX,RR)
     $ => E                          :MLOAD(memOffsetLinearPoseidon)
     $ => C                          :MLOAD(memSizeLinearPoseidon)
     0 => D
@@ -1391,7 +1296,7 @@ hashPoseidonLinearFromMemory:
     56                                                      :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => B                                                  :MLOAD(arithRes1)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 1 - B            :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_PADDING_PG - CNT_PADDING_PG - 1 - B      :JMPN(outOfCountersPadding)
+    %MAX_CNT_PADDING_PG - CNT_PADDING_PG - 1 - B            :JMPN(outOfCountersPadding)
 
     ; get a new hashPId
     $ => B                          :MLOAD(nextHashPId)
@@ -1426,11 +1331,9 @@ hashPoseidonEnd:
     $ => D          :HASHPDIGEST(E)
 
 hashPoseidonReturn:
-    $ => RR         :MLOAD(tmpZkPChashP)
-    $ => A          :MLOAD(tmpVarAhashP)
-    $ => B          :MLOAD(tmpVarBhashP)
-    $ => C          :MLOAD(tmpVarChashP)
-    $ => E          :MLOAD(tmpVarEhashP), RETURN
+    D               :MSTORE(linearPoseidonOutD)
+    $ => A          :RESTORE
+    $ => D          :MLOAD(linearPoseidonOutD), RETURN
 
 VAR GLOBAL tmpVarBmask
 ; @info Mask address to 20 bytes
@@ -1444,11 +1347,9 @@ maskAddress:
     $ => A          :AND
     $ => B          :MLOAD(tmpVarBmask), RETURN
 
-VAR GLOBAL tmpVarAmulmod
-VAR GLOBAL tmpVarBmulmod
-VAR GLOBAL tmpVarDmulmod
-VAR GLOBAL tmpVarEmulmod
-VAR GLOBAL tmpZkPCmulmod
+VAR GLOBAL mulModOutC
+VAR GLOBAL tmpVarMulMod1
+
 ; @info (A*B)%C => C
 ; @in A
 ; @in B
@@ -1460,11 +1361,7 @@ utilMULMOD:
     %MAX_CNT_BINARY - CNT_BINARY - 4    :JMPN(outOfCountersBinary)
     %MAX_CNT_ARITH - CNT_ARITH - 2      :JMPN(outOfCountersArith)
 
-    RR              :MSTORE(tmpZkPCmulmod)
-    A               :MSTORE(tmpVarAmulmod)
-    B               :MSTORE(tmpVarBmulmod)
-    D               :MSTORE(tmpVarDmulmod)
-    E               :MSTORE(tmpVarEmulmod)
+    A                                   :SAVE(B,C,D,E,RCX,RR)
 
     ; The following approach will be followed in order to verify the mulmod operation
     ; A * B + 0 = D*2^256 + E
@@ -1512,7 +1409,7 @@ utilMULMOD:
     ; D2 must be less than 2²⁵⁶
     C => A ; Modulus
     0 => C, D
-    ${B * A} => E   :MSTORE(tmpVarDmulmod), ARITH ; D2
+    ${B * A} => E   :MSTORE(tmpVarMulMod1), ARITH ; D2
 
     ; k.l * N + mulModResult = D1 * 2²⁵⁶ + E
     ; B * A + C = D*2^256 + E
@@ -1535,7 +1432,7 @@ utilMULMOD:
 
     ; Assert D1 + D2 = D ; ADD ;ASSERT
     D => A ; D1
-    $ => B          :MLOAD(tmpVarDmulmod) ;D2
+    $ => B          :MLOAD(tmpVarMulMod1) ;D2
 
     ; verify no carry, because D = D1 + D2 must be less than 2**256
     ; to pass arithmetic equation A * B + C = D * 2**256 + op
@@ -1562,16 +1459,9 @@ zeroOneMod:
     0 => C
 
 utilMULMODend:
-    $ => A          :MLOAD(tmpVarAmulmod)
-    $ => B          :MLOAD(tmpVarBmulmod)
-    $ => D          :MLOAD(tmpVarDmulmod)
-    $ => RR         :MLOAD(tmpZkPCmulmod)
-    $ => E          :MLOAD(tmpVarEmulmod), RETURN
-
-VAR GLOBAL tmpVarBexp
-VAR GLOBAL tmpVarCexp
-VAR GLOBAL tmpVarEexp
-VAR GLOBAL tmpZkPCexp
+    C               :MSTORE(mulModOutC)
+    $ => A          :RESTORE
+    $ => C          :MLOAD(mulModOutC), RETURN
 
 ;@info exp(A,D) --> A^D
 ;@in A, D => A^D
@@ -1579,10 +1469,7 @@ VAR GLOBAL tmpZkPCexp
 expAD:
     %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
     %MAX_CNT_STEPS - STEP - 20       :JMPN(outOfCountersStep)
-    RR              :MSTORE(tmpZkPCexp)
-    B               :MSTORE(tmpVarBexp)
-    C               :MSTORE(tmpVarCexp)
-    E               :MSTORE(tmpVarEexp)
+                    :SAVE(B,C,D,E,RCX,RR)
     ;E base
     A => E
     ;B exp
@@ -1596,16 +1483,9 @@ expAD:
     ;if base == 0 --> expA0D
     $               :EQ,JMPC(expA0D)
     1 => C
-    D => B          :CALL(getLenBits)  ;A exp bits length
-
-    ; check zk-counters on each loop (A loops)
-    ; - 3 ARITH: 1 in divARITH + 1 in 2*mulARITH
-    ; - 5 BINARIES: 5 in divARITH
-    ; - 100 steps (rounded up): 37 in divARITH + 11 in 2*mulARITH + 18 self
-    %MAX_CNT_BINARY - CNT_BINARY - 2*A  :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 50*A        :JMPN(outOfCountersStep)
 
 expADloop:
+    %MAX_CNT_STEPS - STEP - 50        :JMPN(outOfCountersStep)
     ;A exp
     D => A
     0 => B
@@ -1644,64 +1524,31 @@ expAD0:
 
 expADend:
     C => A
-    $ => B          :MLOAD(tmpVarBexp)
-    $ => C          :MLOAD(tmpVarCexp)
-    $ => RR         :MLOAD(tmpZkPCexp)
-    $ => E          :MLOAD(tmpVarEexp), RETURN
+                    :RESTORE, RETURN
 
 ;@info function to force a failed assert
 failAssert:
-    1 => A
-    2               :ASSERT
+    A - 1           :ASSERT
 
-VAR GLOBAL tmpZkPCVerifyMerkleProof
-;@info verifies L1Info data with sibilings
-;@in A: ger
-;@in B: blockhashL1
-;@in C: timestamp
-verifyMerkleProof:
+VAR GLOBAL tmpZkPCComputeMerkleProof
+;@info Computes merkle root with from currentL1InfoTreeRoot, currentL1InfoTreeIndex and sibilings
+;@out C: merkle tree root
+computeMerkleProof:
     ; check zk-counters
-    $ => E                                      :MLOAD(cntKeccakPreProcess)
-
     ; 1 keccak for the leaf and 32 for the L1InfoTree
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - E - 33   :JMPN(outOfCountersKeccak)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 33       :JMPN(outOfCountersKeccak)
     ; 7 steps at most per bit + 21 statics
     %MAX_CNT_STEPS - STEP - 7 * 32 - 21         :JMPN(outOfCountersStep)
 
-    RR                                          :MSTORE(tmpZkPCVerifyMerkleProof)
-
-    ;;;;;;;;;;;;;;;;;;;;;
-    ;; compute leaf value
-    ;;;;;;;;;;;;;;;;;;;;;
-
-    ; new keccak address
-    $ => E                                  :MLOAD(lastHashKIdUsed)
-    E + 1 => E                              :MSTORE(lastHashKIdUsed)
-
-    ; add gerL1InfoTree (32 bytes)
-    0 => HASHPOS
-    32 => D
-    A                                       :HASHK(E)
-
-    ; add blockHashL1 (32 bytes)
-    B                                       :HASHK(E)
-
-    ; add timestamp (8 bytes)
-    8 => D
-    C                                       :HASHK(E)
-
-    ; compute l1InfoTree Leaf value
-    HASHPOS                                 :HASHKLEN(E)
-    $ => C                                  :HASHKDIGEST(E) ; initial value
-
+    RR                                          :MSTORE(tmpZkPCComputeMerkleProof)
     ; initialization registers for smt verify
     0 => D, A
 
-    $ => B                                  :MLOAD(indexL1InfoTree)
-
+    $ => B                                  :MLOAD(currentL1InfoTreeIndex)
+    $ => C                                  :MLOAD(currentL1InfoTreeRoot)
     ; prepare new hash
-    $ => E                                  :MLOAD(lastHashKIdUsed)
-    E + 1 => E                              :MSTORE(lastHashKIdUsed)
+    $ => E                                  :MLOAD(nextHashKId)
+    E + 1                                   :MSTORE(nextHashKId)
     32 => D
 
     ; - Start loop 32 levels:
@@ -1713,13 +1560,13 @@ verifyMerkleProof:
     ${B & 0x00000001}                           :JMPZ(hashLeft0)
 
 hashRight0:
-    ${getSmtProof(mem.indexL1InfoTree, 0)}      :HASHK(E+0)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 0)}      :HASHK(E+0)
     C                                           :HASHK(E+0)
     A + 0x00000001 => A                         :JMP(hashBranchEnd0)
 
 hashLeft0:
     C                                           :HASHK(E+0)
-    ${getSmtProof(mem.indexL1InfoTree, 0)}      :HASHK(E+0)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 0)}      :HASHK(E+0)
 
 hashBranchEnd0:
     HASHPOS                                     :HASHKLEN(E+0)
@@ -1730,13 +1577,13 @@ hashBranchEnd0:
     ${B & 0x00000002}                           :JMPZ(hashLeft1)
 
 hashRight1:
-    ${getSmtProof(mem.indexL1InfoTree, 1)}      :HASHK(E+1)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 1)}      :HASHK(E+1)
     C                                           :HASHK(E+1)
     A + 0x00000002 => A                         :JMP(hashBranchEnd1)
 
 hashLeft1:
     C                                           :HASHK(E+1)
-    ${getSmtProof(mem.indexL1InfoTree, 1)}      :HASHK(E+1)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 1)}      :HASHK(E+1)
 
 hashBranchEnd1:
     HASHPOS                                     :HASHKLEN(E+1)
@@ -1747,13 +1594,13 @@ hashBranchEnd1:
     ${B & 0x00000004}                           :JMPZ(hashLeft2)
 
 hashRight2:
-    ${getSmtProof(mem.indexL1InfoTree, 2)}      :HASHK(E+2)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 2)}      :HASHK(E+2)
     C                                           :HASHK(E+2)
     A + 0x00000004 => A                         :JMP(hashBranchEnd2)
 
 hashLeft2:
     C                                           :HASHK(E+2)
-    ${getSmtProof(mem.indexL1InfoTree, 2)}      :HASHK(E+2)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 2)}      :HASHK(E+2)
 
 hashBranchEnd2:
     HASHPOS                                     :HASHKLEN(E+2)
@@ -1764,13 +1611,13 @@ hashBranchEnd2:
     ${B & 0x00000008}                           :JMPZ(hashLeft3)
 
 hashRight3:
-    ${getSmtProof(mem.indexL1InfoTree, 3)}      :HASHK(E+3)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 3)}      :HASHK(E+3)
     C                                           :HASHK(E+3)
     A + 0x00000008 => A                         :JMP(hashBranchEnd3)
 
 hashLeft3:
     C                                           :HASHK(E+3)
-    ${getSmtProof(mem.indexL1InfoTree, 3)}      :HASHK(E+3)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 3)}      :HASHK(E+3)
 
 hashBranchEnd3:
     HASHPOS                                     :HASHKLEN(E+3)
@@ -1781,13 +1628,13 @@ hashBranchEnd3:
     ${B & 0x00000010}                           :JMPZ(hashLeft4)
 
 hashRight4:
-    ${getSmtProof(mem.indexL1InfoTree, 4)}      :HASHK(E+4)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 4)}      :HASHK(E+4)
     C                                           :HASHK(E+4)
     A + 0x00000010 => A                         :JMP(hashBranchEnd4)
 
 hashLeft4:
     C                                           :HASHK(E+4)
-    ${getSmtProof(mem.indexL1InfoTree, 4)}      :HASHK(E+4)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 4)}      :HASHK(E+4)
 
 hashBranchEnd4:
     HASHPOS                                     :HASHKLEN(E+4)
@@ -1798,13 +1645,13 @@ hashBranchEnd4:
     ${B & 0x00000020}                           :JMPZ(hashLeft5)
 
 hashRight5:
-    ${getSmtProof(mem.indexL1InfoTree, 5)}      :HASHK(E+5)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 5)}      :HASHK(E+5)
     C                                           :HASHK(E+5)
     A + 0x00000020 => A                         :JMP(hashBranchEnd5)
 
 hashLeft5:
     C                                           :HASHK(E+5)
-    ${getSmtProof(mem.indexL1InfoTree, 5)}      :HASHK(E+5)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 5)}      :HASHK(E+5)
 
 hashBranchEnd5:
     HASHPOS                                     :HASHKLEN(E+5)
@@ -1815,13 +1662,13 @@ hashBranchEnd5:
     ${B & 0x00000040}                           :JMPZ(hashLeft6)
 
 hashRight6:
-    ${getSmtProof(mem.indexL1InfoTree, 6)}      :HASHK(E+6)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 6)}      :HASHK(E+6)
     C                                           :HASHK(E+6)
     A + 0x00000040 => A                         :JMP(hashBranchEnd6)
 
 hashLeft6:
     C                                           :HASHK(E+6)
-    ${getSmtProof(mem.indexL1InfoTree, 6)}      :HASHK(E+6)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 6)}      :HASHK(E+6)
 
 hashBranchEnd6:
     HASHPOS                                     :HASHKLEN(E+6)
@@ -1832,13 +1679,13 @@ hashBranchEnd6:
     ${B & 0x00000080}   :JMPZ(hashLeft7)
 
 hashRight7:
-    ${getSmtProof(mem.indexL1InfoTree, 7)}      :HASHK(E+7)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 7)}      :HASHK(E+7)
     C                                           :HASHK(E+7)
     A + 0x00000080 => A                         :JMP(hashBranchEnd7)
 
 hashLeft7:
     C                                           :HASHK(E+7)
-    ${getSmtProof(mem.indexL1InfoTree, 7)}      :HASHK(E+7)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 7)}      :HASHK(E+7)
 
 hashBranchEnd7:
     HASHPOS                                     :HASHKLEN(E+7)
@@ -1849,13 +1696,13 @@ hashBranchEnd7:
     ${B & 0x00000100}                           :JMPZ(hashLeft8)
 
 hashRight8:
-    ${getSmtProof(mem.indexL1InfoTree, 8)}      :HASHK(E+8)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 8)}      :HASHK(E+8)
     C                                           :HASHK(E+8)
     A + 0x00000100 => A                         :JMP(hashBranchEnd8)
 
 hashLeft8:
     C                                           :HASHK(E+8)
-    ${getSmtProof(mem.indexL1InfoTree, 8)}      :HASHK(E+8)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 8)}      :HASHK(E+8)
 
 hashBranchEnd8:
     HASHPOS                                     :HASHKLEN(E+8)
@@ -1866,13 +1713,13 @@ hashBranchEnd8:
     ${B & 0x00000200}                           :JMPZ(hashLeft9)
 
 hashRight9:
-    ${getSmtProof(mem.indexL1InfoTree, 9)}      :HASHK(E+9)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 9)}      :HASHK(E+9)
     C                                           :HASHK(E+9)
     A + 0x00000200 => A                         :JMP(hashBranchEnd9)
 
 hashLeft9:
     C                                           :HASHK(E+9)
-    ${getSmtProof(mem.indexL1InfoTree, 9)}      :HASHK(E+9)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 9)}      :HASHK(E+9)
 
 hashBranchEnd9:
     HASHPOS                                     :HASHKLEN(E+9)
@@ -1883,13 +1730,13 @@ hashBranchEnd9:
     ${B & 0x00000400}                           :JMPZ(hashLeft10)
 
 hashRight10:
-    ${getSmtProof(mem.indexL1InfoTree, 10)}     :HASHK(E+10)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 10)}     :HASHK(E+10)
     C                                           :HASHK(E+10)
     A + 0x00000400 => A                         :JMP(hashBranchEnd10)
 
 hashLeft10:
     C                                           :HASHK(E+10)
-    ${getSmtProof(mem.indexL1InfoTree, 10)}     :HASHK(E+10)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 10)}     :HASHK(E+10)
 
 hashBranchEnd10:
     HASHPOS                                     :HASHKLEN(E+10)
@@ -1900,13 +1747,13 @@ hashBranchEnd10:
     ${B & 0x00000800}                           :JMPZ(hashLeft11)
 
 hashRight11:
-    ${getSmtProof(mem.indexL1InfoTree, 11)}     :HASHK(E+11)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 11)}     :HASHK(E+11)
     C                                           :HASHK(E+11)
     A + 0x00000800 => A                         :JMP(hashBranchEnd11)
 
 hashLeft11:
     C                                           :HASHK(E+11)
-    ${getSmtProof(mem.indexL1InfoTree, 11)}     :HASHK(E+11)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 11)}     :HASHK(E+11)
 
 hashBranchEnd11:
     HASHPOS                                     :HASHKLEN(E+11)
@@ -1918,13 +1765,13 @@ hashBranchEnd11:
     ${B & 0x00001000}                           :JMPZ(hashLeft12)
 
 hashRight12:
-    ${getSmtProof(mem.indexL1InfoTree, 12)}     :HASHK(E+12)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 12)}     :HASHK(E+12)
     C                                           :HASHK(E+12)
     A + 0x00001000 => A                         :JMP(hashBranchEnd12)
 
 hashLeft12:
     C                                           :HASHK(E+12)
-    ${getSmtProof(mem.indexL1InfoTree, 12)}     :HASHK(E+12)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 12)}     :HASHK(E+12)
 
 hashBranchEnd12:
     HASHPOS                                     :HASHKLEN(E+12)
@@ -1935,13 +1782,13 @@ hashBranchEnd12:
     ${B & 0x00002000}                           :JMPZ(hashLeft13)
 
 hashRight13:
-    ${getSmtProof(mem.indexL1InfoTree, 13)}     :HASHK(E+13)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 13)}     :HASHK(E+13)
     C                                           :HASHK(E+13)
     A + 0x00002000 => A                         :JMP(hashBranchEnd13)
 
 hashLeft13:
     C                                           :HASHK(E+13)
-    ${getSmtProof(mem.indexL1InfoTree, 13)}     :HASHK(E+13)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 13)}     :HASHK(E+13)
 
 hashBranchEnd13:
     HASHPOS                                     :HASHKLEN(E+13)
@@ -1952,13 +1799,13 @@ hashBranchEnd13:
     ${B & 0x00004000}                           :JMPZ(hashLeft14)
 
 hashRight14:
-    ${getSmtProof(mem.indexL1InfoTree, 14)}     :HASHK(E+14)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 14)}     :HASHK(E+14)
     C                                           :HASHK(E+14)
     A + 0x00004000 => A                         :JMP(hashBranchEnd14)
 
 hashLeft14:
     C                                           :HASHK(E+14)
-    ${getSmtProof(mem.indexL1InfoTree, 14)}     :HASHK(E+14)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 14)}     :HASHK(E+14)
 
 hashBranchEnd14:
     HASHPOS                                     :HASHKLEN(E+14)
@@ -1969,13 +1816,13 @@ hashBranchEnd14:
     ${B & 0x00008000}                           :JMPZ(hashLeft15)
 
 hashRight15:
-    ${getSmtProof(mem.indexL1InfoTree, 15)}     :HASHK(E+15)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 15)}     :HASHK(E+15)
     C                                           :HASHK(E+15)
     A + 0x00008000 => A                         :JMP(hashBranchEnd15)
 
 hashLeft15:
     C                                           :HASHK(E+15)
-    ${getSmtProof(mem.indexL1InfoTree, 15)}     :HASHK(E+15)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 15)}     :HASHK(E+15)
 
 hashBranchEnd15:
     HASHPOS                                     :HASHKLEN(E+15)
@@ -1986,13 +1833,13 @@ hashBranchEnd15:
     ${B & 0x00010000}                           :JMPZ(hashLeft16)
 
 hashRight16:
-    ${getSmtProof(mem.indexL1InfoTree, 16)}     :HASHK(E+16)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 16)}     :HASHK(E+16)
     C                                           :HASHK(E+16)
     A + 0x00010000 => A                         :JMP(hashBranchEnd16)
 
 hashLeft16:
     C                                           :HASHK(E+16)
-    ${getSmtProof(mem.indexL1InfoTree, 16)}     :HASHK(E+16)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 16)}     :HASHK(E+16)
 
 hashBranchEnd16:
     HASHPOS                                     :HASHKLEN(E+16)
@@ -2003,13 +1850,13 @@ hashBranchEnd16:
     ${B & 0x00020000}                           :JMPZ(hashLeft17)
 
 hashRight17:
-    ${getSmtProof(mem.indexL1InfoTree, 17)}     :HASHK(E+17)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 17)}     :HASHK(E+17)
     C                                           :HASHK(E+17)
     A + 0x00020000 => A                         :JMP(hashBranchEnd17)
 
 hashLeft17:
     C                                           :HASHK(E+17)
-    ${getSmtProof(mem.indexL1InfoTree, 17)}     :HASHK(E+17)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 17)}     :HASHK(E+17)
 
 hashBranchEnd17:
     HASHPOS                                     :HASHKLEN(E+17)
@@ -2020,13 +1867,13 @@ hashBranchEnd17:
     ${B & 0x00040000}                           :JMPZ(hashLeft18)
 
 hashRight18:
-    ${getSmtProof(mem.indexL1InfoTree, 18)}     :HASHK(E+18)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 18)}     :HASHK(E+18)
     C                                           :HASHK(E+18)
     A + 0x00040000 => A                         :JMP(hashBranchEnd18)
 
 hashLeft18:
     C                                           :HASHK(E+18)
-    ${getSmtProof(mem.indexL1InfoTree, 18)}     :HASHK(E+18)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 18)}     :HASHK(E+18)
 
 hashBranchEnd18:
     HASHPOS                                     :HASHKLEN(E+18)
@@ -2037,13 +1884,13 @@ hashBranchEnd18:
     ${B & 0x00080000}                           :JMPZ(hashLeft19)
 
 hashRight19:
-    ${getSmtProof(mem.indexL1InfoTree, 19)}     :HASHK(E+19)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 19)}     :HASHK(E+19)
     C                                           :HASHK(E+19)
     A + 0x00080000 => A                         :JMP(hashBranchEnd19)
 
 hashLeft19:
     C                                           :HASHK(E+19)
-    ${getSmtProof(mem.indexL1InfoTree, 19)}     :HASHK(E+19)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 19)}     :HASHK(E+19)
 
 hashBranchEnd19:
     HASHPOS                                     :HASHKLEN(E+19)
@@ -2054,13 +1901,13 @@ hashBranchEnd19:
     ${B & 0x00100000}                           :JMPZ(hashLeft20)
 
 hashRight20:
-    ${getSmtProof(mem.indexL1InfoTree, 20)}     :HASHK(E+20)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 20)}     :HASHK(E+20)
     C                                           :HASHK(E+20)
     A + 0x00100000 => A                         :JMP(hashBranchEnd20)
 
 hashLeft20:
     C                                           :HASHK(E+20)
-    ${getSmtProof(mem.indexL1InfoTree, 20)}     :HASHK(E+20)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 20)}     :HASHK(E+20)
 
 hashBranchEnd20:
     HASHPOS                                     :HASHKLEN(E+20)
@@ -2071,13 +1918,13 @@ hashBranchEnd20:
     ${B & 0x00200000}                           :JMPZ(hashLeft21)
 
 hashRight21:
-    ${getSmtProof(mem.indexL1InfoTree, 21)}     :HASHK(E+21)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 21)}     :HASHK(E+21)
     C                                           :HASHK(E+21)
     A + 0x00200000 => A                         :JMP(hashBranchEnd21)
 
 hashLeft21:
     C                                           :HASHK(E+21)
-    ${getSmtProof(mem.indexL1InfoTree, 21)}     :HASHK(E+21)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 21)}     :HASHK(E+21)
 
 hashBranchEnd21:
     HASHPOS                                     :HASHKLEN(E+21)
@@ -2088,13 +1935,13 @@ hashBranchEnd21:
     ${B & 0x00400000}                           :JMPZ(hashLeft22)
 
 hashRight22:
-    ${getSmtProof(mem.indexL1InfoTree, 22)}     :HASHK(E+22)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 22)}     :HASHK(E+22)
     C                                           :HASHK(E+22)
     A + 0x00400000 => A                         :JMP(hashBranchEnd22)
 
 hashLeft22:
     C                                           :HASHK(E+22)
-    ${getSmtProof(mem.indexL1InfoTree, 22)}     :HASHK(E+22)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 22)}     :HASHK(E+22)
 
 hashBranchEnd22:
     HASHPOS                                     :HASHKLEN(E+22)
@@ -2105,13 +1952,13 @@ hashBranchEnd22:
     ${B & 0x00800000}                           :JMPZ(hashLeft23)
 
 hashRight23:
-    ${getSmtProof(mem.indexL1InfoTree, 23)}     :HASHK(E+23)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 23)}     :HASHK(E+23)
     C                                           :HASHK(E+23)
     A + 0x00800000 => A                         :JMP(hashBranchEnd23)
 
 hashLeft23:
     C                                           :HASHK(E+23)
-    ${getSmtProof(mem.indexL1InfoTree, 23)}     :HASHK(E+23)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 23)}     :HASHK(E+23)
 
 hashBranchEnd23:
     HASHPOS                                     :HASHKLEN(E+23)
@@ -2122,13 +1969,13 @@ hashBranchEnd23:
     ${B & 0x01000000}                           :JMPZ(hashLeft24)
 
 hashRight24:
-    ${getSmtProof(mem.indexL1InfoTree, 24)}     :HASHK(E+24)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 24)}     :HASHK(E+24)
     C                                           :HASHK(E+24)
     A + 0x01000000 => A                         :JMP(hashBranchEnd24)
 
 hashLeft24:
     C                                           :HASHK(E+24)
-    ${getSmtProof(mem.indexL1InfoTree, 24)}     :HASHK(E+24)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 24)}     :HASHK(E+24)
 
 hashBranchEnd24:
     HASHPOS                                     :HASHKLEN(E+24)
@@ -2139,13 +1986,13 @@ hashBranchEnd24:
     ${B & 0x02000000}                           :JMPZ(hashLeft25)
 
 hashRight25:
-    ${getSmtProof(mem.indexL1InfoTree, 25)}     :HASHK(E+25)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 25)}     :HASHK(E+25)
     C                                           :HASHK(E+25)
     A + 0x02000000 => A                         :JMP(hashBranchEnd25)
 
 hashLeft25:
     C                                           :HASHK(E+25)
-    ${getSmtProof(mem.indexL1InfoTree, 25)}     :HASHK(E+25)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 25)}     :HASHK(E+25)
 
 hashBranchEnd25:
     HASHPOS                                     :HASHKLEN(E+25)
@@ -2156,13 +2003,13 @@ hashBranchEnd25:
     ${B & 0x04000000}                           :JMPZ(hashLeft26)
 
 hashRight26:
-    ${getSmtProof(mem.indexL1InfoTree, 26)}     :HASHK(E+26)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 26)}     :HASHK(E+26)
     C                                           :HASHK(E+26)
     A + 0x04000000 => A                         :JMP(hashBranchEnd26)
 
 hashLeft26:
     C                                           :HASHK(E+26)
-    ${getSmtProof(mem.indexL1InfoTree, 26)}     :HASHK(E+26)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 26)}     :HASHK(E+26)
 
 hashBranchEnd26:
     HASHPOS                                     :HASHKLEN(E+26)
@@ -2173,13 +2020,13 @@ hashBranchEnd26:
     ${B & 0x08000000}                           :JMPZ(hashLeft27)
 
 hashRight27:
-    ${getSmtProof(mem.indexL1InfoTree, 27)}     :HASHK(E+27)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 27)}     :HASHK(E+27)
     C                                           :HASHK(E+27)
     A + 0x08000000 => A                         :JMP(hashBranchEnd27)
 
 hashLeft27:
     C                                           :HASHK(E+27)
-    ${getSmtProof(mem.indexL1InfoTree, 27)}     :HASHK(E+27)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 27)}     :HASHK(E+27)
 
 hashBranchEnd27:
     HASHPOS                                     :HASHKLEN(E+27)
@@ -2190,13 +2037,13 @@ hashBranchEnd27:
     ${B & 0x10000000}                           :JMPZ(hashLeft28)
 
 hashRight28:
-    ${getSmtProof(mem.indexL1InfoTree, 28)}     :HASHK(E+28)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 28)}     :HASHK(E+28)
     C                                           :HASHK(E+28)
     A + 0x10000000 => A                         :JMP(hashBranchEnd28)
 
 hashLeft28:
     C                                           :HASHK(E+28)
-    ${getSmtProof(mem.indexL1InfoTree, 28)}     :HASHK(E+28)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 28)}     :HASHK(E+28)
 
 hashBranchEnd28:
     HASHPOS                                     :HASHKLEN(E+28)
@@ -2207,13 +2054,13 @@ hashBranchEnd28:
     ${B & 0x20000000}                           :JMPZ(hashLeft29)
 
 hashRight29:
-    ${getSmtProof(mem.indexL1InfoTree, 29)}     :HASHK(E+29)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 29)}     :HASHK(E+29)
     C                                           :HASHK(E+29)
     A + 0x20000000 => A                         :JMP(hashBranchEnd29)
 
 hashLeft29:
     C                                           :HASHK(E+29)
-    ${getSmtProof(mem.indexL1InfoTree, 29)}     :HASHK(E+29)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 29)}     :HASHK(E+29)
 
 hashBranchEnd29:
     HASHPOS                                     :HASHKLEN(E+29)
@@ -2224,13 +2071,13 @@ hashBranchEnd29:
     ${B & 0x40000000}                           :JMPZ(hashLeft30)
 
 hashRight30:
-    ${getSmtProof(mem.indexL1InfoTree, 30)}     :HASHK(E+30)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 30)}     :HASHK(E+30)
     C                                           :HASHK(E+30)
     A + 0x40000000 => A                         :JMP(hashBranchEnd30)
 
 hashLeft30:
     C                                           :HASHK(E+30)
-    ${getSmtProof(mem.indexL1InfoTree, 30)}     :HASHK(E+30)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 30)}     :HASHK(E+30)
 
 hashBranchEnd30:
     HASHPOS                                     :HASHKLEN(E+30)
@@ -2241,51 +2088,37 @@ hashBranchEnd30:
     ${B & 0x80000000}                           :JMPZ(hashLeft31)
 
 hashRight31:
-    ${getSmtProof(mem.indexL1InfoTree, 31)}     :HASHK(E+31)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 31)}     :HASHK(E+31)
     C                                           :HASHK(E+31)
     A + 0x80000000 => A                         :JMP(hashBranchEnd31)
 
 hashLeft31:
     C                                           :HASHK(E+31)
-    ${getSmtProof(mem.indexL1InfoTree, 31)}     :HASHK(E+31)
+    ${getSmtProofPreviousIndex(mem.indexL1InfoTree, 31)}     :HASHK(E+31)
 
 hashBranchEnd31:
     HASHPOS                                     :HASHKLEN(E+31)
+    ; Merkle root at C
     $ => C                                      :HASHKDIGEST(E+31)
 
     ; verify linear combination of 'indexL1InfoTree'
-    B                                       :ASSERT
-    E + 31 => E                             :MSTORE(lastHashKIdUsed)
+    B                                           :ASSERT
+    E + 32 => E                                 :MSTORE(nextHashKId)
 
+computeMerkleProofReturn:
+    $ => RR                                     :MLOAD(tmpZkPCComputeMerkleProof)
+                                                :RETURN
 
-verifyMerkleProofEnd:
-    $ => A                        :MLOAD(l1InfoRoot)
-    C                             :ASSERT
-
-verifyMerkleProofReturn:
-    $ => RR                       :MLOAD(tmpZkPCVerifyMerkleProof)
-                                  :RETURN
-
-VAR GLOBAL tmpZkPCreadXFromOffset
 VAR GLOBAL readXFromCalldataOffset
 VAR GLOBAL readXFromCalldataLength
 VAR GLOBAL readXFromCalldataResult
-VAR GLOBAL tmpVarAReadXFromOffset
-VAR GLOBAL tmpVarBReadXFromOffset
-VAR GLOBAL tmpVarCReadXFromOffset
-VAR GLOBAL tmpVarDReadXFromOffset
-VAR GLOBAL tmpVarEReadXFromOffset
 ; @info Reads {readXFromCalldataOffset} bytes (max 32) from a given offset in calldata memory. If offset or offset + length exceeds txCalldataLen, zeros are added
 ; @internalParam {readXFromCalldataOffset} offset to read from calldata
 ; @internalParam {readXFromCalldataLength} length to read from calldata
 ; @returns {readXFromCalldataResult} bytes read from calldata
 readFromCalldataOffset:
     %MAX_CNT_STEPS - STEP - 100       :JMPN(outOfCountersStep)
-    RR              :MSTORE(tmpZkPCreadXFromOffset)
-    A               :MSTORE(tmpVarAReadXFromOffset)
-    B               :MSTORE(tmpVarBReadXFromOffset)
-    C               :MSTORE(tmpVarCReadXFromOffset)
-    E               :MSTORE(tmpVarEReadXFromOffset)
+    A               :SAVE(B,C,D,E,RCX,RR)
     $ => A          :MLOAD(txCalldataLen), JMPZ(return0FromCalldata)
     $ => B          :MLOAD(calldataOffset)
     $ => C          :MLOAD(readXFromCalldataLength)
@@ -2305,11 +2138,7 @@ return0FromCalldata:
     0               :MSTORE(readXFromCalldataResult)
 
 readFromCalldataOffsetEnd:
-    $ => RR         :MLOAD(tmpZkPCreadXFromOffset)
-    $ => A          :MLOAD(tmpVarAReadXFromOffset)
-    $ => B          :MLOAD(tmpVarBReadXFromOffset)
-    $ => C          :MLOAD(tmpVarCReadXFromOffset)
-    $ => E          :MLOAD(tmpVarEReadXFromOffset), RETURN
+    $ => A          :RESTORE, RETURN
 
 ; @info store calldata pointer to read calldata
 saveCalldataPointer:
