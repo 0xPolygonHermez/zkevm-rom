@@ -845,6 +845,8 @@ invalidChangeL2BlockLimitTimestamp:
     $${eventLog(onError, invalid_change_l2_block_limit_timestamp)}  :JMP(handleBatchError)
 invalidChangeL2BlockMinTimestamp:
     $${eventLog(onError, invalid_change_l2_block_min_timestamp)}    :JMP(handleBatchError)
+invalidL1InfoTreeIndex:
+    $${eventLog(onError, invalid_l1_info_tree_index)}    :JMP(handleBatchError)
 outOfGas:
     $${eventLog(onError, OOG)}                      :JMP(handleError)
 invalidJump:
@@ -1666,9 +1668,12 @@ verifyMerkleProof:
     ; 1 keccak for the leaf and 32 for the L1InfoTree
     %MAX_CNT_KECCAK_F - CNT_KECCAK_F - E - 33   :JMPN(outOfCountersKeccak)
     ; 7 steps at most per bit + 21 statics
-    %MAX_CNT_STEPS - STEP - 7 * 32 - 21         :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 7 * 32 - 25         :JMPN(outOfCountersStep)
+    ; check binaries
+    %MAX_CNT_BINARY - CNT_BINARY - 1            :JMPN(outOfCountersBinary)
 
     RR                                          :MSTORE(tmpZkPCVerifyMerkleProof)
+    0                                           :MSTORE(isL1InfoDataZero)
 
     ;;;;;;;;;;;;;;;;;;;;;
     ;; compute leaf value
@@ -1692,8 +1697,14 @@ verifyMerkleProof:
 
     ; compute l1InfoTree Leaf value
     HASHPOS                                 :HASHKLEN(E)
-    $ => C                                  :HASHKDIGEST(E) ; initial value
+    $ => C, A                               :HASHKDIGEST(E) ; initial value
+    ; allow to set value to all zeroes if all its values are zero
+    %L1_INFO_DATA_ZERO => B
+    $                                       :EQ, JMPNC(continueVerifyMerkleProof)
+    1                                       :MSTORE(isL1InfoDataZero)
+    0 => C
 
+continueVerifyMerkleProof:
     ; initialization registers for smt verify
     0 => D, A
 
@@ -2261,6 +2272,7 @@ hashBranchEnd31:
 verifyMerkleProofEnd:
     $ => A                        :MLOAD(l1InfoRoot)
     C                             :ASSERT
+    $                             :MLOAD(isL1InfoDataZero), JMPNZ(invalidL1InfoTreeIndex)
 
 verifyMerkleProofReturn:
     $ => RR                       :MLOAD(tmpZkPCVerifyMerkleProof)
