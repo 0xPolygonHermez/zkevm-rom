@@ -5,8 +5,8 @@
 ;; sqrtFpSecp256k1:
 ;;             in: A,C, where A indicates the parity of the result
 ;;             out:
-;;              · B = 1 or 0, depending on whether C has square root or not
-;;              · C = √C or -√C (mod p), if B = 1
+;;              · C = 0 or 1, depending on whether C has square root or not
+;;              · B = √C or -√C (mod p), if C = 0
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -21,21 +21,18 @@ sqrtFpSecp256k1:
         ${var _sqrtFpSecp256k1_sqrt = sqrtFpEcParity(C,A)} => A
 
         ; In this point we check whether A is LT than SECP256K1_P since, otherwise, either:
-        ;    a) A doesn't have square root. 0 is returned in B.
-        ;    b) A contains an alias, it's a MAP. 0 is returned in B. In this case, the proof cannot
-        ;    be generated because we check in checkSqrtFpSecp256k1 if the root actually exists.
+        ;    a) A doesn't have square root. 1 is returned in C.
+        ;    b) A contains an alias, it's a MAP. 1 is returned in C. In this case, the proof cannot
+        ;    be generated because we check in assertNQRFpSecp256k1 if the root actually exists.
         %SECP256K1_P => B
-        $ => B                                           :LT, JMPNC(sqrtFpSecp256k1_NoRoot)
+        $                                               :LT, JMPNC(sqrtFpSecp256k1_NoRoot)
         ; From here, A,C < SECP256K1_P, which means that the root exists and it's alias-free
 
         ; √C·√C + 0 = C (mod SECP256K1_P)
         A => B
         0 => C
         %SECP256K1_P => D
-        ${(A*B + C) % D} => E        :ARITH_MOD
-
-        1 => B
-        A => C          :RETURN
+        ${(A*B) % D} => E        :ARITH_MOD, RETURN
 
 sqrtFpSecp256k1_NoRoot:
-        :RETURN
+        1 => C          :RETURN
