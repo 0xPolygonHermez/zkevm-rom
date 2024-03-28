@@ -95,13 +95,17 @@ opMSTORE8:
     ; store lastMemLength for memory expansion gas cost. In case of MSTORE8, always 1 byte
     1               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     B => A          :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
-    $ => B          :MLOAD(SP); [value => B]
+    $ => RCX        :MLOAD(SP); [value => B]
     ; read from memory position E
     $ => A          :MLOAD(MEM:E)
-    ${memAlignWR8_W0(A,B,C)} => D  ; no trust calculate W0
-    B               :MEM_ALIGN_WR8 ; only use LSB of B, rest of bytes could be non zero.
-    ; write at memory position E
-    D               :MSTORE(MEM:E), JMP(readCode)
+
+    ; C contains offset, setting len = 1 byte
+    C + 1 * %MEM_ALIGN_LEN => C
+
+    ; no trust calculate W0 but if verification fails, proof no generated
+    ; B,E no change because only one byte, but B must be equal to E
+    ${memAlignWR_W0(A,RCX,C)} => D,B,E  :MSTORE(MEM:E)
+    RCX             :MEM_ALIGN_WR, JMP(readCode) ; only use LSB of B, rest of bytes could be non zero.
 
 /**
  * @link [https://www.evm.codes/#59?fork=berlin]

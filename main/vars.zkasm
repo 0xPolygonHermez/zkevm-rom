@@ -1,32 +1,36 @@
 ; Input variables
 VAR GLOBAL oldStateRoot ; Previous state-tree root
-VAR GLOBAL oldAccInputHash ; Previous accumulated input hash
-VAR GLOBAL l1InfoRoot ; Global exit-tree root
-VAR GLOBAL oldNumBatch ; Previous batch processed
+VAR GLOBAL oldBatchAccInputHash ; Previous accumulated input hash
+VAR GLOBAL previousL1InfoTreeRoot ; Previous L1 info tree root
+VAR GLOBAL previousL1InfoTreeIndex ; Previous L1 info tree index
+VAR GLOBAL currentL1InfoTreeRoot ; Current L1 info tree root
+VAR GLOBAL currentL1InfoTreeIndex ; Current L1 info tree index
 VAR GLOBAL sequencerAddr ; Coinbase address which will receive the fees
 VAR GLOBAL batchHashData ; batchHashData = H_keccak( transactions )
-VAR GLOBAL timestampLimit ; timestampLimit of the batch
 VAR GLOBAL timestamp ; Current batch timestamp
+VAR GLOBAL forcedTimestamp ; Timestamp proposed by a forced batch
+VAR GLOBAL forcedGER ; GER proposed by a forced batch
+VAR GLOBAL forcedBlockHashL1InfoTree ; BlockHashL1 of the forced batch
 VAR GLOBAL chainID ; Current batch chain id
 VAR GLOBAL forkID ; Fork identifier
-VAR GLOBAL forcedBlockHashL1 ; blockHash ¡n L1 when a forced transaction has been done
 VAR GLOBAL isForced ; Flag to determine if the batch is forced
 VAR GLOBAL cumulativeGasUsed ; cumulative gas used in the block
-
+VAR GLOBAL forcedHashData ; solidtykeccak256(abi.encode(GER, blockHashL1, forcedTimestamp))
 ; Output variables
-VAR GLOBAL newAccInputHash ; Final accumulated input hash. newAccInputHash = H_keccak( oldAccInputHash | batchHashData | l1InfoRoot | timestamp | sequencerAddr )
+VAR GLOBAL newBatchAccInputHash ; Final accumulated input hash. newBatchAccInputHash = LinearPoseidon(oldBatchAccInputHash, batchHashData, sequencerAddress, forcedHashData))
 VAR GLOBAL newLocalExitRoot ; Updated local exit tree root
-VAR GLOBAL newNumBatch ; Current batch processed
 
 VAR GLOBAL batchL2DataParsed ; Number of bytes read when decoding RLP transactions. Computed during RLP loop
 VAR GLOBAL pendingTxs ; Number of transactions decoded in RLP block
 VAR GLOBAL lastCtxUsed ; Last context that has been used
 VAR GLOBAL ctxTxToUse ; First context to be used when processing transactions
-VAR GLOBAL lastHashKIdUsed ; Last hash address used
+VAR GLOBAL nextHashKId ; Last hash address used
 VAR GLOBAL nextHashPId ; Next poseidon hash address available
-
+VAR GLOBAL createAddressPointer ; E pointer for create contract address computation
+VAR GLOBAL sha3Pointer ; E pointer for sha3 computation
+VAR GLOBAL txHashPointer ; E pointer for tx hash computation
 VAR GLOBAL batchL2DataLength ; Transactions bytes read from the input
-VAR GLOBAL batchHashDataId ; hash address used when adding bytes to batchHashData
+VAR GLOBAL batchHashDataPointer ; hash address used when adding bytes to batchHashData
 VAR GLOBAL batchHashPos ; hash batchHashData position
 VAR GLOBAL currentCTX ; keeps track of the context used
 VAR GLOBAL originAuxCTX ; keeps track of the previous context when a new one is created
@@ -38,26 +42,23 @@ VAR GLOBAL valueCall ; value parameter when creating a new context
 VAR GLOBAL argsLengthCall ; size of the calldata creating a new context
 VAR GLOBAL txSrcOriginAddr ; origin address of a tx
 VAR GLOBAL txGasPrice ; transaction parameter: 'gasPrice' global var
-VAR GLOBAL cntKeccakPreProcess ; Number of keccak counters needed to finish the batch
+VAR GLOBAL lastRID ; Global VAR to check all save and restore have been consumed at the end of the execution
 
 VAR GLOBAL originSR ; State root before processing each transaction
 VAR GLOBAL batchSR ; State root before processing any transaction
 VAR GLOBAL blockNum ; Current block number
 VAR GLOBAL previousBlockHash ; Previous block hash
 VAR GLOBAL currentTx ; Current tx index in batch
-
+VAR GLOBAL auxNewSR ; auxiliary variable, used to store final SR at outputs phase
 VAR GLOBAL blockInfoSR ; block info tree root
 VAR GLOBAL touchedSR ; touched tree root
 VAR GLOBAL numTopics ; number of topics depending on LOG opcode call
 VAR GLOBAL auxSR ; auxiliary variable. Temporary state root
 VAR GLOBAL txRLPLength ; transaction RLP list length
 VAR GLOBAL txDataRead ; aux variable to check transaction 'data' left that needs to be read
-VAR GLOBAL isLoadingRLP ; flag to determine if the function is called from RLP loop
 VAR GLOBAL globalCalldataMemoryOffset ; Aux variable to store current calldata memory offset at calldata CTX's memory
 
 VAR GLOBAL txIndex ; index of the current tx in the block
-VAR GLOBAL isL1InfoDataZero; indicates if the l1 info data value to be prove has zero value
-
 VAR CTX txGasLimit ; transaction parameter: 'gas limit'
 VAR CTX txDestAddr ; transaction parameter: 'to'
 VAR CTX storageAddr ; address which the storage will be modified
@@ -112,6 +113,7 @@ VAR CTX initLogIndex ; log index once a new context begins
 VAR CTX deltaTimestamp ; delta timestamp of the current change L2 block tx
 VAR CTX indexL1InfoTree ; indexL1InfoTree of the current change L2 block tx
 VAR CTX gerL1InfoTree ; new GER of the current change L2 block tx
+VAR CTX computedL1InfoTreeData ; solidtykeccak256(GER, blockHashL1, timestamp)
 VAR CTX blockHashL1InfoTree ; new BlockhashL1 of the current change L2 block tx
 VAR CTX timestampL1InfoTree ; new timestamp of the current change L2 block tx
 VAR CTX isChangeL2BlockTx ; flag to determine if the current tx is a change L2 block tx

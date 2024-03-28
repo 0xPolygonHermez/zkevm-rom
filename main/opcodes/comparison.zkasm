@@ -344,11 +344,14 @@ opSHR:
 
     ; read two items from the stack
     SP - 1 => SP
-    $ => D          :MLOAD(SP--) ; [shift => D]
+    $ => D, A       :MLOAD(SP--) ; [shift => D, A]
+    256 => B
+    $               :LT, JMPNC(opSHRZero)
     ; call SHRarithBit util
     $ => A          :MLOAD(SP), CALL(SHRarithBit)   ; [value => A]; [ A >> D => A]
     A               :MSTORE(SP++), JMP(readCode) ; [ A => SP]
-
+opSHRZero:
+    0               :MSTORE(SP++), JMP(readCode) ; [ 0 => SP]
 /**
  * @link [https://www.evm.codes/#1b?fork=berlin]
  * @zk-counters
@@ -369,13 +372,14 @@ opSHL:
 
     ; read two items from the stack
     SP - 1 => SP
-    $ => D          :MLOAD(SP--)
-    $ => A          :MLOAD(SP)
-
-    ; CALL shl util
-                    :CALL(SHLarithBit)  ; [ A << D => A]
+    $ => D, A       :MLOAD(SP--) ; [shift => D, A]
+    256 => B
+    $               :LT, JMPNC(opSHLZero)
+    ; CALL SHLarithBit util
+    $ => A          :MLOAD(SP), CALL(SHLarithBit)  ; [ A << D => A]
     A               :MSTORE(SP++), JMP(readCode) ; [A => SP]
-
+opSHLZero:
+    0               :MSTORE(SP++), JMP(readCode) ; [ 0 => SP]
 /**
  * @link [https://www.evm.codes/#1d?fork=berlin]
  * @zk-counters

@@ -1,0 +1,105 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; POST: out is trimmed
+;;
+;; array_mul_two:
+;;           input:
+;;                  · C ∈ [1, 64], the len of in
+;;                  · in ∈ [0, 2²⁵⁶ - 1]^C, the input array
+;;
+;;          output:
+;;                  · out = 2·in = in + in, with len(out) <= C + 1
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; function array_mul_two(a: bigint[], base: bigint): bigint[] {
+;     const len = a.length;
+;     let result = new Array<bigint>(alen);
+;     let sum = 0n;
+;     let carry = 0n;
+;     for (let i = 0; i < len; i++) {
+;         sum = a[i] + a[i] + carry;
+;         carry = sum >= base ? 1n : 0n;
+;         out[i] = sum - carry * base;
+;     }
+;     if (carry === 1n) {
+;         result.push(carry);
+;     }
+;     return result;
+; }
+
+VAR GLOBAL array_mul_two_in[%ARRAY_MAX_LEN]
+VAR GLOBAL array_mul_two_out[%ARRAY_MAX_LEN]
+
+VAR GLOBAL array_mul_two_len_in
+VAR GLOBAL array_mul_two_len_out
+
+VAR GLOBAL array_mul_two_carry
+
+VAR GLOBAL array_mul_two_RR
+
+array_mul_two:
+        %MAX_CNT_BINARY - CNT_BINARY - 1 -  2*%ARRAY_MAX_LEN_MINUS_ONE          :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 9 - 11*%ARRAY_MAX_LEN_MINUS_ONE - 7      :JMPN(outOfCountersStep)
+
+        RR              :MSTORE(array_mul_two_RR)
+
+        C               :MSTORE(array_mul_two_len_in)
+
+array_mul_two_first_iteration:
+        ; a[0] + a[0], where a[0] ∈ [0,base-1]: This number cannot be GT base + (base - 2), two chunks
+        $ => A,B        :MLOAD(array_mul_two_in)
+        $               :ADD, MSTORE(array_mul_two_out), JMPNC(__array_mul_two_continue_1)
+        ;-----------------
+        1 => D          :MSTORE(array_mul_two_carry), JMP(__array_mul_two_continue_2)
+                        __array_mul_two_continue_1:
+        0 => D          :MSTORE(array_mul_two_carry)
+                        __array_mul_two_continue_2:
+        ;-----------------
+
+        1 => E
+        $ => B          :MLOAD(array_mul_two_len_in)
+        B - 1           :JMPZ(array_mul_two_check_carry)
+
+array_mul_two_loopZero2in:
+        ; a[i] + a[i], where a[i] ∈ [0,base-1]: This number cannot be GT base + (base - 2), two chunks
+        $ => A,B        :MLOAD(array_mul_two_in + E)
+        $ => B          :ADD, JMPNC(__array_mul_two_continue_3)
+        ;-----------------
+        1 => D          :JMP(__array_mul_two_continue_4)
+                        __array_mul_two_continue_3:
+        0 => D
+                        __array_mul_two_continue_4:
+        ;-----------------
+
+        ; sum = (a[i] + a[i]) + carry, where carry ∈ [0,1]: This number cannot be GT base + (base - 1), two chunks
+        $ => A          :MLOAD(array_mul_two_carry)
+        $               :ADD, MSTORE(array_mul_two_out + E), JMPNC(__array_mul_two_continue_5)
+        ;-----------------
+        1 => D
+                        __array_mul_two_continue_5:
+        ;-----------------
+
+        ; NOTE: It cannot happen that a[i] + a[i] produces carry and (a[i] + a[i]) + carry as well at the same time
+
+        D               :MSTORE(array_mul_two_carry)
+
+        E + 1 => E
+        $ => B          :MLOAD(array_mul_two_len_in)
+        B - E           :JMPZ(array_mul_two_check_carry, array_mul_two_loopZero2in)
+
+array_mul_two_check_carry:
+        D               :JMPZ(array_mul_two_trim)
+
+array_mul_two_is_carry:
+        ; Carry path
+        E - %ARRAY_MAX_LEN  :JMPZ(failAssert)
+
+        ; In this case, the carry = 1 and we should append it to the result
+        1               :MSTORE(array_mul_two_out + E)
+        E + 1           :MSTORE(array_mul_two_len_out), JMP(array_mul_two_end)
+
+array_mul_two_trim:
+        E               :MSTORE(array_mul_two_len_out)
+
+array_mul_two_end:
+        $ => RR         :MLOAD(array_mul_two_RR)
+                        :RETURN
