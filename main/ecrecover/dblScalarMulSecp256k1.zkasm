@@ -55,14 +55,14 @@ VAR GLOBAL dblScalarMulSecp256k1_RCX
 dblScalarMulSecp256k1:
     	RR      :MSTORE(dblScalarMulSecp256k1_RR)
 
-        RCX     :MSTORE(dblScalarMulSecp256k1_RCX)
+		RCX     :MSTORE(dblScalarMulSecp256k1_RCX)
 
 		; receive the maximum length between the binary representations of k1 and k2
 		; Note that: 0 <= max(len(k1),len(k2)) <= 255
         $BYTE{receiveLen(mem.dblScalarMulSecp256k1_k1, mem.dblScalarMulSecp256k1_k2)} => RR
 
         ; start the acummulator of k1 and k2
-        0 => RCX,GAS   	:MSTORE(dblScalarMulSecp256k1_acum_k1)
+        0 => RCX   		:MSTORE(dblScalarMulSecp256k1_acum_k1)
         0 => HASHPOS    :MSTORE(dblScalarMulSecp256k1_acum_k2)
 
         ; Initialize p3 = 𝒪 (it is symbolic, so we use a variable)
@@ -98,7 +98,7 @@ dblScalarMulSecp256k1:
         ; We have p2 == -p1
 
         ; p12 = p1 - p1 = 𝒪, therefore is the point at infinity
-        1n            :MSTORE(dblScalarMulSecp256k1_p12_zero), JMP(dblScalarMulSecp256k1_loop)
+        1n            :MSTORE(dblScalarMulSecp256k1_p12_zero), JMP(dblScalarMulSecp256k1_loop_fi)
 		; [steps: 19, arith: 1]
 
 dblScalarMulSecp256k1SameInitialPoints:
@@ -115,7 +115,7 @@ dblScalarMulSecp256k1SameInitialPoints:
         ; B == p1_y
         ; (A,B) * 2 = (E, op)
         ${xDblPointEc(A,B)} => E  :MSTORE(dblScalarMulSecp256k1_p12_x)
-        ${yDblPointEc(A,B)}       :ARITH_ECADD_SAME, MSTORE(dblScalarMulSecp256k1_p12_y), JMP(dblScalarMulSecp256k1_loop)
+        ${yDblPointEc(A,B)}       :ARITH_ECADD_SAME, MSTORE(dblScalarMulSecp256k1_p12_y), JMP(dblScalarMulSecp256k1_loop_fi)
 		; [steps: 17, arith: 1]
 
 dblScalarMulSecp256k1DiffInitialPoints:
@@ -146,6 +146,19 @@ dblScalarMulSecp256k1DiffInitialPoints:
 ; [steps.byloop ((bit.k1 && bit.k2) == 1) & nosave:  8 + 16 = 24]
 ; [steps.byloop ((bit.k1 || bit.k2) == 1) & save:   11 + 16 = 27]
 ; [steps.byloop ((bit.k1 && bit.k2) == 1) & save:   13 + 16 = 29]
+
+; First iteration
+; ------------------------------
+dblScalarMulSecp256k1_loop_fi:
+        ; Receive the next MSB bit of k1
+        $0{(mem.dblScalarMulSecp256k1_k1 >> RR) & 0x1}        :JMPNZ(dblScalarMulSecp256k1_k11)
+
+; high_bit(k1) == 0 high_bit(k2) == ??
+dblScalarMulSecp256k1_k10_fi:
+        ; Receive the next MSB bit of k2
+        $0{(mem.dblScalarMulSecp256k1_k2) >> RR & 0x1}        :JMPZ(failAssert, @dblScalarMulSecp256k1_scalar_table_k10_k21 + RR)
+; ------------------------------
+
 
 dblScalarMulSecp256k1_loop:
         ; Receive the next MSB bit of k1
@@ -304,52 +317,51 @@ dblScalarMulSecp256k1_end_loop:
 
         ; Check that the accumulated scalars coincide with the original ones
         $ => A      :MLOAD(dblScalarMulSecp256k1_k1)
-        $ => B      :MLOAD(dblScalarMulSecp256k1_acum_k1)
-        1           :EQ
-        $ => A      :MLOAD(dblScalarMulSecp256k1_k2)
-        $ => B      :MLOAD(dblScalarMulSecp256k1_acum_k2)
-        1           :EQ
+        A      		:MLOAD(dblScalarMulSecp256k1_acum_k1)
 
-        $ => RR         :MLOAD(dblScalarMulSecp256k1_RR)
-        $ => RCX        :MLOAD(dblScalarMulSecp256k1_RCX), RETURN
+        $ => A      :MLOAD(dblScalarMulSecp256k1_k2)
+        A      		:MLOAD(dblScalarMulSecp256k1_acum_k2)
+
+        $ => RR   	:MLOAD(dblScalarMulSecp256k1_RR)
+        $ => RCX  	:MLOAD(dblScalarMulSecp256k1_RCX), RETURN
 
 ; Begin of table
 dblScalarMulSecp256k1_save_k10_k20:
 	; There is no need to load C since it has been done in the table
     ;   $ => C            :MLOAD(dblScalarMulSecp256k1_acum_k1)
-      ROTL_C + RCX      		:MSTORE(dblScalarMulSecp256k1_acum_k1)
+      ROTL_C + RCX      	:MSTORE(dblScalarMulSecp256k1_acum_k1)
 
-      $ => C            		:MLOAD(dblScalarMulSecp256k1_acum_k2)
-      ROTL_C + HASHPOS  		:MSTORE(dblScalarMulSecp256k1_acum_k2)
+      $ => C            	:MLOAD(dblScalarMulSecp256k1_acum_k2)
+      ROTL_C + HASHPOS  	:MSTORE(dblScalarMulSecp256k1_acum_k2)
 
-      0n => RCX,HASHPOS 		:JMP(dblScalarMulSecp256k1_double)
+      0n => RCX,HASHPOS 	:JMP(dblScalarMulSecp256k1_double)
 
 dblScalarMulSecp256k1_save_k11_k20:
-      $ => C            		:MLOAD(dblScalarMulSecp256k1_acum_k1)
-      ROTL_C + RCX      		:MSTORE(dblScalarMulSecp256k1_acum_k1)
+      $ => C            	:MLOAD(dblScalarMulSecp256k1_acum_k1)
+      ROTL_C + RCX      	:MSTORE(dblScalarMulSecp256k1_acum_k1)
 
-      $ => C            		:MLOAD(dblScalarMulSecp256k1_acum_k2)
-      ROTL_C + HASHPOS  		:MSTORE(dblScalarMulSecp256k1_acum_k2)
+      $ => C            	:MLOAD(dblScalarMulSecp256k1_acum_k2)
+      ROTL_C + HASHPOS  	:MSTORE(dblScalarMulSecp256k1_acum_k2)
 
-      0n => RCX,HASHPOS 		:JMP(dblScalarMulSecp256k1_k11_k20_add_prepare)
+      0n => RCX,HASHPOS 	:JMP(dblScalarMulSecp256k1_k11_k20_add_prepare)
 
 dblScalarMulSecp256k1_save_k11_k21:
-      $ => C            		:MLOAD(dblScalarMulSecp256k1_acum_k1)
-      ROTL_C + RCX + GAS      	:MSTORE(dblScalarMulSecp256k1_acum_k1)
+      $ => C           		:MLOAD(dblScalarMulSecp256k1_acum_k1)
+      ROTL_C + RCX      	:MSTORE(dblScalarMulSecp256k1_acum_k1)
 
-      $ => C            		:MLOAD(dblScalarMulSecp256k1_acum_k2)
-      ROTL_C + HASHPOS + GAS  	:MSTORE(dblScalarMulSecp256k1_acum_k2)
+      $ => C            	:MLOAD(dblScalarMulSecp256k1_acum_k2)
+      ROTL_C + HASHPOS  	:MSTORE(dblScalarMulSecp256k1_acum_k2)
 
-      0n => RCX,HASHPOS,GAS 	:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
+      0n => RCX,HASHPOS 	:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 
 dblScalarMulSecp256k1_save_k10_k21:
-      $ => C            		:MLOAD(dblScalarMulSecp256k1_acum_k1)
-      ROTL_C + RCX      		:MSTORE(dblScalarMulSecp256k1_acum_k1)
+      $ => C            	:MLOAD(dblScalarMulSecp256k1_acum_k1)
+      ROTL_C + RCX      	:MSTORE(dblScalarMulSecp256k1_acum_k1)
 
-      $ => C            		:MLOAD(dblScalarMulSecp256k1_acum_k2)
-      ROTL_C + HASHPOS  		:MSTORE(dblScalarMulSecp256k1_acum_k2)
+      $ => C            	:MLOAD(dblScalarMulSecp256k1_acum_k2)
+      ROTL_C + HASHPOS  	:MSTORE(dblScalarMulSecp256k1_acum_k2)
 
-      0n => RCX,HASHPOS 		:JMP(dblScalarMulSecp256k1_k10_k21_add_prepare)
+      0n => RCX,HASHPOS 	:JMP(dblScalarMulSecp256k1_k10_k21_add_prepare)
 
 ; Sage code
 ; ----------------------------------------
@@ -1160,15 +1172,15 @@ dblScalarMulSecp256k1_scalar_table_k11_k20:
 ;     power = 2**latch
 ;     a = f"{power:#0{10}x}"
 ;     if (latch == 0):
-;         print("\tGAS     + {0}n => GAS\t\t\t:JMP(dblScalarMulSecp256k1_save_k11_k21)\t\t; RR = {1}".format(a,i))
-;         print("\tA => A ; Dummy operation")
+;         print("\tRCX     + {0}n => RCX\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t; RR = {1}".format(a,i))
+;         print("\tHASHPOS + {0}n => HASHPOS\t\t:JMP(dblScalarMulSecp256k1_save_k11_k21)".format(a))
 ;     else:
 ;         print("\tRCX     + {0}n => RCX\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t; RR = {1}".format(a,i))
 ;         print("\tHASHPOS + {0}n => HASHPOS\t\t:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)".format(a))
 ; ----------------------------------------
 dblScalarMulSecp256k1_scalar_table_k11_k21:
-	GAS     + 0x00000001n => GAS			:JMP(dblScalarMulSecp256k1_save_k11_k21)		; RR = 0
-	A => A ; Dummy operation
+	RCX     + 0x00000001n => RCX															; RR = 0
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)
 	RCX     + 0x00000002n => RCX															; RR = 1
 	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 	RCX     + 0x00000004n => RCX															; RR = 2
@@ -1231,8 +1243,8 @@ dblScalarMulSecp256k1_scalar_table_k11_k21:
 	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 	RCX     + 0x80000000n => RCX															; RR = 31
 	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
-	GAS     + 0x00000001n => GAS			:JMP(dblScalarMulSecp256k1_save_k11_k21)		; RR = 32
-	A => A ; Dummy operation
+	RCX     + 0x00000001n => RCX															; RR = 32
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)
 	RCX     + 0x00000002n => RCX															; RR = 33
 	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 	RCX     + 0x00000004n => RCX															; RR = 34
@@ -1295,8 +1307,8 @@ dblScalarMulSecp256k1_scalar_table_k11_k21:
 	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 	RCX     + 0x80000000n => RCX															; RR = 63
 	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
-	GAS     + 0x00000001n => GAS			:JMP(dblScalarMulSecp256k1_save_k11_k21)		; RR = 64
-	A => A ; Dummy operation
+	RCX     + 0x00000001n => RCX															; RR = 64
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)
 	RCX     + 0x00000002n => RCX															; RR = 65
 	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 	RCX     + 0x00000004n => RCX															; RR = 66
@@ -1359,8 +1371,8 @@ dblScalarMulSecp256k1_scalar_table_k11_k21:
 	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 	RCX     + 0x80000000n => RCX															; RR = 95
 	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
-	GAS     + 0x00000001n => GAS			:JMP(dblScalarMulSecp256k1_save_k11_k21)		; RR = 96
-	A => A ; Dummy operation
+	RCX     + 0x00000001n => RCX															; RR = 96
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)
 	RCX     + 0x00000002n => RCX															; RR = 97
 	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 	RCX     + 0x00000004n => RCX															; RR = 98
@@ -1423,8 +1435,8 @@ dblScalarMulSecp256k1_scalar_table_k11_k21:
 	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 	RCX     + 0x80000000n => RCX															; RR = 127
 	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
-	GAS     + 0x00000001n => GAS			:JMP(dblScalarMulSecp256k1_save_k11_k21)		; RR = 128
-	A => A ; Dummy operation
+	RCX     + 0x00000001n => RCX															; RR = 128
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)
 	RCX     + 0x00000002n => RCX															; RR = 129
 	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 	RCX     + 0x00000004n => RCX															; RR = 130
@@ -1487,8 +1499,8 @@ dblScalarMulSecp256k1_scalar_table_k11_k21:
 	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 	RCX     + 0x80000000n => RCX															; RR = 159
 	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
-	GAS     + 0x00000001n => GAS			:JMP(dblScalarMulSecp256k1_save_k11_k21)		; RR = 160
-	A => A ; Dummy operation
+	RCX     + 0x00000001n => RCX															; RR = 160
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)
 	RCX     + 0x00000002n => RCX															; RR = 161
 	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 	RCX     + 0x00000004n => RCX															; RR = 162
@@ -1551,8 +1563,8 @@ dblScalarMulSecp256k1_scalar_table_k11_k21:
 	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 	RCX     + 0x80000000n => RCX															; RR = 191
 	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
-	GAS     + 0x00000001n => GAS			:JMP(dblScalarMulSecp256k1_save_k11_k21)		; RR = 192
-	A => A ; Dummy operation
+	RCX     + 0x00000001n => RCX															; RR = 192
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)
 	RCX     + 0x00000002n => RCX															; RR = 193
 	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 	RCX     + 0x00000004n => RCX															; RR = 194
@@ -1615,8 +1627,8 @@ dblScalarMulSecp256k1_scalar_table_k11_k21:
 	HASHPOS + 0x40000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 	RCX     + 0x80000000n => RCX															; RR = 223
 	HASHPOS + 0x80000000n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
-	GAS     + 0x00000001n => GAS			:JMP(dblScalarMulSecp256k1_save_k11_k21)		; RR = 224
-	A => A ; Dummy operation
+	RCX     + 0x00000001n => RCX															; RR = 224
+	HASHPOS + 0x00000001n => HASHPOS		:JMP(dblScalarMulSecp256k1_save_k11_k21)
 	RCX     + 0x00000002n => RCX															; RR = 225
 	HASHPOS + 0x00000002n => HASHPOS		:JMP(dblScalarMulSecp256k1_k11_k21_add_prepare)
 	RCX     + 0x00000004n => RCX															; RR = 226
