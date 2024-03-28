@@ -45,42 +45,39 @@ opJUMPI:
 
 checkJumpDest:
     ; if it is a deploy we have to check the data from the calldata (not the bytecode)
-    $ => B                          :MLOAD(isCreateContract), JMPNZ(checkJumpDestDeployment)
+    $                               :MLOAD(isCreateContract), JMPNZ(checkJumpDestDeployment)
     $ => B                          :MLOAD(bytecodeLength)
     $                               :LT,JMPNC(invalidJump)
-    A => PC, HASHPOS
+    A => B, PC, HASHPOS
     ; get hashP address pointer where contract bytecode is stored
     $ => E                          :MLOAD(contractHashId)
-    $ => A                          :HASHP1(E)
     ; check if is a jumpDest (0x5B)
-    A - 0x5B                        :JMPZ(readCode, invalidJump)
+    $ - 0x5B                        :F_HASHP1(E), JMPZ(readCode, invalidJump)
 
 checkJumpDestDeployment:
     ; check enough bytes to read in calldata
     $ => B                          :MLOAD(txCalldataLen)
     $                               :LT,JMPNC(invalidJump)
     ; check jumpDest from calldata
-    $ => B                          :MLOAD(isCreate), JMPNZ(checkJumpDestDeploymentCreate)
+    $                               :MLOAD(isCreate), JMPNZ(checkJumpDestDeploymentCreate)
     ; get position where data starts in the tx
-    $ => HASHPOS                    :MLOAD(dataStarts)
     ; add PC to data starts to point the bytes to read for the jumpdest
     A => PC
-    HASHPOS + PC => HASHPOS
+    $ + PC => HASHPOS               :F_MLOAD(dataStarts)
     ; get memory pointer for hashing
-    $ => E                          :MLOAD(batchHashDataId)
+    $ => E                          :MLOAD(batchHashDataPointer)
     ; set number of bytes to hashK
-    $ => A                          :HASHK1(E)
     ; check if is a jumpDest (0x5B)
-    A - 0x5B                        :JMPZ(readCode, invalidJump)
+    $ - 0x5B                        :F_HASHP1(E), JMPZ(readCode, invalidJump)
+
 
 checkJumpDestDeploymentCreate:
     ; get bytes from previous context memory
     $ => CTX                        :MLOAD(originCTX)
     ; get offset call position
-    $ => E                          :MLOAD(argsOffsetCall)
     ; increase current program counter (PC) to offset for getting pushed bytes to read
     A => PC
-    E + PC => E
+    $ + PC => E                     :F_MLOAD(argsOffsetCall)
     ; set bytes to read from memory at C
     1 => C                          :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
     $ => CTX                        :MLOAD(currentCTX)

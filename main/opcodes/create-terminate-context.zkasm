@@ -222,8 +222,8 @@ opCALL2:
 
     GAS - %CALL_VALUE_TRANSFER_GAS => GAS :JMPN(outOfGas)
     ; if destAddress is an empty account, we should add 25k of gas to base cost
-    $ => E          :MLOAD(addrCall), CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
-    GAS - %CALL_NEW_ACCOUNT_GAS*E => GAS :JMPN(outOfGas)
+    $ => A          :MLOAD(addrCall), CALL(isEmptyAccount); in: [A: address] out: [A: 0 if is not empty, 1 if is empty]
+    GAS - %CALL_NEW_ACCOUNT_GAS*A => GAS :JMPN(outOfGas)
 
 opCALLend:
     ; setup vars for next CTX
@@ -928,8 +928,8 @@ opSENDALL:
     $ => A              :MLOAD(SP), CALL(maskAddress); in: [A: address] out: [A: masked address]
     A                   :MSTORE(sendAllAddress)
 
-    ; store address receiver in [C, E]
-    A => C, E
+    ; store address receiver in C
+    A => C
 
     ; check balance to move is greater than 0
     0 => A
@@ -944,8 +944,8 @@ opSENDALL:
 ; move balances
 opSENDALL2:
     ; check gas empty account
-                                                :CALL(isEmptyAccount); in: [E: address] out: [E: 0 if is not empty, 1 if is empty]
-    GAS - %CALL_NEW_ACCOUNT_GAS * E => GAS      :JMPN(outOfGas)
+    C => A                                      :CALL(isEmptyAccount); in: [A: address] out: [A: 0 if is not empty, 1 if is empty]
+    GAS - %CALL_NEW_ACCOUNT_GAS * A => GAS      :JMPN(outOfGas)
 
     ; save balance storageAddr in arithA for later usage
     D                           :MSTORE(arithA)

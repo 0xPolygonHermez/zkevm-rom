@@ -50,8 +50,13 @@ opLOG1:
     C                   :MSTORE(lastMemLength), CALL(saveMem)
     ; C is less than 32 bits after calling saveMem
     1                   :MSTORE(numTopics)
-    GAS - %LOG_DATA_GAS * C => GAS      :JMPN(outOfGas)
-                        :JMP(initLogLoop)
+    %LOG_DATA_GAS       :MSTORE(arithA)
+    C                   :MSTORE(arithB), CALL(mulARITH)
+    $ => B              :MLOAD(arithRes1)
+    GAS => A
+    ; check out-of-gas
+    $                   :LT,JMPC(outOfGas)
+    GAS - B => GAS      :JMP(initLogLoop)
 
 opLOG2:
 
@@ -67,8 +72,13 @@ opLOG2:
     C                   :MSTORE(lastMemLength), CALL(saveMem)
     ; C is less than 32 bits after calling saveMem
     2                   :MSTORE(numTopics)
-    GAS - %LOG_DATA_GAS * C => GAS      :JMPN(outOfGas)
-                        :JMP(initLogLoop)
+    %LOG_DATA_GAS       :MSTORE(arithA)
+    C                   :MSTORE(arithB), CALL(mulARITH)
+    $ => B              :MLOAD(arithRes1)
+    GAS => A
+    ; check out-of-gas
+    $                   :LT,JMPC(outOfGas)
+    GAS - B => GAS      :JMP(initLogLoop)
 
 opLOG3:
 
@@ -84,8 +94,13 @@ opLOG3:
     C                   :MSTORE(lastMemLength), CALL(saveMem)
     ; C is less than 32 bits after calling saveMem
     3                   :MSTORE(numTopics)
-    GAS - %LOG_DATA_GAS * C => GAS      :JMPN(outOfGas)
-                        :JMP(initLogLoop)
+    %LOG_DATA_GAS       :MSTORE(arithA)
+    C                   :MSTORE(arithB), CALL(mulARITH)
+    $ => B              :MLOAD(arithRes1)
+    GAS => A
+    ; check out-of-gas
+    $                   :LT,JMPC(outOfGas)
+    GAS - B => GAS      :JMP(initLogLoop)
 
 opLOG4:
 
@@ -101,7 +116,13 @@ opLOG4:
     C                   :MSTORE(lastMemLength), CALL(saveMem)
     ; C is less than 32 bits after calling saveMem
     4                   :MSTORE(numTopics)
-    GAS - %LOG_DATA_GAS * C => GAS      :JMPN(outOfGas)
+    %LOG_DATA_GAS       :MSTORE(arithA)
+    C                   :MSTORE(arithB), CALL(mulARITH)
+    $ => B              :MLOAD(arithRes1)
+    GAS => A
+    ; check out-of-gas
+    $                   :LT,JMPC(outOfGas)
+    GAS - B => GAS      :JMP(initLogLoop)
 
 initLogLoop:
     ; check poseidon counters
@@ -111,7 +132,7 @@ initLogLoop:
     $ => B                                                  :MLOAD(arithRes1)
     ; We count B and also the number of topics, as max is 4 topics of 32 bytes each 32*4/56 = 2.2 -> 3
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - 4 - B            :JMPN(outOfCountersPoseidon)
-    %MAX_CNT_PADDING_PG_LIMIT - CNT_PADDING_PG - 4 - B      :JMPN(outOfCountersPadding)
+    %MAX_CNT_PADDING_PG - CNT_PADDING_PG - 4 - B      :JMPN(outOfCountersPadding)
     0 => HASHPOS
     32 => D
     $ => B                                                  :MLOAD(currentLogIndex)
