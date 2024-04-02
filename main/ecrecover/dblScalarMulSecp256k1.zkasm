@@ -1,5 +1,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  PRE: p1 = (p1_x, p1_y), p2 = (p2_x, p2_y) are in E(Fp)\{𝒪} and p1_x,p1_y,p2_x,p2_y,k1,k2 are alias-free
+;; 		 Moreover, k1 and k2 cannot be zero at the same time
 ;; POST: The resulting coordinates p3_x,p3_y are alias-free and variable p3_is_zero ∈ {0,1}
 ;;
 ;; dblScalarMulSecp256k1:
@@ -42,15 +43,15 @@ VAR GLOBAL dblScalarMulSecp256k1_RR
 VAR GLOBAL dblScalarMulSecp256k1_RCX
 
 ; RESOURCES (k1,k2):
-;                1 arith + 19 steps                              // setup, calculation p12
-;              + number_of_bits_1(k1|k2) * arith                 // additions
-;              + max_bin_len(k1,k2) * arith                      // doubles
-;              + max_bin_len(k1,k2)/32 * 29 steps                // additions + doubles (steps, worst case)
-;              + (256 - max_bin_len(k1,k2)/32) * 24 steps        // additions + doubles (steps, worst case)
-;              + 8 steps + 2 bin                                 // last part
+;                1 arith + 19 steps                      	// setup, calculation p12
+;              + number_of_bits_1(k1|k2) * arith         	// additions
+;              + max_bin_len(k1,k2) * arith              	// doubles
+;              + max_bin_len(k1,k2)/32 * 27 steps        	// additions + doubles (steps, worst case)
+;              + (256 - max_bin_len(k1,k2)/32) * 22 steps	// additions + doubles (steps, worst case)
+;              + 6 steps                                 	// last part
 ;
 ;
-; RESOURCES (worst case): 513 arith + 2 binaries + 6239 steps    // 20 + 256/32 * 29 + (256 - 256/32) * 24 + 8 = 6212
+; RESOURCES (worst case): 513 arith + 5697 steps    		// 19 + 256/32 * 27 + (256 - 256/32) * 22 + 6 = 5697
 
 dblScalarMulSecp256k1:
     	RR      :MSTORE(dblScalarMulSecp256k1_RR)
@@ -93,8 +94,11 @@ dblScalarMulSecp256k1:
         ; y must be distinct from 0, because the cubic root of -7 doesn't exist (y² = x³ + 7)
 
 		; check p1_y + p2_y = SECP256K1_P
-        D => A        ; A = p2_y, B = p1_y
-        %SECP256K1_P  :ADD
+        B => A        ; A = p1_y
+        1 => B
+        D => C        ; C = p2_y
+        0 => D
+        %SECP256K1_P         :ARITH
         ; We have p2 == -p1
 
         ; p12 = p1 - p1 = 𝒪, therefore is the point at infinity
@@ -139,13 +143,13 @@ dblScalarMulSecp256k1DiffInitialPoints:
 ; Goes forward in different branches of code depending on the values of the
 ; most significant bits of k1 and k2.
 
-; [steps.byloop (worst case & nosave): 8 + 16 = 24]
-; [steps.byloop (worst case & save):  13 + 16 = 29]
+; [steps.byloop (worst case & nosave): 7 + 15 = 22]
+; [steps.byloop (worst case & save):  12 + 15 = 27]
 
-; [steps.byloop ((bit.k1 || bit.k2) == 1) & nosave:  6 + 16 = 22]
-; [steps.byloop ((bit.k1 && bit.k2) == 1) & nosave:  8 + 16 = 24]
-; [steps.byloop ((bit.k1 || bit.k2) == 1) & save:   11 + 16 = 27]
-; [steps.byloop ((bit.k1 && bit.k2) == 1) & save:   13 + 16 = 29]
+; [steps.byloop ((bit.k1 || bit.k2) == 1) & nosave:  5 + 15 = 20]
+; [steps.byloop ((bit.k1 && bit.k2) == 1) & nosave:  7 + 15 = 22]
+; [steps.byloop ((bit.k1 || bit.k2) == 1) & save:   10 + 15 = 25]
+; [steps.byloop ((bit.k1 && bit.k2) == 1) & save:   12 + 15 = 27]
 
 ; First iteration
 ; ------------------------------
@@ -176,26 +180,16 @@ dblScalarMulSecp256k1_k11:
 
 ; high_bit(k1) == 0 high_bit(k2) == 1
 dblScalarMulSecp256k1_k10_k21_add_prepare:
-		; [steps.before.nosave: 4]
-		; [steps.before.save:   9]
-		; [steps.before (w.c.): 9]
         $ => C  :MLOAD(dblScalarMulSecp256k1_p2_x)
         $ => D  :MLOAD(dblScalarMulSecp256k1_p2_y), JMP(dblScalarMulSecp256k1_add)
 
 ; high_bit(k1) == 1 high_bit(k2) == 0
 dblScalarMulSecp256k1_k11_k20_add_prepare:
-		; [steps.before.nosave: 3]
-		; [steps.before.save:   9]
-		; [steps.before (w.c.): 9]
         $ => C  :MLOAD(dblScalarMulSecp256k1_p1_x)
         $ => D  :MLOAD(dblScalarMulSecp256k1_p1_y), JMP(dblScalarMulSecp256k1_add)
 
 ; high_bit(k1) == 1 high_bit(k2) == 1
 dblScalarMulSecp256k1_k11_k21_add_prepare:
-		; [steps.before.nosave: 5]
-		; [steps.before.save:   10]
-		; [steps.before (w.c.): 10]
-
         ; if (dblScalarMulSecp256k1_p12_zero) k11_k21 is the same as k10_k20
         ; because adding the point at infinity to a point is the point itself
         $       :MLOAD(dblScalarMulSecp256k1_p12_zero), JMPNZ(dblScalarMulSecp256k1_double)
@@ -205,13 +199,13 @@ dblScalarMulSecp256k1_k11_k21_add_prepare:
 
 ; at this point, C,D contain the point to be added
 dblScalarMulSecp256k1_add:
-        ; [steps.p3empty.nolast: 4 + steps.double = 10]
-        ; [steps.p3empty.last: 4 + steps.double = 5]
-        ; [steps.xeq.yeq: 9 + steps.double = 15]
-        ; [steps.xeq.yneq: 10 + steps.double = 16]
-        ; [steps.xneq.nolast: 7 + steps.double = 13]
-        ; [steps.xneq.last: 7 + steps.double = 8]
-        ; [steps.block: 16]
+        ; [steps.p3empty.nolast: 5 + steps.double = 7]
+        ; [steps.p3empty.last: 5 + steps.double = 6]
+        ; [steps.xeq.yeq: 8 + steps.double = 14, arith: 1 + steps.double = 2]
+        ; [steps.xeq.yneq: 9 + steps.double = 15, arith: 1 + steps.double = 1]
+        ; [steps.xneq.nolast: 6 + steps.double = 12, arith: 1 + steps.double = 2]
+        ; [steps.xneq.last: 6 + steps.double = 7, arith: 1 + steps.double = 1]
+        ; [steps.block: 15, arith.block: 2]
 
         ; if p3 is the point at infinity do not add, just assign, since 𝒪 + P = P
         $   :MLOAD(dblScalarMulSecp256k1_p3_zero), JMPNZ(dblScalarMulSecp256k1_p3_assignment)
@@ -242,8 +236,8 @@ dblScalarMulSecp256k1_p3_assignment:
 dblScalarMulSecp256k1_double:
         ; [steps.last: 1]
         ; [steps.nolast.p3empty: 2]
-        ; [steps.nolast.p3: 6]
-        ; [steps.block: 6]
+        ; [steps.nolast: 6, arith: 1]
+        ; [steps.block: 6, arith: 1]
 
         ; E,A = p3_x  B = p3_y
         RR - 1 => RR    :JMPN(dblScalarMulSecp256k1_end_loop)
@@ -261,10 +255,6 @@ dblScalarMulSecp256k1_double_compute:
         ${yDblPointEc(A,B)}       :ARITH_ECADD_SAME, MSTORE(dblScalarMulSecp256k1_p3_y), JMP(dblScalarMulSecp256k1_loop)
 
 dblScalarMulSecp256k1_x_equals_before_add:
-        ; [steps.same.point: 7]
-        ; [steps.opposite.point: 8]
-        ; [steps.block: 8]
-
         ; [MAP] if C != mem.dblScalarMulSecp256k1_p3_x ==> fails, MLOAD fails because read something different
         ; for memory. It verifies C and dblScalarMulSecp256k1_p3_x are same value, as an ASSERT.
         C   :MLOAD(dblScalarMulSecp256k1_p3_x)
@@ -285,6 +275,7 @@ dblScalarMulSecp256k1_x_equals_before_add:
         ; instead of binary to use similar resources on different paths.
 
         ; if p2_y == -p3_y, and them are alias free ==> p2_y + p3_y === SECP256K1_P
+		; Note: The Secp256k1 curve does not have points with y = 0
 
         1 => B
         D => A
@@ -300,7 +291,6 @@ dblScalarMulSecp256k1_x_equals_before_add:
         1n              :MSTORE(dblScalarMulSecp256k1_p3_zero), JMP(dblScalarMulSecp256k1_double)
 
 dblScalarMulSecp256k1_same_point_to_add:
-        ; [steps.block: 5]
         ; must check really are equals, use MLOAD as ASSERT
         ; ASSERT(D == dblScalarMulSecp256k1_p3_y)
 
@@ -313,8 +303,6 @@ dblScalarMulSecp256k1_same_point_to_add:
         ${yDblPointEc(A,B)}  		:ARITH_ECADD_SAME, MSTORE(dblScalarMulSecp256k1_p3_y), JMP(dblScalarMulSecp256k1_double)
 
 dblScalarMulSecp256k1_end_loop:
-        ; [steps.block: 8]
-
         ; Check that the accumulated scalars coincide with the original ones
         $ => A      :MLOAD(dblScalarMulSecp256k1_k1)
         A      		:MLOAD(dblScalarMulSecp256k1_acum_k1)
