@@ -25,16 +25,13 @@ funcSHA256:
     ; GAS - staticGas
     GAS - %SHA2_256_GAS => GAS :JMPN(outOfGas)
 
-    $ => C          :MLOAD(txCalldataLen)
+    $ => C, D          :MLOAD(txCalldataLen)
 
     ;words => A  === (C+31)/32 => A
-    C + 31 => A
-    A               :MSTORE(arithA)
-    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => A          :MLOAD(arithRes1)
-
+    C + 31 => A     :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    D => C
     ; GAS - dynamicGas
-    GAS - %SHA2_256_WORD_GAS*A => GAS   :JMPN(outOfGas)
+    GAS - %SHA2_256_WORD_GAS*E => GAS   :JMPN(outOfGas)
 
     ; Compute necessary sha256 counters to finish the full hash
     ; Divide the total data length + 9 by 64 to obtain the sha256 counter increment

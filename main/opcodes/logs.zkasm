@@ -32,14 +32,10 @@ opLOG0:
     C                   :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; store number of topics
     0                   :MSTORE(numTopics)
+    ; C is less than 32 bits after calling saveMem
     ; calculate data size gas cost => lastMemLength * 8
-    %LOG_DATA_GAS       :MSTORE(arithA)
-    C                   :MSTORE(arithB), CALL(mulARITH); in: [arithA, arithB] out: [arithRes1: arithA*arithB]
-    $ => B              :MLOAD(arithRes1)
-    GAS => A
-    ; check out-of-gas
-    $                   :LT,JMPC(outOfGas)
-    GAS - B => GAS      :JMP(initLogLoop)
+    GAS - %LOG_DATA_GAS * C => GAS      :JMPN(outOfGas)
+                        :JMP(initLogLoop)
 opLOG1:
 
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
@@ -52,6 +48,7 @@ opLOG1:
     $ => C              :MLOAD(SP)
     E                   :MSTORE(lastMemOffset)
     C                   :MSTORE(lastMemLength), CALL(saveMem)
+    ; C is less than 32 bits after calling saveMem
     1                   :MSTORE(numTopics)
     %LOG_DATA_GAS       :MSTORE(arithA)
     C                   :MSTORE(arithB), CALL(mulARITH)
@@ -73,6 +70,7 @@ opLOG2:
     $ => C              :MLOAD(SP)
     E                   :MSTORE(lastMemOffset)
     C                   :MSTORE(lastMemLength), CALL(saveMem)
+    ; C is less than 32 bits after calling saveMem
     2                   :MSTORE(numTopics)
     %LOG_DATA_GAS       :MSTORE(arithA)
     C                   :MSTORE(arithB), CALL(mulARITH)
@@ -94,6 +92,7 @@ opLOG3:
     $ => C              :MLOAD(SP)
     E                   :MSTORE(lastMemOffset)
     C                   :MSTORE(lastMemLength), CALL(saveMem)
+    ; C is less than 32 bits after calling saveMem
     3                   :MSTORE(numTopics)
     %LOG_DATA_GAS       :MSTORE(arithA)
     C                   :MSTORE(arithB), CALL(mulARITH)
@@ -115,6 +114,7 @@ opLOG4:
     $ => C              :MLOAD(SP)
     E                   :MSTORE(lastMemOffset)
     C                   :MSTORE(lastMemLength), CALL(saveMem)
+    ; C is less than 32 bits after calling saveMem
     4                   :MSTORE(numTopics)
     %LOG_DATA_GAS       :MSTORE(arithA)
     C                   :MSTORE(arithB), CALL(mulARITH)
@@ -164,7 +164,6 @@ opLogFinal:
     C => D
     $ => E          :MLOAD(logNextHashPIdAux)
     A               :HASHP(E)
-                    :JMP(opSaveTopicsInit) ; instruction added to allow executing $$ function
 
 opSaveTopicsInit:
     ; save topics
