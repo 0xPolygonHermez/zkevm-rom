@@ -97,14 +97,14 @@ MSTORE32:
 
         A                           :SAVE(B,C,D,E,RR,RCX)
         32 => C                     :MSTORE(__MSTOREX_len), JMP(__MSTOREX_afterSave)
-        
+
 ; @info save value to memory < 32 bytes with offset
 ; @in bytesToStore => bytes to store in memory
-; @in E => offset 
+; @in E => offset
 ; @in C => length
 ; @out E => new offset
-        
-MSTOREX:  
+
+MSTOREX:
         ; check step counters
         %MAX_CNT_STEPS - STEP - 20              :JMPN(outOfCountersStep)
         %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
@@ -117,7 +117,7 @@ MSTOREX:
 __MSTOREX_afterSave:
 
         ; verification without binary, required in non trust if E > 2**32, after that will verify two paths
-        ; path E < 2**32: 
+        ; path E < 2**32:
         ;   A0 < 2**32 => JMPN fails (if A0 < 0 then path __errorEmore32bits)
         ;   A7..A1 == 0 because use $0
         ;   A < 2**32
@@ -130,14 +130,14 @@ __MSTOREX_afterSave:
         $0{E / 32} => RR                :JMPN(failAssert)
         ; RR = 32 bits positive value
 
-        $BYTE{E%32} => RCX,A          
+        $BYTE{E%32} => RCX,A
         RCX                             :JMP_GT(31, failAssert)
 
         ; E === 32 * RR + A (RCX)
         ; E - 32 * RR === A
         ; secure: E < MAX_MEM_EXPASION_BYTES < 32 bits, RR < 32 bits, 32*RR < 37 bits, all < 38 bits
         E - 32 * RR                 :ASSERT
-        
+
         RCX + %MEM_ALIGN_LEN * C + %MEM_ALIGN_LEFT_ALIGNMENT => C     :JMP_EQ(%MEM_ALIGN_LEN * 32 + %MEM_ALIGN_LEFT_ALIGNMENT, __MSTORE32_offset0_len32)
 
         $ => A                  :MLOAD(MEM:RR)
@@ -156,7 +156,7 @@ __MSTORE32_restore:
         $ => A                  :RESTORE
         __MSTOREX_len + E => E  :RETURN
 
-        
+
 __MSTOREX_end:
                                 :RETURN
 
@@ -177,8 +177,8 @@ MLOAD32:
 ; @in C => length
 ; @out A => value
 ; @out E => new offset
-        
-MLOADX:  
+
+MLOADX:
         ; check step counters
         %MAX_CNT_STEPS - STEP - 20              :JMPN(outOfCountersStep)
         %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
@@ -189,7 +189,7 @@ MLOADX:
 __MLOADX_afterSave:
 
         ; verification without binary, required in non trust if E > 2**32, after that will verify two paths
-        ; path E < 2**32: 
+        ; path E < 2**32:
         ;   A0 < 2**32 => JMPN fails (if A0 < 0 then path __errorEmore32bits)
         ;   A7..A1 == 0 because use $0
         ;   A < 2**32
@@ -202,14 +202,14 @@ __MLOADX_afterSave:
         $0{E / 32} => RR                :JMPN(failAssert)
         ; RR = 32 bits positive value
 
-        $BYTE{E%32} => RCX,A          
+        $BYTE{E%32} => RCX,A
         RCX                             :JMP_GT(31, failAssert)
 
         ; E === 32 * RR + A (RCX)
         ; E - 32 * RR === A
         ; secure: E < MAX_MEM_EXPASION_BYTES < 32 bits, RR < 32 bits, 32*RR < 37 bits, all < 38 bits
         E - 32 * RR                 :ASSERT
-        
+
         RCX + %MEM_ALIGN_LEN * C + %MEM_ALIGN_LEFT_ALIGNMENT => C     :JMP_EQ(%MEM_ALIGN_LEN * 32 + %MEM_ALIGN_LEFT_ALIGNMENT, __MLOAD32_offset0_len32)
 
         $ => A                  :MLOAD(MEM:RR)
@@ -223,14 +223,14 @@ __MLOAD32_offset0_len32:
 __MLOAD32_restore:
         $                       :RESTORE,MSTORE(__MSTOREX_len)
         __MSTOREX_len + E => E  :RETURN
-        
+
 __MLOADX_len0:
         0 => A                  :RETURN
 
 __errorEmore32bits:
         ; path E >= 2**32 must be verified (dual path protection)
         ; E >= 2**32 === !(E < 2**32)
-        E => A 
+        E => A
         2n**32n => B
         ; don't check binary counter, because here was a problem of dual path, if check
         ; before this path was a performance problem. It's only one binary and it's outOfGas
@@ -302,21 +302,22 @@ computeGasSendCall:
     ; C = [c7, c6, ..., c0]
     ; JMPN instruction assures c0 is within the range [0, 2**32 - 1]
     ${GAS >> 6} => C        :JMPN(failAssert)
-    ${GAS & 0x3f} => D
+    ; We secure D to be less than 32 bits with $0{}
+    $0{GAS & 0x3f} => D
 
     ; since D is assured to be less than 0x40
     ; it is enforced that [c7, c6, ..., c1] are 0 since there is no value multiplied by 64
     ; that equals the field
     ; Since e0 is assured to be less than 32 bits, c0 * 64 + d0 could not overflow the field
     C * 64 + D              :ASSERT
-    D => A
-    0x40 => B
-    $                       :LT,JMPNC(failAssert)
+    0x3f - D                :JMPN(failAssert) ; D is less than 32 bits, we can use JMPN
+
     GAS - C => A
+    ; gasCall can be more than 32 bits, obtained from stack
     $ => B                  :MLOAD(gasCall)
     ; gas_sent_with_call = min(requested_gas, all_but_one_64th)
     $                       :LT,JMPC(computeGasSendCallEnd)
-    ; gas to substract
+    ; gas to subtract
     B => A
 
 computeGasSendCallEnd:
@@ -346,12 +347,12 @@ saveMem:
 
     ; load old memory length, if is greater than new memory length, no expansion cost
     $ => A                      :MLOAD(memLength)
-    $                           :LT, JMPC(saveMemGAS, saveMemEnd)
+    ; Both A and B are LT than MAX_MEM_EXPANSION_BYTES, this means they are lower thatn 32 bits, we don't need to use a binary to operate
+    A - B                       :JMPN(saveMemGAS, saveMemEnd)
 
 saveMemGAS:
     ; store new memory length
-    B                           :MSTORE(memLength)
-    B => E
+    B => E                          :MSTORE(memLength)
     ; memory_size_word = (memory_byte_size + 31) / 32 in E
     ; ${(B+31)/32} => E
     E + 31 => A
@@ -359,16 +360,15 @@ saveMemGAS:
     ; E = [e7, e6, ..., e0]
     ; JMPN instruction assures e0 is within the range [0, 2**32 - 1]
     ${A >> 5} => E              :JMPN(failAssert)
-    ${A & 0x1f} => D
+    $0{A & 0x1f} => D
 
     ; since D is assured to be less than 0x20
     ; it is enforced that [e7, e6, ..., e1] are 0 since there is no value multiplied by 32
     ; that equals the field
     ; Since e0 is assured to be less than 32 bits, e0 * 32 + d0 could not overflow the field
     E * 32 + D                  :ASSERT
-    D => A
-    0x20 => B
-    $                           :LT,JMPNC(failAssert)
+    0x1f - D                    :JMPN(failAssert) ; D is less than 32 bits, we can use JMPN
+
     ; memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word) in A
     ; ${E*E/512} + 3*E=> A
     E                           :MSTORE(arithA)
@@ -636,7 +636,7 @@ outOfCountersSha256:
 invalidChangeL2BlockMinTimestamp:
     $${eventLog(onError, invalid_change_l2_block_min_timestamp)}    :JMP(handleBatchError)
 invalidL1InfoTreeIndex:
-    $${eventLog(onError, invalid_L1_info_tree_index)}    :JMP(handleBatchError)
+    $${eventLog(onError, invalid_l1_info_tree_index)}    :JMP(handleBatchError)
 outOfGas:
     $${eventLog(onError, OOG)}                      :JMP(handleError)
 invalidJump:
@@ -757,10 +757,8 @@ endMoveBalances:
 invalidCall:
     ; return to origin context
     $ => SR                         :MLOAD(initSR)
-    $ => A                          :MLOAD(originCTX)
-    0 => B
     ; if last context, finish tx
-    $                               :EQ,JMPC(handleGas)
+    $ => A                          :MLOAD(originCTX),JMPZ(handleGas)
     A => CTX
     0                               :MSTORE(retDataCTX)
     CTX                             :MSTORE(currentCTX)
@@ -939,6 +937,8 @@ VAR GLOBAL startsWithEF
 ; @internalParam {startsWithEF} flag to indicate if first deployed byte on the bytecode is 0xEF
 checkBytecodeStartsEF:
     %MAX_CNT_STEPS - STEP - 50      :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
+
     ; save temporary registers
     A                               :SAVE(B,C,D,E,RCX,RR)
 
@@ -953,10 +953,13 @@ checkBytecodeStartsEF:
 
     ; get 1 byte from memory
     1 => C                          :CALL(MLOADX) ; in: [E: offset, C: length] out: [A: value , E: new offset]
-    31 => D                         :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
 
+    ; mask first byte
+    0xFF00000000000000000000000000000000000000000000000000000000000000n => B
+    $ => A                          :AND
     ; check if byte read is equal to 0xEF
-    %BYTECODE_STARTS_EF - A         :JMPNZ(checkBytecodeStartsEFend)
+    0xEF00000000000000000000000000000000000000000000000000000000000000n => B
+    $                               :EQ, JMPNC(checkBytecodeStartsEFend)
     1                               :MSTORE(startsWithEF)
 
 checkBytecodeStartsEFend:
@@ -1185,10 +1188,7 @@ expADloop:
     ;D = exp/2
     $ => D          :MLOAD(arithRes1)
     ;A = exp%2 (0 or 1)
-    $ => A          :MLOAD(arithRes2)
-    0 => B
-    ;if exp%2 == 0 --> expADloop0
-    $               :EQ,JMPC(expADloop0)
+    $ => A          :MLOAD(arithRes2), JMPZ(expADloop0) ;if exp%2 == 0 --> expADloop0
     E               :MSTORE(arithA)
     ;mulARITH --> E*C
     C               :MSTORE(arithB), CALL(mulARITH)
@@ -1219,7 +1219,7 @@ failAssert:
     A - 1           :ASSERT
 
 VAR GLOBAL tmpZkPCComputeMerkleProof
-;@info Computes merkle root with from currentL1InfoTreeRoot, currentL1InfoTreeIndex and sibilings
+;@info Computes merkle root with from currentL1InfoTreeRoot, currentL1InfoTreeIndex and siblings
 ;@out C: merkle tree root
 computeMerkleProof:
     ; check zk-counters
