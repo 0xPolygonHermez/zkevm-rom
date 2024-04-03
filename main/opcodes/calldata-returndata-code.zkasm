@@ -296,9 +296,7 @@ opCODECOPYloop:
     $ => A          :MLOAD(memOffset), CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
     E               :MSTORE(memInteger)
     ; read M0 previous value
-    $ => A          :MLOAD(MEM:E)
-    A               :MSTORE(previousValue), CALL(opCODECOPYLoadBytes); in:[codecopyBytecodeLength, codecopyHashId] out: [B: readByte]
-    $ => A          :MLOAD(previousValue)
+    $ => A          :MLOAD(MEM:E), CALL(opCODECOPYLoadBytes); in:[codecopyBytecodeLength, codecopyHashId] out: [B: readByte], E is modified
     C + 1 * %MEM_ALIGN_LEN => C
     ${memAlignWR_W0(A,B,C)} => D  ; no trust calculate W0
     B => E          ; B and E must be same value
@@ -306,11 +304,9 @@ opCODECOPYloop:
     $ => E          :MLOAD(memInteger)
     D               :MSTORE(MEM:E) ; write W0
     ; update vars loop
-    $ => B          :MLOAD(remainingBytes)
-    B - 1 => B  ; decrease 1 byte from length
+    $ - 1 => B      :F_MLOAD(remainingBytes); decrease 1 byte from length
     B               :MSTORE(remainingBytes)
-    $ => A          :MLOAD(memOffset)
-    A + 1 => A  ; increment offset to write the next byte
+    $ + 1 => A      :F_MLOAD(memOffset); increment offset to write the next byte
     A               :MSTORE(memOffset), JMP(opCODECOPYloop)
 
 
