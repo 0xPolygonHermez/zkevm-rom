@@ -2,12 +2,13 @@ INCLUDE "constants.zkasm"
 INCLUDE "vars.zkasm"
 
 ; Blocks zkROM
-;       A - Load initial registers into memory: oldStateRoot (B), oldBatchAccInputHash (C), & chainID (GAS)
-;       B - Compute keccaks needed to finish the batch
-;       C - Loop parsing RLP transactions
-;       D - Load blockNum variable & Loop processing transactions
-;       E - Batch computations: get newLocalExitRoot, assert transactions size, compute batchHashData & compute newBatchAccInputHash
-;       F - Finalize execution
+;       A - Load initial registers into memory: oldStateRoot (SR), oldBatchAccInputHash (C), forkID (CTX), previousL1InfoTreeRoot (D), previousL1InfoTreeIndex (RCX), chainID (GAS)
+;       B - Compute forcedHashData
+;       C - Compute newBatchAccInputHash, load timestamp and blockNum
+;       D - Loop parsing RLP transactions
+;       E - Loop processing transactions
+;       F - FinalizeBatch
+;       G - Finalize execution
 
 start: ; main zkROM entry point
 ;;;;;;;;;;;;;;;;;;
@@ -40,7 +41,9 @@ start: ; main zkROM entry point
         ; If forcedHashData ist no zero, is a forced batch
         ; Set forced batch flag
         1                                       :MSTORE(isForced)
-        ; Compute forcedHashData
+;;;;;;;;;;;;;;;;;;
+;; B - Compute forcedHashData
+;;;;;;;;;;;;;;;;;;
         $ => E                                  :MLOAD(nextHashKId)
         E + 1                                   :MSTORE(nextHashKId)
         32 => D
@@ -53,7 +56,7 @@ start: ; main zkROM entry point
         $ => A                                  :HASHKDIGEST(E)
         $                                       :MLOAD(forcedHashData), ASSERT
 ;;;;;;;;;;;;;;;;;
-;; B - Compute newBatchAccInputHash, load newLocalExitRoot and timestamp
+;; C - Compute newBatchAccInputHash, load newLocalExitRoot and timestamp
 ;;;;;;;;;;;;;;;;;;
 computeNewBatchAccInputHash:
         ; newBatchAccInputHash = LinearPoseidon(oldBatchAccInputHash, batchHashData, sequencerAddress, forcedHashData))
@@ -103,7 +106,7 @@ setBlockNum:
         $ => A                              :SLOAD,MSTORE(blockNum)
 
 ;;;;;;;;;;;;;;;;;;
-;; C - Loop parsing RLP transactions
+;; D - Loop parsing RLP transactions
 ;;      - Load transaction RLP data and ensure it has correct RLP encoding
 ;;      - If an error is found in any transaction, the batch will not process any transaction
 ;;;;;;;;;;;;;;;;;;
@@ -120,7 +123,7 @@ txLoopRLP:
         C - A                                   :JMPN(loadTx_rlp)
 
 ;;;;;;;;;;;;;;;;;;
-;; D   - Loop processing transactions
+;; E   - Loop processing transactions
 ;;     - Load transaction data and interpret it
 ;;;;;;;;;;;;;;;;;;
 
@@ -161,7 +164,7 @@ processTxsEnd:
 finalizeBatch:
 
 ;;;;;;;;;;;;;;;;;;
-;; E - Check all save/restore have been consumed
+;; F - Check all save/restore have been consumed
 ;;   - Retrieve newLocalExitRoot
 ;;   - Finalize execution: set output values at corresponding registers
 ;;;;;;;;;;;;;;;;;;
@@ -189,6 +192,9 @@ clearPendingRestores_end:
         $ => A                                  :SLOAD
         A                                       :MSTORE(newLocalExitRoot)
 
+;;;;;;;;;;;;;;;;;;
+;; G - Finalize execution
+;;;;;;;;;;;;;;;;;;
         SR                              :MSTORE(auxNewSR) ; Store final SR to recover at output setting phase
         ; Set registers to its initials values
         ; Save inputs to RESTORE at last - 1 step

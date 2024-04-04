@@ -3,28 +3,24 @@
 ;@in C: current data parsed pointer
 ;@out A: D bytes from batchL2Data at offset C
 getBatchL2DataBytes:
-        $ => A                          :MLOAD(batchL2DataLength)
         $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
+        $ - B - C - D                   :F_MLOAD(batchL2DataLength), JMPN(invalidTxRLP)
         $ => E                          :MLOAD(batchHashDataPointer)
         $ => HASHPOS                    :MLOAD(batchHashPos)
         $ => A                          :HASHP(E)
         HASHPOS                         :MSTORE(batchHashPos)
         C => HASHPOS
-        $ => E                          :MLOAD(txHashPointer)
-                                        :RETURN
+        $ => E                          :MLOAD(txHashPointer), RETURN
 
 ;; Add bytes to generate ethereum signed message
 ;; - legacy transaction: signedMessage = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data, chainId, 0, 0))
 ;; - pre EIP-155: signedMessage = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data))
 ; REVIEW: is it necessary?? (first two steps)
 addHashTx:
-        $ => A                          :MLOAD(txRLPLength)
-        A - HASHPOS - D                 :JMPN(invalidTxRLP)
+        $ - HASHPOS - D                 :F_MLOAD(txRLPLength), JMPN(invalidTxRLP)
 addHashTxBegin:
-        $ => A                          :MLOAD(batchL2DataLength)
         $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
+        $ - B - C - D                   :F_MLOAD(batchL2DataLength), JMPN(invalidTxRLP)
         $ => E                          :MLOAD(batchHashDataPointer)
         $ => HASHPOS                    :MLOAD(batchHashPos)
         $ => A                          :HASHP(E)
@@ -41,12 +37,11 @@ addHashTxBegin:
 ; @in D: number of bytes to add
 ; @in C: current tx data parsed pointer
 addHashTxByteByByte:
-        $ => A                          :MLOAD(txRLPLength)
-        A - HASHPOS - D                 :JMPN(invalidTxRLP)
-        $ => A                          :MLOAD(batchL2DataLength)
+        $ - HASHPOS - D                 :F_MLOAD(txRLPLength), JMPN(invalidTxRLP)
         $ => B                          :MLOAD(batchL2DataParsed)
         ; Save current registers
-        A - B - C - D                   :JMPN(invalidTxRLP), SAVE(B,C,D,E,RR,RCX)
+        ; CHECK: Is correct to save here in same line as JMPN?
+        $ - B - C - D                   :F_MLOAD(batchL2DataLength), JMPN(invalidTxRLP), SAVE(B,C,D,E,RR,RCX)
         $ => HASHPOS                    :MLOAD(batchHashPos)
         D => E
 readHash:
@@ -203,14 +198,14 @@ skipCheckShortData:
                                         :RETURN
 
 ;; Check non-negative integer RLP representation has no leading zeros and it is encoded in its shortest form
-VAR GLOBAL tmpVarAcheckNonLeadingZeros
+VAR GLOBAL tmpVarACheckNonLeadingZeros
 VAR GLOBAL tmpVarZkPCcheckNonLeadingZeros
 checkNonLeadingZeros:
         RR                              :MSTORE(tmpVarZkPCcheckNonLeadingZeros)
-        A                               :MSTORE(tmpVarAcheckNonLeadingZeros)
+        A                               :MSTORE(tmpVarACheckNonLeadingZeros)
         ; set value to B and get its
         A => B                          :CALL(getLenBytes) ; in: [B: number] out: [A: byte length of B]
         ; check (bytes length - encoded length) are not equal
         D - A                           :JMPNZ(invalidTxRLP)
         $ => RR                         :MLOAD(tmpVarZkPCcheckNonLeadingZeros)
-        $ => A                          :MLOAD(tmpVarAcheckNonLeadingZeros), RETURN
+        $ => A                          :MLOAD(tmpVarACheckNonLeadingZeros), RETURN
