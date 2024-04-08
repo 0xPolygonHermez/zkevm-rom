@@ -147,10 +147,9 @@ opAuxPUSHB:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 400 :JMPN(outOfCountersStep)
     ; check is a create/create2
-    $ => A                          :MLOAD(isCreate), JMPNZ(opAuxPUSHBcreate)
-    $ => B                          :MLOAD(txCalldataLen)
-    PC + D - B                      :JMPN(opAuxPUSHB2)
-    B - PC => D                     :JMPZ(opAuxPUSHBend)
+    $                               :MLOAD(isCreate), JMPNZ(opAuxPUSHBCreate)
+    PC + D - $                      :F_MLOAD(txCalldataLen), JMPN(opAuxPUSHB2)
+    $ - PC => D                     :F_MLOAD(txCalldataLen), JMPZ(opAuxPUSHBend)
 
 opAuxPUSHB2:
     ; set bytes length to read to C
@@ -159,16 +158,14 @@ opAuxPUSHB2:
     ; get memory pointer for hashing
     $ => E                          :MLOAD(batchHashDataPointer)
     ; get position where data starts in the tx
-    $ => HASHPOS                    :MLOAD(dataStarts)
-    HASHPOS + PC => HASHPOS
+    $ + PC => HASHPOS               :F_MLOAD(dataStarts)
     PC + D => PC
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 10*D    :JMPN(outOfCountersStep)
 
 opAuxPUSHBloop:
-    $ => B                          :HASHP1(E)
     ; accumulate hash value
-    A + B => A
+    A + $ => A                      :F_HASHP1(E)
     ; decrease length for loop
     C - 1 => C                      :JMPN(opAuxPUSHBend)
     1 => D                          :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
@@ -182,7 +179,7 @@ opAuxPUSHBend:
     ; check stack overflow
     %MAX_STACK_SIZE - SP            :JMPN(stackOverflow, readCode)
 
-opAuxPUSHBcreate:
+opAuxPUSHBCreate:
     ; get bytes length
     $ => B                          :MLOAD(txCalldataLen)
     ; PUSH in a create, we need to get bytes from memory (not calldata)
@@ -193,11 +190,11 @@ opAuxPUSHBcreate:
     ; increase current program counter (PC) to offset for getting pushed bytes to read
     E + PC => E
     D => C
-    C - B + PC                      :JMPN(opAuxPUSHBcreate2)
+    C - B + PC                      :JMPN(opAuxPUSHBCreate2)
     0 => A
-    B - PC => C                     :JMPZ(opfinalPUSHBcreate)
+    B - PC => C                     :JMPZ(opFinalPUSHBcreate)
 
-opAuxPUSHBcreate2:
+opAuxPUSHBCreate2:
     ; set length to read to C for MLOADX call
                                     :CALL(MLOADX); in: [E: offset, C: length] out: [A: value, E: new offset]
     ; increase to PC the length of the read bytes
@@ -205,7 +202,7 @@ opAuxPUSHBcreate2:
     ; put in the lowest significant bytes, align value to right
     32 - D => D                     :CALL(SHRarith); in: [A: value, D: #bytes to right shift] out: [A: shifted result]
 
-opfinalPUSHBcreate:
+opFinalPUSHBcreate:
     ; return to current context
     $ => CTX                        :MLOAD(currentCTX), JMP(opAuxPUSHBend)
 

@@ -122,21 +122,15 @@ opMSIZE:
     ; check out-of-gas
     GAS - %GAS_QUICK_STEP => GAS      :JMPN(outOfGas)
 
-    ; load current memory length
-    $ => E              :MLOAD(memLength)
-    ; MSIZE should be multiple of a word (32 bytes)
-    ; Div operation with Arith
-    E               :MSTORE(arithA)
-    32              :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => C          :MLOAD(arithRes1)
-    ; check arithRes2 is 0, no need to round in this case
-    $               :MLOAD(arithRes2), JMPZ(MSIZEend)
-
+    ; load current memory length, less than 32 bits
+    $ => A              :MLOAD(memLength), CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    ; MSIZE should be multiple of a word (32 bytes), if mod is zero, return size, otherwise round up to next word
+    C                   :JMPZ(MSIZEend)
     ; Round size to 32bytes multiple
-    C * 32 + 32 => E
+    E * 32 + 32 => A
 
 MSIZEend:
-    E               :MSTORE(SP++); [size(E) => SP]
+    A               :MSTORE(SP++); [size(E) => SP]
     ; check stack overflow
     %MAX_STACK_SIZE - SP       :JMPN(stackOverflow, readCode)
 /**

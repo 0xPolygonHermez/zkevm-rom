@@ -203,7 +203,7 @@ lastChecks:
     $                                   :EQ, JMPC(save0out)      ; if Bsize = 0 --> save0out
     ; Bsize > 0 from here
 
-    ; Check maximum length allowed in the zkEVM reagrding the modExp
+    ; Check maximum length allowed in the zkEVM regarding the modExp
     ; If parameters (length > %MAX_SIZE_MODEXP) --> zkEVM does a revert returning all the gas consumed
     %MAX_SIZE_MODEXP => A
     $ => B                              :MLOAD(modexp_Bsize)
@@ -270,7 +270,7 @@ finalMODEXP:
     B => A
 
 finalMODEXPreturn:
-    ; save lower between retCallLength and modexd_Msize in retCopyLen
+    ; save lower between retCallLength and modexp_Msize in retCopyLen
     A                                   :MSTORE(retCopyLen)
 
     ; write data into memory
@@ -285,18 +285,18 @@ finalMODEXPreturn:
     E                                   :MSTORE(modexp_returnFirstIndex)
     $ => A                              :MLOAD(arithRes2)
     A                                   :JMPZ(memoryLoop)
-    
+
     ; if Msize % 32 > 0, copy last bytes, else --> memoryLoop
     A => C
     ; A = 0x0000000000000000000000000000000000000000XXXXXXXXXXXXXXXXXXXXXXXX
-    ; C = lenght X's
+    ; C = length X's
     $ => A                              :MLOAD(modexp_out+E)
     32 - C => D                         :CALL(SHLarith)
     ; A = 0xXXXXXXXXXXXXXXXXXXXXXXXX0000000000000000000000000000000000000000
     A                                   :MSTORE(bytesToStore)
     A                                   :MSTORE(modexp_out+E)
     B => E
-    ; MSTORE X with C = lenght X's
+    ; MSTORE X with C = length X's
                                         :CALL(MSTOREX) ; in: [bytesToStore, E: offset, C: length] out: [E: new offset]
     ; E == new offset (0 + length X's)
     E => B
@@ -337,7 +337,7 @@ modexpReturn:
     B                                   :MSTORE(retDataCTX)
     $ => C                              :MLOAD(retCopyLen)
     0 => E
-    ; copy retCopyLen from memory (currentCTX) to retCallOffset (originCTX)  
+    ; copy retCopyLen from memory (currentCTX) to retCallOffset (originCTX)
 modexpReturnLoop:
     C - 32                              :JMPN(modexpReturnFinal)
     B => CTX                            :CALL(MLOAD32)

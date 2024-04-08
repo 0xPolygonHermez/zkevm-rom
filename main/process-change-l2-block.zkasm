@@ -26,8 +26,7 @@ continueProcessChangeL2Block:
 
     %ADDRESS_SYSTEM => A
     %SMT_KEY_SC_STORAGE => B
-    $ => C                              :MLOAD(blockNum)
-    C                                   :HASHK(E)
+    ${mem.blockNum}                     :HASHK(E), MLOAD(blockNum)
     %STATE_ROOT_STORAGE_POS             :HASHK(E)
     HASHPOS                             :HASHKLEN(E)
     $ => C                              :HASHKDIGEST(E)
@@ -75,8 +74,7 @@ verifyTimestampAndL1InfoRoot:
     ; check indexL1InfoTree != 0 to verify data L1InfoTree
     $ => A                                              :MLOAD(indexL1InfoTree), JMPZ(skipSetGERL1InfoTree)
     ; Verify indexL1InfoTree > currentL1InfoTreeIndex
-    $ => B                                              :MLOAD(currentL1InfoTreeIndex)
-    A - B - 1                                           :JMPN(invalidL1InfoTreeIndex)
+    A - $ - 1                                           :F_MLOAD(currentL1InfoTreeIndex), JMPN(invalidL1InfoTreeIndex)
     ${getL1InfoGER(mem.indexL1InfoTree)}                :MSTORE(gerL1InfoTree)
     ${getL1InfoBlockHash(mem.indexL1InfoTree)}          :MSTORE(blockHashL1InfoTree)
     ${getL1InfoMinTimestamp(mem.indexL1InfoTree)} => B  :MSTORE(timestampL1InfoTree)
@@ -85,7 +83,7 @@ verifyTimestampAndL1InfoRoot:
     $                                                   :LT, JMPC(invalidChangeL2BlockMinTimestamp)
     ; Compute infoTreeData
                                             :CALL(computeL1InfoTreeValue)
-    $ => B                                  :MLOAD(currentL1InfoTreeIndex), JMPNZ(previousL1InfoTreeIndexIsNotZero)
+    $                                       :MLOAD(currentL1InfoTreeIndex), JMPNZ(previousL1InfoTreeIndexIsNotZero)
     ; if previous L1 Info TreeIndex is zero, currentL1InfoTreeRoot = keccak(HistoricRoot, blockHashL1InfoTree)
                                             :CALL(computeNewCurrentL1InfoRootFromHistoric)
     $ => A                                  :MLOAD(indexL1InfoTree)

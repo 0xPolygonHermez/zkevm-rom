@@ -207,7 +207,7 @@ __MLOADX_afterSave:
 
         ; E === 32 * RR + A (RCX)
         ; E - 32 * RR === A
-        ; secure: E < MAX_MEM_EXPASION_BYTES < 32 bits, RR < 32 bits, 32*RR < 37 bits, all < 38 bits
+        ; secure: E < MAX_MEM_EXPANSION_BYTES < 32 bits, RR < 32 bits, 32*RR < 37 bits, all < 38 bits
         E - 32 * RR                 :ASSERT
 
         RCX + %MEM_ALIGN_LEN * C + %MEM_ALIGN_LEFT_ALIGNMENT => C     :JMP_EQ(%MEM_ALIGN_LEN * 32 + %MEM_ALIGN_LEFT_ALIGNMENT, __MLOAD32_offset0_len32)
@@ -347,7 +347,7 @@ saveMem:
 
     ; load old memory length, if is greater than new memory length, no expansion cost
     $ => A                      :MLOAD(memLength)
-    ; Both A and B are LT than MAX_MEM_EXPANSION_BYTES, this means they are lower thatn 32 bits, we don't need to use a binary to operate
+    ; Both A and B are LT than MAX_MEM_EXPANSION_BYTES, this means they are lower than 32 bits, we don't need to use a binary to operate
     A - B                       :JMPN(saveMemGAS, saveMemEnd)
 
 saveMemGAS:
@@ -692,20 +692,18 @@ errorAtFirstContext:
 ;@out E offset/32
 ;@out C offset%32
 offsetUtil:
-    %MAX_CNT_STEPS - STEP - 20          :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 10          :JMPN(outOfCountersStep)
 
     ; E = [e7, e6, ..., e0]
     ; JMPN instruction assures e0 is within the range [0, 2**32 - 1]
     ${A >> 5} => E                      :JMPN(failAssert)
-    $0{A & 0x1F} => C                   ; C is 32 bits
+    $0{A & 0x1F} => C                   :JMP_GT(0x1F, failAssert); C is 32 bits, If C is greater than 31 (remainder), it is an error
 
     ; since C is assured to be less than 0x20
     ; it is enforced that [e7, e6, ..., e1] are 0 since there is no value multiplied by 32
     ; that equals the field
     ; Since e0 is assured to be less than 32 bits, e0 * 32 + c0 could not overflow the field
-    E * 32 + C                          :ASSERT
-    0x1F - C                            :JMPN(failAssert); If C is greater than 31, it is an error
-                                        :RETURN
+    E * 32 + C                          :ASSERT, RETURN
 
 ;@info: move balances between two accounts
 ;@in: txSrcAddr: source address

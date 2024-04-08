@@ -187,7 +187,7 @@ endCalldataIntrinsicGas:
         ; Store state root with upfront cost subtracted and nonce increased
         SR                              :MSTORE(initSR)
 
-        ; Substract intrinsic gas
+        ; Subtract intrinsic gas
         $ => GAS                        :MLOAD(txGasLimit)
         $ => A                          :MLOAD(gasCalldata)
         GAS - A => GAS
@@ -198,9 +198,8 @@ endCalldataIntrinsicGas:
 txType:
 
         ; Compute deployment address if create contract operation
-        $ => A                          :MLOAD(isCreateContract), JMPNZ(getContractAddress)
-        $ => A                          :MLOAD(txDestAddr)
-                                        :CALL(isColdAddress) ; Add 'to' to touched addresses
+        $                               :MLOAD(isCreateContract), JMPNZ(getContractAddress)
+        $ => A                          :MLOAD(txDestAddr), CALL(isColdAddress) ; Add 'to' to touched addresses
         ; Check 'to' is zero or precompiled contract
         ; Check zero address since zero address is not a precompiled contract
         0 => B
@@ -241,19 +240,17 @@ getContractAddress:
         0xc0 + 22 + C                   :HASHK1(E)
         0x94                            :HASHK1(E)
         20 => D
-        $ => B                          :MLOAD(txSrcAddr)
-        B                               :HASHK(E)
+        ${mem.txSrcAddr}                :HASHK(E), MLOAD(txSrcAddr)
         0x80 + C                        :HASHK1(E)
         C => D
         A                               :HASHK(E), JMP(endContractAddress)
 
 nonce1byte:
-        $ => A                          :MLOAD(txSrcAddr)
         $ => B                          :MLOAD(txNonce)
         0xc0 + 22                       :HASHK1(E)
         0x94                            :HASHK1(E)
         20 => D
-        A                               :HASHK(E)
+        ${mem.txSrcAddr}                :HASHK(E), MLOAD(txSrcAddr)
         B                               :JMPZ(nonceIs0)
         B                               :HASHK1(E),JMP(endContractAddress)
 
@@ -304,11 +301,9 @@ create2end:
         E + 1                           :MSTORE(nextHashKId)
         0xff                            :HASHK1(E)
         20 => D
-        $ => A                          :MLOAD(txSrcAddr)
-        A                               :HASHK(E)
+        ${mem.txSrcAddr}                :HASHK(E), MLOAD(txSrcAddr)
         32 => D
-        $ => B                          :MLOAD(salt)
-        B                               :HASHK(E)
+        ${mem.salt}                     :HASHK(E), MLOAD(salt)
         32 => D
         C                               :HASHK(E)
 
@@ -440,7 +435,7 @@ readByteCode:
         PC + 1 => PC                    :JMP(@mapping_opcodes + RR)
 
 readCode:
-        $ => A                          :MLOAD(isCreateContract), JMPNZ(readDeployBytecode, readByteCode)
+        $                               :MLOAD(isCreateContract), JMPNZ(readDeployBytecode, readByteCode)
 
 ;; Compute and save hash bytecode and bytecode length in the state-tree
 endDeploy:
@@ -455,7 +450,8 @@ endDeploy:
 
         ; save offset memory and length to compute hash bytecode. Read bytecode first byte
         E                               :MSTORE(memOffsetLinearPoseidon)
-        C                               :MSTORE(memSizeLinearPoseidon), CALL(checkBytecodeStartsEF) ; in: [memOffset], out: [startsWithEFn]
+        ; Set C to D, used later at SSTORE as SC LENGTH
+        C => D                          :MSTORE(memSizeLinearPoseidon), CALL(checkBytecodeStartsEF) ; in: [memOffset], out: [startsWithEFn]
 
         ; check bytecode first byte != 0xEF
         $                               :MLOAD(startsWithEF), JMPNZ(invalidCodeStartsEF)
@@ -463,12 +459,11 @@ endDeploy:
         ; set bytecode length
         $ => A                          :MLOAD(createContractAddress)
         %SMT_KEY_SC_LENGTH => B
-        C => D
         0 => C
         $ => SR                         :SSTORE
         A                               :MSTORE(txDestAddr), CALL(hashPoseidonLinearFromMemory)
         $ => A                          :MLOAD(createContractAddress)
-        0 => C
+        ; C is 0 here
         %SMT_KEY_SC_CODE => B
         $ => SR                         :SSTORE, JMP(handleGas)
 
