@@ -13,6 +13,11 @@
 ;;                  · out = inA + inB, with len(out) <= C + 1
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; WARNING: This function is tailored for checking that a = q·b + r in the array_div_long function.
+;;          In can be used for other purposes except for the worst case, i.e. when len(inA) == %ARRAY_MAX_LEN_DOUBLED.
+;;          Specifically, there is an implicit assumption that the output len of this function cannot be
+;;          greater than %ARRAY_MAX_LEN_DOUBLED, and do not allow to generate the proof in such case.
+
 ; function array_add_AGTB(a: bigint[], b: bigint[], base: bigint): bigint[] {
 ;     const alen = a.length;
 ;     const blen = b.length;
@@ -71,8 +76,7 @@ array_add_AGTB_first_iteration:
         ;-----------------
 
         1 => E
-        $ => B          :MLOAD(array_add_AGTB_len_inB)
-        B - 1           :JMPZ(array_add_AGTB_loop_index_check)
+        $ - 1           :F_MLOAD(array_add_AGTB_len_inB), JMPZ(array_add_AGTB_loop_index_check)
 
 array_add_AGTB_loopZero2inB:
         ; a[i] + b[i], where a[i],b[i] ∈ [0,base-1]: This number cannot be GT base + (base - 2), two chunks
@@ -99,12 +103,10 @@ array_add_AGTB_loopZero2inB:
         D               :MSTORE(array_add_AGTB_carry)
 
         E + 1 => E
-        $ => B          :MLOAD(array_add_AGTB_len_inB)
-        B - E           :JMPZ(array_add_AGTB_loop_index_check, array_add_AGTB_loopZero2inB)
+        $ - E           :F_MLOAD(array_add_AGTB_len_inB), JMPZ(array_add_AGTB_loop_index_check, array_add_AGTB_loopZero2inB)
 
 array_add_AGTB_loop_index_check:
-        ; C = len_inA
-        C - E           :JMPZ(array_add_AGTB_check_carry)
+        $ - E           :F_MLOAD(array_add_AGTB_len_inA), JMPZ(array_add_AGTB_check_carry)
 
 array_add_AGTB_loopinB2inA:
         ; sum = a[i] + carry: This number cannot be GT base, two chunks
@@ -134,5 +136,4 @@ array_add_AGTB_trim:
         E               :MSTORE(array_add_AGTB_len_out)
 
 array_add_AGTB_end:
-        $ => RR         :MLOAD(array_add_AGTB_RR)
-                        :RETURN
+        $ => RR         :MLOAD(array_add_AGTB_RR), RETURN

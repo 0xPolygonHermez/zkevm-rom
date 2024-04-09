@@ -23,12 +23,12 @@
 ;;     if (array_is_one(base)) return [1n];
 ;;     if (array_is_zero(e)) return [1n];
 ;;
-;;     let r = [1n];
+;;     let out = [1n];
 ;;     let base = array_div(base, mod)[1];
 ;;     while (!array_is_zero(exp)) {
 ;;         if (array_is_zero(base)) return [0n];
 ;;         if (isOdd(exp)) {
-;;             r = array_div(array_mul(r, base),mod)[1];
+;;             out = array_div(array_mul(out, base),mod)[1];
 ;;         }
 ;;         exp = array_div_two(exp);
 ;;         base = array_div(array_square(base),mod)[1];
@@ -251,16 +251,14 @@ modexp_pre_loop:
 
         ; Is Elen = 1 and E = 0?
         0 => B
-        $ => A          :MLOAD(modexp_Elen)
-        A - 1           :JMPNZ(__modexp_E_continue)
+        $ - 1           :F_MLOAD(modexp_Elen), JMPNZ(__modexp_E_continue)
         $ => A          :MLOAD(modexp_E)
         $               :EQ, JMPC(modexp_end) ; we are done
                         __modexp_E_continue:
 
 modexp_loop:
         ; Is Blen = 1 and B = 0?
-        $ => A          :MLOAD(modexp_Blen)
-        A - 1           :JMPNZ(__modexp_B_continue)
+        $ - 1           :F_MLOAD(modexp_Blen), JMPNZ(__modexp_B_continue)
         $ => A          :MLOAD(modexp_B)
         $               :EQ, JMPC(modexp_B_is_zero)
                         __modexp_B_continue:
@@ -269,7 +267,7 @@ modexp_loop:
         ; The base is 2^256, so I only need to check if the first chunk is odd to conclude that the whole number is odd.
         $ => A          :MLOAD(modexp_E)
         1 => B
-        $               :AND, JMPNZ(modexp_loop_multiply) ; In the worst case, the exponent is odd in each iteration
+        $               :AND, JMPC(modexp_loop_multiply) ; In the worst case, the exponent is odd in each iteration
                         return_modexp_loop_multiply:
 
         $ => C          :MLOAD(modexp_Elen)
@@ -326,9 +324,8 @@ modexp_out_to_div_short2:
         RR - 1 => RR    :JMPN(modexp_M_to_div_short3, modexp_out_to_div_short2)
 
 modexp_M_to_div_short3:
-        $ => A          :MLOAD(modexp_M + E)
-        A               :MSTORE(array_div_short_inB + E)
-        E - 1 => E      :JMPN(modexp_div_short_out_and_M2, modexp_M_to_div_short3)
+        $ => A          :MLOAD(modexp_M)
+        A               :MSTORE(array_div_short_inB)
 
 modexp_div_short_out_and_M2:
                         :CALL(array_div_short)
@@ -366,5 +363,4 @@ modexp_rem_from_div3:
 ; -------------------
 
 modexp_end:
-        $ => RR         :MLOAD(modexp_RR)
-                        :RETURN
+        $ => RR         :MLOAD(modexp_RR), RETURN
