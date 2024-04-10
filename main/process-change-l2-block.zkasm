@@ -52,7 +52,7 @@ continueProcessChangeL2Block:
     $                                   :MLOAD(isForced), JMPZ(verifyTimestampAndL1InfoRoot)
 
     ; forced batch
-    ;   - update timestamp only if currentTimestamp < limitTimestamp
+    ;   - update timestamp only if currentTimestamp < forcedTimestamp
     ;   - set blockHash to default
     $ => C                              :MLOAD(forcedBlockHashL1InfoTree)
     C                                   :MSTORE(blockHashL1InfoTree)
@@ -77,26 +77,29 @@ verifyTimestampAndL1InfoRoot:
     A - $ - 1                                           :F_MLOAD(currentL1InfoTreeIndex), JMPN(invalidL1InfoTreeIndex)
     ${getL1InfoGER(mem.indexL1InfoTree)}                :MSTORE(gerL1InfoTree)
     ${getL1InfoBlockHash(mem.indexL1InfoTree)}          :MSTORE(blockHashL1InfoTree)
-    ${getL1InfoMinTimestamp(mem.indexL1InfoTree)} => B  :MSTORE(timestampL1InfoTree)
-    ; Verify (currentTimestamp + deltaTimestamp) >= l1InfoRoot.minTimestamp
-    $ => A                                              :MLOAD(timestamp)
-    $                                                   :LT, JMPC(invalidChangeL2BlockMinTimestamp)
+    ${getL1InfoMinTimestamp(mem.indexL1InfoTree)}       :MSTORE(timestampL1InfoTree)
+
     ; Compute infoTreeData
-                                            :CALL(computeL1InfoTreeValue)
+                                            :CALL(computeL1InfoTreeValue) ; out: [@label: computedL1InfoTreeData]
     $                                       :MLOAD(currentL1InfoTreeIndex), JMPNZ(previousL1InfoTreeIndexIsNotZero)
     ; if previous L1 Info TreeIndex is zero, currentL1InfoTreeRoot = keccak(HistoricRoot, blockHashL1InfoTree)
                                             :CALL(computeNewCurrentL1InfoRootFromHistoric)
-    $ => A                                  :MLOAD(indexL1InfoTree)
-    ; Update currentL1InfoTreeIndex
-    A                                       :MSTORE(currentL1InfoTreeIndex), JMP(initSetGERL1InfoTree)
+                                            :JMP(updateCurrentL1InfoTreeIndex)
 
 previousL1InfoTreeIndexIsNotZero:
+    ; if previous L1 Info TreeIndex is NOT zero, currentL1InfoTreeRoot = keccak(computedMerkleRoot, blockHashL1InfoTree)
                                             :CALL(computeMerkleProof)  ; out: [C: computed merkle root]
     ; Compute newL1InfoTreeRoot
-                                            :CALL(computeNewCurrentL1InfoRoot)
+                                            :CALL(computeNewCurrentL1InfoRoot) ; in: [C: computed merkle root], out: [@label: currentL1InfoTreeRoot]
+updateCurrentL1InfoTreeIndex:
     ; Update currentL1InfoTreeIndex
     $ => A                                  :MLOAD(indexL1InfoTree)
-    A                                       :MSTORE(currentL1InfoTreeIndex), JMP(initSetGERL1InfoTree)
+    A                                       :MSTORE(currentL1InfoTreeIndex)
+    ; Verify (currentTimestamp + deltaTimestamp) >= l1InfoRoot.minTimestamp
+    ; This verification is done after updating the currentL1InfoTreeIndex and the currentL1InfoTreeRoot to correctly set batch outputs at execution finalization
+    $ => A                                  :MLOAD(timestamp)
+    $ => B                                  :MLOAD(timestampL1InfoTree)
+    $                                       :LT, JMPC(invalidChangeL2BlockMinTimestamp, initSetGERL1InfoTree)
 
 setNewTimestamp:
     ; Set forcedTimestamp (now new Timestamp) from forced batch data
