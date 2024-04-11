@@ -13,30 +13,26 @@
 ;;                  · out = inA + inB, with len(out) <= C + 1
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; function array_add_AGTB(a: bigint[], b: bigint[], base: bigint): bigint[] {
-;     const alen = a.length;
-;     const blen = b.length;
-;     let result = new Array<bigint>(alen);
-;     let sum = 0n;
-;     let carry = 0n;
-;     for (let i = 0; i < blen; i++) {
-;         sum = a[i] + b[i] + carry;
-;         carry = sum >= base ? 1n : 0n;
-;         out[i] = sum - carry * base;
-;     }
-;     for (let i = blen; i < alen; i++) {
-;         sum = a[i] + carry;
-;         carry = sum == base ? 1n : 0n; // the past carry is at most 1n
-;         out[i] = sum - carry * base;
-;     }
-
-;     if (carry === 1n) {
-;         result.push(carry);
-;     }
-;     return result;
-; }
+;; WARNING: This function is tailored for checking that a = q·b + r in the array_div_long function.
+;;          In can be used for other purposes except for the worst case, i.e. when len(inA) == %ARRAY_MAX_LEN_DOUBLED.
+;;          Specifically, there is an implicit assumption that the output len of this function cannot be
+;;          greater than %ARRAY_MAX_LEN_DOUBLED, and do not allow to generate the proof in such case.
 
 ; NOTE: It's unoptimized for the case where len(inB) = 1. Use array_add_short instead.
+
+; code
+; --------------------------
+; first_iteration           <-- Compute a[0] + b[0]
+; while(inB_index_check) {  <-- While 0 < i < len(b)
+;     loop2inB              <-- Compute a[i] + b[i] + carry
+; }
+; while (inA_index_check) { <-- While 0 < i < len(a)
+;     loop2inA              <-- Compute a[i] + carry
+; }
+; 1] check_carry            <-- If there is a carry, append it to the result
+; 2] trim                   <-- Otherwise, trim the result
+; end
+; --------------------------
 
 VAR GLOBAL array_add_AGTB_inA[%ARRAY_MAX_LEN_DOUBLED]
 VAR GLOBAL array_add_AGTB_inB[%ARRAY_MAX_LEN]
@@ -71,10 +67,11 @@ array_add_AGTB_first_iteration:
         ;-----------------
 
         1 => E
-        $ => B          :MLOAD(array_add_AGTB_len_inB)
-        B - 1           :JMPZ(array_add_AGTB_loop_index_check)
 
-array_add_AGTB_loopZero2inB:
+array_add_AGTB_inB_index_check:
+        $ - E           :F_MLOAD(array_add_AGTB_len_inB), JMPZ(array_add_AGTB_inA_index_check)
+
+array_add_AGTB_loop2inB:
         ; a[i] + b[i], where a[i],b[i] ∈ [0,base-1]: This number cannot be GT base + (base - 2), two chunks
         $ => A          :MLOAD(array_add_AGTB_inA + E)
         $ => B          :MLOAD(array_add_AGTB_inB + E)
@@ -98,15 +95,12 @@ array_add_AGTB_loopZero2inB:
 
         D               :MSTORE(array_add_AGTB_carry)
 
-        E + 1 => E
-        $ => B          :MLOAD(array_add_AGTB_len_inB)
-        B - E           :JMPZ(array_add_AGTB_loop_index_check, array_add_AGTB_loopZero2inB)
+        E + 1 => E      :JMP(array_add_AGTB_inB_index_check)
 
-array_add_AGTB_loop_index_check:
-        ; C = len_inA
-        C - E           :JMPZ(array_add_AGTB_check_carry)
+array_add_AGTB_inA_index_check:
+        $ - E           :F_MLOAD(array_add_AGTB_len_inA), JMPZ(array_add_AGTB_check_carry)
 
-array_add_AGTB_loopinB2inA:
+array_add_AGTB_loop2inA:
         ; sum = a[i] + carry: This number cannot be GT base, two chunks
         $ => A          :MLOAD(array_add_AGTB_inA + E)
         D => B
@@ -118,7 +112,7 @@ array_add_AGTB_loopinB2inA:
                         __array_add_AGTB_continue_7:
         ;-----------------
 
-        E + 1 => E      :JMP(array_add_AGTB_loop_index_check)
+        E + 1 => E      :JMP(array_add_AGTB_inA_index_check)
 
 array_add_AGTB_check_carry:
         D               :JMPZ(array_add_AGTB_trim)
@@ -134,5 +128,4 @@ array_add_AGTB_trim:
         E               :MSTORE(array_add_AGTB_len_out)
 
 array_add_AGTB_end:
-        $ => RR         :MLOAD(array_add_AGTB_RR)
-                        :RETURN
+        $ => RR         :MLOAD(array_add_AGTB_RR), RETURN
