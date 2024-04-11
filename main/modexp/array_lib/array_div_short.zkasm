@@ -12,26 +12,6 @@
 ;;                  · [quo,rem] = [inA / inB[0], inA % inB[0]], with len(quo) <= C, len(rem) = 1
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; function array_div_short(a: bigint[], b: bigint, base: bigint): bigint[] {
-;     if (a === [0n]) {
-;         if (b === 0n) {
-;             throw new Error("Division by zero");
-;         }
-;         return [0n, 0n];
-;     } else if (b === 0n) {
-;         throw new Error("Division by zero");
-;     }
-;
-;     if (a === b) {
-;         return [1n, 0n];
-;     } else if (a < b) {
-;         return [0n, a];
-;     }
-; }
-
-; NOTE: This function receives the actual result from the helper (avoiding the need of computing divisions);
-;       checks the correctness of the result and returns the result to the caller
-
 VAR GLOBAL array_div_short_inA[%ARRAY_MAX_LEN]
 VAR GLOBAL array_div_short_inB
 VAR GLOBAL array_div_short_quo[%ARRAY_MAX_LEN]
@@ -54,10 +34,10 @@ array_div_short:
         C               :MSTORE(array_div_short_len_quo)
 
         ; Let's cover the edge cases
-        0 => B
         ; 1] Is C == 1 and inA == 0?
         C - 1           :JMPNZ(array_div_short_inAGTinB) ; If len(inA) > 1, then we already know that inA > inB
         $ => A          :MLOAD(array_div_short_inA); Here, len(inA) = len(inB) = 1
+        0 => B
         $               :EQ, JMPC(array_div_short_inA_is_zero, array_div_short_equal_len)
                         __array_div_short_inA_continue:
 
@@ -103,7 +83,7 @@ array_div_short_same_input:
         0               :MSTORE(array_div_short_rem), JMP(array_div_short_end)
 
 array_div_short_check_inALTinB:
-        RR + 1      :JMPN(failAssert) ; if RR < -1 ERROR
+        RR + 1          :JMPN(failAssert) ; if RR < -1 ERROR
 
         $ => A          :MLOAD(array_div_short_inA)
         $ => B          :MLOAD(array_div_short_inB)
@@ -127,8 +107,7 @@ array_div_short_inAGTinB:
 
         ; 1] The received length must satisfy 1 <= len(Q) <= len(inA)
         C - 1 => RR                     :JMPN(failAssert) ; if len(Q) < 1 ERROR
-        $ => A                          :MLOAD(array_div_short_len_inA)
-        A - C                           :JMPN(failAssert) ; if len(inA) < len(Q) ERROR
+        $ - C                           :F_MLOAD(array_div_short_len_inA), JMPN(failAssert) ; if len(inA) < len(Q) ERROR
 
         ; 2] To avoid non-determinism, we must ensure that the quotient is trimmed
         ; i.e., that its last chunk is not 0
@@ -158,7 +137,8 @@ array_div_short_inB_to_mul:
         A               :MSTORE(array_mul_short_inB)
 
 array_div_short_mul_quo_inB:
-                        :CALL(array_mul_short)
+                        :CALL(array_mul_short);  inputs: [array_mul_short_len_inA: C, array_mul_short_inA: array_div_short_quo, array_mul_short_inB: array_div_short_inB]
+                                              ; outputs: [array_mul_short_len_out, array_mul_short_out]
 
         ; w.c. is when rem is not zero
         %MAX_CNT_BINARY - CNT_BINARY -  2                                  :JMPN(outOfCountersBinary)
@@ -188,7 +168,8 @@ array_div_short_result_to_add:
         RR - 1 => RR    :JMPN(array_div_short_add_result_rem, array_div_short_result_to_add)
 
 array_div_short_add_result_rem:
-                        :CALL(array_add_short)
+                        :CALL(array_add_short) ;  inputs: [array_add_short_len_inA: C, array_add_short_inA: array_mul_short_out, array_add_short_inB: array_div_short_inB]
+                                               ; outputs: [array_add_short_len_out, array_add_short_out]
 
         %MAX_CNT_STEPS - STEP - 3 - 3*%ARRAY_MAX_LEN - 2 :JMPN(outOfCountersStep)
 

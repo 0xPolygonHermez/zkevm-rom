@@ -15,21 +15,16 @@
 ;;          Specifically, there is an implicit assumption that the output len of this function cannot be
 ;;          greater than %ARRAY_MAX_LEN, and do not allow to generate the proof in such case.
 
-; function array_mul_two(a: bigint[], base: bigint): bigint[] {
-;     const len = a.length;
-;     let result = new Array<bigint>(alen);
-;     let sum = 0n;
-;     let carry = 0n;
-;     for (let i = 0; i < len; i++) {
-;         sum = a[i] + a[i] + carry;
-;         carry = sum >= base ? 1n : 0n;
-;         out[i] = sum - carry * base;
-;     }
-;     if (carry === 1n) {
-;         result.push(carry);
-;     }
-;     return result;
+; code
+; --------------------------
+; first_iteration           <-- a[0] + a[0]
+; while(loop_index_check) { <-- While 0 < i < len(a)
+;     loop2in               <-- Compute a[i] + a[i] + carry
 ; }
+; 1] check_carry            <-- If there is a carry, append it to the result
+; 2] trim                   <-- Otherwise, trim the result
+; end
+; --------------------------
 
 VAR GLOBAL array_mul_two_in[%ARRAY_MAX_LEN]
 VAR GLOBAL array_mul_two_out[%ARRAY_MAX_LEN]  ; This cannot be bigger because we use it for division checking
@@ -61,9 +56,11 @@ array_mul_two_first_iteration:
         ;-----------------
 
         1 => E
-        $ - 1           :F_MLOAD(array_mul_two_len_in), JMPZ(array_mul_two_check_carry)
 
-array_mul_two_loopZero2in:
+array_mul_two_loop_index_check:
+        $ - E           :F_MLOAD(array_mul_two_len_in), JMPZ(array_mul_two_check_carry)
+
+array_mul_two_loop2in:
         ; a[i] + a[i], where a[i] ∈ [0,base-1]: This number cannot be GT base + (base - 2), two chunks
         $ => A,B        :MLOAD(array_mul_two_in + E)
         $ => B          :ADD, JMPNC(__array_mul_two_continue_3)
@@ -86,13 +83,11 @@ array_mul_two_loopZero2in:
 
         D               :MSTORE(array_mul_two_carry)
 
-        E + 1 => E
-        $ - E           :F_MLOAD(array_mul_two_len_in), JMPZ(array_mul_two_check_carry, array_mul_two_loopZero2in)
+        E + 1 => E      :JMP(array_mul_two_loop_index_check)
 
 array_mul_two_check_carry:
         D               :JMPZ(array_mul_two_trim)
 
-array_mul_two_is_carry:
         ; Carry path
         E - %ARRAY_MAX_LEN  :JMPZ(failAssert)
 
