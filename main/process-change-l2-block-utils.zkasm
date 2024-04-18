@@ -1,0 +1,45 @@
+; Computes L1InfoTree leaf value computedL1InfoTreeData = keccak(gerL1InfoTree, blockHashL1InfoTree, timestampL1InfoTree)
+; @out label: computedL1InfoTreeData
+computeL1InfoTreeValue:
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1         :JMPN(outOfCountersKeccak)
+
+    $ => E                                  :MLOAD(nextHashKId)
+    E + 1                                   :MSTORE(nextHashKId)
+    0 => HASHPOS
+    32 => D
+    ${mem.gerL1InfoTree}                    :HASHK(E), MLOAD(gerL1InfoTree)
+    ${mem.blockHashL1InfoTree}              :HASHK(E), MLOAD(blockHashL1InfoTree)
+    8 => D
+    ${mem.timestampL1InfoTree}              :HASHK(E), MLOAD(timestampL1InfoTree)
+    HASHPOS                                 :HASHKLEN(E)
+    $                                       :HASHKDIGEST(E), MSTORE(computedL1InfoTreeData), RETURN
+
+; compute "new" currentL1InfoRoot from historicRoot, currentL1InfoTreeRoot = keccak(HistoricRoot, computedL1InfoTreeData)
+computeNewCurrentL1InfoRootFromHistoric:
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1    :JMPN(outOfCountersKeccak)
+
+    $ => E                                  :MLOAD(nextHashKId)
+    E + 1                                   :MSTORE(nextHashKId)
+    0 => HASHPOS
+    32 => D
+    ${getL1HistoricRoot(mem.indexL1InfoTree)} :HASHK(E) ; historic root
+    ${mem.computedL1InfoTreeData}           :HASHK(E), MLOAD(computedL1InfoTreeData) ; Info tree Data
+    HASHPOS                                 :HASHKLEN(E)
+    ; compute "new" currentL1InfoRoot
+    ; update currentL1InfoTreeRoot
+    $ => A                                  :HASHKDIGEST(E), MSTORE(currentL1InfoTreeRoot), RETURN
+
+; compute "new" currentL1InfoRoot from computed merkle root, currentL1InfoTreeRoot = keccak(computedMerkleRoot, computedL1InfoTreeData)
+; @in C: computed merkle root
+; @out label: currentL1InfoTreeRoot
+computeNewCurrentL1InfoRoot:
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1    :JMPN(outOfCountersKeccak)
+    $ => E                                  :MLOAD(nextHashKId)
+    E + 1                                   :MSTORE(nextHashKId)
+    0 => HASHPOS
+    32 => D
+    C                                       :HASHK(E) ; computed merkle root
+    ${mem.computedL1InfoTreeData}           :HASHK(E), MLOAD(computedL1InfoTreeData)
+    HASHPOS                                 :HASHKLEN(E)
+    ; update currentL1InfoTreeRoot
+    $ => A                                  :HASHKDIGEST(E), MSTORE(currentL1InfoTreeRoot), RETURN

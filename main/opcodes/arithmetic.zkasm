@@ -294,14 +294,11 @@ opEXP:
 
     ; check out-of-gas
     $ => C              :MLOAD(SP--); [a => C]
-    $ => B              :MLOAD(SP); [exp => B]
-
+    $ => B, D           :MLOAD(SP), CALL(getLenBytes); [exp => B], in: [B: number] out: [A: byte length of B]
     ; check out-of-gas
-                                                    :CALL(getLenBytes) ; in: [B: number] out: [A: byte length of B]
     GAS - %GAS_SLOW_STEP - %EXP_BYTE_GAS * A => GAS :JMPN(outOfGas)
 
     ; compute exponentiation
-    B => D
     C => A
     zkPC+1 => RR        :JMP(expAD) ; in: [A, D] out: [A: A ** D]
     A                   :MSTORE(SP++), JMP(readCode) ; [a ** exp => SP]
@@ -315,7 +312,7 @@ opEXP:
  *  - stack input: [b,x]
  *  - stack output: [y]
  */
-opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-monorepo/blob/master/packages/vm/src/evm/opcodes/functions.ts#L193
+opSIGNEXTEND: ; https://github.com/0xPolygonHermez/ethereumjs-monorepo/blob/2349ebfab9d9a7d89cc91ff194b9ab4a30e7ebdc/packages/vm/src/evm/opcodes/functions.ts#L225
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100 :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 6 :JMPN(outOfCountersBinary)
@@ -329,14 +326,12 @@ opSIGNEXTEND: ; following this impl https://github.com/ethereumjs/ethereumjs-mon
     30 => A
     ; if signByte is 31 or more, means basically let the number as it is
     $               :LT, JMPC(opSIGNEXTENDEnd)
-    B * 8  + 7 => D, RR; B is less than 31, no need for binary
+    B * 8  + 7 => RR; B is less than 31, no need for binary
                     :CALL(@exp_num + RR)
     B => A
-    $ => D          :MLOAD(SP); [x => D]
     ;Store mask
     1 => B
     $ => C          :SUB ; mask
-
     D => B               ; number to convert
     $ => B          :AND ; check sign bit
     0 => A

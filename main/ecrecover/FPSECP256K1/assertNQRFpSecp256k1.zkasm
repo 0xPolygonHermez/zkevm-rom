@@ -1,0 +1,3807 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  PRE: C is not alias free
+;;
+;; assertNQRFpSecp256k1:
+;;             in: C
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; This function is using Euler's criterion pow(C, (p-1)/2) == -1 to determine that a given number is not a quadratic residue modulo p
+
+; Efficiency of the exponentiation:
+; (p-1)/2 = 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffe17
+;             (*) 222 x 1,  1 x 1, 22 x 1,  4 x 1, 1 x 1,  1 x 1, 3 x 1
+;             (*) 222 x SM, 1 x S, 22 x SM, 4 x S, 1 x SM, 1 x S, 3 x SM    (S=square M=multiplication)
+;         BLOCK:  1         2      3        4      5       6      7
+;             (*) 222 + initial initialization
+
+VAR GLOBAL assertNQRFpSecp256k1_base
+
+assertNQRFpSecp256k1:
+        ; RESOURCES:
+        ;   SM: 248 x (3 steps + 1 arith + 4 steps + 1 arith) = 1736 steps + 496 ariths
+        ;    S: 6 x (3 step + 1 arith) = 18 steps + 6 ariths
+        ;  Rem: 7 steps + 1 binary
+        ; TOTAL = 1761 steps + 1 binary + 502 ariths
+
+        C           :MSTORE(assertNQRFpSecp256k1_base)
+
+        ; Set the modulus
+        %SECP256K1_P => D
+
+        ; === BLOCK1: 1/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 2/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 3/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 4/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 5/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 6/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 7/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 8/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 9/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 10/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 11/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 12/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 13/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 14/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 15/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 16/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 17/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 18/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 19/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 20/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 21/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 22/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 23/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 24/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 25/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 26/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 27/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 28/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 29/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 30/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 31/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 32/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 33/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 34/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 35/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 36/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 37/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 38/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 39/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 40/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 41/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 42/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 43/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 44/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 45/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 46/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 47/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 48/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 49/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 50/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 51/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 52/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 53/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 54/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 55/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 56/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 57/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 58/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 59/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 60/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 61/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 62/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 63/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 64/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 65/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 66/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 67/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 68/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 69/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 70/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 71/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 72/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 73/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 74/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 75/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 76/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 77/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 78/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 79/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 80/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 81/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 82/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 83/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 84/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 85/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 86/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 87/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 88/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 89/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 90/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 91/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 92/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 93/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 94/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 95/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 96/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 97/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 98/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 99/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 100/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 101/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 102/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 103/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 104/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 105/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 106/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 107/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 108/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 109/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 110/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 111/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 112/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 113/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 114/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 115/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 116/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 117/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 118/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 119/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 120/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 121/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 122/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 123/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 124/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 125/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 126/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 127/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 128/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 129/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 130/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 131/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 132/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 133/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 134/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 135/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 136/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 137/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 138/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 139/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 140/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 141/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 142/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 143/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 144/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 145/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 146/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 147/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 148/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 149/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 150/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 151/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 152/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 153/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 154/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 155/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 156/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 157/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 158/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 159/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 160/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 161/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 162/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 163/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 164/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 165/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 166/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 167/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 168/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 169/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 170/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 171/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 172/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 173/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 174/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 175/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 176/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 177/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 178/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 179/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 180/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 181/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 182/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 183/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 184/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 185/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 186/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 187/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 188/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 189/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 190/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 191/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 192/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 193/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 194/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 195/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 196/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 197/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 198/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 199/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 200/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 201/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 202/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 203/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 204/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 205/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 206/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 207/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 208/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 209/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 210/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 211/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 212/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 213/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 214/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 215/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 216/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 217/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 218/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 219/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 220/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 221/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK1: 222/222 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+
+
+        ; === BLOCK2: 1/1 S ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+
+
+        ; === BLOCK3: 1/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 2/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 3/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 4/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 5/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 6/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 7/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 8/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 9/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 10/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 11/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 12/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 13/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 14/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 15/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 16/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 17/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 18/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 19/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 20/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 21/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK3: 22/22 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+
+        ; === BLOCK4: 1/4 S ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK4: 2/4 S ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK4: 3/4 S ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK4: 4/4 S ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+
+        ; === BLOCK5: 1/1 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+
+        ; === BLOCK6: 1 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK7: 1/3 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK7: 2/3 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; === BLOCK7: 3/3 SM ===
+
+        ; Square:
+        ; C·C + 0 = op (mod SECP256K1_P)
+        C => A,B
+        0 => C
+        ${(A*B) % D} => C       :ARITH_MOD
+
+        ; Multiply:
+        ; A·B + 0 = op (mod SECP256K1_P)
+        $ => A 	:MLOAD(assertNQRFpSecp256k1_base)
+        C => B
+        0 => C
+        ${(A*B) % D} => A       :ARITH_MOD
+
+        %SECP256K1_P_MINUS_ONE  :ASSERT, RETURN

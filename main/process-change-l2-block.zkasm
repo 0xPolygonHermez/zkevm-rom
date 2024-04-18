@@ -2,10 +2,9 @@ processChangeL2Block:
 
     ; checks zk-counters
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*6     :JMPN(outOfCountersPoseidon)
-    $ => A                                                                      :MLOAD(cntKeccakPreProcess)
-    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 2                                    :JMPN(outOfCountersKeccak)
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1                                        :JMPN(outOfCountersKeccak)
     %MAX_CNT_STEPS - STEP - 500                                                 :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 8                                            :JMPN(outOfCountersBinary)
+    %MAX_CNT_BINARY - CNT_BINARY - 7                                            :JMPN(outOfCountersBinary)
 
     ; If it is not the first transaction, we must consolidate previous block
     $ => A                              :MLOAD(currentTx)
@@ -22,13 +21,12 @@ continueProcessChangeL2Block:
     ; Update state root mapping
     32 => D
     0 => HASHPOS ; A new hash with position 0 is started
-    $ => E                              :MLOAD(lastHashKIdUsed)
-    E + 1 => E                          :MSTORE(lastHashKIdUsed)
+    $ => E                              :MLOAD(nextHashKId)
+    E + 1                               :MSTORE(nextHashKId)
 
     %ADDRESS_SYSTEM => A
     %SMT_KEY_SC_STORAGE => B
-    $ => C                              :MLOAD(blockNum)
-    C                                   :HASHK(E)
+    ${mem.blockNum}                     :HASHK(E), MLOAD(blockNum)
     %STATE_ROOT_STORAGE_POS             :HASHK(E)
     HASHPOS                             :HASHKLEN(E)
     $ => C                              :HASHKDIGEST(E)
@@ -48,35 +46,23 @@ continueProcessChangeL2Block:
     $ => SR                             :SSTORE
 
     ; Load current timestamp
-    %TIMESTAMP_STORAGE_POS => C
-    %ADDRESS_SYSTEM => A
-    %SMT_KEY_SC_STORAGE => B
-    $ => A                              :SLOAD ; currentTimestamp => A
-
-    $ => B                              :MLOAD(timestampLimit) ; timestampLimit => B
+    $ => A                              :MLOAD(timestamp) ; currentTimestamp => A
 
     ; If it is NOT a forced tx ==> verify Timestamp & L1InfoRoot
     $                                   :MLOAD(isForced), JMPZ(verifyTimestampAndL1InfoRoot)
 
     ; forced batch
-    ;   - update timestamp only if currentTimestamp < limitTimestamp
+    ;   - update timestamp only if currentTimestamp < forcedTimestamp
     ;   - set blockHash to default
-    $ => C                              :MLOAD(forcedBlockHashL1)
+    $ => C                              :MLOAD(forcedBlockHashL1InfoTree)
     C                                   :MSTORE(blockHashL1InfoTree)
-    A                                   :MSTORE(timestamp)
-    $                                   :LT, JMPNC(initSetGERL1InfoTree)
-
-newForcedTimestamp:
-    B                                   :MSTORE(timestamp), JMP(setNewTimestamp)
+    $ => B                              :MLOAD(forcedTimestamp)
+    $                                   :LT, JMPC(setNewTimestamp, initSetGERL1InfoTree)
 
 verifyTimestampAndL1InfoRoot:
     $ => B                              :MLOAD(deltaTimestamp)
     ; Addition of two values of 8 bytes [B: currentTimestamp(A) + deltaTimestamp(B)]
     $ => B                              :ADD, MSTORE(timestamp)
-
-    ; Verify (currentTimestamp + deltaTimestamp) <= limitTimestamp
-    $ => A                              :MLOAD(timestampLimit)
-    $                                   :LT, JMPC(invalidChangeL2BlockLimitTimestamp)
 
     ; Set new timestamp
     %TIMESTAMP_STORAGE_POS => C
@@ -86,41 +72,59 @@ verifyTimestampAndL1InfoRoot:
     $ => SR                             :SSTORE
 
     ; check indexL1InfoTree != 0 to verify data L1InfoTree
-    $                                                   :MLOAD(indexL1InfoTree), JMPZ(skipSetGERL1InfoTree)
+    $ => A                                              :MLOAD(indexL1InfoTree), JMPZ(skipSetGERL1InfoTree)
+    ; Verify indexL1InfoTree > currentL1InfoTreeIndex
+    A - $ - 1                                           :F_MLOAD(currentL1InfoTreeIndex), JMPN(invalidL1InfoTreeIndex)
+    ${getL1InfoGER(mem.indexL1InfoTree)}                :MSTORE(gerL1InfoTree)
+    ${getL1InfoBlockHash(mem.indexL1InfoTree)}          :MSTORE(blockHashL1InfoTree)
+    ${getL1InfoMinTimestamp(mem.indexL1InfoTree)}       :MSTORE(timestampL1InfoTree)
 
-    ${getL1InfoGER(mem.indexL1InfoTree)} => A           :MSTORE(gerL1InfoTree)
-    ${getL1InfoBlockHash(mem.indexL1InfoTree)} => B     :MSTORE(blockHashL1InfoTree)
-    ${getL1InfoTimestamp(mem.indexL1InfoTree)} => C     :MSTORE(timestampL1InfoTree)
-                                                        :CALL(verifyMerkleProof)
+    ; Compute infoTreeData
+                                            :CALL(computeL1InfoTreeValue) ; out: [@label: computedL1InfoTreeData]
+    $                                       :MLOAD(currentL1InfoTreeIndex), JMPNZ(previousL1InfoTreeIndexIsNotZero)
+    ; if previous L1 Info TreeIndex is zero, currentL1InfoTreeRoot = keccak(HistoricRoot, blockHashL1InfoTree)
+                                            :CALL(computeNewCurrentL1InfoRootFromHistoric)
+                                            :JMP(updateCurrentL1InfoTreeIndex)
 
-    ; Verify (currentTimestamp + deltaTimestamp) >= l1InfoRoot.timestamp
-    $ => A                                          :MLOAD(timestamp)
-    $ => B                                          :MLOAD(timestampL1InfoTree)
-    $                                               :LT, JMPC(invalidChangeL2BlockMinTimestamp, initSetGERL1InfoTree)
+previousL1InfoTreeIndexIsNotZero:
+    ; if previous L1 Info TreeIndex is NOT zero, currentL1InfoTreeRoot = keccak(computedMerkleRoot, blockHashL1InfoTree)
+                                            :CALL(computeMerkleProof)  ; out: [C: computed merkle root]
+    ; Compute newL1InfoTreeRoot
+                                            :CALL(computeNewCurrentL1InfoRoot) ; in: [C: computed merkle root], out: [@label: currentL1InfoTreeRoot]
+updateCurrentL1InfoTreeIndex:
+    ; Update currentL1InfoTreeIndex
+    $ => A                                  :MLOAD(indexL1InfoTree)
+    A                                       :MSTORE(currentL1InfoTreeIndex)
+    ; Verify (currentTimestamp + deltaTimestamp) >= l1InfoRoot.minTimestamp
+    ; This verification is done after updating the currentL1InfoTreeIndex and the currentL1InfoTreeRoot to correctly set batch outputs at execution finalization
+    $ => A                                  :MLOAD(timestamp)
+    $ => B                                  :MLOAD(timestampL1InfoTree)
+    $                                       :LT, JMPC(invalidChangeL2BlockMinTimestamp, initSetGERL1InfoTree)
 
 setNewTimestamp:
-    ; Set new timestamp
+    ; Set forcedTimestamp (now new Timestamp) from forced batch data
     %TIMESTAMP_STORAGE_POS => C
     %ADDRESS_SYSTEM => A
+    B => D                                  :MSTORE(timestamp)
     %SMT_KEY_SC_STORAGE => B
-    $ => D                                  :MLOAD(timestamp)
     $ => SR                                 :SSTORE
 
 initSetGERL1InfoTree:
     ; Set new GER
     $ => A                                  :MLOAD(gerL1InfoTree)
-    ; If it is a forced tx ==> gerL1InfoTree = l1InfoRoot
+    ; If it is a forced tx ==> gerL1InfoTree = forcedGER
     $                                       :MLOAD(isForced), JMPZ(setGERL1InfoTree)
-    $ => A                                  :MLOAD(l1InfoRoot)
+    $ => A                                  :MLOAD(forcedGER)
     A                                       :MSTORE(gerL1InfoTree)
 
 setGERL1InfoTree:
+    %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1                                        :JMPN(outOfCountersKeccak)
     0 => B
     ; Do not set if zero
     $                                       :EQ, JMPC(skipSetGERL1InfoTree)
     0 => HASHPOS
-    $ => E                                  :MLOAD(lastHashKIdUsed)
-    E + 1 => E                              :MSTORE(lastHashKIdUsed)
+    $ => E                                  :MLOAD(nextHashKId)
+    E + 1                                   :MSTORE(nextHashKId)
 
     32 => D
     A                                       :HASHK(E)
@@ -145,3 +149,5 @@ setGERL1InfoTree:
 skipSetGERL1InfoTree:
                                             :CALL(setupNewBlockInfoTree)
                                             :JMP(txLoop)
+
+INCLUDE "process-change-l2-block-utils.zkasm"

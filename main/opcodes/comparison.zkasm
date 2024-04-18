@@ -281,7 +281,7 @@ opNOT:
     ; read one item from the stack
     $ => A          :MLOAD(SP-1)
 
-    0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn => B ; 2**256 - 1 =>
+    %MAX_UINT_256 => B
     $ => A          :XOR,MSTORE(SP-1), JMP(readCode) ; [ NOT a => SP]
 
 /**
@@ -314,8 +314,7 @@ opBYTE:
     $ => D          :SUB, JMPC(opBYTE0)
 
     ; call util function
-    C => A
-                    :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
+    C => A          :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
 
     ; call binary:and state machine and push to the stack
     255 => B
@@ -344,11 +343,14 @@ opSHR:
 
     ; read two items from the stack
     SP - 1 => SP
-    $ => D          :MLOAD(SP--) ; [shift => D]
+    $ => D, A       :MLOAD(SP--) ; [shift => D, A]
+    256 => B
+    $               :LT, JMPNC(opSHRZero)
     ; call SHRarithBit util
     $ => A          :MLOAD(SP), CALL(SHRarithBit)   ; [value => A]; [ A >> D => A]
     A               :MSTORE(SP++), JMP(readCode) ; [ A => SP]
-
+opSHRZero:
+    0               :MSTORE(SP++), JMP(readCode) ; [ 0 => SP]
 /**
  * @link [https://www.evm.codes/#1b?fork=berlin]
  * @zk-counters
@@ -369,13 +371,14 @@ opSHL:
 
     ; read two items from the stack
     SP - 1 => SP
-    $ => D          :MLOAD(SP--)
-    $ => A          :MLOAD(SP)
-
-    ; CALL shl util
-                    :CALL(SHLarithBit)  ; [ A << D => A]
+    $ => D, A       :MLOAD(SP--) ; [shift => D, A]
+    256 => B
+    $               :LT, JMPNC(opSHLZero)
+    ; CALL SHLarithBit util
+    $ => A          :MLOAD(SP), CALL(SHLarithBit)  ; [ A << D => A]
     A               :MSTORE(SP++), JMP(readCode) ; [A => SP]
-
+opSHLZero:
+    0               :MSTORE(SP++), JMP(readCode) ; [ 0 => SP]
 /**
  * @link [https://www.evm.codes/#1d?fork=berlin]
  * @zk-counters
@@ -425,7 +428,7 @@ negativeValue:
     %MAX_UINT_256 => B
     $ => A          :XOR ; [~A => A]
     C => D          :CALL(SHRarithBit) ; [shift (bits) => D]; [ A >> D => A]
-    $ => A          :XOR, JMP(endSAR) ; [~A => A]
+    $ => A          :XOR ; [~A => A]
 
 endSAR:
     ; check shifted result is greater than 0

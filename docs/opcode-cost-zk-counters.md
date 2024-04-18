@@ -170,7 +170,7 @@ counters = SLOAD
 ### CODECOPY
 L = bytes to copy.  
 if is createContract -> counters = CALLDATACOPY  
-else -> counters = LT + L*(LT + MEM_ALIGN_WR8)  
+else -> counters = LT + L*(LT + MEM_ALIGN_WR)  
 
 ### EXTCODESIZE
 counters = SLOAD  
@@ -178,7 +178,7 @@ counters = SLOAD
 ### EXTCODECOPY
 L = bytes to copy.  
 if is createContract -> counters = CALLDATACOPY  
-else -> counters = LT + L*(LT + MEM_ALIGN_WR8)
+else -> counters = LT + L*(LT + MEM_ALIGN_WR)
 
 ### RETURNDATACOPY
 L = Length to copy.  
@@ -250,7 +250,7 @@ counters = 2*EQ + LT*2 + computeGasSendCall + copySP
 | ARITH          | 1         | 0          | 0             | 0            | 0              | 0              | false      |
 | SLOAD          | 0         | 0          | 0             | 0            | 0              | 11              | [true](#SLOAD)      |
 | SSTORE         | 0         | 0          | 0             | 0            | 0              | 11              | [true](#SSTORE)      |
-| MEM_ALIGN_WR8  | 0         | 0          | 1             | 0            | 0              | 0              | false      |
+| MEM_ALIGN_WR  | 0         | 0          | 1             | 0            | 0              | 0              | false      |
 
 
 ## Dynamic regs

@@ -6,7 +6,7 @@
 ;;    [  8   bytes   ] nonce
 ;;    [  32  bytes   ] gasPrice
 ;;    [  8  bytes    ] gasLimit
-;;    [  1   bytes   ] deployment ('0': no deloyment, '1': deployment)
+;;    [  1   bytes   ] deployment ('0': no deployment, '1': deployment)
 ;;    [  20  bytes   ] to (0 bytes if it is a deployment)
 ;;    [  32  bytes   ] value
 ;;    [  3   bytes   ] dataLength
@@ -19,7 +19,7 @@
 ;;    [  8   bytes   ] nonce
 ;;    [  32  bytes   ] gasPrice
 ;;    [  8  bytes    ] gasLimit
-;;    [  1   bytes   ] deployment ('0': no deloyment, '1': deployment)
+;;    [  1   bytes   ] deployment ('0': no deployment, '1': deployment)
 ;;    [  20  bytes   ] to (0 bytes if it is a deployment)
 ;;    [  32  bytes   ] value
 ;;    [  3   bytes   ] dataLength
@@ -65,7 +65,6 @@ addL2HashTx:
 ;; Write 1 byte to l2TxHash: flag deployment = 1 ('0': no deployment transaction, '1': deployment transaction)
 addL2HashTx_isDeploy:
         ; store temporary register values
-        A                               :MSTORE(tmpVar_A_L2HashTx)
         E                               :MSTORE(tmpVar_E_L2HashTx)
         HASHPOS                         :MSTORE(tmpVar_HASHPOS_L2HashTx)
 
@@ -76,7 +75,6 @@ addL2HashTx_isDeploy:
         HASHPOS                         :MSTORE(l2HASHP)
 
         ; load temporary register values
-        $ => A                          :MLOAD(tmpVar_A_L2HashTx)
         $ => E                          :MLOAD(tmpVar_E_L2HashTx)
         $ => HASHPOS                    :MLOAD(tmpVar_HASHPOS_L2HashTx), RETURN
 
@@ -108,8 +106,7 @@ addL2HashTx_dataLength:
         $ => E                          :MLOAD(l2TxHashPointer)
         $ => HASHPOS                    :MLOAD(l2HASHP)
         3 => D
-        $ => A                          :MLOAD(txCalldataLen)
-        A                               :HASHP(E)
+        ${mem.txCalldataLen}            :HASHP(E), MLOAD(txCalldataLen)
         HASHPOS                         :MSTORE(l2HASHP)
 
         ; load temporary register values
@@ -119,7 +116,7 @@ addL2HashTx_dataLength:
         $ => HASHPOS                    :MLOAD(tmpVar_HASHPOS_L2HashTx), RETURN
 
 ;; Write 1 byte to l2TxHash: txType
-; note: HASHPOS is not reovered and the outcome register is the l2TxHash length
+; note: HASHPOS is not recovered and the outcome register is the l2TxHash length
 addL2HashTx_txType:
         ; store temporary register values
         A                               :MSTORE(tmpVar_A_L2HashTx)

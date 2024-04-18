@@ -25,14 +25,15 @@ async function genTestsFiles() {
         fs.mkdirSync(testsFolder);
     }
     for (const inputPath of inputs) {
-        const name = inputPath.split('/').slice(-1)[0].replace('json', 'test.js');
+        const fileName = path.basename(inputPath, '.json');
+        const folderName = path.basename(path.dirname(inputPath));
         const sample = fs.readFileSync(sampleDir, 'utf-8');
         let test = sample.replace('%%INPUT_PATH%%', `${inputPath}`);
         // Replace skip vcounters flag
         if (argv.skipVCounters) {
             test = test.replace('%%SKIP_VCOUNTERS%%', 'yes');
         }
-        fs.writeFileSync(`${testsFolder}/${name}`, test);
+        fs.writeFileSync(`${testsFolder}/${folderName}__${fileName}.test.js`, test);
     }
     expect(true).to.be.equal(true);
 }

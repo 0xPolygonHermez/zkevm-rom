@@ -95,13 +95,17 @@ opMSTORE8:
     ; store lastMemLength for memory expansion gas cost. In case of MSTORE8, always 1 byte
     1               :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     B => A          :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
-    $ => B          :MLOAD(SP); [value => B]
+    $ => RCX        :MLOAD(SP); [value => B]
     ; read from memory position E
     $ => A          :MLOAD(MEM:E)
-    ${memAlignWR8_W0(A,B,C)} => D  ; no trust calculate W0
-    B               :MEM_ALIGN_WR8 ; only use LSB of B, rest of bytes could be non zero.
-    ; write at memory position E
-    D               :MSTORE(MEM:E), JMP(readCode)
+
+    ; C contains offset, setting len = 1 byte
+    C + 1 * %MEM_ALIGN_LEN => C
+
+    ; no trust calculate W0 but if verification fails, proof no generated
+    ; B,E no change because only one byte, but B must be equal to E
+    ${memAlignWR_W0(A,RCX,C)} => D,B,E  :MSTORE(MEM:E)
+    RCX             :MEM_ALIGN_WR, JMP(readCode) ; only use LSB of B, rest of bytes could be non zero.
 
 /**
  * @link [https://www.evm.codes/#59?fork=berlin]
@@ -118,25 +122,15 @@ opMSIZE:
     ; check out-of-gas
     GAS - %GAS_QUICK_STEP => GAS      :JMPN(outOfGas)
 
-    ; load current memory length
-    $ => E              :MLOAD(memLength)
-    ; MSIZE should be multiple of a word (32 bytes)
-    ; Div operation with Arith
-    E               :MSTORE(arithA)
-    32              :MSTORE(arithB)
-                    :CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
-    $ => C          :MLOAD(arithRes1)
-    $ => B          :MLOAD(arithRes2)
-    ; check arithRes2 is 0, no need to round in this case
-    0 => A
-    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
-    $               :EQ, JMPC(MSIZEend)
+    ; load current memory length, less than 32 bits
+    $ => A              :MLOAD(memLength), CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+    ; MSIZE should be multiple of a word (32 bytes), if mod is zero, return size, otherwise round up to next word
+    C                   :JMPZ(MSIZEend)
     ; Round size to 32bytes multiple
-    C + 1 => C
-    C * 32 => E
+    E * 32 + 32 => A
 
 MSIZEend:
-    E               :MSTORE(SP++); [size(E) => SP]
+    A               :MSTORE(SP++); [size(E) => SP]
     ; check stack overflow
     %MAX_STACK_SIZE - SP       :JMPN(stackOverflow, readCode)
 /**

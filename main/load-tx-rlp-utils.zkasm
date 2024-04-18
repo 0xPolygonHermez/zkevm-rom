@@ -1,40 +1,179 @@
-;@info: Add 'data' bytes to batchHashData. batchHashData = H_keccak( transactions )
-;@in: D: length of the hash
-addBatchHashData:
-        $ => HASHPOS                    :MLOAD(batchHashPos)
-        $ => E                          :MLOAD(batchHashDataId)
-        A                               :HASHK(E)
-        HASHPOS                         :MSTORE(batchHashPos)
-        C => HASHPOS
-        $ => E                          :MLOAD(lastHashKIdUsed), RETURN
-
-;; get D bytes from transaction bytes
+;; get D bytes from batchL2Data
 ;@in D: number of bytes to get
 ;@in C: current data parsed pointer
-;@out A: D bytes from batch data at offset C
-getTxBytes:
-        $ => A                          :MLOAD(batchL2DataLength)
+;@out A: D bytes from batchL2Data at offset C
+getBatchL2DataBytes:
         $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${p = p + D}
-                                        :RETURN
+        $ - B - C - D                   :F_MLOAD(batchL2DataLength), JMPN(invalidTxRLP)
+        $ => E                          :MLOAD(batchHashDataPointer)
+        $ => HASHPOS                    :MLOAD(batchHashPos)
+        $ => A                          :HASHP(E)
+        HASHPOS                         :MSTORE(batchHashPos)
+        C => HASHPOS
+        $ => E                          :MLOAD(txHashPointer), RETURN
 
 ;; Add bytes to generate ethereum signed message
 ;; - legacy transaction: signedMessage = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data, chainId, 0, 0))
 ;; - pre EIP-155: signedMessage = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data))
+; REVIEW: is it necessary?? (first two steps)
 addHashTx:
-        $ => A                          :MLOAD(txRLPLength)
-        A - HASHPOS - D                 :JMPN(invalidTxRLP)
+        $ - HASHPOS - D                 :F_MLOAD(txRLPLength), JMPN(invalidTxRLP)
 addHashTxBegin:
-        $ => A                          :MLOAD(batchL2DataLength)
         $ => B                          :MLOAD(batchL2DataParsed)
-        A - B - C - D                   :JMPN(invalidTxRLP)
-        ${getTxs(p,D)} => A
-        $${p = p + D}
+        $ - B - C - D                   :F_MLOAD(batchL2DataLength), JMPN(invalidTxRLP)
+        $ => E                          :MLOAD(batchHashDataPointer)
+        $ => HASHPOS                    :MLOAD(batchHashPos)
+        $ => A                          :HASHP(E)
+        HASHPOS                         :MSTORE(batchHashPos)
+        $ => E                          :MLOAD(txHashPointer)
+        C => HASHPOS
         A                               :HASHK(E)
         C + D => C                      :RETURN
 
+;; Add bytes to generate ethereum signed message byte by byte
+; It's done byte by byte to get 1 byte access to hashp during execution
+;; - legacy transaction: signedMessage = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data, chainId, 0, 0))
+;; - pre EIP-155: signedMessage = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data))
+; @in D: number of bytes to add
+; @in C: current tx data parsed pointer
+addHashTxByteByByte:
+        $ - HASHPOS - D                 :F_MLOAD(txRLPLength), JMPN(invalidTxRLP)
+        $ => B                          :MLOAD(batchL2DataParsed)
+        ; Save current registers
+        ; CHECK: Is correct to save here in same line as JMPN?
+        $ - B - C - D                   :F_MLOAD(batchL2DataLength), JMPN(invalidTxRLP), SAVE(B,C,D,E,RR,RCX)
+        $ => HASHPOS                    :MLOAD(batchHashPos)
+        D => E
+readHash:
+                   :JMP(@readHash+E)
+                   :JMP(_readHash1)     ;1
+                   :JMP(_readHash2)     ;2
+                   :JMP(_readHash3)     ;3
+                   :JMP(_readHash4)     ;4
+                   :JMP(_readHashX)     ;5
+                   :JMP(_readHashX)     ;6
+                   :JMP(_readHashX)     ;7
+                   :JMP(_readHashX)     ;8
+                   :JMP(_readHashX)     ;9
+                   :JMP(_readHashX)     ;10
+                   :JMP(_readHashX)     ;11
+                   :JMP(_readHashX)     ;12
+                   :JMP(_readHashX)     ;13
+                   :JMP(_readHashX)     ;14
+                   :JMP(_readHashX)     ;15
+                   :JMP(_readHashX)     ;16
+                   :JMP(_readHashX)     ;17
+                   :JMP(_readHashX)     ;18
+                   :JMP(_readHashX)     ;19
+                   :JMP(_readHashX)     ;20
+                   :JMP(_readHashX)     ;21
+                   :JMP(_readHashX)     ;22
+                   :JMP(_readHashX)     ;23
+                   :JMP(_readHashX)     ;24
+                   :JMP(_readHashX)     ;25
+                   :JMP(_readHashX)     ;26
+                   :JMP(_readHashX)     ;27
+                   :JMP(_readHashX)     ;28
+                   :JMP(_readHashX)     ;29
+                   :JMP(_readHashX)     ;30
+                   :JMP(_readHashX)     ;31
+                   :JMP(_readHash32)    ;32
+
+finishReadHash:
+HASHPOS                         :MSTORE(batchHashPos), RESTORE
+$ => E                          :MLOAD(txHashPointer)
+C => HASHPOS
+; Insert data into txhash (hashk)
+A                               :HASHK(E)
+C + D => C                      :RETURN
+
+_readHash1:
+    $ => E                      :MLOAD(batchHashDataPointer)
+    $ => A                      :HASHP1(E), JMP(finishReadHash)
+
+_readHash2:
+    $ => E                      :MLOAD(batchHashDataPointer)
+    $ => C                      :HASHP1(E)
+    C * 256 + $ => A            :F_HASHP1(E), JMP(finishReadHash)
+
+_readHash3:
+    $ => E                      :MLOAD(batchHashDataPointer)
+    $ => A                      :HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E), JMP(finishReadHash)
+
+_readHash4:
+    $ => E                      :MLOAD(batchHashDataPointer)
+    $ => A                      :HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E), JMP(finishReadHash)
+
+_readHash32:
+    $ => E                      :MLOAD(batchHashDataPointer)
+    _readPushTable:
+    $ => A                      :HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    A * 256 + $ => C            :F_HASHP1(E)
+
+    ; 28 bytes
+
+    $ => A                      :HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    ROTL_C + A * 256 + $ => C   :F_HASHP1(E)
+
+    ; 24 bytes
+
+    $ => A                      :HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    ROTL_C + A * 256 + $ => C   :F_HASHP1(E)
+
+    ; 20 bytes
+
+    $ => A                      :HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    ROTL_C + A * 256 + $ => C   :F_HASHP1(E)
+
+    ; 16 bytes
+
+    $ => A                      :HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    ROTL_C + A * 256 + $ => C   :F_HASHP1(E)
+
+    ; 12 bytes
+
+    $ => A                      :HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    ROTL_C + A * 256 + $ => C   :F_HASHP1(E)
+
+    ; 8 bytes
+
+    $ => A                      :HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    ROTL_C + A * 256 + $ => C   :F_HASHP1(E)
+
+    ; 4 bytes
+
+    $ => A                      :HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    A * 256 + $ => A            :F_HASHP1(E)
+    ROTL_C + A * 256 + $ => A   :F_HASHP1(E), JMP(finishReadHash)
+
+_readHashBaseTable:
+
+_readHashX:
+    $ => B                      :MLOAD(batchHashDataPointer)
+
+readHashBytes:
+    0 => A,C
+    B => E                     :JMP(@_readHashBaseTable - E)
 
 ;; Check short value is over 127. Error RLP: single byte < 0x80 are not prefixed
 checkShortRLP:
@@ -59,14 +198,14 @@ skipCheckShortData:
                                         :RETURN
 
 ;; Check non-negative integer RLP representation has no leading zeros and it is encoded in its shortest form
-VAR GLOBAL tmpVarAcheckNonLeadingZeros
+VAR GLOBAL tmpVarACheckNonLeadingZeros
 VAR GLOBAL tmpVarZkPCcheckNonLeadingZeros
 checkNonLeadingZeros:
         RR                              :MSTORE(tmpVarZkPCcheckNonLeadingZeros)
-        A                               :MSTORE(tmpVarAcheckNonLeadingZeros)
+        A                               :MSTORE(tmpVarACheckNonLeadingZeros)
         ; set value to B and get its
         A => B                          :CALL(getLenBytes) ; in: [B: number] out: [A: byte length of B]
         ; check (bytes length - encoded length) are not equal
         D - A                           :JMPNZ(invalidTxRLP)
         $ => RR                         :MLOAD(tmpVarZkPCcheckNonLeadingZeros)
-        $ => A                          :MLOAD(tmpVarAcheckNonLeadingZeros), RETURN
+        $ => A                          :MLOAD(tmpVarACheckNonLeadingZeros), RETURN
