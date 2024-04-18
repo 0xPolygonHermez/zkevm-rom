@@ -135,7 +135,7 @@ __MSTOREX_afterSave:
 
         ; E === 32 * RR + A (RCX)
         ; E - 32 * RR === A
-        ; secure: E < MAX_MEM_EXPASION_BYTES < 32 bits, RR < 32 bits, 32*RR < 37 bits, all < 38 bits
+        ; secure: E < MAX_MEM_EXPANSION_BYTES < 32 bits, RR < 32 bits, 32*RR < 37 bits, all < 38 bits
         E - 32 * RR                 :ASSERT
 
         RCX + %MEM_ALIGN_LEN * C + %MEM_ALIGN_LEFT_ALIGNMENT => C     :JMP_EQ(%MEM_ALIGN_LEN * 32 + %MEM_ALIGN_LEFT_ALIGNMENT, __MSTORE32_offset0_len32)
@@ -225,7 +225,7 @@ __MLOAD32_restore:
         __MSTOREX_len + E => E  :RETURN
 
 __MLOADX_len0:
-        0 => A                  :RETURN
+        0 => A                  :RESTORE, RETURN
 
 __errorEmore32bits:
         ; path E >= 2**32 must be verified (dual path protection)
@@ -973,7 +973,6 @@ VAR GLOBAL linearPoseidonOutD
 ; @out D => resulting linear poseidon
 hashPoseidonLinearFromMemory:
     %MAX_CNT_STEPS - STEP - 50          :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
     A                               :SAVE(B,C,D,E,RCX,RR)
     $ => E                          :MLOAD(memOffsetLinearPoseidon)
     $ => C                          :MLOAD(memSizeLinearPoseidon)
@@ -1015,6 +1014,7 @@ hashPoseidonFinal:
     A               :HASHP(E)
 
 hashPoseidonEnd:
+    %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
     $ => E          :MLOAD(tmpContractHashId)
     HASHPOS         :HASHPLEN(E)
     $ => D          :HASHPDIGEST(E)
