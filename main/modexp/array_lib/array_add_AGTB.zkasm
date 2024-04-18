@@ -72,7 +72,7 @@ array_add_AGTB_first_iteration:
 
         1 => E
         $ => B          :MLOAD(array_add_AGTB_len_inB)
-        B - E           :JMPZ(array_add_AGTB_loop_index_check)
+        B - 1           :JMPZ(array_add_AGTB_loop_index_check)
 
 array_add_AGTB_loopZero2inB:
         ; a[i] + b[i], where a[i],b[i] ∈ [0,base-1]: This number cannot be GT base + (base - 2), two chunks
@@ -103,34 +103,26 @@ array_add_AGTB_loopZero2inB:
         B - E           :JMPZ(array_add_AGTB_loop_index_check, array_add_AGTB_loopZero2inB)
 
 array_add_AGTB_loop_index_check:
-        $ => C          :MLOAD(array_add_AGTB_len_inA)
+        ; C = len_inA
         C - E           :JMPZ(array_add_AGTB_check_carry)
 
-array_add_AGTB_last_two_additions:
+array_add_AGTB_loopinB2inA:
         ; sum = a[i] + carry: This number cannot be GT base, two chunks
-        ; This sum can produce, at most, one additional carry
         $ => A          :MLOAD(array_add_AGTB_inA + E)
         D => B
-        $               :ADD, MSTORE(array_add_AGTB_out + E), JMPNC(array_add_AGTB_set)
+        $               :ADD, MSTORE(array_add_AGTB_out + E), JMPNC(__array_add_AGTB_continue_6)
+        ;-----------------
+        1 => D          :JMP(__array_add_AGTB_continue_7)
+                        __array_add_AGTB_continue_6:
+        0 => D
+                        __array_add_AGTB_continue_7:
+        ;-----------------
 
-        E + 1 => E
-        C - E           :JMPZ(array_add_AGTB_is_carry)
-
-        $ => A          :MLOAD(array_add_AGTB_inA + E)
-        1 => B
-        $               :ADD, MSTORE(array_add_AGTB_out + E)
-
-array_add_AGTB_set:
-        E + 1 => E
-        $ => A          :MLOAD(array_add_AGTB_len_inA)
-        A - E           :JMPZ(array_add_AGTB_trim)
-        $ => A          :MLOAD(array_add_AGTB_inA + E)
-        A               :MSTORE(array_add_AGTB_out + E), JMP(array_add_AGTB_set)
+        E + 1 => E      :JMP(array_add_AGTB_loop_index_check)
 
 array_add_AGTB_check_carry:
         D               :JMPZ(array_add_AGTB_trim)
 
-array_add_AGTB_is_carry:
         ; Carry path
         E - %ARRAY_MAX_LEN_DOUBLED  :JMPZ(failAssert)
 
