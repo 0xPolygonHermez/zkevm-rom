@@ -10,15 +10,19 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+VAR GLOBAL _C
+
 ; RESOURCES:
 ;   with sqrt: 1 arith + 1 binary + 7 steps
 ;   without sqrt: 1 binary + 4 steps
 ;   TOTAL (worst case): 1 arith + 1 binary + 7 steps
 
 sqrtFpSecp256k1:
+        C => _C
+
         ; start by free-inputing the square root of the input C
         ; taking the positive one if A = 1, and the negative one if A = 0
-        ${var _sqrtFpSecp256k1_sqrt = sqrtFpEcParity(C,A)} => A
+        ${sqrtFpEcParity(C,A)} => A
 
         ; In this point we check whether A is LT than SECP256K1_P since, otherwise, either:
         ;    a) A doesn't have square root. 1 is returned in C.
@@ -32,7 +36,7 @@ sqrtFpSecp256k1:
         A => B
         0 => C
         %SECP256K1_P => D
-        ${(A*B) % D} => E        :ARITH_MOD, RETURN
+        ${(A*B) % D}            :ARITH_MOD, MLOAD(_C), RETURN
 
 sqrtFpSecp256k1_NoRoot:
         1 => C          :RETURN
