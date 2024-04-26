@@ -28,7 +28,6 @@
 ;;    [  20  bytes   ] from
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-
 VAR CTX l2TxHashPointer ; Pointer to l2TxHash hash address
 VAR CTX l2HASHP ; pointer to the l2TxHash to store the bytes
 VAR GLOBAL tmpVar_HASHPOS_L2HashTx ; temporary variable register HASHPOS
@@ -97,9 +96,7 @@ addL2HashTx_isNotDeploy:
 ;; Write 3 bytes to l2TxHash: data length
 addL2HashTx_dataLength:
         ; store temporary register values
-        A                               :MSTORE(tmpVar_A_L2HashTx)
-        D                               :MSTORE(tmpVar_D_L2HashTx)
-        E                               :MSTORE(tmpVar_E_L2HashTx)
+        A                               :SAVE(B,C,D,E,RCX,RR)
         HASHPOS                         :MSTORE(tmpVar_HASHPOS_L2HashTx)
 
         ; load pointer l2HashTx and write data length
@@ -109,18 +106,13 @@ addL2HashTx_dataLength:
         ${mem.txCalldataLen}            :HASHP(E), MLOAD(txCalldataLen)
         HASHPOS                         :MSTORE(l2HASHP)
 
-        ; load temporary register values
-        $ => A                          :MLOAD(tmpVar_A_L2HashTx)
-        $ => D                          :MLOAD(tmpVar_D_L2HashTx)
-        $ => E                          :MLOAD(tmpVar_E_L2HashTx)
-        $ => HASHPOS                    :MLOAD(tmpVar_HASHPOS_L2HashTx), RETURN
+        $ => HASHPOS                    :MLOAD(tmpVar_HASHPOS_L2HashTx)
+        $ => A                          :RESTORE, RETURN
 
 ;; Write 1 byte to l2TxHash: txType
 ; note: HASHPOS is not recovered and the outcome register is the l2TxHash length
 addL2HashTx_txType:
-        ; store temporary register values
-        A                               :MSTORE(tmpVar_A_L2HashTx)
-        E                               :MSTORE(tmpVar_E_L2HashTx)
+        A                               :SAVE(B,C,D,E,RCX,RR)
         HASHPOS                         :MSTORE(tmpVar_HASHPOS_L2HashTx)
 
         ; load pointer l2HashTx and write txType
@@ -132,10 +124,8 @@ addL2HashTx_txType:
 addL2HashTx_txType_write_1:
         1                               :HASHP1(E)
 addL2HashTx_txType_finish:
-        ; load temporary register values
-        $ => A                          :MLOAD(tmpVar_A_L2HashTx)
-        $ => E                          :MLOAD(tmpVar_E_L2HashTx)
-        $ => HASHPOS                    :MLOAD(tmpVar_HASHPOS_L2HashTx), RETURN
+        $ => HASHPOS                    :MLOAD(tmpVar_HASHPOS_L2HashTx)
+        $ => A                          :RESTORE, RETURN
 
 ;; Closes l2TxHash and store the result
 closeL2TxHash:
@@ -148,8 +138,7 @@ closeL2TxHash:
         $ => E                          :MLOAD(l2TxHashPointer)
         HASHPOS                         :HASHPLEN(E)
         ; digest l2TxHash
-        $ => E                          :HASHPDIGEST(E)
-        E                               :MSTORE(l2TxHash)
+        $ => E                          :HASHPDIGEST(E), MSTORE(l2TxHash)
 
         ; load temporary register values
         $ => E                          :MLOAD(tmpVar_E_L2HashTx)

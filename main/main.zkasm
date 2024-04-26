@@ -17,7 +17,7 @@ start: ; main zkROM entry point
         STEP => A
         0                                       :ASSERT ; Ensure it is the beginning of the execution
 
-        CTX                                     :MSTORE(forkID) ; Fork id from CTX
+        CTX                                     :MSTORE(forkID) ; Fork id from CTX, assumed to be less than 32 bits
         CTX - %FORK_ID                          :JMPNZ(failAssert)
 
         SR => A                                  :MSTORE(oldStateRoot) ; oldStateRoot from SR
@@ -29,7 +29,7 @@ start: ; main zkROM entry point
         C                                       :MSTORE(oldBatchAccInputHash) ; oldBatchAccInputHash from C
         D                                       :MSTORE(previousL1InfoTreeRoot) ; previousL1InfoTreeRoot from D
         D                                       :MSTORE(currentL1InfoTreeRoot)
-        RCX                                     :MSTORE(previousL1InfoTreeIndex) ; previousL1InfoTreeIndex from E
+        RCX                                     :MSTORE(previousL1InfoTreeIndex) ; previousL1InfoTreeIndex, assumed to be less than 32 bits
         RCX                                     :MSTORE(currentL1InfoTreeIndex)
         GAS                                     :MSTORE(chainID) ; chainID from GAS, assumed to be less than 32 bits
 
@@ -46,17 +46,15 @@ start: ; main zkROM entry point
 ;;;;;;;;;;;;;;;;;;
         $ => E                                  :MLOAD(nextHashKId)
         E + 1                                   :MSTORE(nextHashKId)
-        32 => D
-        ${getForcedGER()} => A                  :MSTORE(forcedGER), HASHK(E)
-        ${getForcedBlockHashL1()} => A          :MSTORE(forcedBlockHashL1InfoTree), HASHK(E)
-        8 => D
-        ${getForcedTimestamp()} => A            :MSTORE(forcedTimestamp), HASHK(E)
+        ${getForcedGER()} => A                  :MSTORE(forcedGER), HASHK32(E)
+        ${getForcedBlockHashL1()}               :MSTORE(forcedBlockHashL1InfoTree), HASHK32(E) ; no need to set at A
+        ${getForcedTimestamp()} => A            :MSTORE(forcedTimestamp), HASHK8(E)
         HASHPOS                                 :HASHKLEN(E)
         ; Assert forcedHashData computed matches with forcedHashData obtained from free input
         $ => A                                  :HASHKDIGEST(E)
         $                                       :MLOAD(forcedHashData), ASSERT
 ;;;;;;;;;;;;;;;;;
-;; C - Compute newBatchAccInputHash, load newLocalExitRoot and timestamp
+;; C - Compute newBatchAccInputHash, load blockNum and timestamp
 ;;;;;;;;;;;;;;;;;;
 computeNewBatchAccInputHash:
         ; newBatchAccInputHash = LinearPoseidon(oldBatchAccInputHash, batchHashData, sequencerAddress, forcedHashData))
@@ -65,16 +63,16 @@ computeNewBatchAccInputHash:
         $${eventLog(onStartBatch, C)}
         0 => HASHPOS
 
-        32 => D
-        ${mem.oldBatchAccInputHash}     :HASHP(E), MLOAD(oldBatchAccInputHash)
+        ; 32 bytes
+        ${mem.oldBatchAccInputHash}     :HASHP32(E), MLOAD(oldBatchAccInputHash)
 
-        ${mem.batchHashData}            :HASHP(E), MLOAD(batchHashData)
+        ${mem.batchHashData}            :HASHP32(E), MLOAD(batchHashData)
 
-        20 => D
-        ${mem.sequencerAddr}            :HASHP(E), MLOAD(sequencerAddr)
+        ; 20 bytes
+        ${mem.sequencerAddr}            :HASHP20(E), MLOAD(sequencerAddr)
 
-        32 => D
-        ${mem.forcedHashData}           :HASHP(E), MLOAD(forcedHashData)
+        ; 32 bytes
+        ${mem.forcedHashData}           :HASHP32(E), MLOAD(forcedHashData)
 
         ; finish accInputHash
         HASHPOS                         :HASHPLEN(E)
@@ -85,25 +83,20 @@ computeNewBatchAccInputHash:
         $ => E                          :MLOAD(nextHashPId)
         E                               :MSTORE(batchHashDataPointer)
         E + 1                           :MSTORE(nextHashPId)
-        ; Initialize batchHashPos to zero (CHECK: is this necessary?)
-        0                               :MSTORE(batchHashPos)
-        $ => A                          :MLOAD(batchHashData)
         ; No need to compute poseidon consumption, max batchL2Data length is 120000 bytes and this is the beginning of the execution, will always have enough poseidons
+        $ => A                          :MLOAD(batchHashData)
         A                               :HASHPDIGEST(E)
-        ; store batchL2DataLength, less than 120000 bytes. Enforced by the smart contract
+        ; store batchL2DataLength, less than 4096*31 bytes (126976). Enforced by the smart contract
         $                               :HASHPLEN(E), MSTORE(batchL2DataLength)
 
         ; Load current timestamp
+        %ADDRESS_SYSTEM => A
+        %SMT_KEY_SC_STORAGE => B
         %TIMESTAMP_STORAGE_POS => C
-        %ADDRESS_SYSTEM => A
-        %SMT_KEY_SC_STORAGE => B
-        $ => A                              :SLOAD, MSTORE(timestamp)
-
-setBlockNum:
+        $                               :SLOAD, MSTORE(timestamp)
+        ; Load current block
         %LAST_BLOCK_STORAGE_POS => C
-        %ADDRESS_SYSTEM => A
-        %SMT_KEY_SC_STORAGE => B
-        $ => A                              :SLOAD,MSTORE(blockNum)
+        $                               :SLOAD,MSTORE(blockNum)
 
 ;;;;;;;;;;;;;;;;;;
 ;; D - Loop parsing RLP transactions
@@ -119,9 +112,7 @@ txLoopRLP:
         A+1 => CTX                              :MSTORE(lastCtxUsed)
         ; If batchL2DataLength is zero, we finalize batch
         $ => A                                  :MLOAD(batchL2DataLength), JMPZ(finalizeBatch)
-        $ => C                                  :MLOAD(batchL2DataParsed)
-        C - A                                   :JMPN(loadTx_rlp)
-
+        $ - A                                   :F_MLOAD(batchL2DataParsed), JMPN(loadTx_rlp)
 ;;;;;;;;;;;;;;;;;;
 ;; E   - Loop processing transactions
 ;;     - Load transaction data and interpret it
@@ -142,8 +133,7 @@ txLoop:
         ; Detect if transaction is a change L2 block tx
         ; Store initial state at the beginning of the transaction
         SR                                      :MSTORE(originSR)
-        $ => A                                  :MLOAD(isChangeL2BlockTx)
-        A - 1                                   :JMPZ(processChangeL2Block, processTx)
+        $ - 1                                   :F_MLOAD(isChangeL2BlockTx), JMPZ(processChangeL2Block, processTx)
 
 processTxFinished:
         %MAX_CNT_BINARY - CNT_BINARY - 1        :JMPN(outOfCountersBinary)
@@ -168,11 +158,9 @@ finalizeBatch:
 ;;   - Retrieve newLocalExitRoot
 ;;   - Finalize execution: set output values at corresponding registers
 ;;;;;;;;;;;;;;;;;;
-        $${eventLog(onFinishBatch)}
         ;Each save must be restored precisely once. At the end of the program, all saves without restoration must be cleaned because if not, proof generation fails.
                                                 :SAVE(B,C,D,E,RR,RCX)
         RID                                     :MSTORE(lastRID)
-        ; CHECK: maybe only the loop needed? Why doing one more save/restore?
 clearPendingRestores_loop:
         ${getPendingRID(mem.lastRID)} => RID    :JMPN(clearPendingRestores_end)
                                                 :RESTORE, JMP(clearPendingRestores_loop)
@@ -185,13 +173,14 @@ clearPendingRestores_end:
         ; Retrieve newLocalExitRoot
         ; Read 'localExitRoot' variable from GLOBAL_EXIT_ROOT_MANAGER_L2 and store
         ; it to the 'newLocalExitRoot' var
-        %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE     :JMPN(outOfCountersPoseidon)
+        %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE     :JMPN(outOfCountersPoseidon) ; !!!
+        ; Comment margin counters
         %ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2  => A
         %SMT_KEY_SC_STORAGE => B
         %LOCAL_EXIT_ROOT_STORAGE_POS => C
         $ => A                                  :SLOAD
-        A                                       :MSTORE(newLocalExitRoot)
-
+        A                                       :MSTORE(newLocalExitRoot) ; one line
+        $${eventLog(onFinishBatch)}
 ;;;;;;;;;;;;;;;;;;
 ;; G - Finalize execution
 ;;;;;;;;;;;;;;;;;;

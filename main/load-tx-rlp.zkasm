@@ -23,8 +23,6 @@ INCLUDE "l2-tx-hash.zkasm"
 ;;;;;;;;;;;;;;;;;;
 
 loadTx_rlp:
-        ; check one keccak is available to begin processing the RLP
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1         :JMPN(outOfCountersKeccak)
 
         ; Pointer to next RLP bytes to read
         0 => C
@@ -251,7 +249,6 @@ readDataFinal:
         B - 1                           :JMPN(endData)
         B => D                          :CALL(addHashTxByteByByte)
                                         :CALL(addL2HashTx)
-                                        ; WARNING: check checkShortDataRLP correctness
                                         :CALL(checkShortDataRLP)
         32 - D => D                     :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
         $ => E                          :MLOAD(globalCalldataMemoryOffset)
@@ -318,6 +315,8 @@ sizeVerificationSuccess:
 
 ;; read ecdsa 'r'
 rREADTx:
+        $ => E                          :MLOAD(batchHashDataPointer)
+        $ => HASHPOS                    :MLOAD(batchHashPos)
         32 => D                         :CALL(getBatchL2DataBytes)
         A                               :MSTORE(txR)
         C + D => C
@@ -339,6 +338,8 @@ effectivePercentageTx:
         1 => D                          :CALL(getBatchL2DataBytes)
         A                               :MSTORE(effectivePercentageRLP)
         C + D => C
+        ; Update batch hashPos and restore HASHPOS
+        HASHPOS                         :MSTORE(batchHashPos)
 
 ;;;;;;;;;
 ;; D - Finish RLP parsing
@@ -351,6 +352,8 @@ finishLoadRLP:
         $ => A                          :MLOAD(pendingTxs)
         A + 1                           :MSTORE(pendingTxs)
 ;; compute signature
+        $ => E                          :MLOAD(txHashPointer)
+        C => HASHPOS
         $ => A                          :HASHKDIGEST(E)
         A                               :MSTORE(txHash)
 

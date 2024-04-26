@@ -8,7 +8,8 @@ INCLUDE "load-change-l2-block-utils.zkasm"
 decodeChangeL2BlockTx:
     ; No changeL2BlockTx allowed at forced batches
     $                               :MLOAD(isForced), JMPNZ(invalidDecodeChangeL2Block)
-
+    $ => E                          :MLOAD(batchHashDataPointer)
+    $ => HASHPOS                    :MLOAD(batchHashPos)
     ; Decode deltaTimestamp / 4 bytes
     %DELTA_TIMESTAMP_NUM_BYTES => D :CALL(getChangeL2TxBytes)
     C + D => C
@@ -19,7 +20,8 @@ decodeChangeL2BlockTx:
     C + D => C
     A                               :MSTORE(indexL1InfoTree)
     1                               :MSTORE(isChangeL2BlockTx)
-
+    ; update batchHashPos
+    HASHPOS                         :MSTORE(batchHashPos)
     ; update bytes parsed
     $ => A                      :MLOAD(batchL2DataParsed)
     A + C                       :MSTORE(batchL2DataParsed)
