@@ -30,10 +30,10 @@ getLenBytes:
     0 => C
     B => A
 
+    ; checks zk-counters, worst case scenario
+    %MAX_CNT_STEPS - STEP - 10*32          :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1*32    :JMPN(outOfCountersBinary)
 getLenBytesLoop:
-    ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 10          :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
 
     0 => B
     ; if A is zero, finish counter
@@ -45,9 +45,8 @@ getLenBytesLoop:
 
 getLenEnd:
     ; counter to A
-    C => A
     ; recover registries
-                    :RESTORE, RETURN
+    C => A          :RESTORE, RETURN
 
 ; @info bits length of B
 ; @in B => number
@@ -60,18 +59,16 @@ getLenBits:
     ; set C as counter to 0
     0 => C
     B => A
-
+    ; checks zk-counters, worst case scenario
+    %MAX_CNT_STEPS - STEP - 10*256          :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1*256    :JMPN(outOfCountersBinary)
 getLenBitsLoop:
-    ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 10          :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
     0 => B
     ; if B is zero, finish counter
     $               :EQ,JMPC(getLenBitsEnd)
     ; divide value by 2
     A               :MSTORE(arithA)
-    2               :MSTORE(arithB)
-    zkPC+1 => RR    :JMP(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    2               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => A          :MLOAD(arithRes1)
     ; increase counter
     C + 1 => C      :JMP(getLenBitsLoop)
@@ -138,7 +135,7 @@ __MSTOREX_afterSave:
         ; secure: E < MAX_MEM_EXPANSION_BYTES < 32 bits, RR < 32 bits, 32*RR < 37 bits, all < 38 bits
         E - 32 * RR                 :ASSERT
 
-        RCX + %MEM_ALIGN_LEN * C + %MEM_ALIGN_LEFT_ALIGNMENT => C     :JMP_EQ(%MEM_ALIGN_LEN * 32 + %MEM_ALIGN_LEFT_ALIGNMENT, __MSTORE32_offset0_len32)
+        RCX * %MEM_ALIGN_OFFSET + %MEM_ALIGN_SIZE * C + %MEM_ALIGN_LEFT_ALIGNMENT => C     :JMP_EQ(%MEM_ALIGN_SIZE * 32 + %MEM_ALIGN_LEFT_ALIGNMENT, __MSTORE32_offset0_len32)
 
         $ => A                  :MLOAD(MEM:RR)
         $ => B                  :MLOAD(MEM:RR+1)
@@ -210,7 +207,7 @@ __MLOADX_afterSave:
         ; secure: E < MAX_MEM_EXPANSION_BYTES < 32 bits, RR < 32 bits, 32*RR < 37 bits, all < 38 bits
         E - 32 * RR                 :ASSERT
 
-        RCX + %MEM_ALIGN_LEN * C + %MEM_ALIGN_LEFT_ALIGNMENT => C     :JMP_EQ(%MEM_ALIGN_LEN * 32 + %MEM_ALIGN_LEFT_ALIGNMENT, __MLOAD32_offset0_len32)
+        RCX * %MEM_ALIGN_OFFSET + %MEM_ALIGN_SIZE * C + %MEM_ALIGN_LEFT_ALIGNMENT => C     :JMP_EQ(%MEM_ALIGN_SIZE * 32 + %MEM_ALIGN_LEFT_ALIGNMENT, __MLOAD32_offset0_len32)
 
         $ => A                  :MLOAD(MEM:RR)
         $ => B                  :MLOAD(MEM:RR+1)
@@ -401,7 +398,7 @@ VAR GLOBAL addArithOverflow
 ; @in: arithB: addend value
 ; @out: arithRes1: arithA + arithB
 addARITH:
-
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     A               :SAVE(B,C,D,E,RR,RCX)
     $ => A          :MLOAD(arithA)
     $ => B          :MLOAD(arithB)
@@ -659,6 +656,18 @@ invalidCodeStartsEF:
 handleError:
     %MAX_CNT_STEPS - STEP - 500         :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 2    :JMPN(outOfCountersBinary)
+    ; Restore al not restored saves
+                                            :SAVE(B,C,D,E,RR,RCX)
+    RID                                     :MSTORE(lastRID)
+    clearPendingRestoresError_loop:
+    ${getPendingRID(mem.lastRID)} => RID    :JMPN(clearPendingRestoresError_end)
+                                            :RESTORE, JMP(clearPendingRestoresError_loop)
+
+    clearPendingRestoresError_end:
+    $ => RID                :MLOAD(lastRID)
+                            :RESTORE
+    0 => RID
+
     ;revert all state changes
     $ => SR         :MLOAD(initSR), CALL(revertTouched)
                     :CALL(revertBlockInfoTree)

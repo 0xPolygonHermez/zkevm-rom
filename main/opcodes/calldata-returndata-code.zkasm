@@ -297,7 +297,7 @@ opCODECOPYloop:
     E               :MSTORE(memInteger)
     ; read M0 previous value
     $ => A          :MLOAD(MEM:E), CALL(opCODECOPYLoadBytes); in:[codecopyBytecodeLength, codecopyHashId] out: [B: readByte], E is modified
-    C + 1 * %MEM_ALIGN_LEN => C
+    C * %MEM_ALIGN_OFFSET + 1 * %MEM_ALIGN_SIZE => C ; create MEM_ALIGN_OFFSET = 1 // MEM_ALIGN_SIZE
     ${memAlignWR_W0(A,B,C)} => D  ; no trust calculate W0
     B => E          ; B and E must be same value
     B               :MEM_ALIGN_WR ; only use LSB of B, rest of bytes could be non zero
@@ -311,6 +311,10 @@ opCODECOPYloop:
 
 
 ; @info Load 0 if read bytecode position is above bytecode length
+; @in param codecopyBytecodeLength
+; @in param codecopyHashId
+; @out B: readByte
+; @out E: codecopyHashId
 opCODECOPYLoadBytes:
     ; codecopyBytecodeLength is less than 32 bits, length obtained from storage, max bytecode of a contract is 24kbytes
     $ => B          :MLOAD(codecopyBytecodeLength), JMPZ(readZero)
