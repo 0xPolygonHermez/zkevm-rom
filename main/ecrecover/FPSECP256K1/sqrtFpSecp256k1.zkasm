@@ -10,7 +10,7 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-VAR GLOBAL _C
+VAR GLOBAL _input
 
 ; RESOURCES:
 ;   with sqrt: 1 arith + 1 binary + 7 steps
@@ -18,7 +18,7 @@ VAR GLOBAL _C
 ;   TOTAL (worst case): 1 arith + 1 binary + 7 steps
 
 sqrtFpSecp256k1:
-        C => _C
+        C => _input
 
         ; start by free-inputing the square root of the input C
         ; taking the positive one if A = 1, and the negative one if A = 0
@@ -29,14 +29,14 @@ sqrtFpSecp256k1:
         ;    b) A contains an alias, it's a MAP. 1 is returned in C. In this case, the proof cannot
         ;    be generated because we check in assertNQRFpSecp256k1 if the root actually exists.
         %SECP256K1_P => B
-        $                                               :LT, JMPNC(sqrtFpSecp256k1_NoRoot)
+        $                               :LT, JMPNC(sqrtFpSecp256k1_NoRoot)
         ; From here, A,C < SECP256K1_P, which means that the root exists and it's alias-free
 
         ; √C·√C + 0 = C (mod SECP256K1_P)
         A => B
         0 => C
         %SECP256K1_P => D
-        ${(A*B) % D}            :ARITH_MOD, MLOAD(_C), RETURN
+        ${(A*B) % D}                    :ARITH_MOD, MLOAD(_input), RETURN
 
 sqrtFpSecp256k1_NoRoot:
-        1 => C          :RETURN
+        1 => C                          :RETURN
