@@ -86,7 +86,7 @@ array_div_long:
 
         RR          :JMPN(array_div_long_check_inALTinB)
 
-        C - RR      :JMPN(failAssert) ; if C < RR ERROR
+        C - RR      :JMPN(failAssertModexp) ; if C < RR ERROR
 
         RR - 1 => RR ; Moving from i+1 to i
         ; Ensure the received chunk is higher
@@ -125,7 +125,7 @@ array_div_long_same_input:
         1               :MSTORE(array_div_long_len_rem), JMP(array_div_long_end)
 
 array_div_long_check_inALTinB:
-        RR + C          :JMPN(failAssert) ; if RR < -C ERROR
+        RR + C          :JMPN(failAssertModexp) ; if RR < -C ERROR
 
         -RR - 1 => RR  ; Moving from -i-1 to i
         ; Ensure that the received chunk is lower
@@ -168,10 +168,10 @@ array_div_long_inAGTinB:
         ; len(Q) + len(inB) - 1 <= len(Q·inB) <= len(inA)
 
         ; 1] The received length must satisfy 1 <= len(Q) <= len(inA) - len(inB) + 1
-        C - 1 => RR                             :JMPN(failAssert) ; if len(Q) < 1 ERROR
+        C - 1 => RR                             :JMPN(failAssertModexp) ; if len(Q) < 1 ERROR
         $ => A                                  :MLOAD(array_div_long_len_inA)
         $ => B                                  :MLOAD(array_div_long_len_inB)
-        A - B + 1 - C                           :JMPN(failAssert) ; if len(inA) - len(inB) + 1 < len(Q) ERROR
+        A - B + 1 - C                           :JMPN(failAssertModexp) ; if len(inA) - len(inB) + 1 < len(Q) ERROR
 
         ; 2] To avoid non-determinism, we must ensure that the quotient is trimmed
         ; i.e., that its last chunk is not 0
@@ -214,9 +214,9 @@ array_div_long_mul_quo_inB:
         $0{receiveLenRemainder()} => D          :JMPZ(array_div_long_rem_is_zero)
 
         ; 1] The received length must satisfy 1 <= len(R) <= len(inB) <= len(inA)
-        D - 1 => E              :JMPN(failAssert) ; if len(R) < 1 ERROR
+        D - 1 => E              :JMPN(failAssertModexp) ; if len(R) < 1 ERROR
         $ => C                  :MLOAD(array_div_long_len_inB)
-        C - D                   :JMPN(failAssert) ; if len(inB) < len(R) ERROR
+        C - D                   :JMPN(failAssertModexp) ; if len(inB) < len(R) ERROR
 
         ; 2] To avoid non-determinism, we must ensure that the remainder is trimmed
         ; i.e., that its last chunk is not 0
@@ -236,8 +236,8 @@ array_div_long_mul_quo_inB:
         D - C           :JMPN(array_div_long_rem_lower)
 
         ; If len(R) == len(B), then we must compare them chunk by chunk
-        ${getFirstDiffChunkRem(addr.array_div_long_inB,mem.array_div_long_len_inB)} => RR :JMPN(failAssert)
-        D - 1 - RR      :JMPN(failAssert) ; if D - 1 < RR ERROR
+        ${getFirstDiffChunkRem(addr.array_div_long_inB,mem.array_div_long_len_inB)} => RR :JMPN(failAssertModexp)
+        D - 1 - RR      :JMPN(failAssertModexp) ; if D - 1 < RR ERROR
 
         ; if it is the last chunk, then we are done
         E - RR          :JMPZ(array_div_long_compare_rem_first)

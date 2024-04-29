@@ -1,21 +1,19 @@
 ;; get D bytes from batchL2Data
 ;@in D: number of bytes to get
 ;@in C: current data parsed pointer
+;@in E: batchHashDataPointer
+;@in HASHPOS: batchHashPos
 ;@out A: D bytes from batchL2Data at offset C
 getBatchL2DataBytes:
         $ => B                          :MLOAD(batchL2DataParsed)
         $ - B - C - D                   :F_MLOAD(batchL2DataLength), JMPN(invalidTxRLP)
-        $ => E                          :MLOAD(batchHashDataPointer)
-        $ => HASHPOS                    :MLOAD(batchHashPos)
-        $ => A                          :HASHP(E)
-        HASHPOS                         :MSTORE(batchHashPos)
-        C => HASHPOS
-        $ => E                          :MLOAD(txHashPointer), RETURN
+        $ => A                          :HASHP(E), RETURN
 
 ;; Add bytes to generate ethereum signed message
 ;; - legacy transaction: signedMessage = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data, chainId, 0, 0))
 ;; - pre EIP-155: signedMessage = H_keccak(rlp(nonce, gasprice, gaslimit, to, value, data))
-; REVIEW: is it necessary?? (first two steps)
+; @in D: number of bytes to add
+; @in C: current tx data parsed pointer
 addHashTx:
         $ - HASHPOS - D                 :F_MLOAD(txRLPLength), JMPN(invalidTxRLP)
 addHashTxBegin:
@@ -40,7 +38,6 @@ addHashTxByteByByte:
         $ - HASHPOS - D                 :F_MLOAD(txRLPLength), JMPN(invalidTxRLP)
         $ => B                          :MLOAD(batchL2DataParsed)
         ; Save current registers
-        ; CHECK: Is correct to save here in same line as JMPN?
         $ - B - C - D                   :F_MLOAD(batchL2DataLength), JMPN(invalidTxRLP), SAVE(B,C,D,E,RR,RCX)
         $ => HASHPOS                    :MLOAD(batchHashPos)
         D => E
@@ -176,6 +173,9 @@ readHashBytes:
     B => E                     :JMP(@_readHashBaseTable - E)
 
 ;; Check short value is over 127. Error RLP: single byte < 0x80 are not prefixed
+; add inputs/outputs at all this file
+;@in D: length of value to check, should be 1
+;@in A: value to check
 checkShortRLP:
         D - 1                           :JMPNZ(skipCheckShort)
         A - %MIN_VALUE_SHORT            :JMPN(invalidTxRLP)
@@ -184,11 +184,13 @@ skipCheckShort:
                                         :RETURN
 
 ;; Check long list/value is over 55 bytes long. Error RLP: encoded list too short
+;@in A: length of value to check
 checkLongRLP:
         A - %MIN_BYTES_LONG             :JMPN(invalidTxRLP)
                                         :RETURN
 
 ;; Check short value is over 127. Error RLP: single byte < 0x80 are not prefixed
+;@in A: value to check
 checkShortDataRLP:
         $ => B                          :MLOAD(txCalldataLen)
         B - 1                           :JMPNZ(skipCheckShortData)
@@ -201,11 +203,8 @@ skipCheckShortData:
 VAR GLOBAL tmpVarACheckNonLeadingZeros
 VAR GLOBAL tmpVarZkPCcheckNonLeadingZeros
 checkNonLeadingZeros:
-        RR                              :MSTORE(tmpVarZkPCcheckNonLeadingZeros)
-        A                               :MSTORE(tmpVarACheckNonLeadingZeros)
-        ; set value to B and get its
-        A => B                          :CALL(getLenBytes) ; in: [B: number] out: [A: byte length of B]
+        ; set value to B and get its length
+        A => B                          :SAVE(B,C,D,E,RR,RCX), CALL(getLenBytes) ; in: [B: number] out: [A: byte length of B]
         ; check (bytes length - encoded length) are not equal
         D - A                           :JMPNZ(invalidTxRLP)
-        $ => RR                         :MLOAD(tmpVarZkPCcheckNonLeadingZeros)
-        $ => A                          :MLOAD(tmpVarACheckNonLeadingZeros), RETURN
+        $ => A                          :RESTORE, RETURN
