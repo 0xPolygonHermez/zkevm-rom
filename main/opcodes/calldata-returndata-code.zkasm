@@ -391,7 +391,7 @@ opEXTCODECOPY:
 
     ; store lastMemLength for memory expansion gas cost, we store also at RCX to recover later
     ; compute memory expansion gas cost
-    E => RCX         :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    E                :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
 
     ; check out-of-gas
     ;${3*((E+31)/32)}
@@ -402,7 +402,8 @@ opEXTCODECOPY:
     ; 3*((E+31)/32)
     ; check out-of-gas
     GAS - 3 * E => GAS  :JMPN(outOfGas)
-    RCX => E
+    ; Recover secured lastMemLength at E
+    $ => E              :MLOAD(lastMemLength)
     B => C
     ; if offset is above data len, length => offset
     D => A
@@ -508,7 +509,7 @@ opRETURNDATACOPY:
     ; store lastMemOffset for memory expansion gas cost
     D               :MSTORE(lastMemOffset)
     ; store lastMemLength for memory expansion gas cost, we store also at RCX to recover later
-    C => RCX        :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
+    C              :MSTORE(lastMemLength), CALL(saveMem); in: [lastMemOffset, lastMemLength]
     ; if retDataCTX is 0, end opcode execution
     $ => B          :MLOAD(retDataCTX), JMPZ(opRETURNDATACOPYEmpty)
     ; Load ret data length from last ctx
@@ -530,7 +531,8 @@ opRETURNDATACOPY:
     ; C is secured to be less than 32 bits after calling saveMem
     ;(C+31)/32
     C + 31 => A     :CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
-    RCX => C
+    ; Recover secured lastMemLength at C
+    $ => C          :MLOAD(lastMemLength)
     ; 3*((C+31)/32)
     ; check out-of-gas
     GAS - 3 * E => GAS  :JMPN(outOfGas)

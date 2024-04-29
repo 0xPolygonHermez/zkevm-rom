@@ -368,11 +368,14 @@ readDeployBytecodeCreate:
         $ => CTX                        :MLOAD(originCTX)
         ; check enough bytes to read in memory
         E - PC - 1                      :JMPN(readDeployBytecodeCreateDefault)
-        $ + PC => E                     :F_MLOAD(argsOffsetCall)
-        1 => C                          :CALL(MLOADX) ; in: [E: offset, C: length] out: [A: value, E: new offset]
+
+        %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
+        $ + PC => A                     :F_MLOAD(argsOffsetCall), CALL(offsetUtil); in: [A: offset] out: [E: offset/32, C: offset%32]
+        C * %MEM_ALIGN_OFFSET + %MEM_ALIGN_SIZE => C
+        $ => A                          :MLOAD(MEM:E)
+        $ => B                          :MLOAD(MEM:E+1)
+        $ => A, RR                      :MEM_ALIGN_RD
         $ => CTX                        :MLOAD(currentCTX)
-        31 => D                         :CALL(SHRarith) ; in: [A: value, D: #bytes to right shift] out: [A: shifted result]
-        A => RR
         $${eventLog(onOpcode(RR))}
         PC + 1 => PC                    :JMP(@mapping_opcodes + RR)
 
