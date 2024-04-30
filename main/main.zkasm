@@ -33,7 +33,6 @@ start: ; main zkROM entry point
         RCX                                     :MSTORE(currentL1InfoTreeIndex)
         GAS                                     :MSTORE(chainID) ; chainID from GAS, assumed to be less than 32 bits
 
-        ${getSequencerAddr()}                   :MSTORE(sequencerAddr)
         ${getBatchHashData()}                   :MSTORE(batchHashData)
         ${getForcedHashData()} => A             :MSTORE(forcedHashData)
         0 => B
@@ -57,7 +56,7 @@ start: ; main zkROM entry point
 ;; C - Compute newBatchAccInputHash, load blockNum and timestamp
 ;;;;;;;;;;;;;;;;;;
 computeNewBatchAccInputHash:
-        ; newBatchAccInputHash = LinearPoseidon(oldBatchAccInputHash, batchHashData, sequencerAddress, forcedHashData))
+        ; newBatchAccInputHash = LinearPoseidon(oldBatchAccInputHash, batchHashData, forcedHashData))
         $ => E                          :MLOAD(nextHashPId)
         E + 1                           :MSTORE(nextHashPId)
         $${eventLog(onStartBatch, C)}
@@ -67,9 +66,6 @@ computeNewBatchAccInputHash:
         ${mem.oldBatchAccInputHash}     :HASHP32(E), MLOAD(oldBatchAccInputHash)
 
         ${mem.batchHashData}            :HASHP32(E), MLOAD(batchHashData)
-
-        ; 20 bytes
-        ${mem.sequencerAddr}            :HASHP20(E), MLOAD(sequencerAddr)
 
         ; 32 bytes
         ${mem.forcedHashData}           :HASHP32(E), MLOAD(forcedHashData)
