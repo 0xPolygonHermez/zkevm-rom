@@ -23,8 +23,6 @@ INCLUDE "l2-tx-hash.zkasm"
 ;;;;;;;;;;;;;;;;;;
 
 loadTx_rlp:
-        ; check one keccak is available to begin processing the RLP
-        %MAX_CNT_KECCAK_F - CNT_KECCAK_F - 1         :JMPN(outOfCountersKeccak)
 
         ; Pointer to next RLP bytes to read
         0 => C
@@ -63,7 +61,7 @@ loadTx_rlp_continue:
         A - 0xc1                        :JMPN(invalidTxRLP)
         A - 0xf8                        :JMPN(shortList)
         ; do not allow lists over 2**24 bytes length
-        ; Transaction could not have more than 120.000 due to smart contract limitation (keccaks counters)
+        ; Transaction could not have more than 4096*31 bytes due to smart contract limitation (keccaks counters)
         ; meaning that the RLP encoding is wrong
         A - 0xfb                        :JMPN(longList, invalidTxRLP)
 
@@ -199,7 +197,7 @@ dataREAD:
         A - 0x81                        :JMPN(zeroBytesData)
         A - 0xb8                        :JMPN(shortData)
         ; do not allow string over 2**24 bytes length
-        ; Transaction could not have more than 120.000 due to smart contract limitation (keccaks counters)
+        ; Transaction could not have more than 4096*31 bytes due to smart contract limitation (keccaks counters)
         ; meaning that the RLP encoding is wrong
         A - 0xbb                        :JMPN(longData, invalidTxRLP)
 
@@ -251,7 +249,6 @@ readDataFinal:
         B - 1                           :JMPN(endData)
         B => D                          :CALL(addHashTxByteByByte)
                                         :CALL(addL2HashTx)
-                                        ; WARNING: check checkShortDataRLP correctness
                                         :CALL(checkShortDataRLP)
         32 - D => D                     :CALL(SHLarith); in: [A: value, D: #bytes to left shift] out: [A: shifted result]
         $ => E                          :MLOAD(globalCalldataMemoryOffset)
@@ -270,7 +267,7 @@ zeroBytesData:
 
 endData:
         ; Check all bytes read to detect pre EIP-155 tx, if bytes read are the same as txLength, we reached the end, so it's a pre EIP-155 tx
-        ; txRLPLength and C is at most 120.000 bytes, no need to use a binary for comparison
+        ; txRLPLength and C is at most 4096*31 bytes, no need to use a binary for comparison
         $ => B                          :MLOAD(txRLPLength)
         C - B                           :JMPZ(setPreEIP155Flag)
 
@@ -305,7 +302,7 @@ setPreEIP155Flag:
 ;; size verification
         ; checks RLP length read at the RLP header with bytes read during RLP parsing
 sizeVerification:
-        ; txRLPLength and C is at most 120.000 bytes, no need to use a binary for comparison
+        ; txRLPLength and C is at most 4096*31 bytes, no need to use a binary for comparison
         $ => B                          :MLOAD(txRLPLength)
         C - B                           :JMPZ(sizeVerificationSuccess, invalidTxRLP)
 sizeVerificationSuccess:
@@ -318,6 +315,8 @@ sizeVerificationSuccess:
 
 ;; read ecdsa 'r'
 rREADTx:
+        $ => E                          :MLOAD(batchHashDataPointer)
+        $ => HASHPOS                    :MLOAD(batchHashPos)
         32 => D                         :CALL(getBatchL2DataBytes)
         A                               :MSTORE(txR)
         C + D => C
@@ -339,6 +338,8 @@ effectivePercentageTx:
         1 => D                          :CALL(getBatchL2DataBytes)
         A                               :MSTORE(effectivePercentageRLP)
         C + D => C
+        ; Update batch hashPos and restore HASHPOS
+        HASHPOS                         :MSTORE(batchHashPos)
 
 ;;;;;;;;;
 ;; D - Finish RLP parsing
@@ -351,6 +352,8 @@ finishLoadRLP:
         $ => A                          :MLOAD(pendingTxs)
         A + 1                           :MSTORE(pendingTxs)
 ;; compute signature
+        $ => E                          :MLOAD(txHashPointer)
+        C => HASHPOS
         $ => A                          :HASHKDIGEST(E)
         A                               :MSTORE(txHash)
 

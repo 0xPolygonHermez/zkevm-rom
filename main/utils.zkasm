@@ -30,10 +30,10 @@ getLenBytes:
     0 => C
     B => A
 
+    ; checks zk-counters, worst case scenario
+    %MAX_CNT_STEPS - STEP - 10*32          :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1*32    :JMPN(outOfCountersBinary)
 getLenBytesLoop:
-    ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 10          :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
 
     0 => B
     ; if A is zero, finish counter
@@ -45,9 +45,8 @@ getLenBytesLoop:
 
 getLenEnd:
     ; counter to A
-    C => A
     ; recover registries
-                    :RESTORE, RETURN
+    C => A          :RESTORE, RETURN
 
 ; @info bits length of B
 ; @in B => number
@@ -60,18 +59,16 @@ getLenBits:
     ; set C as counter to 0
     0 => C
     B => A
-
+    ; checks zk-counters, worst case scenario
+    %MAX_CNT_STEPS - STEP - 10*256          :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1*256    :JMPN(outOfCountersBinary)
 getLenBitsLoop:
-    ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 10          :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 1    :JMPN(outOfCountersBinary)
     0 => B
     ; if B is zero, finish counter
     $               :EQ,JMPC(getLenBitsEnd)
     ; divide value by 2
     A               :MSTORE(arithA)
-    2               :MSTORE(arithB)
-    zkPC+1 => RR    :JMP(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
+    2               :MSTORE(arithB), CALL(divARITH); in: [arithA, arithB] out: [arithRes1: arithA/arithB, arithRes2: arithA%arithB]
     $ => A          :MLOAD(arithRes1)
     ; increase counter
     C + 1 => C      :JMP(getLenBitsLoop)
@@ -127,18 +124,18 @@ __MSTOREX_afterSave:
         $0{E > 0xFFFFFFFF ? -1:E} => A  :JMPN(__errorEmore32bits)
         E                               :ASSERT,JMP_GE(%MAX_MEM_EXPANSION_BYTES, errorMLOADMSTORE)
 
-        $0{E / 32} => RR                :JMPN(failAssert)
+        $0{E / 32} => RR                :JMPN(failAssertMstoreX)
         ; RR = 32 bits positive value
 
         $BYTE{E%32} => RCX,A
-        RCX                             :JMP_GT(31, failAssert)
+        RCX                             :JMP_GT(31, failAssertMstoreX)
 
         ; E === 32 * RR + A (RCX)
         ; E - 32 * RR === A
         ; secure: E < MAX_MEM_EXPANSION_BYTES < 32 bits, RR < 32 bits, 32*RR < 37 bits, all < 38 bits
         E - 32 * RR                 :ASSERT
 
-        RCX + %MEM_ALIGN_LEN * C + %MEM_ALIGN_LEFT_ALIGNMENT => C     :JMP_EQ(%MEM_ALIGN_LEN * 32 + %MEM_ALIGN_LEFT_ALIGNMENT, __MSTORE32_offset0_len32)
+        RCX * %MEM_ALIGN_OFFSET + %MEM_ALIGN_SIZE * C + %MEM_ALIGN_LEFT_ALIGNMENT => C     :JMP_EQ(%MEM_ALIGN_SIZE * 32 + %MEM_ALIGN_LEFT_ALIGNMENT, __MSTORE32_offset0_len32)
 
         $ => A                  :MLOAD(MEM:RR)
         $ => B                  :MLOAD(MEM:RR+1)
@@ -199,18 +196,18 @@ __MLOADX_afterSave:
         $0{E > 0xFFFFFFFF ? -1:E} => A  :JMPN(__errorEmore32bits)
         E                               :ASSERT,JMP_GE(%MAX_MEM_EXPANSION_BYTES, errorMLOADMSTORE)
 
-        $0{E / 32} => RR                :JMPN(failAssert)
+        $0{E / 32} => RR                :JMPN(failAssertMloadX)
         ; RR = 32 bits positive value
 
         $BYTE{E%32} => RCX,A
-        RCX                             :JMP_GT(31, failAssert)
+        RCX                             :JMP_GT(31, failAssertMloadX)
 
         ; E === 32 * RR + A (RCX)
         ; E - 32 * RR === A
         ; secure: E < MAX_MEM_EXPANSION_BYTES < 32 bits, RR < 32 bits, 32*RR < 37 bits, all < 38 bits
         E - 32 * RR                 :ASSERT
 
-        RCX + %MEM_ALIGN_LEN * C + %MEM_ALIGN_LEFT_ALIGNMENT => C     :JMP_EQ(%MEM_ALIGN_LEN * 32 + %MEM_ALIGN_LEFT_ALIGNMENT, __MLOAD32_offset0_len32)
+        RCX * %MEM_ALIGN_OFFSET + %MEM_ALIGN_SIZE * C + %MEM_ALIGN_LEFT_ALIGNMENT => C     :JMP_EQ(%MEM_ALIGN_SIZE * 32 + %MEM_ALIGN_LEFT_ALIGNMENT, __MLOAD32_offset0_len32)
 
         $ => A                  :MLOAD(MEM:RR)
         $ => B                  :MLOAD(MEM:RR+1)
@@ -301,7 +298,7 @@ computeGasSendCall:
 
     ; C = [c7, c6, ..., c0]
     ; JMPN instruction assures c0 is within the range [0, 2**32 - 1]
-    ${GAS >> 6} => C        :JMPN(failAssert)
+    ${GAS >> 6} => C        :JMPN(failAssertComputeGasSendCall)
     ; We secure D to be less than 32 bits with $0{}
     $0{GAS & 0x3f} => D
 
@@ -310,7 +307,7 @@ computeGasSendCall:
     ; that equals the field
     ; Since e0 is assured to be less than 32 bits, c0 * 64 + d0 could not overflow the field
     C * 64 + D              :ASSERT
-    0x3f - D                :JMPN(failAssert) ; D is less than 32 bits, we can use JMPN
+    0x3f - D                :JMPN(failAssertComputeGasSendCall) ; D is less than 32 bits, we can use JMPN
 
     GAS - C => A
     ; gasCall can be more than 32 bits, obtained from stack
@@ -359,7 +356,7 @@ saveMemGAS:
 
     ; E = [e7, e6, ..., e0]
     ; JMPN instruction assures e0 is within the range [0, 2**32 - 1]
-    ${A >> 5} => E              :JMPN(failAssert)
+    ${A >> 5} => E              :JMPN(failAssertSaveMemGAS)
     $0{A & 0x1f} => D
 
     ; since D is assured to be less than 0x20
@@ -367,7 +364,7 @@ saveMemGAS:
     ; that equals the field
     ; Since e0 is assured to be less than 32 bits, e0 * 32 + d0 could not overflow the field
     E * 32 + D                  :ASSERT
-    0x1f - D                    :JMPN(failAssert) ; D is less than 32 bits, we can use JMPN
+    0x1f - D                    :JMPN(failAssertSaveMemGAS) ; D is less than 32 bits, we can use JMPN
 
     ; memory_cost = (memory_size_word ** 2) / 512 + (3 * memory_size_word) in A
     ; ${E*E/512} + 3*E=> A
@@ -401,7 +398,7 @@ VAR GLOBAL addArithOverflow
 ; @in: arithB: addend value
 ; @out: arithRes1: arithA + arithB
 addARITH:
-
+    %MAX_CNT_BINARY - CNT_BINARY - 1 :JMPN(outOfCountersBinary)
     A               :SAVE(B,C,D,E,RR,RCX)
     $ => A          :MLOAD(arithA)
     $ => B          :MLOAD(arithB)
@@ -659,6 +656,18 @@ invalidCodeStartsEF:
 handleError:
     %MAX_CNT_STEPS - STEP - 500         :JMPN(outOfCountersStep)
     %MAX_CNT_BINARY - CNT_BINARY - 2    :JMPN(outOfCountersBinary)
+    ; Restore al not restored saves
+                                            :SAVE(B,C,D,E,RR,RCX)
+    RID                                     :MSTORE(lastRID)
+    clearPendingRestoresError_loop:
+    ${getPendingRID(mem.lastRID)} => RID    :JMPN(clearPendingRestoresError_end)
+                                            :RESTORE, JMP(clearPendingRestoresError_loop)
+
+    clearPendingRestoresError_end:
+    $ => RID                :MLOAD(lastRID)
+                            :RESTORE
+    0 => RID
+
     ;revert all state changes
     $ => SR         :MLOAD(initSR), CALL(revertTouched)
                     :CALL(revertBlockInfoTree)
@@ -696,8 +705,8 @@ offsetUtil:
 
     ; E = [e7, e6, ..., e0]
     ; JMPN instruction assures e0 is within the range [0, 2**32 - 1]
-    ${A >> 5} => E                      :JMPN(failAssert)
-    $0{A & 0x1F} => C                   :JMP_GT(0x1F, failAssert); C is 32 bits, If C is greater than 31 (remainder), it is an error
+    ${A >> 5} => E                      :JMPN(failAssertOffsetUtil)
+    $0{A & 0x1F} => C                   :JMP_GT(0x1F, failAssertOffsetUtil); C is 32 bits, If C is greater than 31 (remainder), it is an error
 
     ; since C is assured to be less than 0x20
     ; it is enforced that [e7, e6, ..., e1] are 0 since there is no value multiplied by 32
@@ -1125,7 +1134,7 @@ utilMULMOD:
 
     ; verify no carry, because D = D1 + D2 must be less than 2**256
     ; to pass arithmetic equation A * B + C = D * 2**256 + op
-    $ => A          :ADD,JMPC(failAssert)
+    $ => A          :ADD,JMPC(failAssertMulMod)
     $               :MLOAD(mulArithOverflowValue), ASSERT, JMP(utilMULMODend)
 
 mulModNoKH:
@@ -1215,7 +1224,24 @@ expADend:
 ;@info function to force a failed assert
 failAssert:
     A - 1           :ASSERT
-
+failAssertInvalidForkId:
+    A - 1           :ASSERT
+failAssertMstoreX:
+    A - 1           :ASSERT
+failAssertMloadX:
+    A - 1           :ASSERT
+failAssertComputeGasSendCall:
+    A - 1           :ASSERT
+failAssertSaveMemGAS:
+    A - 1           :ASSERT
+failAssertOffsetUtil:
+    A - 1           :ASSERT
+failAssertMulMod:
+    A - 1           :ASSERT
+failAssertModexp:
+    A - 1           :ASSERT
+failAssertEcrecover:
+    A - 1           :ASSERT
 VAR GLOBAL tmpZkPCComputeMerkleProof
 ;@info Computes merkle root with from currentL1InfoTreeRoot, currentL1InfoTreeIndex and siblings
 ;@out C: merkle tree root
