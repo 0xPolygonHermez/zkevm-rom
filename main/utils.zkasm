@@ -843,129 +843,12 @@ maskAddress:
     $ => A          :AND
     $ => B          :MLOAD(tmpVarBmask), RETURN
 
-VAR GLOBAL mulModOutC
-VAR GLOBAL tmpVarMulMod1
-
-; @info (A*B)%C => C
-; @in A
-; @in B
-; @in C
-; @out C
-utilMULMOD:
-    ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 4    :JMPN(outOfCountersBinary)
-    %MAX_CNT_ARITH - CNT_ARITH - 2      :JMPN(outOfCountersArith)
-
-    A                                   :SAVE(B,C,D,E,RCX,RR)
-
-    ; The following approach will be followed in order to verify the mulmod operation
-    ; A * B + 0 = D*2^256 + E
-    ; K * N + mulModResult = D*2^256 + E
-
-    ; Since the k can be bigger than 2²⁵⁶ and therefore does not fit in a register, we split it in the
-    ; most significant and less significant part:
-
-    ; (k.l + k.h * 2²⁵⁶) * N + mulModResult = (D1 + D2) * 2²⁵⁶ + E
-    ; And divide this operation in 2 which fits in 2²⁵⁶ digits
-
-    ;k.l * N + mulModResult = D1 * 2²⁵⁶ + E
-    ;k.h * 2²⁵⁶ * N  = D2 * 2²⁵⁶ --> k.h  * N  = D2
-
-    ; Mul operation with Arith
-    $${var _mulMod = A * B}
-    A               :MSTORE(arithA)
-    ; here we perform the: A * B + 0 = D*2^256 + E
-    ; result is stored in: arithRes1(E) and mulArithOverflowValue(D)
-    B               :MSTORE(arithB), CALL(mulARITH)
-    C => A
-    ; Check if modulus is 0 or 1
-    2 => B
-    $               :LT, JMPC(zeroOneMod)
-    ; Now we will try to perform the following equation:
-    ; (k.l + k.h * 2²⁵⁶) * N + mulModResult = (D1 + D2) * 2²⁵⁶ + E
-
-    ${(_mulMod / C) >> 256} => B     ; k.h
-    ; We can jump with Js, because later it's all verified by the ARITH
-    ; the two paths must be mutually exclusive.
-    ; mulModNoKH: if kh is non zero, not found a solution only with kl
-    ${cond(B == 0)}  :JMPN(mulModNoKH)
-
-    ; in case of malicious prover, check that B was different of zero to
-    ; avoid dual path.
-    0 => A
-    0       :EQ ; assert B != 0
-
-    ; Since there's k.h we will split the equation in those 2
-    ;k.l * N + mulModResult = D1 * 2²⁵⁶ + E
-    ;k.h * 2²⁵⁶ * N  = D2 * 2²⁵⁶ --> k.h  * N  = D2
-
-    ; k.h  * N  = D2
-    ; B * A + 0 = 0 * 2²⁵⁶ + E
-    ; D2 must be less than 2²⁵⁶
-    C => A ; Modulus
-    0 => C, D
-    ${B * A} => E   :MSTORE(tmpVarMulMod1), ARITH ; D2
-
-    ; k.l * N + mulModResult = D1 * 2²⁵⁶ + E
-    ; B * A + C = D*2^256 + E
-    ; remember that:
-    ; result of mul is stored in: arithRes1(E) and mulArithOverflowValue(D)
-
-    ${(_mulMod / A) % (1 << 256)} => B   ; k.l
-    ${_mulMod % A} => C        ; mulModResult
-    ${(B * A + C) >> 256} => D ; D1
-    $               :MLOAD(arithRes1), ARITH
-
-    ; Finally we need to assert the following:
-    ; N>resultModulus
-    ; D1 + D2 = D
-    ; N>resultModulus   ; LT; ASSERT
-    A => B          ; modulus
-    C => A          ; mulModResult
-    $ => A          :LT
-    1               :ASSERT
-
-    ; Assert D1 + D2 = D ; ADD ;ASSERT
-    D => A ; D1
-    $ => B          :MLOAD(tmpVarMulMod1) ;D2
-
-    ; verify no carry, because D = D1 + D2 must be less than 2**256
-    ; to pass arithmetic equation A * B + C = D * 2**256 + op
-    $ => A          :ADD,JMPC(failAssert)
-    $               :MLOAD(mulArithOverflowValue), ASSERT, JMP(utilMULMODend)
-
-mulModNoKH:
-    ; if theres no K.h the equation is simplified as:
-    ; K * N + mulModResult = D*2^256 + E
-    ; B * A + C = D*2^256 + E
-
-    C => A ; Modulus on A
-    ${(_mulMod / A)} => B   ; k
-    ${_mulMod % A} => C     ; mulModResult
-    $ => D         :MLOAD(mulArithOverflowValue)
-    $              :MLOAD(arithRes1), ARITH
-
-    A => B          ; modulus
-    C => A          ; mulModResult
-    $ => A          :LT
-    1               :ASSERT, JMP(utilMULMODend)
-
-zeroOneMod:
-    0 => C
-
-utilMULMODend:
-    C               :MSTORE(mulModOutC)
-    $ => A          :RESTORE
-    $ => C          :MLOAD(mulModOutC), RETURN
-
 ;@info exp(A,D) --> A^D
 ;@in A, D => A^D
 ;@out A => result
 expAD:
     %MAX_CNT_BINARY - CNT_BINARY - 2 :JMPN(outOfCountersBinary)
-    %MAX_CNT_STEPS - STEP - 20       :JMPN(outOfCountersStep)
-                    :SAVE(B,C,D,E,RCX,RR)
+    %MAX_CNT_STEPS - STEP - 20       :JMPN(outOfCountersStep), SAVE(B,C,D,E,RCX,RR)
     ;E base
     A => E
     ;B exp
@@ -1016,8 +899,7 @@ expAD0:
     0 => D
 
 expADend:
-    C => A
-                    :RESTORE, RETURN
+    C => A          :RESTORE, RETURN
 
 ;@info function to force a failed assert
 failAssert:
