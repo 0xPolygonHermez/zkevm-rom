@@ -262,18 +262,28 @@ zeroOneAddMod:
  */
 opMULMOD:
      ; checks zk-counters
-    %MAX_CNT_STEPS - STEP - 20 :JMPN(outOfCountersStep)
+    %MAX_CNT_STEPS - STEP - 15     :JMPN(outOfCountersStep)
+    %MAX_CNT_ARITH - CNT_ARITH - 1 :JMPN(outOfCountersArith)
     ; check stack underflow
-    SP - 3          :JMPN(stackUnderflow)
+    SP - 3                          :JMPN(stackUnderflow)
     ; check out-of-gas
-    GAS - %GAS_MID_STEP => GAS    :JMPN(outOfGas)
+    GAS - %GAS_MID_STEP => GAS      :JMPN(outOfGas)
     SP - 1 => SP
 
-    $ => A          :MLOAD(SP--); [a => A]
-    $ => B          :MLOAD(SP--); [b => B]
-    $ => C          :MLOAD(SP); [N => C]
-    zkPC+1 => RR    :JMP(utilMULMOD); in: [A, B, C] out: [C: (A * B) % C]
-    C               :MSTORE(SP++), JMP(readCode); [C => SP]
+    $ => C          :MLOAD(SP--); [a => A]
+    $ => E          :MLOAD(SP--); [b => B]
+    $ => A, D       :MLOAD(SP); [N => C]
+    ; Check mod is zero, arith would fail otherwise
+    0 => B
+    $               :EQ, JMPC(opMULMODZero)
+    C => A
+    E => B
+    0 => C
+    ; compute ARITH_MOD => A*B+C= op (mod D)
+    ${(A*B) % D} => E   :ARITH_MOD
+    E                   :MSTORE(SP++), JMP(readCode); [C => SP]
+opMULMODZero:
+    0                   :MSTORE(SP++), JMP(readCode); [C => SP]
 
 /**
  * @link [https://www.evm.codes/#0A?fork=berlin]
@@ -299,8 +309,7 @@ opEXP:
     GAS - %GAS_SLOW_STEP - %EXP_BYTE_GAS * A => GAS :JMPN(outOfGas)
 
     ; compute exponentiation
-    C => A
-    zkPC+1 => RR        :JMP(expAD) ; in: [A, D] out: [A: A ** D]
+    C => A              :CALL(expAD) ; in: [A, D] out: [A: A ** D]
     A                   :MSTORE(SP++), JMP(readCode) ; [a ** exp => SP]
 
 /**
