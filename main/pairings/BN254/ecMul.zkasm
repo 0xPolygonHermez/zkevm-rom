@@ -15,6 +15,8 @@ VAR GLOBAL ecMul_P_y
 VAR GLOBAL ecMul_Q_x
 VAR GLOBAL ecMul_Q_y
 
+VAR GLOBAL ecMul_acummulator
+
 VAR GLOBAL ecMul_RR
 
 ; ERROR CODES (B)
@@ -23,35 +25,56 @@ VAR GLOBAL ecMul_RR
 ; 2 - P_y is too big
 ; 3 - P is not in E(Fp)
 
+; RESOURCES (not considering error paths):
+; -------------------------------------------
+; PATH 1 P == 𝒪:            [steps: 16, bin: 4]
+; PATH 2 k == 0 and P != 𝒪: [steps: 85, bin: 12, arith: 13]
+; PATH 3 k > r and P != 𝒪:  <--- w.c.
+;                [steps: 90, bin: 13, arith: 13]                               // setup
+;                 + max_bin_len(k) * [steps: 184, bin: 14, arith: 24]          // doubles
+;                 + number_of_bits_1(k) * [steps: 182, bin: 12, arith: 20]     // additions
+;                 + [steps: 7, bin: 1]                                         // last iteration + k reconstruction check
+;               total (w.c.): [steps: 92513 bin: 6580, arith: 11125]           // [90 + 253*184 + 252*182 + 7,
+;                                                                                  13 + 253*14  + 252*12  + 1,
+;                                                                                  13 + 253*24  + 252*20]
+; -------------------------------------------
+
 ecMul:
         RR      :MSTORE(ecMul_RR)
 
+        ; Check whether the point coordinates are in the range [0, BN254_P)
         %BN254_P_MINUS_ONE => A
         $ => B      :MLOAD(ecMul_P_x)
         $           :LT, JMPC(ecMul_Px_too_big)
         $ => B      :MLOAD(ecMul_P_y)
         $           :LT, JMPC(ecMul_Py_too_big)
+        ; [steps: 6, bin: 2]
 
-        ; Is P = O?
+        ; Is P = 𝒪?
         0n => B
         $ => A  :MLOAD(ecMul_P_x)
         $       :EQ, JMPNC(__ecMul_P_continue)
         $ => A  :MLOAD(ecMul_P_y)
         $       :EQ, JMPC(ecMul_P_is_zero)
                 __ecMul_P_continue:
+        ; [steps: 11, bin: 4]
+        ; P is not 𝒪 from here
 
-        ; 1] Check if P is in E(Fp)
+        ; 1] Check if P ∈ E(Fp)
         ; P in E iff (P.y)² == (P.x)³ + 3 (mod p)
         ; 1.1] Compute LHS and RHS
         $ => A    :MLOAD(ecMul_P_x), CALL(squareFpBN254)
         ; B = (P.x)²
+        ; [steps: 25, bin: 6, arith: 2]
 
         $ => A      :MLOAD(ecMul_P_x), CALL(mulFpBN254)
         ; C = (P.x)³
+        ; [steps: 37, bin: 7, arith: 8]
 
         %BN254_E_B => A     :CALL(addFpBN254)
         ; C = (P.x)³ + 3
         C           :MSTORE(ecMul_Q_x)
+        ; [steps: 50, bin: 8, arith: 10]
 
         $ => A    :MLOAD(ecMul_P_y), CALL(squareFpBN254)
         ; B = (Py)²
@@ -60,67 +83,77 @@ ecMul:
         B => A
         $ => B      :MLOAD(ecMul_Q_x)
         $           :EQ, JMPNC(ecMul_P_is_not_in_E)
+        ; [steps: 67, bin: 10, arith: 12]
+        ; P ∈ E(Fp) from here
 
-        ; Is k ∈ [1,r-1]?
-        $ => B      :MLOAD(ecMul_k), CALL(reduceFrBN254)
-        A           :MSTORE(ecMul_k)
-        0n => B
-        $           :EQ, JMPC(ecMul_k_is_zero)
+        ; Is k ∈ [0,r-1]?
+        $ => A          :MLOAD(ecMul_k)
+        %BN254_R => B
+        $               :LT, JMPC(__ecMul_continue)
+        A => B          :CALL(reduceFrBN254)
+                        __ecMul_continue:
+        0 => B
+        $               :EQ, JMPC(ecMul_k_is_zero)
+        A               :MSTORE(ecMul_k)
+        ; [steps: 83, bin: 13, arith: 13]
+        ; k ∈ [1,r-1] from here
 
-        257 => RCX
+        $0{receiveLen(mem.ecMul_k)} => RCX,E           ; receive the length of the binary representation of k
+
+        ; start the acummulator with the MSB of k
+        0 => A  :CALL(@bitwiseReconstruction + E)
+        A       :MSTORE(ecMul_acummulator)
 
         $ => A  :MLOAD(ecMul_P_x)
         $ => C  :MLOAD(ecMul_P_y)
         A       :MSTORE(ecMul_Q_x)
-        C       :MSTORE(ecMul_Q_y)
+        C       :MSTORE(ecMul_Q_y), JMP(ecMul_loop)
+        ; [steps: 90, bin: 13, arith: 13]
 
-                :JMP(ecMul_find_MSB_k)
-
+; Begin of branching
 ecMul_P_is_zero:
-        ; Q = O
-        0n      :MSTORE(ecMul_Q_x)
-        0n      :MSTORE(ecMul_Q_y)
+        ; before (w.c.) -> [steps: 11, bin: 4]
 
-                :JMP(ecMul_correct)
+        ; Q = 𝒪
+        0n      :MSTORE(ecMul_Q_x)
+        0n      :MSTORE(ecMul_Q_y), JMP(ecMul_correct)
+
+        ; till the end -> [steps: 16, bin: 4]
 
 ecMul_k_is_zero:
-        ; Q = O
+        ; before (w.c.) -> [steps: 80, bin: 12, arith: 13]
+
+        ; Q = 𝒪
         0n      :MSTORE(ecMul_Q_x)
-        0n      :MSTORE(ecMul_Q_y)
+        0n      :MSTORE(ecMul_Q_y), JMP(ecMul_correct)
 
-                :JMP(ecMul_correct)
-
-ecMul_find_MSB_k:
-        RCX - 1 => RCX
-        $ => A,B        :MLOAD(ecMul_k)
-        ; E = 2A
-        $ => E          :ADD,MSTORE(ecMul_k), JMPNC(ecMul_find_MSB_k)
-
+        ; till the end -> [steps: 85, bin: 12, arith: 13]
+; End of branching
 
 ecMul_loop:
-        RCX - 1 => RCX    :JMPZ(ecMul_correct)
+        ; block costs:
+        ;       no_last: [steps: 184, bin: 14, arith: 24]
+        ;       last:    [steps: 1]
+
+        RCX - 1 => RCX    :JMPN(ecMul_check)
 
         ; We always double
         $ => A  :MLOAD(ecMul_Q_x)
         $ => B  :MLOAD(ecMul_Q_y)
-        A       :MSTORE(ecAdd_P1_x)
-        B       :MSTORE(ecAdd_P1_y)
-        A       :MSTORE(ecAdd_P2_x)
-        B       :MSTORE(ecAdd_P2_y), CALL(ecAdd)
-        ; Q = Q + Q
-
-        $ => A  :MLOAD(ecAdd_P3_x)
-        $ => B  :MLOAD(ecAdd_P3_y)
+        A       :MSTORE(doublePointFPBN254_P_x)
+        B       :MSTORE(doublePointFPBN254_P_y), CALL(doublePointFPBN254)
+        $ => A  :MLOAD(doublePointFPBN254_Q_x)
+        $ => B  :MLOAD(doublePointFPBN254_Q_y)
         A       :MSTORE(ecMul_Q_x)
         B       :MSTORE(ecMul_Q_y)
+        ; Q = Q + Q
 
-        ; We check if the MSB b of k is either 1 or 0. If b==1, we should add P to Q.
-        ; Then, update the value of k.
-        $ => A,B        :MLOAD(ecMul_k)
-        ; E = 2A
-        $ => E          :ADD, MSTORE(ecMul_k), JMPNC(ecMul_loop)
+        ; Receive the next MSB b of k. If b == 1, we should add P to Q, otherwise start the next iteration
+        $0{(mem.ecMul_k) >> RCX & 0x1}         :JMPZ(ecMul_loop)
 
 ecMul_add:
+        ; block costs: [steps: 182, bin: 12, arith: 20]
+
         ; We add
         $ => A  :MLOAD(ecMul_Q_x)
         $ => B  :MLOAD(ecMul_Q_y)
@@ -129,14 +162,19 @@ ecMul_add:
         A       :MSTORE(ecAdd_P1_x)
         B       :MSTORE(ecAdd_P1_y)
         C       :MSTORE(ecAdd_P2_x)
-        D       :MSTORE(ecAdd_P2_y), CALL(ecAdd)
-        ; Q = Q + P
-
+        D       :MSTORE(ecAdd_P2_y)
+        1       :MSTORE(ecAdd_diff), CALL(ecAdd)
         $ => A  :MLOAD(ecAdd_P3_x)
         $ => B  :MLOAD(ecAdd_P3_y)
         A       :MSTORE(ecMul_Q_x)
-        B       :MSTORE(ecMul_Q_y), JMP(ecMul_loop)
+        B       :MSTORE(ecMul_Q_y)
+        ; Q = Q + P
 
+        ; We keep reconstruction the scalar k
+        $ => A          :MLOAD(ecMul_acummulator)
+        RCX => E
+                        :CALL(@bitwiseReconstruction + E)
+        A               :MSTORE(ecMul_acummulator), JMP(ecMul_loop)
 
 ; ERRORS
 ecMul_Px_too_big:
@@ -147,6 +185,13 @@ ecMul_Py_too_big:
 
 ecMul_P_is_not_in_E:
         3 => B      :JMP(ecMul_error)
+
+ecMul_check:
+        ; till the end -> [steps: 6, bin: 1]
+
+        $ => A      :MLOAD(ecMul_k)
+        $ => B      :MLOAD(ecMul_acummulator)
+        1           :EQ
 
 ecMul_correct:
         0 => B      :JMP(ecMul_end)

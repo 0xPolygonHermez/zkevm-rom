@@ -2,7 +2,7 @@
 ;;
 ;;  halfPairingBN254:
 ;;          input: P ∈ G1 and Q ∈ G2
-;;          output: It returns 1 if either P = 0 or Q = 0 and f_{r,Q}(P) ∈ Fp12 otherwise
+;;          output: It returns 1 if either P = 𝒪 or Q = 𝒪 and f_{r,Q}(P) ∈ FP2 otherwise
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -47,9 +47,18 @@ VAR GLOBAL halfPairingBN254_psi_y2
 ; 7 - P is not in G1
 ; 8 - Q is not in G2
 
+; RESOURCES (not considering error paths):
+; -------------------------------------------
+; PATH 1 P == 𝒪 and Q == 𝒪:     [steps: 40,  bin: 12, arith: 0]
+; PATH 2 P == 𝒪 and Q != 𝒪:     [steps: 20939, bin: 561, arith: 1804]
+; PATH 3 P != 𝒪 and Q == 𝒪:     [steps: 96,  bin: 17, arith: 8]
+; PATH 4 P,Q != 𝒪:              [steps: 172003, bin: 966, arith: 13327] <--- w.c.
+; -------------------------------------------
+
 halfPairingBN254:
     RR          :MSTORE(halfPairingBN254_RR)
 
+    ; Check whether the points coordinates are in the range [0, BN254_P)
     %BN254_P_MINUS_ONE => A
     $ => B      :MLOAD(halfPairingBN254_P_x)
     $           :LT, JMPC(halfPairingBN254_Px_too_big)
@@ -63,16 +72,18 @@ halfPairingBN254:
     $           :LT, JMPC(halfPairingBN254_Qy1_too_big)
     $ => B      :MLOAD(halfPairingBN254_Q_y2)
     $           :LT, JMPC(halfPairingBN254_Qy2_too_big)
+    ; [steps: 14, bin: 6, arith: 0]
 
-    ; Is P = O?
+    ; Is P = 𝒪?
     0n => B
     $ => A  :MLOAD(halfPairingBN254_P_x)
     $       :EQ, JMPNC(__halfPairingBN254_P_continue)
     $ => A  :MLOAD(halfPairingBN254_P_y)
     $       :EQ, JMPC(halfPairingBN254_P_is_zero)
             __halfPairingBN254_P_continue:
+    ; [steps: 19, bin: 8, arith: 0]
 
-    ; Is Q = O?
+    ; Is Q = 𝒪?
     $ => A  :MLOAD(halfPairingBN254_Q_x1)
     $       :EQ, JMPNC(__halfPairingBN254_Q_continue1)
     $ => A  :MLOAD(halfPairingBN254_Q_x2)
@@ -82,11 +93,14 @@ halfPairingBN254:
     $ => A  :MLOAD(halfPairingBN254_Q_y2)
     $       :EQ, JMPC(halfPairingBN254_Q_is_zero)
             __halfPairingBN254_Q_continue1:
+            :JMP(halfPairingBN254_P_subgroup_check)
+    ; [steps: 28, bin: 12, arith: 0]
 
-                :JMP(halfPairingBN254_P_subgroup_check)
-
+; Begin of branching
 halfPairingBN254_P_is_zero:
-    ; Is Q = O?
+    ; before (w.c.) -> [steps: 19, bin: 8, arith: 0]
+
+    ; Is Q = 𝒪?
     $ => A  :MLOAD(halfPairingBN254_Q_x1)
     $       :EQ, JMPNC(__halfPairingBN254_Q_continue2)
     $ => A  :MLOAD(halfPairingBN254_Q_x2)
@@ -96,34 +110,39 @@ halfPairingBN254_P_is_zero:
     $ => A  :MLOAD(halfPairingBN254_Q_y2)
     $       :EQ, JMPC(halfPairingBN254_P_and_Q_are_zero)
             __halfPairingBN254_Q_continue2:
+    ; [steps: 27, bin: 12, arith: 0]
 
-    ; Check that Q is in G2
+    ; Check that Q ∈ G2
     ; Q in G2 iff Q in E' and psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
 
-    ; 1] Check if Q is in E'(Fp2)
+    ; 1] Check if Q ∈ E'(Fp2)
     ; Q in E' iff (Q.y1 + Q.y2·u)² == (Q.x1 + Q.x2·u)³ + 3/(9+u)
     ; 1.1] Compute LHS and RHS
     $ => A  :MLOAD(halfPairingBN254_Q_x1)
     $ => B  :MLOAD(halfPairingBN254_Q_x2), CALL(squareFp2BN254)
     ; E + C·u = (Q.x1 + Q.x2·u)²
+    ; [steps: 34, bin: 12, arith: 1]
 
     E => A
     C => B
     $ => C  :MLOAD(halfPairingBN254_Q_x1)
     $ => D  :MLOAD(halfPairingBN254_Q_x2), CALL(mulFp2BN254)
     ; E + C·u = (Q.x1 + Q.x2·u)³
+    ; [steps: 41, bin: 12, arith: 2]
 
     E => A
     C => B
     %BN254_ETWISTED_B_X => C
     %BN254_ETWISTED_B_Y => D     :CALL(addFp2BN254)
     ; E + C·u = (Q.x1 + Q.x2·u)³ + 3/(9+u)
-    E           :MSTORE(halfPairingBN254_Q_RHS_x)
-    C           :MSTORE(halfPairingBN254_Q_RHS_y)
+    E       :MSTORE(halfPairingBN254_Q_RHS_x)
+    C       :MSTORE(halfPairingBN254_Q_RHS_y)
+    ; [steps: 50, bin: 12, arith: 3]
 
     $ => A  :MLOAD(halfPairingBN254_Q_y1)
     $ => B  :MLOAD(halfPairingBN254_Q_y2), CALL(squareFp2BN254)
     ; E + C·u = (Q.y1 + Q.y2·u)²
+    ; [steps: 57, bin: 12, arith: 4]
 
     ; 1.2] Check if LHS == RHS
     E => A
@@ -133,6 +152,7 @@ halfPairingBN254_P_is_zero:
     C => A
     $ => B  :MLOAD(halfPairingBN254_Q_RHS_y)
     $       :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
+    ; [steps: 63, bin: 14, arith: 4]
 
     ; 2] Check if psi(Q) == [6x²]Q
     ; 2.1] Compute psi(Q)
@@ -144,6 +164,7 @@ halfPairingBN254_P_is_zero:
     $ => C      :MLOAD(halfPairingBN254_Q_x1), CALL(mulFp2BN254)
     E           :MSTORE(halfPairingBN254_psi_x1)
     C           :MSTORE(halfPairingBN254_psi_x2)
+    ; [steps: 74, bin: 15, arith: 5]
 
     %BN254_P => A
     $ => B      :MLOAD(halfPairingBN254_Q_y2)
@@ -153,35 +174,36 @@ halfPairingBN254_P_is_zero:
     $ => C      :MLOAD(halfPairingBN254_Q_y1), CALL(mulFp2BN254)
     E           :MSTORE(halfPairingBN254_psi_y1)
     C           :MSTORE(halfPairingBN254_psi_y2)
+    ; [steps: 85, bin: 16, arith: 6]
 
     ; 2.2] Compute [6x²]Q
     $ => A      :MLOAD(halfPairingBN254_Q_x1)
     $ => B      :MLOAD(halfPairingBN254_Q_x2)
     $ => C      :MLOAD(halfPairingBN254_Q_y1)
     $ => D      :MLOAD(halfPairingBN254_Q_y2)
-    A           :MSTORE(escalarMulBN254_P_x1)
-    B           :MSTORE(escalarMulBN254_P_x2)
-    C           :MSTORE(escalarMulBN254_P_y1)
-    D           :MSTORE(escalarMulBN254_P_y2)
-    %BN254_SIX_TIMES_X_SQ :MSTORE(escalarMulBN254_k), CALL(escalarMulBN254)
-
+    A           :MSTORE(scalarMulPointBy6X2FP2BN254_P_x1)
+    B           :MSTORE(scalarMulPointBy6X2FP2BN254_P_x2)
+    C           :MSTORE(scalarMulPointBy6X2FP2BN254_P_y1)
+    D           :MSTORE(scalarMulPointBy6X2FP2BN254_P_y2), CALL(scalarMulPointBy6X2FP2BN254)
+    ; [steps: 20912, bin: 557, arith: 1804]
 
     ; 2.3] Check if psi(Q) == [6x²]Q
     $ => A      :MLOAD(halfPairingBN254_psi_x1)
-    $ => B      :MLOAD(escalarMulBN254_Q_x1)
+    $ => B      :MLOAD(scalarMulPointBy6X2FP2BN254_Q_x1)
     $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
 
     $ => A      :MLOAD(halfPairingBN254_psi_x2)
-    $ => B      :MLOAD(escalarMulBN254_Q_x2)
+    $ => B      :MLOAD(scalarMulPointBy6X2FP2BN254_Q_x2)
     $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
 
     $ => A      :MLOAD(halfPairingBN254_psi_y1)
-    $ => B      :MLOAD(escalarMulBN254_Q_y1)
+    $ => B      :MLOAD(scalarMulPointBy6X2FP2BN254_Q_y1)
     $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
 
     $ => A      :MLOAD(halfPairingBN254_psi_y2)
-    $ => B      :MLOAD(escalarMulBN254_Q_y2)
+    $ => B      :MLOAD(scalarMulPointBy6X2FP2BN254_Q_y2)
     $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
+    ; [steps: 20924, bin: 561, arith: 1804]
 
     ; e(O,Q) = 1
     1n      :MSTORE(halfPairingBN254_f11_x)
@@ -199,8 +221,12 @@ halfPairingBN254_P_is_zero:
 
     0 => B     :JMP(halfPairingBN254_end)
 
+    ; till the end -> [steps: 20939, bin: 561, arith: 1804]
+
 halfPairingBN254_Q_is_zero:
-    ; Check that P is in G1
+    ; before (w.c.) -> [steps: 28, bin: 12, arith: 0]
+
+    ; Check that P ∈ G1
     ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
     ; 1] Compute LHS and RHS
     $ => A,B    :MLOAD(halfPairingBN254_P_x), CALL(mulFpBN254); C = (Px)²
@@ -211,6 +237,7 @@ halfPairingBN254_Q_is_zero:
     C           :MSTORE(halfPairingBN254_P_x3)               ; halfPairingBN254_P_x3 = (Px)³ + 3
 
     $ => A,B    :MLOAD(halfPairingBN254_P_y), CALL(mulFpBN254); C = (Py)²
+    ; [steps: 78, bin: 16, arith: 8]
 
     ; 2] Check if LHS == RHS
     C => A
@@ -233,7 +260,11 @@ halfPairingBN254_Q_is_zero:
 
     0 => B     :JMP(halfPairingBN254_end)
 
+    ; till the end -> [steps: 96, bin: 17, arith: 8]
+
 halfPairingBN254_P_and_Q_are_zero:
+    ; before (w.c.) -> [steps: 27, bin: 12, arith: 0]
+
     ; e(O,O) = 1
     1n      :MSTORE(halfPairingBN254_f11_x)
     0n      :MSTORE(halfPairingBN254_f11_y)
@@ -250,8 +281,13 @@ halfPairingBN254_P_and_Q_are_zero:
 
     0 => B     :JMP(halfPairingBN254_end)
 
+    ; till the end -> [steps: 40, bin: 12, arith: 0]
+; End of branching
+
 halfPairingBN254_P_subgroup_check:
-    ; Check that P is in G1
+    ; before (w.c.) -> [steps: 28, bin: 12, arith: 0]
+
+    ; Check that P ∈ G1
     ; P in G1 iff (Py)² == (Px)³ + 3 (mod p)
     ; 1] Compute LHS and RHS
     $ => A,B    :MLOAD(halfPairingBN254_P_x), CALL(mulFpBN254); C = (Px)²
@@ -262,17 +298,19 @@ halfPairingBN254_P_subgroup_check:
     C           :MSTORE(halfPairingBN254_P_x3)               ; halfPairingBN254_P_x3 = (Px)³ + 3
 
     $ => A,B    :MLOAD(halfPairingBN254_P_y), CALL(mulFpBN254); C = (Py)²
+    ; [steps: 78, bin: 16, arith: 8]
 
     ; 2] Check if LHS == RHS
     C => A
     $ => B      :MLOAD(halfPairingBN254_P_x3)
     $           :EQ, JMPNC(halfPairingBN254_P_is_not_in_G1)
+    ; [steps: 81, bin: 17, arith: 8]
 
 halfPairingBN254_Q_subgroup_check:
-    ; Check that Q is in G2
+    ; Check that Q ∈ G2
     ; Q in G2 iff Q in E' and psi(Q) == [6x²]Q as proven in Proposition 3 of 2022/352
 
-    ; 1] Check if Q is in E'(Fp2)
+    ; 1] Check if Q ∈ E'(Fp2)
     ; Q in E' iff (Q.y1 + Q.y2·u)² == (Q.x1 + Q.x2·u)³ + 3/(9+u)
     ; 1.1] Compute LHS and RHS
     $ => A  :MLOAD(halfPairingBN254_Q_x1)
@@ -331,29 +369,29 @@ halfPairingBN254_Q_subgroup_check:
     $ => B      :MLOAD(halfPairingBN254_Q_x2)
     $ => C      :MLOAD(halfPairingBN254_Q_y1)
     $ => D      :MLOAD(halfPairingBN254_Q_y2)
-    A           :MSTORE(escalarMulBN254_P_x1)
-    B           :MSTORE(escalarMulBN254_P_x2)
-    C           :MSTORE(escalarMulBN254_P_y1)
-    D           :MSTORE(escalarMulBN254_P_y2)
-    %BN254_SIX_TIMES_X_SQ :MSTORE(escalarMulBN254_k), CALL(escalarMulBN254)
+    A           :MSTORE(scalarMulPointBy6X2FP2BN254_P_x1)
+    B           :MSTORE(scalarMulPointBy6X2FP2BN254_P_x2)
+    C           :MSTORE(scalarMulPointBy6X2FP2BN254_P_y1)
+    D           :MSTORE(scalarMulPointBy6X2FP2BN254_P_y2), CALL(scalarMulPointBy6X2FP2BN254)
 
 
     ; 2.3] Check if psi(Q) == [6x²]Q
     $ => A      :MLOAD(halfPairingBN254_psi_x1)
-    $ => B      :MLOAD(escalarMulBN254_Q_x1)
+    $ => B      :MLOAD(scalarMulPointBy6X2FP2BN254_Q_x1)
     $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
 
     $ => A      :MLOAD(halfPairingBN254_psi_x2)
-    $ => B      :MLOAD(escalarMulBN254_Q_x2)
+    $ => B      :MLOAD(scalarMulPointBy6X2FP2BN254_Q_x2)
     $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
 
     $ => A      :MLOAD(halfPairingBN254_psi_y1)
-    $ => B      :MLOAD(escalarMulBN254_Q_y1)
+    $ => B      :MLOAD(scalarMulPointBy6X2FP2BN254_Q_y1)
     $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
 
     $ => A      :MLOAD(halfPairingBN254_psi_y2)
-    $ => B      :MLOAD(escalarMulBN254_Q_y2)
+    $ => B      :MLOAD(scalarMulPointBy6X2FP2BN254_Q_y2)
     $           :EQ, JMPNC(halfPairingBN254_Q_is_not_in_G2)
+    ; [steps: 20978, bin: 566, arith: 1812]
 
 halfPairingBN254_Miller_loop:
     $ => A      :MLOAD(halfPairingBN254_P_x)
@@ -368,6 +406,8 @@ halfPairingBN254_Miller_loop:
     B           :MSTORE(millerLoopBN254_Q_x2)
     C           :MSTORE(millerLoopBN254_Q_y1)
     D           :MSTORE(millerLoopBN254_Q_y2), CALL(millerLoopBN254)
+    ; [steps: 171976, bin: 966, arith: 13327]
+
     $ => A      :MLOAD(millerLoopBN254_f11_x)
     $ => B      :MLOAD(millerLoopBN254_f11_y)
     A           :MSTORE(halfPairingBN254_f11_x)
@@ -394,6 +434,8 @@ halfPairingBN254_Miller_loop:
     B           :MSTORE(halfPairingBN254_f23_y)
 
     0 => B     :JMP(halfPairingBN254_end)
+
+    ; till end -> [steps: 172003, bin: 966, arith: 13327]
 
 ; ERRORS
 halfPairingBN254_Px_too_big:
@@ -425,4 +467,4 @@ halfPairingBN254_error:
 
 halfPairingBN254_end:
     $ => RR     :MLOAD(halfPairingBN254_RR)
-    :RETURN
+                :RETURN
