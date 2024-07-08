@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable import/no-extraneous-dependencies */
 /* eslint-disable no-use-before-define */
+const fs = require('fs');
 const path = require('path');
 const chalk = require('chalk');
 const zkasm = require('@0xpolygonhermez/zkasmcom');
@@ -9,7 +10,8 @@ const smMain = require('@0xpolygonhermez/zkevm-proverjs/src/sm/sm_main/sm_main')
 const emptyInput = require('@0xpolygonhermez/zkevm-proverjs/test/inputs/empty_input.json');
 
 const { argv } = require('yargs')
-    .alias('v', 'verbose');
+    .alias('v', 'verbose')
+    .alias('i', 'input');
 
 const { compilePil, getTestFiles } = require('./helpers/helpers');
 
@@ -29,7 +31,7 @@ async function main() {
     for (const file of files) {
 
         if (file.includes('ignore')) {
-          continue; 
+          continue;
         }
 
         if (await runTest(file, cmPols) == 1) {
@@ -60,7 +62,12 @@ async function runTest(pathTest, cmPols) {
     try {
         console.log(chalk.blue('   --> start'), pathTest);
         const rom = await zkasm.compile(pathTest, null, configZkasm);
-        const result = await smMain.execute(cmPols.Main, emptyInput, rom, config);
+
+        // get input
+        const input = (typeof argv.input === 'undefined') ? emptyInput : JSON.parse(fs.readFileSync(argv.input.trim()));
+
+        const result = await smMain.execute(cmPols.Main, input, rom, config);
+
         console.log(chalk.green('   --> pass'), pathTest);
         if (argv.verbose) {
             console.log(chalk.blue('   --> verbose'));

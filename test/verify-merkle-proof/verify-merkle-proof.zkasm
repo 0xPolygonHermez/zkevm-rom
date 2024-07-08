@@ -1,0 +1,20 @@
+start:
+    ; skip hashK verification
+    32 => D
+    A                                       :HASHK(0)
+
+    ; check indexL1InfoTree != 0 to verify data L1InfoTree
+    1                                                   :MSTORE(indexL1InfoTree)
+    ${getL1InfoRoot()}                                  :MSTORE(l1InfoRoot)
+
+    ${getL1InfoGER(mem.indexL1InfoTree)} => A           :MSTORE(gerL1InfoTree)
+    ${getL1InfoBlockHash(mem.indexL1InfoTree)} => B     :MSTORE(blockHashL1InfoTree)
+    ${getL1InfoTimestamp(mem.indexL1InfoTree)} => C     :MSTORE(timestampL1InfoTree)
+                                                        :CALL(verifyMerkleProof)
+
+
+endExecution:
+    0 => A,B,C,D,E,CTX, SP, PC, GAS,  SR, HASHPOS, RR
+                                                        :JMP(finalizeExecution)
+
+INCLUDE "../../main/main.zkasm"
