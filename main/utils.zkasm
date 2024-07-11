@@ -1694,7 +1694,7 @@ verifyMerkleProof_old:
 
     ; compute l1InfoTree Leaf value
     HASHPOS                       :HASHKLEN(E)
-    $ => C                        :HASHKDIGEST(E) ; initial value
+    $ => C                        :HASHKDIGEST(E) ; 'VALUE' LEAF MERKLE TREE --> LEVEL 0
     ; allow to set value to all zeroes if all its values are zero
     %L1_INFO_DATA_ZERO => B
     $                                       :EQ, JMPNC(continueVerifyMerkleProof_old)
@@ -1706,11 +1706,13 @@ continueVerifyMerkleProof_old:
     0 => D
 
 verifyMerkleProofLoop:
+    ; %L1INFO_TREE_LEVELS = 32
     %L1INFO_TREE_LEVELS - D         :JMPZ(verifyMerkleProofEnd)
 
     ; get left/right branch
-    $ => A                          :MLOAD(indexL1InfoTree)
+    $ => A                          :MLOAD(indexL1InfoTree) ; 'KEY' LEAF MERKLE TREE --> NAVIGATION PATH --> 00...011
     D => RR
+    ; Get bit D of the KEY --> Bit_i = KEY & (2**i)
                                     :CALL(@exp_num + RR); out:[B: 2**RR]
     ; A: index, B: SMTLevel (index maximum value is 4 bytes, SMTLevel maximum value is is 2**32)
     $ => B                          :AND
@@ -1727,13 +1729,13 @@ verifyMerkleProofLoop:
     ; decide left/right branch
     B                             :JMPZ(hashLeft)
 
-    ;hashRight:
+hashRight: ; HASH(SIBLING | VALUE)
     D => B ; save D in B for the next loop
     32 => D
     A                             :HASHK(E)
     C                             :HASHK(E), JMP(hashBranchEnd)
 
-hashLeft:
+hashLeft: ; HASH(VALUE | SIBLING)
     D => B ; save D in B for the next loop
     32 => D
     C                             :HASHK(E)
@@ -1741,7 +1743,7 @@ hashLeft:
 
 hashBranchEnd:
     HASHPOS                       :HASHKLEN(E)
-    $ => C                        :HASHKDIGEST(E)
+    $ => C                        :HASHKDIGEST(E) ; DIGEST
     B + 1 => D                    :JMP(verifyMerkleProofLoop)
 
 
@@ -1786,7 +1788,7 @@ verifyMerkleProof:
 
     ; compute l1InfoTree Leaf value
     HASHPOS                                 :HASHKLEN(E)
-    $ => C, A                               :HASHKDIGEST(E) ; initial value
+    $ => C, A                               :HASHKDIGEST(E) ; 'VALUE' MERKLE TREE
     ; allow to set value to all zeroes if all its values are zero
     %L1_INFO_DATA_ZERO => B
     $                                       :EQ, JMPNC(continueVerifyMerkleProof)
@@ -1808,16 +1810,20 @@ continueVerifyMerkleProof:
     ;    - provide each 'indexL1InfoTree' bit to either hash left/right the merkle tree nodes
     ;    - compute linear combination of 'indexL1InfoTree' bits to match the 'indexL1InfoTree' itself at the end of the loop
 
+    ; KEY_LINEAR_COMBINATION = 2^31*bit_31 + ... + 2^1*bit_1 + 2^0*bit_0
+    ; Provided by the prover
+
+    ; UNROLLED LOOP
     ; BIT 0
     0 => HASHPOS
     ${B & 0x00000001}                           :JMPZ(hashLeft0)
 
-hashRight0:
+hashRight0: ; HASH(SIBLING, VALUE)
     ${getSmtProof(mem.indexL1InfoTree, 0)}      :HASHK(E+0)
     C                                           :HASHK(E+0)
-    A + 0x00000001 => A                         :JMP(hashBranchEnd0)
+    A + 0x00000001 => A                         :JMP(hashBranchEnd0) ; ACCUMULATE KEY
 
-hashLeft0:
+hashLeft0: ; HASH(VALUE, SIBLING)
     C                                           :HASHK(E+0)
     ${getSmtProof(mem.indexL1InfoTree, 0)}      :HASHK(E+0)
 
@@ -1832,7 +1838,7 @@ hashBranchEnd0:
 hashRight1:
     ${getSmtProof(mem.indexL1InfoTree, 1)}      :HASHK(E+1)
     C                                           :HASHK(E+1)
-    A + 0x00000002 => A                         :JMP(hashBranchEnd1)
+    A + 0x00000002 => A                         :JMP(hashBranchEnd1) ; ACCUMULATE KEY
 
 hashLeft1:
     C                                           :HASHK(E+1)
@@ -2354,13 +2360,12 @@ hashBranchEnd31:
     $ => C                                      :HASHKDIGEST(E+31)
 
     ; verify linear combination of 'indexL1InfoTree'
-    B                                       :ASSERT
+    B                                       :ASSERT ; (KEY PROVIDED BY PROVER) === (KEY IN MEMORY)
     E + 31 => E                             :MSTORE(lastHashKIdUsed)
 
-
 verifyMerkleProofEnd:
-    $ => A                        :MLOAD(l1InfoRoot)
-    C                             :ASSERT
+    $ => A                        :MLOAD(l1InfoRoot) ; l1InfoRoot COMES FROM L1
+    C                             :ASSERT ; A === C --> ROOT COMPUTED === ROOT FROM
     $                             :MLOAD(isL1InfoDataZero), JMPNZ(invalidL1InfoTreeIndex)
 
 verifyMerkleProofReturn:
