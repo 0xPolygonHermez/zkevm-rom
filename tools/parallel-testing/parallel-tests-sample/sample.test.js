@@ -13,7 +13,7 @@ const smMain = require('@0xpolygonhermez/zkevm-proverjs/src/sm/sm_main/sm_main')
 
 let rom = require('../../../build/rom.json');
 
-let stepsN = 2 ** 23;
+let stepsN = 2 ** 24;
 let counters = false;
 
 const fileCachePil = path.join(__dirname, '../../../node_modules/@0xpolygonhermez/zkevm-proverjs/cache-main-pil.json');
