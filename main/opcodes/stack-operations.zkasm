@@ -130,7 +130,9 @@ opAuxPUSHA:
 
     $ => B              :MLOAD(bytecodeLength)
     PC + D - B          :JMPN(opAuxPUSHA2)
-    B - PC => D
+    ; For the edge case where the last opcode of the bytecode is PUSH1, we will handle this specific situation separately,
+    ; where a 0 is pushed to the stack and the PC is incremented by 1.
+    B - PC => D         :JMPZ(lastOpcodePUSH1)
 
 opAuxPUSHA2:
     ; check out-of-gas
@@ -151,7 +153,9 @@ opAuxPUSHB:
     $ => A                          :MLOAD(isCreate), JMPNZ(opAuxPUSHBcreate)
     $ => B                          :MLOAD(txCalldataLen)
     PC + D - B                      :JMPN(opAuxPUSHB2)
-    B - PC => D
+    ; For the edge case where the last opcode of the bytecode is PUSH1, we will handle this specific situation separately,
+    ; where a 0 is pushed to the stack and the PC is incremented by 1.
+    B - PC => D                     :JMPZ(lastOpcodePUSH1)
 
 opAuxPUSHB2:
     ; set bytes length to read to C
@@ -211,6 +215,16 @@ opAuxPUSHBcreate2:
 opfinalPUSHBcreate:
     ; return to current context
     $ => CTX                        :MLOAD(currentCTX), JMP(opAuxPUSHBend)
+
+lastOpcodePUSH1:
+    ; check out-of-gas
+    GAS - %GAS_FASTEST_STEP => GAS      :JMPN(outOfGas)
+    ; store stack output
+    0                              :MSTORE(SP++); [pushed_value(E) => SP]
+    ; check stack overflow
+    %MAX_STACK_SIZE - SP           :JMPN(stackOverflow)
+    ; rectify PC
+    PC + 1 => PC                   :JMP(readCode)
 
 /**
  * @link [https://www.evm.codes/#80?fork=berlin]
