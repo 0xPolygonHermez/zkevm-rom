@@ -11,26 +11,16 @@
 ;;                  · out = inA·inB, with len(out) <= C + 1
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; function array_mul_short(a: bigint[], b: bigint, base: bigint): bigint[] {
-;     const alen = a.length;
-;     const len = alen;
-;     const result = new Array<bigint>(len).fill(0n);
-;     let product: bigint;
-;     let carry = 0n;
-;     let i;
-;     for (i = 0; i < alen; i++) {
-;         product = a[i] * b + carry;
-;         carry = product / base;
-;         out[i] = product - carry * base;
-;     }
-
-;     if (carry > 0n) {
-;         result.push(carry);
-;     }
-
-;     trim(result);
-;     return result;
+; code
+; --------------------------
+; first_iteration           <-- a[0]·b
+; while(loop_index_check) { <-- While 0 < i < len(a)
+;     loop2inA              <-- Compute a[i]·b + carry
 ; }
+; 1] check_carry            <-- If there is a carry, append it to the result
+; 2] trim                   <-- Otherwise, trim the result
+; end
+; --------------------------
 
 VAR GLOBAL array_mul_short_inA[%ARRAY_MAX_LEN]
 VAR GLOBAL array_mul_short_inB
@@ -49,14 +39,12 @@ array_mul_short:
 
         C               :MSTORE(array_mul_short_len_inA)
 
-        ; Load b
-        $ => B          :MLOAD(array_mul_short_inB)
-
 array_mul_short_first_iteration:
         ; The result will be stored as D·base + C
 
-        ; 1] a[0] * b, where a[i],b ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
+        ; 1] a[0] * b, where a[0],b ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
         $ => A          :MLOAD(array_mul_short_inA)
+        $ => B          :MLOAD(array_mul_short_inB)
         0 => C
         $${var _arrayShortMul_AB = A*B}
         ${_arrayShortMul_AB >> 256} => D ; this is used as the next carry
@@ -65,39 +53,37 @@ array_mul_short_first_iteration:
         ; out[0] = product - carry·base
         C               :MSTORE(array_mul_short_out)
 
-        1 => RR
-        $ => A          :MLOAD(array_mul_short_len_inA)
-        A - RR          :JMPZ(array_mul_short_prep_trim)
+        1 => E
 
-array_mul_short_loopZero2inA:
+array_mul_short_loop_index_check:
+        $ - E           :F_MLOAD(array_mul_short_len_inA), JMPZ(array_mul_short_check_carry)
+
+array_mul_short_loop2inA:
         ; The result will be stored as D·base + C
 
         ; 1] a[i] * b + carry, where a[i],b,carry ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
-        $ => A          :MLOAD(array_mul_short_inA + RR)
+        $ => A          :MLOAD(array_mul_short_inA + E)
         D => C
         $${var _arrayShortMul_AB = A*B + C}
         ${_arrayShortMul_AB >> 256} => D ; this is used as the next carr
         ${_arrayShortMul_AB} => C :ARITH
 
         ; out[i] = product - carry·base
-        C               :MSTORE(array_mul_short_out + RR)
+        C               :MSTORE(array_mul_short_out + E)
 
-        RR + 1 => RR
-        $ => A          :MLOAD(array_mul_short_len_inA)
-        A - RR          :JMPZ(array_mul_short_prep_trim, array_mul_short_loopZero2inA)
+        E + 1 => E      :JMP(array_mul_short_loop_index_check)
 
 ; If the last carry > 0, we need to insert it to the output
-array_mul_short_prep_trim:
+array_mul_short_check_carry:
         D => A
         0 => B
-        $               :EQ, JMPNZ(array_mul_short_trim)
+        $               :EQ, JMPC(array_mul_short_trim)
 
-        D               :MSTORE(array_mul_short_out + RR)
-        RR + 1          :MSTORE(array_mul_short_len_out), JMP(array_mul_short_end)
+        D               :MSTORE(array_mul_short_out + E)
+        E + 1           :MSTORE(array_mul_short_len_out), JMP(array_mul_short_end)
 
 array_mul_short_trim:
-        RR               :MSTORE(array_mul_short_len_out)
+        E               :MSTORE(array_mul_short_len_out)
 
 array_mul_short_end:
-        $ => RR         :MLOAD(array_mul_short_RR)
-                        :RETURN
+        $ => RR         :MLOAD(array_mul_short_RR), RETURN
