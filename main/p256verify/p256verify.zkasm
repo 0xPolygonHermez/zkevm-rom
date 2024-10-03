@@ -1,0 +1,222 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; P256VERIFY precompiled as specified in https://github.com/ethereum/RIPs/blob/master/RIPS/rip-7212.md
+;;
+;; p256verify:
+;;             in:
+;;                · A = hash        - The message hash
+;;                · B = r           - The first signature element
+;;                · C = s           - The second signature element
+;;                · D = x           - The first coordinate of the public key
+;;                · E = y           - The second coordinate of the public key
+;;            out:
+;;                · A = result      - 1 if the signature is valid, 0 otherwise
+;;                · B = result_code - 0 if no error, otherwise the error code
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; TODO: See if everything gets broken when hash = 0
+;       Also for x (see constants.zkasm)
+
+; inputs
+VAR GLOBAL p256verify_hash
+VAR GLOBAL p256verify_r
+VAR GLOBAL p256verify_s
+VAR GLOBAL p256verify_x
+VAR GLOBAL p256verify_y
+
+VAR GLOBAL p256verify_x3
+VAR GLOBAL p256verify_s_inv
+VAR GLOBAL p256verify_u1
+VAR GLOBAL p256verify_u2
+
+; VAR GLOBAL p256verify_r_inv
+; VAR GLOBAL p256verify_y
+; VAR GLOBAL p256verify_y2
+; VAR GLOBAL p256verify_k1
+; VAR GLOBAL p256verify_k2
+; VAR GLOBAL p256verify_RR
+; VAR GLOBAL p256verify_v_parity
+; VAR GLOBAL p256verify_s_upperlimit
+
+; ERROR CODES (B)
+; 0 - no error
+; 1 - r is zero
+; 2 - r is too big
+; 3 - s is zero
+; 4 - s is too big
+; 5 - x is too big
+; 6 - y is too big
+; 7 - PK is the point at infinity
+; 8 - PK is not in the curve
+; 9 - result is the point at infinity
+
+; RESOURCES:
+; TODO
+
+p256verify:
+        ; save RR to call return at end of routine
+        RR          :MSTORE(p256verify_RR)
+
+        A               :MSTORE(p256verify_hash)
+        B               :MSTORE(p256verify_r)
+        C               :MSTORE(p256verify_s)
+        D               :MSTORE(p256verify_x)
+        E               :MSTORE(p256verify_y)
+
+        ; %MAX_CNT_BINARY - CNT_BINARY - 550   :JMPN(outOfCountersBinary)
+        ; %MAX_CNT_ARITH - CNT_ARITH - 1100     :JMPN(outOfCountersArith)
+        ; %MAX_CNT_STEPS - STEP - 6400     :JMPN(outOfCountersStep)
+
+        ; $ => A         :MLOAD(cntKeccakPreProcess)
+        ; %MAX_CNT_KECCAK_F - CNT_KECCAK_F - A - 1 :JMPN(outOfCountersKeccak)
+
+p256verify_correctness_checks:
+        ; 1] Check that r in [1,N-1]
+        0n => A
+        $ => B          :MLOAD(p256verify_r)
+        $               :EQ, JMPC(p256verify_r_is_zero)
+        %SECP256R1_N_MINUS_ONE => A
+        $               :LT, JMPC(p256verify_r_is_too_big)
+
+        ; 2] Check that s in [1,N-1]
+        $ => B          :MLOAD(p256verify_s)
+        $               :LT, JMPC(p256verify_s_is_too_big)
+        0n => A
+        $               :EQ, JMPC(p256verify_s_is_zero)
+
+        ; 3] Check that x in [0,P-1]
+        %SECP256R1_P_MINUS_ONE => A
+        $ => B          :MLOAD(p256verify_x)
+        $               :LT, JMPC(p256verify_x_is_too_big)
+
+        ; 4] Check that y in [0,P-1]
+        $ => B          :MLOAD(p256verify_y)
+        $               :LT, JMPC(p256verify_y_is_too_big)
+
+        ; TODO: Talk, but we should somehow check whether PK is the point at infinity
+        ; ; 5] Check whether PK = (x,y) is the point at infinity 𝒪
+        ; 0n => B
+        ; $ => A          :MLOAD(p256verify_x)
+        ; $               :EQ, JMPNC(p256verify_pk_not_zero)
+        ; $ => A          :MLOAD(p256verify_y)
+        ; $               :EQ, JMPC(p256verify_pk_zero)
+
+        ; 6] Check whether PK = (x,y) is a point on the curve
+        ; PK in E(Fp) iff y² == x³ + a·x + b (mod p)
+        ; 1.1] Compute LHS and RHS
+        $ => A          :MLOAD(p256verify_x), CALL(squareFpBN254)
+        ; B = x²
+
+        $ => A          :MLOAD(p256verify_x), CALL(mulFpBN254)
+        ; C = x³
+        C               :MSTORE(p256verify_x3)
+
+        %SECP256R1_A => A
+        $ => B          :MLOAD(p256verify_x), CALL(mulFpBN254)
+        ; C = a·x
+
+        %SECP256R1_B => A :CALL(addFpBN254)
+        ; C = a·x + b
+
+        $ => A          :MLOAD(p256verify_x3), CALL(addFpBN254)
+        ; C = x³ + a·x + b
+        C               :MSTORE(p256verify_x3)
+
+        $ => A          :MLOAD(p256verify_y), CALL(squareFpBN254)
+        ; B = y²
+
+        ; 1.2] Check if LHS == RHS
+        B => A
+        $ => B          :MLOAD(p256verify_x3)
+        $               :EQ, JMPNC(p256verify_pk_not_in_curve)
+
+p256verify_scalars:
+        ; compute s⁻¹ (mod n)
+        $ => A          :MLOAD(p256verify_s), CALL(invFnEc)
+        ; B = s⁻¹
+        B               :MSTORE(p256verify_s_inv)
+
+        ; compute u1 = hash·s⁻¹ (mod n)
+        $ => A          :MLOAD(p256verify_hash), CALL(mulFnEc)
+        ; C = hash·s⁻¹
+        C               :MSTORE(p256verify_u1)
+
+        ; compute u2 = r·s⁻¹ (mod n)
+        $ => A          :MLOAD(p256verify_r)
+        $ => B          :MLOAD(p256verify_s_inv), CALL(mulFnEc)
+        ; C = r·s⁻¹
+        C               :MSTORE(p256verify_u2)
+
+p256verify_ecp:
+        ; Compute u1·G + u2·PK
+        $ => A          :MLOAD(p256verify_u1)
+        A               :MSTORE(mulPointEc_s1)
+        %SECP256R1_G_X  :MSTORE(mulPointEc_p1_x)
+        %SECP256R1_G_Y  :MSTORE(mulPointEc_p1_y)
+
+        $ => A          :MLOAD(p256verify_u2)
+        A               :MSTORE(mulPointEc_s2)
+        $ => A          :MLOAD(p256verify_x)
+        A               :MSTORE(mulPointEc_p2_x)
+        $ => A          :MLOAD(p256verify_y)
+        A               :MSTORE(mulPointEc_p2_y), CALL(mulPointEc)
+
+p256verify_verification:
+        ; if the result is the point at infinity, the signature is invalid
+        HASHPOS         :JMPZ(p256verify_result_point_at_infinity)
+
+        ; no errors from here
+        0 => B
+
+        ; check if the x-coordinate of the result is equal to r
+        $ => A          :MLOAD(mulPointEc_p3_x)
+        $ => B          :MLOAD(p256verify_r)
+        $               :EQ, JMPNC(p256verify_error)
+
+        ; Signature is valid
+        1 => A          :JMP(p256verify_end)
+
+; ERRORS
+p256verify_r_is_zero:
+        1 => B          :JMP(p256verify_error)
+
+p256verify_r_is_too_big:
+        2 => B          :JMP(p256verify_error)
+
+p256verify_s_is_zero:
+        3 => B          :JMP(p256verify_error)
+
+p256verify_s_is_too_big:
+        4 => B          :JMP(p256verify_error)
+
+p256verify_x_is_too_big:
+        5 => B          :JMP(p256verify_error)
+
+p256verify_y_is_too_big:
+        6 => B          :JMP(p256verify_error)
+
+; p256verify_pk_point_at_infinity:
+;         7 => B        :JMP(p256verify_error)
+
+p256verify_pk_not_in_curve:
+        8 => B          :JMP(p256verify_error)
+
+p256verify_result_point_at_infinity:
+        9 => B          :JMP(p256verify_error)
+
+p256verify_error:
+        0 => A
+
+p256verify_end:
+        $ => RR         :MLOAD(p256verify_RR)
+                        :RETURN
+
+; INCLUDE "addFpEc.zkasm"
+; INCLUDE "sqFpEc.zkasm"
+; INCLUDE "mulFpEc.zkasm"
+; INCLUDE "mulFnEc.zkasm"
+; INCLUDE "invFpEc.zkasm"
+; INCLUDE "invFnEc.zkasm"
+; INCLUDE "sqrtFpEc.zkasm"
+; INCLUDE "checkSqrtFpEc.zkasm"
+; INCLUDE "mulPointEc.zkasm"
