@@ -1,4 +1,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; POST: out is trimmed
 ;;
 ;; array_add_short:
 ;;             in:
@@ -10,76 +11,82 @@
 ;;                  · out = inA + inB, with len(out) <= C + 1
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; function array_add_short(a: bigint[], b: bigint, base: bigint): bigint[] {
-;     const alen = a.length;
-;     let result = new Array<bigint>(alen);
-;     let sum = 0n;
-;     let carry = b;
-;     for (let i = 0; i < alen; i++) {
-;         sum = a[i] + carry;
-;         carry = sum >= base ? 1n : 0n;
-;         out[i] = sum - carry * base;
-;     }
+;; WARNING: This function is tailored for checking that a = q·b + r in the array_div_short function.
+;;          In can be used for other purposes except for the worst case, i.e. when len(inA) == %ARRAY_MAX_LEN.
+;;          Specifically, there is an implicit assumption that the output len of this function cannot be
+;;          greater than %ARRAY_MAX_LEN, and do not allow to generate the proof in such case.
 
-;     if (carry === 1n) {
-;         result.push(carry);
-;     }
-;     return result;
+; code
+; --------------------------
+; first_iteration           <-- Compute a[0] + b
+; while(loop_index_check) { <-- While 0 < i < len(a)
+;     loop2inA              <-- Compute a[i] + carry
 ; }
+; 1] check_carry            <-- If there is a carry, append it to the result
+; 2] trim                   <-- Otherwise, trim the result
+; end
+; --------------------------
 
 VAR GLOBAL array_add_short_inA[%ARRAY_MAX_LEN]
 VAR GLOBAL array_add_short_inB
-VAR GLOBAL array_add_short_out[%ARRAY_MAX_LEN_PLUS_ONE]
+VAR GLOBAL array_add_short_out[%ARRAY_MAX_LEN] ; This cannot be bigger because we use it for division checking
 VAR GLOBAL array_add_short_len_inA
 VAR GLOBAL array_add_short_len_out
-
-VAR GLOBAL array_add_short_carry
 
 VAR GLOBAL array_add_short_RR
 
 array_add_short:
-        %MAX_CNT_BINARY - CNT_BINARY     -    C           :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 5 - 10*C - 8       :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY -  1 -   %ARRAY_MAX_LEN_MINUS_ONE           :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 10 - 8*%ARRAY_MAX_LEN_MINUS_ONE - 5       :JMPN(outOfCountersStep)
 
         RR              :MSTORE(array_add_short_RR)
 
         C               :MSTORE(array_add_short_len_inA)
 
-        0 => E ; index in loops
-        $ => A          :MLOAD(array_add_short_inB)
-        A               :MSTORE(array_add_short_carry)
-
-array_add_short_loopZero2inA:
-        ; The result will be stored as D·base + C
-
-        0 => D  ; reset the carry chunk
-
-        ; a[i] + carry, where a[i] ∈ [0,base-1]:
-        ;       · If i = 0, then carry = inB and then the number cannot be GT base + (base - 2), two chunks
-        ;       · Otherwise, the number cannot be GT base, two chunks
-        $ => A          :MLOAD(array_add_short_inA + E)
-        $ => B          :MLOAD(array_add_short_carry)
-        $ => C          :ADD, JMPNC(__array_add_short_continue_1)
-        1 => D
+array_add_short_first_iteration:
+        ; a[0] + b, where a[0] ∈ [0,base-1]: the number cannot be GT base + (base - 2), two chunks
+        $ => A          :MLOAD(array_add_short_inA)
+        $ => B          :MLOAD(array_add_short_inB)
+        $               :ADD, MSTORE(array_add_short_out), JMPC(__array_add_short_continue_1)
+        ; ---------------------
+        0 => D          :JMP(__array_add_short_continue_2)
                         __array_add_short_continue_1:
+        1 => D
+                        __array_add_short_continue_2:
+        ; ---------------------
 
-        C               :MSTORE(array_add_short_out + E)
-        D               :MSTORE(array_add_short_carry)
+        1 => E
 
-        E + 1 => E,A
-        $ => B          :MLOAD(array_add_short_len_inA)
-        B - A           :JMPZ(array_add_short_check_carry, array_add_short_loopZero2inA)
+array_add_short_loop_index_check:
+        ; C = len_inA
+        C - E           :JMPZ(array_add_short_check_carry)
+
+array_add_short_loop2inA:
+        ; a[i] + carry, where a[i] ∈ [0,base-1]:  the number cannot be GT base, two chunks
+        $ => A          :MLOAD(array_add_short_inA + E)
+        D => B
+        $               :ADD, MSTORE(array_add_short_out + E), JMPC(__array_add_short_continue_3)
+        ; ---------------------
+        0 => D          :JMP(__array_add_short_continue_4)
+                        __array_add_short_continue_3:
+        1 => D
+                        __array_add_short_continue_4:
+        ; ---------------------
+
+        E + 1 => E      :JMP(array_add_short_loop_index_check)
 
 array_add_short_check_carry:
-        D => A
-        A               :JMPZ(__array_add_short_continue_2)
+        D               :JMPZ(array_add_short_trim)
+
+        ; Carry path
+        E - %ARRAY_MAX_LEN      :JMPZ(failAssert)
+
         ; In this case, the carry = 1 and we should append it to the result
         1               :MSTORE(array_add_short_out + E)
-        E + 1           :MSTORE(array_add_short_len_out)
-                        :JMP(array_add_short_end)
-                        __array_add_short_continue_2:
-         E              :MSTORE(array_add_short_len_out)
+        E + 1           :MSTORE(array_add_short_len_out), JMP(array_add_short_end)
+
+array_add_short_trim:
+        E              :MSTORE(array_add_short_len_out)
 
 array_add_short_end:
-        $ => RR         :MLOAD(array_add_short_RR)
-                        :RETURN
+        $ => RR         :MLOAD(array_add_short_RR), RETURN
