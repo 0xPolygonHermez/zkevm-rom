@@ -10,26 +10,24 @@
 ;;                  · out = in², with len(out) <= 2·C
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; function array_square(a: bigint[], base: bigint): bigint[] {
-;     let len = a.length;
-;     let out = new Array<bigint>(2*len).fill(0n);
-;     let product: bigint;
-;     let carry: bigint;
-;     for (let i = 0; i < len; i++) {
-;         carry = 0n - a[i] * a[i];
-;         for (var j = i; j < len; j++) {
-;             product = 2n * (a[i] * a[j]) + out[i+j] + carry;
-;             carry = product / base;
-
-;             out[i+j] = product - carry * base;
-;         }
-;         out[i + len] = carry;
-;     }
-;     trim(out);
-;     return out;
-; }
-
 ; Matrix visualization: https://hackmd.io/C9KQPGoaSICStIQQFweBlw?view
+
+; code
+; --------------------------
+; first_iteration_first_row       <-- Compute a[0]·b[0]
+; do {
+;     finish_first_row            <-- Compute a[0]·b[j] + out[j]
+; } while(inB_index_check)        <-- While 0 < j < len(b)
+; while(inA_index_check) {        <-- While 0 <  i < len(a)
+;       while (inB_index_check) { <-- While 0 <= j < len(b) - 1
+;               loop2inB          <-- Compute a[i]·b[j] + out[i+j]
+;       }
+;      loop2inB_last              <-- Compute a[i]·b[len(b)-1] + out[i+len(b)-1]
+; }
+; 1] check_carry                  <-- If there is a carry, append it to the result
+; 2] trim                         <-- Otherwise, trim the result
+; end
+; --------------------------
 
 VAR GLOBAL array_square_in[%ARRAY_MAX_LEN]
 VAR GLOBAL array_square_out[%ARRAY_MAX_LEN_DOUBLED]
@@ -361,5 +359,4 @@ array_square_trim:
         C - 1           :MSTORE(array_square_len_out)
 
 array_square_end:
-        $ => RR         :MLOAD(array_square_RR)
-                        :RETURN
+        $ => RR         :MLOAD(array_square_RR), RETURN

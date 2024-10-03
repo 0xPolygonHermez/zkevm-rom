@@ -23,12 +23,12 @@
 ;;     if (array_is_one(base)) return [1n];
 ;;     if (array_is_zero(e)) return [1n];
 ;;
-;;     let r = [1n];
+;;     let out = [1n];
 ;;     let base = array_div(base, mod)[1];
 ;;     while (!array_is_zero(exp)) {
 ;;         if (array_is_zero(base)) return [0n];
 ;;         if (isOdd(exp)) {
-;;             r = array_div(array_mul(r, base),mod)[1];
+;;             out = array_div(array_mul(out, base),mod)[1];
 ;;         }
 ;;         exp = array_div_two(exp);
 ;;         base = array_div(array_square(base),mod)[1];
@@ -91,7 +91,8 @@ modexp_M_to_div_short1:
         A               :MSTORE(array_div_short_inB)
 
 modexp_div_short_B_and_M:
-                        :CALL(array_div_short)
+                        :CALL(array_div_short) ;  inputs: [array_div_short_len_inA: C, array_div_short_inA: modexp_B, array_div_short_inB: modexp_M]
+                                               ; outputs: [array_div_short_rem]
 
         %MAX_CNT_STEPS - STEP - 5       :JMPN(outOfCountersStep) ; till pre_loop
 
@@ -111,7 +112,8 @@ modexp_M_to_div_long1:
         E - 1 => E      :JMPN(modexp_div_long_B_and_M, modexp_M_to_div_long1)
 
 modexp_div_long_B_and_M:
-                        :CALL(array_div_long)
+                        :CALL(array_div_long) ;  inputs: [array_div_long_len_inA: C, array_div_long_len_inB: D, array_div_long_inA: modexp_B, array_div_long_inB: modexp_M]
+                                              ; outputs: [array_div_long_len_rem, array_div_long_rem]
 
         $ => C          :MLOAD(array_div_long_len_rem)
 
@@ -155,7 +157,8 @@ modexp_B_to_mul_short:
         A               :MSTORE(array_mul_short_inB)
 
 modexp_mul_short_out_and_B:
-                        :CALL(array_mul_short)
+                        :CALL(array_mul_short) ;  inputs: [array_mul_short_len_inA: C, array_mul_short_inA: modexp_out, array_mul_short_inB: modexp_B]
+                                               ; outputs: [array_mul_short_len_out, array_mul_short_out]
 
         %MAX_CNT_STEPS - STEP - 4 - 3*%ARRAY_MAX_LEN - 3*%ARRAY_MAX_LEN - 1 :JMPN(outOfCountersStep)
 
@@ -176,7 +179,8 @@ modexp_B_to_mul_long:
         E - 1 => E      :JMPN(modexp_mul_long_out_and_B, modexp_B_to_mul_long)
 
 modexp_mul_long_out_and_B:
-                        :CALL(array_mul_long)
+                        :CALL(array_mul_long) ;  inputs: [array_mul_long_len_inA: C, array_mul_long_len_inB: D, array_mul_long_inA: modexp_out, array_mul_long_inB: modexp_B]
+                                              ; outputs: [array_mul_long_len_out, array_mul_long_out]
 
         %MAX_CNT_STEPS - STEP - 4 - 3*%ARRAY_MAX_LEN - 3*%ARRAY_MAX_LEN - 1 :JMPN(outOfCountersStep)
 
@@ -204,7 +208,8 @@ modexp_M_to_div_short2:
         A               :MSTORE(array_div_short_inB)
 
 modexp_div_short_out_and_M1:
-                        :CALL(array_div_short)
+                        :CALL(array_div_short) ;  inputs: [array_div_short_len_inA: C, array_div_short_inA: array_mul_long_out, array_div_short_inB: modexp_M]
+                                               ; outputs: [array_div_short_rem]
 
         %MAX_CNT_STEPS - STEP - 3 - 2 - 3*%ARRAY_MAX_LEN - 2 :JMPN(outOfCountersStep) ; till array_div_short by 2
 
@@ -230,7 +235,8 @@ modexp_M_to_div_long2:
         E - 1 => E      :JMPN(modexp_div_long_out_and_M1, modexp_M_to_div_long2)
 
 modexp_div_long_out_and_M1:
-                        :CALL(array_div_long)
+                        :CALL(array_div_long) ;  inputs: [array_div_long_len_inA: C, array_div_long_inA: array_mul_long_out, array_div_long_inB: modexp_M]
+                                              ; outputs: [array_div_long_len_rem, array_div_long_rem]
 
         %MAX_CNT_STEPS - STEP - 3 - 3*%ARRAY_MAX_LEN - 2 - 3*%ARRAY_MAX_LEN - 2 :JMPN(outOfCountersStep) ; till array_div_short by 2
 
@@ -251,16 +257,14 @@ modexp_pre_loop:
 
         ; Is Elen = 1 and E = 0?
         0 => B
-        $ => A          :MLOAD(modexp_Elen)
-        A - 1           :JMPNZ(__modexp_E_continue)
+        $ - 1           :F_MLOAD(modexp_Elen), JMPNZ(__modexp_E_continue)
         $ => A          :MLOAD(modexp_E)
         $               :EQ, JMPC(modexp_end) ; we are done
                         __modexp_E_continue:
 
 modexp_loop:
         ; Is Blen = 1 and B = 0?
-        $ => A          :MLOAD(modexp_Blen)
-        A - 1           :JMPNZ(__modexp_B_continue)
+        $ - 1           :F_MLOAD(modexp_Blen), JMPNZ(__modexp_B_continue)
         $ => A          :MLOAD(modexp_B)
         $               :EQ, JMPC(modexp_B_is_zero)
                         __modexp_B_continue:
@@ -269,7 +273,7 @@ modexp_loop:
         ; The base is 2^256, so I only need to check if the first chunk is odd to conclude that the whole number is odd.
         $ => A          :MLOAD(modexp_E)
         1 => B
-        $               :AND, JMPNZ(modexp_loop_multiply) ; In the worst case, the exponent is odd in each iteration
+        $               :AND, JMPC(modexp_loop_multiply) ; In the worst case, the exponent is odd in each iteration
                         return_modexp_loop_multiply:
 
         $ => C          :MLOAD(modexp_Elen)
@@ -283,7 +287,8 @@ modexp_E_to_div_two:
         RR - 1 => RR    :JMPN(modexp_div_E_and_two, modexp_E_to_div_two)
 
 modexp_div_E_and_two:
-                        :CALL(array_div_two)
+                        :CALL(array_div_two) ;  inputs: [array_div_two_len_in: C, array_div_two_in: modexp_E]
+                                             ; outputs: [array_div_two_len_quo, array_div_two_quo]
 
         %MAX_CNT_STEPS - STEP - 3 - 3*%ARRAY_MAX_LEN - 2 - 3*%ARRAY_MAX_LEN - 1   :JMPN(outOfCountersStep) ; till array_square
 
@@ -309,7 +314,8 @@ modexp_B_to_square1:
         RR - 1 => RR    :JMPN(modexp_square_B, modexp_B_to_square1)
 
 modexp_square_B:
-                        :CALL(array_square)
+                        :CALL(array_square) ;  inputs: [array_square_len_in: C, array_square_in: modexp_B]
+                                            ; outputs: [array_square_len_out, array_square_out]
 
         %MAX_CNT_STEPS - STEP - 4 - 3*%ARRAY_MAX_LEN - 3*%ARRAY_MAX_LEN - 1     :JMPN(outOfCountersStep)
 
@@ -326,12 +332,12 @@ modexp_out_to_div_short2:
         RR - 1 => RR    :JMPN(modexp_M_to_div_short3, modexp_out_to_div_short2)
 
 modexp_M_to_div_short3:
-        $ => A          :MLOAD(modexp_M + E)
-        A               :MSTORE(array_div_short_inB + E)
-        E - 1 => E      :JMPN(modexp_div_short_out_and_M2, modexp_M_to_div_short3)
+        $ => A          :MLOAD(modexp_M)
+        A               :MSTORE(array_div_short_inB)
 
 modexp_div_short_out_and_M2:
-                        :CALL(array_div_short)
+                        :CALL(array_div_short) ;  inputs: [array_div_short_len_inA: C, array_div_short_inA: array_square_out, array_div_short_inB: modexp_M]
+                                               ; outputs: [array_div_short_rem]
 
         %MAX_CNT_STEPS - STEP - 3 - 2    :JMPN(outOfCountersStep) ; till begginning of modexp_pre_loop
 
@@ -351,7 +357,8 @@ modexp_M_to_div_long3:
         E - 1 => E      :JMPN(modexp_div_long_out_and_M2, modexp_M_to_div_long3)
 
 modexp_div_long_out_and_M2:
-                        :CALL(array_div_long)
+                        :CALL(array_div_long) ;  inputs: [array_div_long_len_inA: C, array_div_long_len_inB: D, array_div_long_inA: array_square_out, array_div_long_inB: modexp_M]
+                                              ; outputs: [array_div_long_len_rem, array_div_long_rem]
 
         %MAX_CNT_STEPS - STEP - 3 - 3*%ARRAY_MAX_LEN - 2 :JMPN(outOfCountersStep) ; till begginning of modexp_pre_loop
 
@@ -366,5 +373,4 @@ modexp_rem_from_div3:
 ; -------------------
 
 modexp_end:
-        $ => RR         :MLOAD(modexp_RR)
-                        :RETURN
+        $ => RR         :MLOAD(modexp_RR), RETURN
