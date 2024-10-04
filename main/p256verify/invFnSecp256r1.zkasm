@@ -1,0 +1,56 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; invFnSecp256r1:
+;;             in: A
+;;             out: A = A⁻¹ (mod SECP256R1_N)
+;;
+;;  PRE: Inputs can be any 256-bit number
+;; POST: The result is in Fn
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; NOTE: On input 0, it returns 0
+
+VAR GLOBAL invFnSecp256r1_tmp
+VAR GLOBAL invFnSecp256r1_RR
+
+invFnSecp256r1:
+        RR              :MSTORE(invFnSecp256r1_RR)
+
+        ; Normalization of A
+        %SECP256R1_N => B
+        $               :LT, JMPC(invFnSecp256r1_zero_check)
+        ; If A ≥ SECP256R1_N, then since p < 2²⁵⁶ < 2·p, subtracting SECP256R1_N ensures
+        ; that A falls within the range [0, SECP256R1_N).
+        $ => A          :SUB
+        ; From here, it is guaranteed that A ∈ [0,SECP256R1_N)
+
+; TODO: Check if A can be assumed to be non-zero
+invFnSecp256r1_zero_check:
+        ; Check if A = 0, and if so, return 0
+        0 => B
+        $               :EQ, JMPC(invFnSecp256r1_end)
+
+invFnSecp256r1_normalized:
+        ; 1] Compute and check the inverse over Z
+        ; A·A⁻¹ + [0] = [D]·2²⁵⁶ + [E]
+        0 => C
+        ${var _invFnSecp256r1_A = invFnSecp256r1(A)} => B :MSTORE(invFnSecp256r1_tmp);
+        $${var _invFnSecp256r1_AB = A * _invFnSecp256r1_A}
+        ${_invFnSecp256r1_AB >> 256} => D
+        ${_invFnSecp256r1_AB} => E :ARITH
+
+        ; 2] Check it over Fn, that is, it must be satisfied that:
+        ; [SECP256R1_N]·[(A·A⁻¹) / SECP256R1_N] + [1] = D·2²⁵⁶ + E
+        %SECP256R1_N => A
+        ${_invFnSecp256r1_AB / const.SECP256R1_N} => B  ; quotient  (256 bits)
+        1 => C                                          ; remainder
+        E :ARITH
+
+        ; 3] Check that the result is lower than SECP256R1_N
+        A => B
+        $ => A          :MLOAD(invFnSecp256r1_tmp)
+        1               :LT
+
+invFnSecp256r1_end:
+        $ => RR         :MLOAD(invFnSecp256r1_RR)
+                        :RETURN
