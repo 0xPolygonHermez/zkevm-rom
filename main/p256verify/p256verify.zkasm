@@ -29,6 +29,10 @@ VAR GLOBAL p256verify_s_inv
 VAR GLOBAL p256verify_u1
 VAR GLOBAL p256verify_u2
 
+VAR GLOBAL p256verify_RR
+
+INCLUDE "constants.zkasm"
+
 ; ERROR CODES (B)
 ; 0 - no error
 ; 1 - r is zero
@@ -81,7 +85,6 @@ p256verify_correctness_checks:
         $ => B          :MLOAD(p256verify_y)
         $               :LT, JMPC(p256verify_y_is_too_big)
 
-        ; TODO: Talk, but we should somehow check whether PK is the point at infinity
         ; 5] Check whether PK = (x,y) is the point at infinity 𝒪
         0n => B
         $ => A          :MLOAD(p256verify_x)
@@ -153,16 +156,28 @@ p256verify_verification:
         ; check if result of dblScalarMulSecp256k1 is point at infinity
         $               :MLOAD(dblScalarMulSecp256r1_p3_zero), JMPNZ(p256verify_result_point_at_infinity)
 
-        ; no errors from here
-        0 => B
-
         ; check if the x-coordinate of the result is equal to r
-        $ => A          :MLOAD(dblScalarMulSecp256r1_p3_x)
-        $ => B          :MLOAD(p256verify_r)
-        $               :EQ, JMPNC(p256verify_error)
+        ; perform modular reduction is p3_x >= SECP256R1_N
+        %SECP256R1_N_MINUS_ONE => A
+        $ => B          :MLOAD(dblScalarMulSecp256r1_p3_x)
+        $               :LT, JMPNC(p256verify_assign_a)
 
-        ; Signature is valid
-        1 => A          :JMP(p256verify_end)
+        ; If A ≥ SECP256R1_N, then since n < 2²⁵⁶ < 2·n, subtracting SECP256R1_N ensures
+        ; that A falls within the range [0, SECP256R1_N).
+        $ => A          :MLOAD(dblScalarMulSecp256r1_p3_x)
+        %SECP256R1_N => B
+        $ => A          :SUB, JMP(p256verify_final_check)
+
+p256verify_assign_a:
+        $ => A          :MLOAD(dblScalarMulSecp256r1_p3_x)
+
+p256verify_final_check:
+        $ => B          :MLOAD(p256verify_r)
+        $ => A          :EQ
+        ; A = 1 if the signature is valid; 0 otherwise
+
+        ; program ended with no errors
+        0 => B          :JMP(p256verify_end)
 
 ; ERRORS
 p256verify_r_is_zero:
@@ -198,3 +213,10 @@ p256verify_error:
 p256verify_end:
         $ => RR         :MLOAD(p256verify_RR)
                         :RETURN
+
+INCLUDE "addFpSecp256r1.zkasm"
+INCLUDE "invFnSecp256r1.zkasm"
+INCLUDE "mulFnSecp256r1.zkasm"
+INCLUDE "mulFpSecp256r1.zkasm"
+INCLUDE "squareSecp256r1.zkasm"
+INCLUDE "dblScalarMulSecp256r1.zkasm"

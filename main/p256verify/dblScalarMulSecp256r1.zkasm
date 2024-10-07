@@ -59,7 +59,7 @@ dblScalarMulSecp256r1:
 
 	; receive the maximum length (minus one) between the binary representations of k1 and k2
 	; Note that 0 <= max(len(k1)-1,len(k2)-1) <= 255
-        $0{receiveLen(mem.dblScalarMulSecp256r1_k1, mem.dblScalarMulSecp256r1_k2)} => A,RR ; TODO: I can use $BYTE here
+        $0{receiveLen(mem.dblScalarMulSecp256r1_k1, mem.dblScalarMulSecp256r1_k2)} => A,RR
 	256 => B
 	1 		:LT
 
@@ -117,8 +117,8 @@ dblScalarMulSecp256r1SameInitialPoints:
         ; A == p1_x
         ; B == p1_y
         ; 2·(A, B) = (E, op)
-        ${dblPointSecp256r1_x(A,B)} => E 	:MSTORE(dblScalarMulSecp256r1_p12_x)
-        ${dblPointSecp256r1_y(A,B)}   		:ARITH_SECP256R1_ECADD_SAME, MSTORE(dblScalarMulSecp256r1_p12_y), JMP(dblScalarMulSecp256r1_loop_fi)
+        ${xDblPointEc_secp256r1(A,B)} => E 	:MSTORE(dblScalarMulSecp256r1_p12_x)
+        ${yDblPointEc_secp256r1(A,B)}   		:ARITH_SECP256R1_ECADD_SAME, MSTORE(dblScalarMulSecp256r1_p12_y), JMP(dblScalarMulSecp256r1_loop_fi)
 	; [steps: 17, arith: 1]
 
 dblScalarMulSecp256r1DiffInitialPoints:
@@ -132,8 +132,8 @@ dblScalarMulSecp256r1DiffInitialPoints:
 
         ; Compute and check the addition p1 + p2
         ; (A, B) + (C, D) = (E, op)
-        ${addPointSecp256r1_x(A,B,C,D)} => E  	:MSTORE(dblScalarMulSecp256r1_p12_x)
-        ${addPointSecp256r1_y(A,B,C,D)}       	:ARITH_SECP256R1_ECADD_DIFFERENT, MSTORE(dblScalarMulSecp256r1_p12_y)
+        ${xAddPointEc_secp256r1(A,B,C,D)} => E  	:MSTORE(dblScalarMulSecp256r1_p12_x)
+        ${yAddPointEc_secp256r1(A,B,C,D)}       	:ARITH_SECP256R1_ECADD_DIFFERENT, MSTORE(dblScalarMulSecp256r1_p12_y)
 	; [steps: 14, arith: 1]
 
 
@@ -154,28 +154,32 @@ dblScalarMulSecp256r1DiffInitialPoints:
 ; ------------------------------
 dblScalarMulSecp256r1_loop_fi:
         ; Receive the next MSB bit of k1
-        $0{(mem.dblScalarMulSecp256r1_k1 >> RR) & 0x1}        :JMPNZ(dblScalarMulSecp256r1_k11)
+        $0{(mem.dblScalarMulSecp256r1_k1 >> RR) & 0x1}        	:JMPNZ(dblScalarMulSecp256r1_k11)
 
 ; high_bit(k1) == 0 high_bit(k2) == ??
 dblScalarMulSecp256r1_k10_fi:
         ; Receive the next MSB bit of k2
-        $0{(mem.dblScalarMulSecp256r1_k2) >> RR & 0x1}        :JMPZ(failAssert, @dblScalarMulSecp256r1_scalar_table_k10_k21 + RR)
+        $0{(mem.dblScalarMulSecp256r1_k2) >> RR & 0x1}        	:JMPZ(failAssert)
+								:JMP(@dblScalarMulSecp256r1_scalar_table_k10_k21 + RR)
 ; ------------------------------
 
 
 dblScalarMulSecp256r1_loop:
         ; Receive the next MSB bit of k1
-        $0{(mem.dblScalarMulSecp256r1_k1 >> RR) & 0x1}        :JMPNZ(dblScalarMulSecp256r1_k11)
+        $0{(mem.dblScalarMulSecp256r1_k1 >> RR) & 0x1}        	:JMPNZ(dblScalarMulSecp256r1_k11)
 
 ; high_bit(k1) == 0 high_bit(k2) == ??
 dblScalarMulSecp256r1_k10:
         ; Receive the next MSB bit of k2
-        $0{(mem.dblScalarMulSecp256r1_k2) >> RR & 0x1}        :JMPZ(@dblScalarMulSecp256r1_scalar_table_k10_k20 + RR, @dblScalarMulSecp256r1_scalar_table_k10_k21 + RR)
+        $0{(mem.dblScalarMulSecp256r1_k2) >> RR & 0x1}        	:JMPZ(@dblScalarMulSecp256r1_scalar_table_k10_k20 + RR)
+								:JMP(@dblScalarMulSecp256r1_scalar_table_k10_k21 + RR)
 
 ; high_bit(k1) == 1 high_bit(k2) == ??
 dblScalarMulSecp256r1_k11:
+	2*RR => E
         ; Receive the next MSB b of k2.
-        $0{(mem.dblScalarMulSecp256r1_k2) >> RR & 0x1}        :JMPZ(@dblScalarMulSecp256r1_scalar_table_k11_k20 + 2*RR, @dblScalarMulSecp256r1_scalar_table_k11_k21 + 2*RR)
+        $0{(mem.dblScalarMulSecp256r1_k2) >> RR & 0x1}        	:JMPZ(@dblScalarMulSecp256r1_scalar_table_k11_k20 + E)
+								:JMP(@dblScalarMulSecp256r1_scalar_table_k11_k21 + E)
 
 ; high_bit(k1) == 0 high_bit(k2) == 1
 dblScalarMulSecp256r1_k10_k21_add_prepare:
@@ -221,8 +225,8 @@ dblScalarMulSecp256r1_add:
         ; p3 = p3 + (C,D)
         ; (C, D) is point to add (p1 or p2 or p12)
         ; (A, B) + (C, D) = (E, op)
-        ${addPointSecp256r1_x(A,B,C,D)} => E 	:MSTORE(dblScalarMulSecp256r1_p3_x)
-        ${addPointSecp256r1_y(A,B,C,D)} 	:ARITH_SECP256R1_ECADD_DIFFERENT, MSTORE(dblScalarMulSecp256r1_p3_y), JMP(dblScalarMulSecp256r1_double)
+        ${xAddPointEc_secp256r1(A,B,C,D)} => E 	:MSTORE(dblScalarMulSecp256r1_p3_x)
+        ${yAddPointEc_secp256r1(A,B,C,D)} 	:ARITH_SECP256R1_ECADD_DIFFERENT, MSTORE(dblScalarMulSecp256r1_p3_y), JMP(dblScalarMulSecp256r1_double)
 
 dblScalarMulSecp256r1_p3_assignment:
         ; p3 = (C,D)
@@ -249,8 +253,8 @@ dblScalarMulSecp256r1_double_noRR:
 
 dblScalarMulSecp256r1_double_compute:
         ; 2·(A, B) = (E, op)
-        ${xDblPointEc(A,B)} => E  :MSTORE(dblScalarMulSecp256r1_p3_x)
-        ${yDblPointEc(A,B)}       :ARITH_SECP256R1_ECADD_SAME, MSTORE(dblScalarMulSecp256r1_p3_y), JMP(dblScalarMulSecp256r1_loop)
+        ${xDblPointEc_secp256r1(A,B)} => E  :MSTORE(dblScalarMulSecp256r1_p3_x)
+        ${yDblPointEc_secp256r1(A,B)}       :ARITH_SECP256R1_ECADD_SAME, MSTORE(dblScalarMulSecp256r1_p3_y), JMP(dblScalarMulSecp256r1_loop)
 
 dblScalarMulSecp256r1_x_equals_before_add:
         ; [MAP] if C != mem.dblScalarMulSecp256r1_p3_x ==> fails, MLOAD fails because read something different
@@ -295,8 +299,8 @@ dblScalarMulSecp256r1_same_point_to_add:
         D => B
 
         ; (A,B) * 2 = (E, op)
-        ${xDblPointEc(A,B)} => E  	:MSTORE(dblScalarMulSecp256r1_p3_x)
-        ${yDblPointEc(A,B)}  		:ARITH_SECP256R1_ECADD_SAME, MSTORE(dblScalarMulSecp256r1_p3_y), JMP(dblScalarMulSecp256r1_double)
+        ${xDblPointEc_secp256r1(A,B)} => E  	:MSTORE(dblScalarMulSecp256r1_p3_x)
+        ${yDblPointEc_secp256r1(A,B)}  		:ARITH_SECP256R1_ECADD_SAME, MSTORE(dblScalarMulSecp256r1_p3_y), JMP(dblScalarMulSecp256r1_double)
 
 dblScalarMulSecp256r1_end_loop:
         ; Check that the accumulated scalars coincide with the original ones
