@@ -47,7 +47,16 @@ INCLUDE "constants.zkasm"
 ; 9 - result is the point at infinity
 
 ; RESOURCES:
-; TODO
+;           · r is zero:      [steps: 13,   bin: 1,  arith: 0]
+;           · r is too big:   [steps: 15,   bin: 2,  arith: 0]
+;           · s is zero:      [steps: 17,   bin: 3,  arith: 0]
+;           · s is too big:   [steps: 19,   bin: 4,  arith: 0]
+;           · x is too big:   [steps: 22,   bin: 5,  arith: 0]
+;           · y is too big:   [steps: 24,   bin: 6,  arith: 0]
+;           · PK is zero:     [steps: 29,   bin: 8,  arith: 0]
+;           · PK not in E:    [steps: 104,  bin: 15, arith: 12]
+;           · result is zero: [steps: 7708, bin: 19, arith: 531]
+;           · no error:       [steps: 7718, bin: 22, arith: 531]
 
 p256verify:
         ; save RR to call return at end of routine
@@ -59,9 +68,9 @@ p256verify:
         D               :MSTORE(p256verify_x)
         E               :MSTORE(p256verify_y)
 
-        ; %MAX_CNT_BINARY - CNT_BINARY - 550   :JMPN(outOfCountersBinary)
-        ; %MAX_CNT_ARITH - CNT_ARITH - 1100     :JMPN(outOfCountersArith)
-        ; %MAX_CNT_STEPS - STEP - 6400     :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY - 25       :JMPN(outOfCountersBinary)
+        %MAX_CNT_ARITH - CNT_ARITH - 550        :JMPN(outOfCountersArith)
+        %MAX_CNT_STEPS - STEP - 8000            :JMPN(outOfCountersStep)
 
 p256verify_correctness_checks:
         ; 1] Check that r in [1,N-1]
@@ -92,52 +101,55 @@ p256verify_correctness_checks:
         $               :EQ, JMPNC(p256verify_pk_not_point_at_infinity)
         $ => A          :MLOAD(p256verify_y)
         $               :EQ, JMPC(p256verify_pk_point_at_infinity)
+        ; [steps: 29, bin: 8, arith: 0]
 
 p256verify_pk_not_point_at_infinity:
         ; 6] Check whether PK = (x,y) is a point on the curve
         ; PK in E(Fp) iff y² == x³ + a·x + b (mod p)
         ; 1.1] Compute LHS and RHS
-        $ => A          :MLOAD(p256verify_x), CALL(squareFpSecp256r1)
+        $ => A          :MLOAD(p256verify_x), CALL(squareFpSecp256r1) ; [in: A, out: A] [steps: 11, bin: 1, arith: 2]
         ; A = x²
 
-        $ => B          :MLOAD(p256verify_x), CALL(mulFpSecp256r1)
+        $ => B          :MLOAD(p256verify_x), CALL(mulFpSecp256r1) ; [in: A,B, out: C] [steps: 10, bin: 1, arith: 2]
         ; C = x³
         C               :MSTORE(p256verify_x3)
 
         %SECP256R1_A => A
-        $ => B          :MLOAD(p256verify_x), CALL(mulFpSecp256r1)
+        $ => B          :MLOAD(p256verify_x), CALL(mulFpSecp256r1) ; [in: A,B, out: C]
         ; C = a·x
 
-        %SECP256R1_B => A :CALL(addFpSecp256r1)
+        %SECP256R1_B => A :CALL(addFpSecp256r1) ; [in: A,C, out: C] [steps: 10, bin: 1, arith: 2]
         ; C = a·x + b
 
-        $ => A          :MLOAD(p256verify_x3), CALL(addFpSecp256r1)
+        $ => A          :MLOAD(p256verify_x3), CALL(addFpSecp256r1) ; [in: A,C, out: C] [steps: 10, bin: 1, arith: 2]
         ; C = x³ + a·x + b
         C               :MSTORE(p256verify_x3)
 
-        $ => A          :MLOAD(p256verify_y), CALL(squareFpSecp256r1)
+        $ => A          :MLOAD(p256verify_y), CALL(squareFpSecp256r1) ; [in: A, out: A] [steps: 11, bin: 1, arith: 2]
         ; A = y²
 
         ; 1.2] Check if LHS == RHS
         $ => B          :MLOAD(p256verify_x3)
         $               :EQ, JMPNC(p256verify_pk_not_in_curve)
+        ; [steps: 100, bin: 15, arith: 12]
 
 p256verify_scalars:
         ; compute s⁻¹ (mod n)
-        $ => A          :MLOAD(p256verify_s), CALL(invFnSecp256r1)
+        $ => A          :MLOAD(p256verify_s), CALL(invFnSecp256r1) ; [in: A, out: A] [steps: 11, bin: 1, arith: 2]
         ; A = s⁻¹
         A               :MSTORE(p256verify_s_inv)
 
         ; compute u1 = hash·s⁻¹ (mod n)
-        $ => B          :MLOAD(p256verify_hash), CALL(mulFnSecp256r1)
+        $ => B          :MLOAD(p256verify_hash), CALL(mulFnSecp256r1) ; [in: A,B, out: C] [steps: 10, bin: 1, arith: 2]
         ; C = hash·s⁻¹
         C               :MSTORE(p256verify_u1)
 
         ; compute u2 = r·s⁻¹ (mod n)
         $ => A          :MLOAD(p256verify_r)
-        $ => B          :MLOAD(p256verify_s_inv), CALL(mulFnSecp256r1)
+        $ => B          :MLOAD(p256verify_s_inv), CALL(mulFnSecp256r1) ; [in: A,B, out: C] [steps: 10, bin: 1, arith: 2]
         ; C = r·s⁻¹
         C               :MSTORE(p256verify_u2)
+        ; [steps: 138, bin: 18, arith: 18]
 
 p256verify_ecp:
         ; Compute u1·G + u2·PK
@@ -151,7 +163,8 @@ p256verify_ecp:
         $ => A          :MLOAD(p256verify_x)
         A               :MSTORE(dblScalarMulSecp256r1_p2_x)
         $ => A          :MLOAD(p256verify_y)
-        A               :MSTORE(dblScalarMulSecp256r1_p2_y), CALL(dblScalarMulSecp256r1)
+        A               :MSTORE(dblScalarMulSecp256r1_p2_y), CALL(dblScalarMulSecp256r1) ; [steps: 6459, bin: 1, arith: 513]
+        ; [steps: 7707, bin: 19, arith: 531]
 
 p256verify_verification:
         ; check if result of dblScalarMulSecp256k1 is point at infinity
@@ -179,6 +192,7 @@ p256verify_final_check:
 
         ; program ended with no errors
         0 => B          :JMP(p256verify_end)
+        ; till the end -> [steps: 7718, bin: 22, arith: 531]
 
 ; ERRORS
 p256verify_r_is_zero:
@@ -219,5 +233,5 @@ INCLUDE "addFpSecp256r1.zkasm"
 INCLUDE "invFnSecp256r1.zkasm"
 INCLUDE "mulFnSecp256r1.zkasm"
 INCLUDE "mulFpSecp256r1.zkasm"
-INCLUDE "squareSecp256r1.zkasm"
+INCLUDE "squareFpSecp256r1.zkasm"
 INCLUDE "dblScalarMulSecp256r1.zkasm"

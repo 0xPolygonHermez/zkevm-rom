@@ -41,8 +41,9 @@ start:
         -1          :MSTORE(lastHashKId)
         -1          :MSTORE(lastHashPId)
 
-        :JMP(test_p256verify)
         ; :JMP(point_arith_tests)
+        ; :JMP(point_arith_tests_wc)
+        :JMP(test_p256verify)
 
 INCLUDE "../main/p256verify/p256verify.zkasm"
 
@@ -124,6 +125,23 @@ point_arith_tests:
         ;;;;;;;;;;;;;;;;;;
         ;; Random tests ;;
         ;;;;;;;;;;;;;;;;;;
+
+        :JMP(end)
+
+point_arith_tests_wc:
+        ; choose k1,k2 to be the scalar with the most hamming weight lower than N
+        %SECP256R1_G_X                                                          :MSTORE(dblScalarMulSecp256r1_p1_x)
+        %SECP256R1_G_Y                                                          :MSTORE(dblScalarMulSecp256r1_p1_y)
+        0x7cf27b188d034f7e8a52380304b51ac3c08969e277f21b35a60b48fc47669978n     :MSTORE(dblScalarMulSecp256r1_p2_x)
+        0x7775510db8ed040293d9ac69f7430dbba7dade63ce982299e04b79d227873d1n      :MSTORE(dblScalarMulSecp256r1_p2_y)
+        0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn     :MSTORE(dblScalarMulSecp256r1_k1)
+        0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn     :MSTORE(dblScalarMulSecp256r1_k2)
+        :CALL(dblScalarMulSecp256r1)
+        0                                                                       :MLOAD(dblScalarMulSecp256r1_p3_zero)
+        0xeebb107bc2d546057f9c5649bb5dea8795f64141cb9e99838be45b60da918a24n     :MLOAD(dblScalarMulSecp256r1_p3_x)
+        0x26fa920fb6a63cd960bdf294aea1f7dfb6774d041f6ac22c0fddefeaa3c6061fn     :MLOAD(dblScalarMulSecp256r1_p3_y)
+
+        :JMP(end)
 
 
 test_p256verify:
@@ -8744,6 +8762,10 @@ test_p256verify:
 	7 :ASSERT
 
         :JMP(end)
+
+outOfCountersStep:
+outOfCountersBinary:
+outOfCountersArith:
 
 ;@info function to force a failed assert
 failAssert:
