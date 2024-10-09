@@ -93,8 +93,9 @@ VAR GLOBAL array_div_long_RR
 array_div_long:
         ; w.c. until array_mul_long is when inA > inB and len(inA) == len(inB)
 
-        %MAX_CNT_BINARY - CNT_BINARY - 2                                                              :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 24 - 4*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE - 3*%ARRAY_MAX_LEN - 1 :JMPN(outOfCountersStep) ; till array_mul_long
+        %MAX_CNT_ARITH - CNT_ARITH - %ARRAY_MAX_LEN + 18*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE - 19*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE*%ARRAY_MAX_LEN :JMPN(outOfCountersArith)
+        %MAX_CNT_BINARY - CNT_BINARY - 2 - 2*%ARRAY_MAX_LEN - 2*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE*%ARRAY_MAX_LEN                                                    :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 64 - 7*%ARRAY_MAX_LEN_DOUBLED - 28*%ARRAY_MAX_LEN - 8*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE - 19*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE*%ARRAY_MAX_LEN :JMPN(outOfCountersStep) ; till array_mul_long
 
         RR              :MSTORE(array_div_long_RR)
 
@@ -255,8 +256,6 @@ array_div_long_mul_quo_inB:
         ; block (R != 0 and len(R) == len(B)): [steps: 14, bin: 1]
 
         ; w.c. is when rem is not zero
-        %MAX_CNT_BINARY - CNT_BINARY - 1                               - 1                                    :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 14 - 5*%ARRAY_MAX_LEN_MINUS_ONE - 2 - 3 - 3*%ARRAY_MAX_LEN_DOUBLED - 1 :JMPN(outOfCountersStep) ; till array_add_AGTB
 
         ; Check the remainder
         $0{receiveLenRemainder()} => D          :JMPZ(array_div_long_rem_is_zero)
@@ -323,8 +322,6 @@ array_div_long_mul_out_to_add:
 array_div_long_add_mul_out_rem:
                         :CALL(array_add_AGTB) ;  inputs: [array_add_AGTB_len_inA: C, array_add_AGTB_len_inB: D, array_add_AGTB_inA: array_mul_long_out, array_add_AGTB_inB: array_div_long_rem]
                                               ; outputs: [array_add_AGTB_len_out, array_add_AGTB_out]
-
-        %MAX_CNT_STEPS - STEP - 3 - 3*%ARRAY_MAX_LEN_DOUBLED - 2 :JMPN(outOfCountersStep)
 
         ; The length of q·b + r must be the same as the input of a
         $ => C          :MLOAD(array_add_AGTB_len_out)
