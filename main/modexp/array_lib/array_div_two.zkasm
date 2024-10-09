@@ -19,9 +19,29 @@ VAR GLOBAL array_div_two_len_quo
 
 VAR GLOBAL array_div_two_RR
 
-array_div_two:
-        ; w.c. is when len(in) >> len(2)
+/*
+ * RESOURCES:
+ * -------------------------------------------
+ *
+ * Worst Path: A != 0, inA > 2, len(A) > 1:
+ *             [steps: 5]                                                 // compare A and 2
+ *             + [steps: 11, bin: 1] + (len(Q)-1)*[steps: 4] + [steps: 1] // get Q and input Q to mul_two
+ *             + [steps: 4 + 9*len(Q), bin: len(Q) - 1]                   // multiply Q by 2
+ *             + [steps: 9, bin: 2] + len(2·Q)*[steps: 3] + [steps: 1]    // R and 2·Q to add
+ *             + [steps: 8 + 6*len(2·Q), bin: len(2·Q) - 1]               // add 2·Q and R
+ *             + [steps: 3] + len(A)*[steps: 3] + [steps: 2]              // compare A and Q·B + R and finish
+ * Total: [steps: 49 + 3*len(A) + 22*len(Q),
+ *           bin: 2 + 2*len(Q),
+ *         arith: 0]
+ * -------------------------------------------
+ * where:
+ *         R = Remainder of A / B
+ *         Q = Quotient of A / B
+ *
+ * Note: For the total count, we have used the fact that len(2·Q) <= len(Q) + 1
+ */
 
+array_div_two:
         %MAX_CNT_BINARY - CNT_BINARY -  3                                  :JMPN(outOfCountersBinary)
         %MAX_CNT_STEPS - STEP        - 26 - 4*%ARRAY_MAX_LEN_MINUS_ONE - 1 :JMPN(outOfCountersStep) ; till array_mul_two
 
@@ -81,6 +101,7 @@ array_div_two_inALTinB:
 ; End of edge cases
 
 array_div_two_inAGTinB:
+        ; block: [steps: 11, bin: 1]
         ; From here, in > 2
 
         ; Strategy: Divide outside and check the result inside
@@ -90,8 +111,7 @@ array_div_two_inAGTinB:
 
         ; 1] The received length must satisfy 1 <= len(Q) <= len(in)
         C - 1 => RR                     :JMPN(failAssert) ; if len(Q) < 1 ERROR
-        $ => A                          :MLOAD(array_div_two_len_in)
-        A - C                           :JMPN(failAssert) ; if len(in) < len(Q) ERROR
+        $ - C                           :F_MLOAD(array_div_two_len_in), JMPN(failAssert) ; if len(in) < len(Q) ERROR
 
         ; 2] To avoid non-determinism, we must ensure that the quotient is trimmed
         ; i.e., that its last chunk is not 0
@@ -103,7 +123,6 @@ array_div_two_inAGTinB:
         ; 3] Let's multiply the quotient by 2
 
         C               :MSTORE(array_div_two_len_quo)
-        C => D
         C - 1 => RR
 
         ; save the first non-zero chunk of quo

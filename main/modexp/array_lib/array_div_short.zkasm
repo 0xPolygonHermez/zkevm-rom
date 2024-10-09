@@ -22,9 +22,29 @@ VAR GLOBAL array_div_short_len_quo
 
 VAR GLOBAL array_div_short_RR
 
-array_div_short:
-        ; w.c. is when len(inA) >> len(inB)
+/*
+ * RESOURCES:
+ * -------------------------------------------
+ *
+ * Worst Path: A != 0, A > B, len(A) > 1:
+ *             [steps: 4]                                                 // compare A and B
+ *             + [steps: 11, bin: 1] + (len(Q)-1)*[steps: 4] + [steps: 3] // get Q and input Q and B to mul
+ *             + [steps: 10 + 7*len(Q), bin: 1, arith: len(Q)]            // multiply Q and B
+ *             + [steps: 10, bin: 2] + len(Q·B)*[steps: 3] + [steps: 1]   // R and Q·B to add
+ *             + [steps: 8 + 6*len(Q·B), bin: len(Q·B) - 1]               // add Q·B and R
+ *             + [steps: 3] + len(A)*[steps: 3] + [steps: 2]              // compare A and Q·B + R and finish
+ * Total: [steps: 57 + 3*len(A) + 19*len(Q),
+ *           bin: 4 + len(Q),
+ *         arith: len(Q)]
+ * -------------------------------------------
+ * where:
+ *         R = Remainder of A / B
+ *         Q = Quotient of A / B
+ *
+ * Note: For the total count, we have used the fact that len(Q·B)  len(Q) + 1
+ */
 
+array_div_short:
         %MAX_CNT_BINARY - CNT_BINARY -  2                                  :JMPN(outOfCountersBinary)
         %MAX_CNT_STEPS - STEP        - 20 - 4*%ARRAY_MAX_LEN_MINUS_ONE - 3 :JMPN(outOfCountersStep) ; till array_mul_short
 
@@ -98,6 +118,7 @@ array_div_short_inALTinB:
 ; End of edge cases
 
 array_div_short_inAGTinB:
+        ; block: [steps: 11, bin: 1]
         ; From here, inA > inB
 
         ; Strategy: Divide outside and check the result inside
@@ -139,6 +160,7 @@ array_div_short_inB_to_mul:
 array_div_short_mul_quo_inB:
                         :CALL(array_mul_short);  inputs: [array_mul_short_len_inA: C, array_mul_short_inA: array_div_short_quo, array_mul_short_inB: array_div_short_inB]
                                               ; outputs: [array_mul_short_len_out, array_mul_short_out]
+        ; block (R != 0): [steps: 10, bin: 1]
 
         ; w.c. is when rem is not zero
         %MAX_CNT_BINARY - CNT_BINARY -  2                                  :JMPN(outOfCountersBinary)

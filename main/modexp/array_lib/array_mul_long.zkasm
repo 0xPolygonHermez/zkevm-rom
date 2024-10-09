@@ -46,8 +46,16 @@ VAR GLOBAL array_mul_long_out_chunk_2
 
 VAR GLOBAL array_mul_long_RR
 
+/*
+ * RESOURCES:
+ * -----------------------------
+ * (worst case) [steps: 12, arith: 1] + (lenB-1)*[steps: 7, arith: 1] + [steps: 3] + lenA*((lenB-1)*[steps: 19, bin: 2, arith: 1] + [steps: 14, bin: 1, arith: 1]) + [steps: 7, bin: 1]
+ * total: [steps: 15 + 14*lenA + 7*lenB + 19*lenA*(lenB-1), bin: 1 + lenA + 2*lenA*(lenB-1), arith: lenA + lenB + 19*lenA*(lenB-1)]
+ * -----------------------------
+ */
+
 array_mul_long:
-        ; big loop costs (len(inA) - 1)*((len(inB) - 1) * [steps: 21, binary: 2, arith: 1] + [steps: 18, binary: 1, arith: 1])
+        ; big loop costs (len(inA) - 1)*((len(inB) - 1) * [steps: 21, bin: 2, arith: 1] + [steps: 18, bin: 1, arith: 1])
 
         %MAX_CNT_ARITH - CNT_ARITH   -  1 -   %ARRAY_MAX_LEN_MINUS_ONE -    %ARRAY_MAX_LEN_TIMES_DOUBLED -    %ARRAY_MAX_LEN_DOUBLED_MINUS_ONE       :JMPN(outOfCountersArith)
         %MAX_CNT_BINARY - CNT_BINARY                                   -  2*%ARRAY_MAX_LEN_TIMES_DOUBLED -    %ARRAY_MAX_LEN_DOUBLED_MINUS_ONE - 1   :JMPN(outOfCountersBinary)
@@ -109,7 +117,7 @@ array_mul_long_inA_index_check:
         0 => RR         :MSTORE(array_mul_long_out_chunk_2) ; reset the second index and the out chunk 2
 
 array_mul_long_loop2inB:
-        ; costs [steps: 21, binary: 2, arith: 1]
+        ; costs [steps: 19, bin: 2, arith: 1]
 
         ; The result will be stored as D·base + C
 
@@ -143,8 +151,7 @@ array_mul_long_loop2inB:
         D => B
         $ => C          :ADD, JMPNC(__array_mul_long_no_carry_continue_2)
         ;-----------------
-        1               :MSTORE(array_mul_long_out_chunk_2)
-                        :JMP(__array_mul_long_carry_continue)
+        1               :MSTORE(array_mul_long_out_chunk_2), JMP(__array_mul_long_carry_continue)
                         __array_mul_long_no_carry_continue_2:
         0               :MSTORE(array_mul_long_out_chunk_2)
                         __array_mul_long_carry_continue:
@@ -158,7 +165,7 @@ array_mul_long_loop2inB:
         $ - RR - 1      :F_MLOAD(array_mul_long_len_inB), JMPZ(array_mul_long_loop2inB_last, array_mul_long_loop2inB)
 
 array_mul_long_loop2inB_last:
-        ; costs [steps: 13, binary: 1, arith: 1]
+        ; costs [steps: 14, bin: 1, arith: 1]
 
         ; The result will be stored as D·base + C
 

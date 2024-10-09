@@ -68,8 +68,30 @@ VAR GLOBAL array_div_long_len_rem
 
 VAR GLOBAL array_div_long_RR
 
+/*
+ * RESOURCES:
+ * -------------------------------------------
+ *
+ * Worst Path: A != 0, A > B, len(A) == len(B) and len(R) == len(B):
+ *             [steps: 14, bin: 1] + (len(A)-1)*[steps: 4] +                                                                                                     // compare A and B
+ *             + [steps: 15, bin: 1] + (len(Q)-1)*[steps: 4] + len(B)*[steps: 3] + [steps: 1]                                                                    // get Q and input Q and B to mul
+ *             + [steps: 15 + 14*len(Q) + 7*len(B) + 19*len(Q)*(len(B)-1), bin: 1 + len(Q) + 2*len(Q)*(len(B)-1), arith: len(Q) + len(B) + 19*len(Q)*(len(B)-1)] // multiply Q and B
+ *             + [steps: 14, bin: 1] + (len(R)-1)*[steps: 5] + [steps: 4] + len(Q·B)*[steps: 3] + [steps: 1]                                                     // R and Q·B to add
+ *             + [steps: 8 + 6*len(Q·B) + 4*len(B), bin: len(Q·B) + len(B) - 2]                                                                                  // add Q·B and R
+ *             + [steps: 3] + len(A)*[steps: 3] + [steps: 2]                                                                                                     // compare A and Q·B + R and finish
+ * Total: [steps: 64 + 7*len(A) + 23*len(B) + 8*len(Q) + 5*len(R) + 19*len(Q)*len(B),
+ *           bin: 2 + 2*len(B) + 2*len(Q)*len(B),
+ *         arith: len(B) - 18*len(Q) + 19*len(Q)*len(B)]
+ * -------------------------------------------
+ * where:
+ *         R = Remainder of A / B
+ *         Q = Quotient of A / B
+ *
+ * Note: For the total count, we have used the fact that len(Q·B) <= len(Q) + len(B)
+ */
+
 array_div_long:
-        ; w.c. is when inA > inB and len(inA) >> len(inB)
+        ; w.c. until array_mul_long is when inA > inB and len(inA) == len(inB)
 
         %MAX_CNT_BINARY - CNT_BINARY - 2                                                              :JMPN(outOfCountersBinary)
         %MAX_CNT_STEPS - STEP        - 24 - 4*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE - 3*%ARRAY_MAX_LEN - 1 :JMPN(outOfCountersStep) ; till array_mul_long
@@ -117,8 +139,8 @@ array_div_long_inA_not_zero_two_chunks:
         $ => B          :MLOAD(array_div_long_inA + RR)
         1               :LT
 
-        ; Now, we must check that the above chunks are all equal, unless there are none
-        C - 1 => E
+        ; Now, we must check that the previous chunks are all equal
+        C - 1 => E ; [steps: 14, bin: 1]
 array_div_long_check_inAGTinB_loop:
         E - RR          :JMPZ(array_div_long_inAGTinB)
         $ => A          :MLOAD(array_div_long_inA + E)
@@ -177,6 +199,7 @@ array_div_long_inALTinB:
 ; End of edge cases
 
 array_div_long_inAGTinB:
+        ; block: [steps: 15, bin: 1]
         ; From here, inA > inB
 
         ; Strategy: Divide outside and check the result inside
@@ -229,6 +252,7 @@ array_div_long_inB_to_mul:
 array_div_long_mul_quo_inB:
                         :CALL(array_mul_long) ;  inputs: [array_mul_long_len_inA: C, array_mul_long_len_inB: D, array_mul_long_inA: array_div_long_quo, array_mul_long_inB: array_div_long_inB]
                                               ; outputs: [array_mul_long_len_out, array_mul_long_out]
+        ; block (R != 0 and len(R) == len(B)): [steps: 14, bin: 1]
 
         ; w.c. is when rem is not zero
         %MAX_CNT_BINARY - CNT_BINARY - 1                               - 1                                    :JMPN(outOfCountersBinary)
@@ -279,6 +303,7 @@ array_div_long_compare_rem_first:
 
 array_div_long_rem_to_add:
         ; From here, we have checked that the R < inB
+        ; Introduce the remaining rem chunks to the addition
         E - 1 => E                       :JMPN(array_div_long_add_check)
         ${receiveRemainderChunk(E)} => A :MSTORE(array_div_long_rem + E)
         A                                :MSTORE(array_add_AGTB_inB + E)
