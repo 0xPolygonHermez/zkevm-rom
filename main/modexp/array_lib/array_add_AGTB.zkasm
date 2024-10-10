@@ -1,10 +1,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; PRE: len(inA) >= len(inB)
-;;
+;;  PRE: len(inA) >= len(inB)
+;; POST: out is trimmed
 ;;
 ;; array_add_AGTB:
 ;;             in:
-;;                  · C ∈ [1, 32], the len of inA
+;;                  · C ∈ [1, 64], the len of inA
 ;;                  · D ∈ [1, 32], the len of inB
 ;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
 ;;                  · inB ∈ [0, 2²⁵⁶ - 1]^D, the second input array
@@ -13,34 +13,30 @@
 ;;                  · out = inA + inB, with len(out) <= C + 1
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; function array_add_AGTB(a: bigint[], b: bigint[], base: bigint): bigint[] {
-;     const alen = a.length;
-;     const blen = b.length;
-;     let result = new Array<bigint>(alen);
-;     let sum = 0n;
-;     let carry = 0n;
-;     for (let i = 0; i < blen; i++) {
-;         sum = a[i] + b[i] + carry;
-;         carry = sum >= base ? 1n : 0n;
-;         out[i] = sum - carry * base;
-;     }
-;     for (let i = blen; i < alen; i++) {
-;         sum = a[i] + carry;
-;         carry = sum == base ? 1n : 0n; // the past carry is at most 1n
-;         out[i] = sum - carry * base;
-;     }
-
-;     if (carry === 1n) {
-;         result.push(carry);
-;     }
-;     return result;
-; }
+;; WARNING: This function is tailored for checking that a = q·b + r in the array_div_long function.
+;;          In can be used for other purposes except for the worst case, i.e. when len(inA) == %ARRAY_MAX_LEN_DOUBLED.
+;;          Specifically, there is an implicit assumption that the output len of this function cannot be
+;;          greater than %ARRAY_MAX_LEN_DOUBLED, and do not allow to generate the proof in such case.
 
 ; NOTE: It's unoptimized for the case where len(inB) = 1. Use array_add_short instead.
 
-VAR GLOBAL array_add_AGTB_inA[%ARRAY_MAX_LEN]
+; code
+; --------------------------
+; first_iteration           <-- Compute a[0] + b[0]
+; while(inB_index_check) {  <-- While 0 < i < len(b)
+;     loop2inB              <-- Compute a[i] + b[i] + carry
+; }
+; while (inA_index_check) { <-- While 0 < i < len(a)
+;     loop2inA              <-- Compute a[i] + carry
+; }
+; 1] check_carry            <-- If there is a carry, append it to the result
+; 2] trim                   <-- Otherwise, trim the result
+; end
+; --------------------------
+
+VAR GLOBAL array_add_AGTB_inA[%ARRAY_MAX_LEN_DOUBLED]
 VAR GLOBAL array_add_AGTB_inB[%ARRAY_MAX_LEN]
-VAR GLOBAL array_add_AGTB_out[%ARRAY_MAX_LEN_PLUS_ONE]
+VAR GLOBAL array_add_AGTB_out[%ARRAY_MAX_LEN_DOUBLED] ; This cannot be bigger because we use it for division checking
 VAR GLOBAL array_add_AGTB_len_inA
 VAR GLOBAL array_add_AGTB_len_inB
 VAR GLOBAL array_add_AGTB_len_out
@@ -49,73 +45,94 @@ VAR GLOBAL array_add_AGTB_carry
 
 VAR GLOBAL array_add_AGTB_RR
 
+/*
+ * RESOURCES:
+ * -----------------------------
+ * (worst case) [steps: 9, bin: 1] + (lenB-1)*[steps: 10, bin: 2] + [steps: 3] + (lenA - lenB)*[steps: 6, bin: 1] + [steps: 6]
+ * total: [steps: 8 + 6*lenA + 4*lenB, bin: lenA + lenB - 2]
+ * -----------------------------
+ */
+
 array_add_AGTB:
-        %MAX_CNT_BINARY - CNT_BINARY     -  2*D     -   C+  D           :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 5 - 14*D - 3 - 9*C+9*D - 8       :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY + 2 -   %ARRAY_MAX_LEN_DOUBLED -   %ARRAY_MAX_LEN  :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 8 - 6*%ARRAY_MAX_LEN_DOUBLED - 4*%ARRAY_MAX_LEN  :JMPN(outOfCountersStep)
 
         RR              :MSTORE(array_add_AGTB_RR)
 
         C               :MSTORE(array_add_AGTB_len_inA)
         D               :MSTORE(array_add_AGTB_len_inB)
 
-        0 => E ; index in loops
-        0               :MSTORE(array_add_AGTB_carry)
+array_add_AGTB_first_iteration:
+        ; a[0] + b[0], where a[0],b[0] ∈ [0,base-1]: This number cannot be GT base + (base - 2), two chunks
+        $ => A          :MLOAD(array_add_AGTB_inA)
+        $ => B          :MLOAD(array_add_AGTB_inB)
+        $               :ADD, MSTORE(array_add_AGTB_out), JMPNC(__array_add_AGTB_continue_1)
+        ;-----------------
+        1 => D          :MSTORE(array_add_AGTB_carry), JMP(__array_add_AGTB_continue_2)
+                        __array_add_AGTB_continue_1:
+        0 => D          :MSTORE(array_add_AGTB_carry)
+                        __array_add_AGTB_continue_2:
+        ;-----------------
 
-array_add_AGTB_loopZero2inB:
-        ; The result will be stored as D·base + C
+        1 => E
 
-        0 => D  ; reset the carry chunk
+array_add_AGTB_inB_index_check:
+        $ - E           :F_MLOAD(array_add_AGTB_len_inB), JMPZ(array_add_AGTB_inA_index_check)
 
+array_add_AGTB_loop2inB:
         ; a[i] + b[i], where a[i],b[i] ∈ [0,base-1]: This number cannot be GT base + (base - 2), two chunks
         $ => A          :MLOAD(array_add_AGTB_inA + E)
         $ => B          :MLOAD(array_add_AGTB_inB + E)
-        $ => C          :ADD, JMPNC(__array_add_AGTB_continue_1)
-        1 => D
-                        __array_add_AGTB_continue_1:
+        $ => B          :ADD, JMPNC(__array_add_AGTB_continue_3)
+        ;-----------------
+        1 => D          :JMP(__array_add_AGTB_continue_4)
+                        __array_add_AGTB_continue_3:
+        0 => D
+                        __array_add_AGTB_continue_4:
+        ;-----------------
 
-        ; sum = (a[i] + b[i]) + carry: This number cannot be GT base + (base - 1), two chunks
+        ; sum = (a[i] + b[i]) + carry, where carry ∈ [0,1]: This number cannot be GT base + (base - 1), two chunks
         $ => A          :MLOAD(array_add_AGTB_carry)
-        C => B
-        $ => C          :ADD, JMPNC(__array_add_AGTB_continue_2)
+        $               :ADD, MSTORE(array_add_AGTB_out + E), JMPNC(__array_add_AGTB_continue_5)
+        ;-----------------
         1 => D
-                        __array_add_AGTB_continue_2:
+                        __array_add_AGTB_continue_5:
+        ;-----------------
 
-        C               :MSTORE(array_add_AGTB_out + E)
+        ; NOTE: It cannot happen that a[i] + b[i] produces carry and (a[i] + b[i]) + carry as well at the same time
+
         D               :MSTORE(array_add_AGTB_carry)
 
-        E + 1 => E,A
-        $ => B          :MLOAD(array_add_AGTB_len_inB)
-        B - A           :JMPZ(array_add_AGTB_loop_index_check, array_add_AGTB_loopZero2inB)
+        E + 1 => E      :JMP(array_add_AGTB_inB_index_check)
 
-array_add_AGTB_loop_index_check:
-        $ => B          :MLOAD(array_add_AGTB_len_inA)
-        B - A           :JMPZ(array_add_AGTB_check_carry)
+array_add_AGTB_inA_index_check:
+        $ - E           :F_MLOAD(array_add_AGTB_len_inA), JMPZ(array_add_AGTB_check_carry)
 
-array_add_AGTB_loopInB2InA:
-        0 => D ; reset the carry chunk
-
+array_add_AGTB_loop2inA:
         ; sum = a[i] + carry: This number cannot be GT base, two chunks
         $ => A          :MLOAD(array_add_AGTB_inA + E)
-        $ => B          :MLOAD(array_add_AGTB_carry)
-        $ => C          :ADD, JMPNC(__array_add_AGTB_continue_3)
-        1 => D
-                        __array_add_AGTB_continue_3:
+        D => B
+        $               :ADD, MSTORE(array_add_AGTB_out + E), JMPNC(__array_add_AGTB_continue_6)
+        ;-----------------
+        1 => D          :JMP(__array_add_AGTB_continue_7)
+                        __array_add_AGTB_continue_6:
+        0 => D
+                        __array_add_AGTB_continue_7:
+        ;-----------------
 
-        C               :MSTORE(array_add_AGTB_out + E)
-        D               :MSTORE(array_add_AGTB_carry)
-
-        E + 1 => E,A
-        $ => B          :MLOAD(array_add_AGTB_len_inA)
-        B - A           :JMPZ(array_add_AGTB_check_carry, array_add_AGTB_loopInB2InA)
+        E + 1 => E      :JMP(array_add_AGTB_inA_index_check)
 
 array_add_AGTB_check_carry:
-        D => A
-        A               :JMPZ(__array_add_AGTB_continue_4)
+        D               :JMPZ(array_add_AGTB_trim)
+
+        ; Carry path
+        E - %ARRAY_MAX_LEN_DOUBLED  :JMPZ(failAssert)
+
         ; In this case, the carry = 1 and we should append it to the result
         1               :MSTORE(array_add_AGTB_out + E)
-        E + 1           :MSTORE(array_add_AGTB_len_out)
-                        :JMP(array_add_AGTB_end)
-                        __array_add_AGTB_continue_4:
+        E + 1           :MSTORE(array_add_AGTB_len_out), JMP(array_add_AGTB_end)
+
+array_add_AGTB_trim:
         E               :MSTORE(array_add_AGTB_len_out)
 
 array_add_AGTB_end:
