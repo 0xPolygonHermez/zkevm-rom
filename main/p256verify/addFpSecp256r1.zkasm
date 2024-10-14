@@ -1,0 +1,35 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; addFpSecp256r1:
+;;              in: A,C
+;;             out: C = A + C (mod SECP256R1_P)
+;;
+;;  PRE: Inputs can be any 256-bit number
+;; POST: The result is in Fp
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; RESOURCES:
+; -----------------------------
+; [steps: 10, bin: 1, arith: 2]
+; -----------------------------
+
+addFpSecp256r1:
+        ; 1] Compute and check the sum over Z
+        ; A·[1] + C = [D]·2²⁵⁶ + [E]
+        1 => B
+        $${var _addFpSecp256r1_AC = A + C}
+        ${_addFpSecp256r1_AC >> 256} => D
+        ${_addFpSecp256r1_AC} => E :ARITH
+
+        ; 2] Check it over Fp, that is, it must be satisfied that:
+        ; [SECP256R1_P]·[(A+C) / SECP256R1_P] + [(A+C) % SECP256R1_P] = D·2²⁵⁶ + E
+        ; where C < SECP256R1_P
+        %SECP256R1_P => A
+        ${_addFpSecp256r1_AC / const.SECP256R1_P} => B        ; quotient  (256 bits)
+        ${_addFpSecp256r1_AC % const.SECP256R1_P} => C        ; remainder (256 bits)
+        E :ARITH
+
+        ; 3] Check that the result is lower than SECP256R1_P
+        A => B
+        C => A
+        1       :LT, RETURN

@@ -1,0 +1,79 @@
+/**
+ * @link [https://github.com/ethereum/RIPs/blob/master/RIPS/rip-7212.md]
+ * @zk-counters
+ *  - dynamic steps:
+ *  - dynamic arith:
+ *  - dynamic binary:
+ * @process-precompiled
+ *  - stack input: [hash, r, s, x, y]
+ *  - stack output: [success]
+*/
+
+funcP256VERIFY:
+    %MAX_CNT_STEPS - STEP - 50         :JMPN(outOfCountersStep)
+    %MAX_CNT_BINARY - CNT_BINARY - 1   :JMPN(outOfCountersBinary)
+
+   ; Move balances if value > 0 just before executing the contract CALL
+   $ => B                              :MLOAD(txValue)
+   0 => A
+   zkPC+2 => RR
+   $                                   :LT, JMPC(moveBalances)
+
+   GAS - %P256VERIFY_GAS => GAS        :JMPN(outOfGas) ; gas static = 3450
+   ; read data stored in calldata
+   ; read hash [32 bytes]
+   32                                  :MSTORE(readXFromCalldataLength)
+   0 => E                              :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+   $ => A                              :MLOAD(readXFromCalldataResult)
+   ; read r [32 bytes]
+   E + 32 => E                         :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+   $ => B                              :MLOAD(readXFromCalldataResult)
+   ; read s [32 bytes]
+   E + 32 => E                         :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+   $ => C                              :MLOAD(readXFromCalldataResult)
+   ; read x [32 bytes]
+   E + 32 => E                         :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+   $ => D                              :MLOAD(readXFromCalldataResult)
+   ; read y [32 bytes]
+   E + 32 => E                         :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
+   $ => E                              :MLOAD(readXFromCalldataResult), CALL(p256verify) ;in: [A: hash, B: r, C: s, D: x, E: y], out: [A: result, B: result_code]
+   B                                   :JMPNZ(endP256VERIFYFail)
+   A                                   :JMPZ(preEndP256VERIFY)
+
+   ; write result p256verify into memory
+   0 => E
+   A                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+
+   ; prepare return data
+   0                                   :MSTORE(retDataOffset)
+   32                                  :MSTORE(retDataLength)
+   $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
+   ; set retDataCTX
+   $ => B                              :MLOAD(currentCTX)
+   A => CTX
+   B                                   :MSTORE(retDataCTX)
+   B => CTX
+
+   ; write result p256verify into previous context memory
+   $ => C                              :MLOAD(retCallLength), JMPZ(preEndP256VERIFY)
+   $ => E                              :MLOAD(retCallOffset)
+
+   ; p256verify result is in bytesToStore
+   C - 32                              :JMPN(continueP256VERIFY)
+   32 => C
+
+continueP256VERIFY:
+   $ => CTX                            :MLOAD(originCTX), CALL(MSTOREX)  ; in: [bytesToStore, E: offset, C: length] out: [E: new offset]
+                                       :JMP(endP256VERIFY)
+
+endP256VERIFYFail:
+    $ => A                              :MLOAD(originCTX), JMPZ(handleGas)
+    A => CTX
+    0                                   :MSTORE(retDataCTX)
+    CTX                                 :MSTORE(currentCTX), JMP(preEnd)
+
+preEndP256VERIFY:
+    $ => CTX                            :MLOAD(originCTX)
+
+endP256VERIFY:
+    CTX                                 :MSTORE(currentCTX), JMP(preEnd)
