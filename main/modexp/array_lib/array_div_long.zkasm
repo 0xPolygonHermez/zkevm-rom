@@ -72,30 +72,30 @@ VAR GLOBAL array_div_long_RR
  * RESOURCES:
  * -------------------------------------------
  *
- * Worst Path: A != 0, A > B, len(A) == len(B) and len(R) == len(B):
- *             [steps: 14, bin: 1] + (len(A)-1)*[steps: 4] +                                                                                                     // compare A and B
- *             + [steps: 15, bin: 1] + (len(Q)-1)*[steps: 4] + len(B)*[steps: 3] + [steps: 1]                                                                    // get Q and input Q and B to mul
- *             + [steps: 15 + 14*len(Q) + 7*len(B) + 19*len(Q)*(len(B)-1), bin: 1 + len(Q) + 2*len(Q)*(len(B)-1), arith: len(Q) + len(B) + 19*len(Q)*(len(B)-1)] // multiply Q and B
- *             + [steps: 14, bin: 1] + (len(R)-1)*[steps: 5] + [steps: 4] + len(Q·B)*[steps: 3] + [steps: 1]                                                     // R and Q·B to add
- *             + [steps: 8 + 6*len(Q·B) + 4*len(B), bin: len(Q·B) + len(B) - 2]                                                                                  // add Q·B and R
- *             + [steps: 3] + len(A)*[steps: 3] + [steps: 2]                                                                                                     // compare A and Q·B + R and finish
- * Total: [steps: 64 + 7*len(A) + 23*len(B) + 8*len(Q) + 5*len(R) + 19*len(Q)*len(B),
- *           bin: 2 + 2*len(B) + 2*len(Q)*len(B),
- *         arith: len(B) - 18*len(Q) + 19*len(Q)*len(B)]
+ * Worst Path: A != 0, A > B, lenA == lenB and lenR == lenB:
+ *             [steps: 14, bin: 1] + (lenA-1)*[steps: 4] +                                                             // compare A and B
+ *             + [steps: 15, bin: 1] + (lenQ-1)*[steps: 4] + (lenB-1)*[steps: 3] + [steps: 1]                          // get Q and input Q and B to mul
+ *             + [steps: 20 - 5*lenQ - 12*lenB + 19*lenQ*lenB, bin: 2 - lenQ - 2*lenB + 2*lenQ*lenB, arith: lenQ*lenB] // multiply Q and B
+ *             + [steps: 14, bin: 1] + (lenR-1)*[steps: 5] + [steps: 4, bin: 1] + len(Q·B)*[steps: 3] + [steps: 1]     // R and Q·B to add
+ *             + [steps: 8 + 6*len(Q·B) + 4*lenR, bin: - 2 + len(Q·B) + lenR]                                          // add Q·B and R
+ *             + [steps: 3] + lenA*[steps: 3] + [steps: 2]                                                             // compare A and Q·B + R and finish
+ * Total: [steps: 66 + 7*lenA + 8*lenQ + 9*lenR + 19*lenQ*lenB,
+ *           bin: 4 - lenB + lenR + 2*lenQ*lenB,
+ *         arith: lenQ*lenB]
  * -------------------------------------------
  * where:
  *         R = Remainder of A / B
  *         Q = Quotient of A / B
  *
- * Note: For the total count, we have used the fact that len(Q·B) <= len(Q) + len(B)
+ * Note: For the total count, we have used the fact that len(Q·B) <= lenQ + lenB
  */
 
 array_div_long:
         ; w.c. until array_mul_long is when inA > inB and len(inA) == len(inB)
 
-        %MAX_CNT_ARITH - CNT_ARITH - %ARRAY_MAX_LEN + 18*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE - 19*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE*%ARRAY_MAX_LEN :JMPN(outOfCountersArith)
-        %MAX_CNT_BINARY - CNT_BINARY - 2 - 2*%ARRAY_MAX_LEN - 2*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE*%ARRAY_MAX_LEN                                                    :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 64 - 7*%ARRAY_MAX_LEN_DOUBLED - 28*%ARRAY_MAX_LEN - 8*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE - 19*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE*%ARRAY_MAX_LEN :JMPN(outOfCountersStep) ; till array_mul_long
+        %MAX_CNT_ARITH - CNT_ARITH                                                                                           -    %ARRAY_MAX_LEN_DOUBLED_MINUS_ONE*%ARRAY_MAX_LEN       :JMPN(outOfCountersArith)
+        %MAX_CNT_BINARY - CNT_BINARY -  4                                                                                    -  2*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE*%ARRAY_MAX_LEN       :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 66 - 7*%ARRAY_MAX_LEN_DOUBLED - 8*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE - 9*%ARRAY_MAX_LEN - 19*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE*%ARRAY_MAX_LEN       :JMPN(outOfCountersStep)
 
         RR              :MSTORE(array_div_long_RR)
 

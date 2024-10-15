@@ -26,28 +26,28 @@ VAR GLOBAL array_div_short_RR
  * RESOURCES:
  * -------------------------------------------
  *
- * Worst Path: A != 0, A > B, len(A) > 1:
- *             [steps: 4]                                                 // compare A and B
- *             + [steps: 11, bin: 1] + (len(Q)-1)*[steps: 4] + [steps: 3] // get Q and input Q and B to mul
- *             + [steps: 10 + 7*len(Q), bin: 1, arith: len(Q)]            // multiply Q and B
- *             + [steps: 10, bin: 2] + len(Q·B)*[steps: 3] + [steps: 1]   // R and Q·B to add
- *             + [steps: 8 + 6*len(Q·B), bin: len(Q·B) - 1]               // add Q·B and R
- *             + [steps: 3] + len(A)*[steps: 3] + [steps: 2]              // compare A and Q·B + R and finish
- * Total: [steps: 57 + 3*len(A) + 19*len(Q),
- *           bin: 4 + len(Q),
- *         arith: len(Q)]
+ * Worst Path: A != 0, A > B, lenA > 1:
+ *             [steps: 4]                                               // compare A and B
+ *             + [steps: 11, bin: 1] + (lenQ-1)*[steps: 4] + [steps: 3] // get Q and input Q and B to mul
+ *             + [steps: 10 + 7*lenQ, bin: 1, arith: lenQ]              // multiply Q and B
+ *             + [steps: 10, bin: 2] + (lenQ+1)*[steps: 3] + [steps: 1] // R and Q·B to add
+ *             + [steps: 14 + 6*lenQ, bin: 1 + lenQ]                    // add Q·B and R
+ *             + [steps: 3] + lenA*[steps: 3] + [steps: 2]              // compare A and Q·B + R and finish
+ * Total: [steps: 57 + 3*lenA + 20*lenQ,
+ *           bin: 5 + lenQ,
+ *         arith: lenQ]
  * -------------------------------------------
  * where:
  *         R = Remainder of A / B
  *         Q = Quotient of A / B
  *
- * Note: For the total count, we have used the fact that len(Q·B)  len(Q) + 1
+ * Note: For the total count, we have used the fact that len(Q·B) <= lenQ + 1
  */
 
 array_div_short:
-        %MAX_CNT_ARITH - CNT_ARITH - %ARRAY_MAX_LEN :JMPN(outOfCountersArith)
-        %MAX_CNT_BINARY - CNT_BINARY -  4 - %ARRAY_MAX_LEN                                  :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 57 - 22*%ARRAY_MAX_LEN :JMPN(outOfCountersStep) ; till array_mul_short
+        %MAX_CNT_ARITH - CNT_ARITH        -    %ARRAY_MAX_LEN   :JMPN(outOfCountersArith)
+        %MAX_CNT_BINARY - CNT_BINARY -  5 -    %ARRAY_MAX_LEN   :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 57 - 23*%ARRAY_MAX_LEN   :JMPN(outOfCountersStep)
 
         RR              :MSTORE(array_div_short_RR)
 
