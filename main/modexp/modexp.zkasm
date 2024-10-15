@@ -50,50 +50,50 @@ VAR GLOBAL modexp_RR
 
 ; RESOURCES (assuming a worst case scenario):
 ; -------------------------------------------
-; [steps: 7] + len(B)*[steps: 3] + len(M)*[steps: 3] + [steps: 1]                                           // init and B and M to array_div_long
-; [steps: 64 + 7*len(B) + 23*len(M) + 8*len(Q(B,M)) + 5*len(R(B,M)) + 19*len(Q(B,M))*len(M)                 // array_div_long of B and M
-;    bin: 2 + 2*len(M) + 2*len(Q(B,M))*len(M),
-;  arith: len(M) - 18*len(Q(B,M)) + 19*len(Q(B,M))*len(M)]
-; [steps: 2] + len(R(B,M))*[steps: 3]                                                                       // copy R(B,M) to B
+; [steps: 7] + len(B)*[steps: 3] + len(M)*[steps: 3] + [steps: 1]                                     // init and B and M to array_div_long
+; [steps: 66 + 7*len(B) + 8*len(Q(B,M)) + 9*len(R(B,M)) + 19*len(Q(B,M))*len(M),                      // array_div_long of B and M
+;    bin: 4 - len(M) + len(R(B,M)) + 2*len(Q(B,M))*len(M),
+;  arith: len(Q(B,M))*len(M)]
+; [steps: 2] + len(R(B,M))*[steps: 3]                                                                 // copy R(B,M) to B
 ;
 ; for ⌊log₂(E)⌋ iterations:
-;   [steps: 4, bin: 1]                                                                                      // check E == 0
-;   [steps: 3, bin: 1]                                                                                      // check B == 0
-;   [steps: 3, bin: 1]                                                                                      // check E parity
+;   [steps: 4, bin: 1]                                                                                // check E == 0
+;   [steps: 3, bin: 1]                                                                                // check B == 0
+;   [steps: 3, bin: 1]                                                                                // check E parity
 ;   if E is odd, then compute (O·B) % M:
-;        [steps: 4] + len(O)*[steps: 3] + len(B)*[steps: 3] + [steps: 1]                                    // O and B to array_mul_long
-;        [steps: 15 + 14*len(O) + 7*len(B) + 19*len(O)*(len(B)-1),                                          // array_mul_long of O and B
-;           bin: 1 + len(O) + 2*len(O)*(len(B)-1),
-;         arith: len(O) + len(B) + 19*len(O)*(len(B)-1)]
-;        [steps: 4] + len(O·B)*[steps: 3] + len(M)*[steps: 3] + [steps: 1]                                  // O·B and M to array_div_long
-;        [steps: 64 + 7*len(O·B) + 23*len(M) + 8*len(Q(O·B,M)) + 5*len(R(O·B,M)) + 19*len(Q(O·B,M))*len(M), // array_div_long of O·B and M
-;           bin: 2 + 2*len(M) + 2*len(Q(O·B,M))*len(M),
-;         arith: len(M) - 18*len(Q(O·B,M)) + 19*len(Q(O·B,M))*len(M)]
-;       [steps: 3] + len(R(O·B,M))*[steps: 3]                                                               // copy R(O·B,M) to O
-;   [steps: 2] + len(E)*[steps: 3] + [steps: 1]                                                             // E to array_div_two
-;   [steps: 49 + 3*len(E) + 22*len(Q(E,2)), bin: 2 + 2*len(Q(E,2))]                                         // array_div_two of E
-;   [steps: 3] + len(Q(E,2))*[steps: 3]                                                                     // Copy Q(E,2) to E
-;   [steps: 2] + len(B)*[steps: 3] + [steps: 1]                                                             // B to array_square
-;   [steps: -3 - 25*len(B) + 51*len(B)², bin: 1 - 9*len(B) + 9*len(B)², arith: -1 + len(B) + len(B)²]       // array_square of B
-;   [steps: 4] + len(B²)*[steps: 3] + len(M)*[steps: 3] + [steps: 1]                                        // B² and M to array_div_long
-;   [steps: 64 + 7*len(B²) + 23*len(M) + 8*len(Q(B²,M)) + 5*len(R(B²,M)) + 19*len(Q(B²,M))*len(M),          // array_div_long of B² and M
-;      bin: 2 + 2*len(M) + 2*len(Q(B²,M))*len(M),
-;    arith: len(M) - 18*len(Q(B²,M)) + 19*len(Q(B²,M))*len(M)]
-;   [steps: 3] + len(R(B²,M))*[steps: 3]                                                                    // copy R(B²,M) to B
+;        [steps: 4] + len(O)*[steps: 3] + len(B)*[steps: 3] + [steps: 1]                              // O and B to array_mul_long
+;        [steps: 20 - 5*len(O) - 12*len(B) + 19*len(O)*len(B),                                        // array_mul_long of O and B
+;           bin: 2 - len(O) - 2*len(B) + 2*len(O)*len(B),
+;         arith: len(O)*len(B)]
+;        [steps: 4] + len(O·B)*[steps: 3] + len(M)*[steps: 3] + [steps: 1]                            // O·B and M to array_div_long
+;        [steps: 66 + 7*len(O·B) + 8*len(Q(O·B,M)) + 9*len(R(O·B,M)) + 19*len(Q(O·B,M))*len(M),       // array_div_long of O·B and M
+;           bin: 4 - len(M) + len(R(O·B,M)) + 2*len(Q(O·B,M))*len(M),
+;         arith: len(Q(O·B,M))*len(M)]
+;       [steps: 3] + len(R(O·B,M))*[steps: 3]                                                         // copy R(O·B,M) to O
+;   [steps: 2] + len(E)*[steps: 3] + [steps: 1]                                                       // E to array_div_two
+;   [steps: 49 + 3*len(E) + 22*len(Q(E,2)), bin: 3 + 2*len(Q(E,2))]                                   // array_div_two of E
+;   [steps: 3] + len(Q(E,2))*[steps: 3]                                                               // Copy Q(E,2) to E
+;   [steps: 2] + len(B)*[steps: 3] + [steps: 1]                                                       // B to array_square
+;   [steps: 32 - 25*len(B) + 51*len(B)², bin: 1 - 9*len(B) + 9*len(B)², arith: -1 + len(B) + len(B)²] // array_square of B
+;   [steps: 4] + len(B²)*[steps: 3] + len(M)*[steps: 3] + [steps: 1]                                  // B² and M to array_div_long
+;   [steps: 66 + 7*len(B²) + 8*len(Q(B²,M)) + 9*len(R(B²,M)) + 19*len(Q(B²,M))*len(M),                // array_div_long of B² and M
+;      bin: 4 - len(M) + len(R(B²,M)) + 2*len(Q(B²,M))*len(M),
+;    arith: len(Q(B²,M))*len(M)]
+;   [steps: 3] + len(R(B²,M))*[steps: 3]                                                              // copy R(B²,M) to B
 ;
-; [steps: 2]                                                                                                // end
+; [steps: 2]                                                                                          // end
 ;
 ; -------------------------------------------
 ; nIterations    = ⌊log₂(E)⌋
 ; num_times_E_is_odd   = HammingWeight(E) (i.e., number of 1s in the binary representation of E)
 ; num_times_E_is_even  = nIterations - num_times_E_is_odd
 ; -------------------------------------------
-;       · cost(first_part)    = [steps: 74 + 10*len(B) + 26*len(M) + 8*len(Q(B,M)) + 8*len(R(B,M)) + 19*len(Q(B,M))*len(M),
-;                                  bin: 2 + 2*len(M) + 2*len(Q(B,M))*len(M),
-;                                arith: len(M) - 18*len(Q(B,M)) + 19*len(Q(B,M))*len(M)]
-;       · cost(odd_iteration) = [steps: 229 + 14*len(B) + 6*len(E) + 68*len(M) + 51*len(B)² + 38*len(B)*len(M) + 25*len(Q(E,2)) + 19*len(Q(B²,M))*len(M) +  8*len(Q(B²,M)) + 8*len(R(B²,M)),
-;                                  bin:  11 -  9*len(B)            +  3*len(M) +  9*len(B)²  + 4*len(B)*len(M) +  2*len(Q(E,2)) +  2*len(Q(B²,M))*len(M),
-;                                arith: -1  - 16*len(B)            - 16*len(M) +    len(B)² + 38*len(B)*len(M)                  + 19*len(Q(B²,M))*len(M) - 18*len(Q(B²,M))]
+;       · cost(first_part)    = [steps: 76 + 10*len(B) + 3*len(M) + 8*len(Q(B,M)) + 12*len(R(B,M)) + 19*len(Q(B,M))*len(M),
+;                                  bin: 4 - len(M) + len(R(B,M)) + 2*len(Q(B,M))*len(M),
+;                                arith: len(Q(B,M))*len(M)]
+;       · cost(odd_iteration) = [steps: 273 +    len(B) + 6*len(E) + 26*len(M) + 54*len(B)² + 38*len(B)*len(M) + 22*len(Q(E,2)) + 19*len(Q(B²,M))*len(M) + 8*len(Q(B²,M)) + 12*len(R(B²,M)),
+;                                  bin: 17  - 11*len(B)            -  2*len(M) +  9*len(B)² +  4*len(B)*len(M) +  2*len(Q(E,2)) +  2*len(Q(B²,M))*len(M)                  +    len(R(B²,M)) ,
+;                                arith: -1  +    len(B)                        +    len(B)² +  2*len(B)*len(M)                  +    len(Q(B²,M))*len(M)]
 ;       · cost(last_part)     = [steps: 2]
 ; -------------------------------------------
 ; cost(w.c): cost(first_part) + ⌊log₂(E)⌋*odd_iteration + cost(last_part)

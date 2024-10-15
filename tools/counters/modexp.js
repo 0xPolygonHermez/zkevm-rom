@@ -69,7 +69,7 @@ module.exports = class myHelper {
         const Bsq = B * B;
         const [Q_Bsq_M, R_Bsq_M] = [Bsq / M, Bsq % M];
 
-        const lenE2 = Math.floor(lenE / 2) || 1;
+        const lenQE2 = Math.floor(lenE / 2) || 1;
 
         let nTimesOdd = 0;
         while (E > 0n) {
@@ -104,60 +104,57 @@ module.exports = class myHelper {
         }
 
         function setupAndFirstDivCounters() {
-            // [steps: 74 + 10*len(B) + 26*len(M) + 8*len(Q(B,M)) + 8*len(R(B,M)) + 19*len(Q(B,M))*len(M),
-            //        bin: 2 + 2*len(M) + 2*len(Q(B,M))*len(M),
-            //      arith: len(M) - 18*len(Q(B,M)) + 19*len(Q(B,M))*len(M)]
+            // [steps: 76 + 10*len(B) + 3*len(M) + 8*len(Q(B,M)) + 12*len(R(B,M)) + 19*len(Q(B,M))*len(M),
+            //    bin: 4 - len(M) + len(R(B,M)) + 2*len(Q(B,M))*len(M),
+            //  arith: len(Q(B,M))*len(M)]
             return {
                 cntStep:
-                    74 +
+                    76 +
                     10 * lenB +
-                    26 * lenM +
+                    3 * lenM +
                     8 * computeLenThisBase(Q_B_M) +
-                    8 * computeLenThisBase(R_B_M) +
+                    12 * computeLenThisBase(R_B_M) +
                     19 * computeLenThisBase(Q_B_M) * lenM,
                 cntBinary:
-                    2 +
-                    2 * lenM +
+                    4 -
+                    lenM +
+                    computeLenThisBase(R_B_M) +
                     2 * computeLenThisBase(Q_B_M) * lenM,
                 cntArith:
-                    lenM -
-                    18 * computeLenThisBase(Q_B_M) +
-                    19 * computeLenThisBase(Q_B_M) * lenM,
+                    computeLenThisBase(Q_B_M) * lenM,
             };
         }
 
         function fullLoopCounters() {
-            // [steps: 229 + 14*len(B) + 6*len(E) + 68*len(M) + 51*len(B)² + 38*len(B)*len(M) + 25*len(Q(E,2)) + 19*len(Q(B²,M))*len(M) +  8*len(Q(B²,M)) + 8*len(R(B²,M)),
-            //    bin:  11 -  9*len(B)            +  3*len(M) +  9*len(B)²  + 4*len(B)*len(M) +  2*len(Q(E,2)) +  2*len(Q(B²,M))*len(M),
-            //  arith: -1  - 16*len(B)            - 16*len(M) +    len(B)² + 38*len(B)*len(M)                  + 19*len(Q(B²,M))*len(M) - 18*len(Q(B²,M))]
+            // [steps: 273 +    len(B) + 6*len(E) + 26*len(M) + 54*len(B)² + 38*len(B)*len(M) + 22*len(Q(E,2)) + 19*len(Q(B²,M))*len(M) + 8*len(Q(B²,M)) + 12*len(R(B²,M)),
+            //    bin: 17  - 11*len(B)            -  2*len(M) +  9*len(B)² +  4*len(B)*len(M) +  2*len(Q(E,2)) +  2*len(Q(B²,M))*len(M)                  +    len(R(B²,M)) ,
+            //  arith: -1  +    len(B)                        +    len(B)² +  2*len(B)*len(M)                  +    len(Q(B²,M))*len(M)]
             return {
                 cntStep:
-                    229 +
-                    14 * lenB +
+                    273 +
+                    lenB +
                     6 * lenE +
-                    68 * lenM +
-                    51 * lenB**2 +
+                    26 * lenM +
+                    54 * lenB**2 +
                     38 * lenB * lenM +
-                    25 * lenE2 +
+                    22 * lenQE2 +
                     19 * computeLenThisBase(Q_Bsq_M) * lenM +
                     8 * computeLenThisBase(Q_Bsq_M) +
-                    8 * computeLenThisBase(R_Bsq_M),
+                    12 * computeLenThisBase(R_Bsq_M),
                 cntBinary:
-                    11 -
-                    9 * lenB +
-                    3 * lenM +
+                    17 -
+                    11 * lenB -
+                    2 * lenM +
                     9 * lenB**2 +
                     4 * lenB * lenM +
-                    2 * lenE2 +
+                    2 * lenQE2 +
                     2 * computeLenThisBase(Q_Bsq_M) * lenM,
                 cntArith:
-                    -1 -
-                    16 * lenB -
-                    16 * lenM +
+                    -1 +
+                    lenB +
                     lenB**2 +
-                    38 * lenB * lenM +
-                    19 * computeLenThisBase(Q_Bsq_M) * lenM -
-                    18 * computeLenThisBase(Q_Bsq_M),
+                    2 * lenB * lenM +
+                    computeLenThisBase(Q_Bsq_M) * lenM,
             };
         }
     }
