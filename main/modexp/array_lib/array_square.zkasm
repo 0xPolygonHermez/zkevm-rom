@@ -47,19 +47,20 @@ VAR GLOBAL array_square_RR
 /*
  * RESOURCES:
  * -----------------------------
- * (worst case) [steps: 6] + [steps: 9, arith: 1] + (len(in)-1)*[steps: 35, bin: 6, arith: 1]                                                 // Init and first row
- *              + (len(in)-1)*([steps: 7] + [steps: 6, arith: 1] + [steps: 29, bin: 3, arith: 1] + (len(in)-1)*[steps: 51, bin: 9, arith: 1]) // Rest of the rows
- *              [steps: 8, bin: 1]                                                                                                            // Ending
- * total: [steps: 32 - 25*len(in) + 51*len(in)²,
- *           bin:  1 - 9*len(in) + 9*len(in)²,
- *         arith: -1 + len(in) + len(in)²]
+ * (worst case) [steps: 9] + [steps: 9, arith: 1] + (len(in)-1)*[steps: 35, bin: 6, arith: 1] + [steps: 7] // Init and first row
+ *              + (len(in)-1)*([steps: 6, arith: 1] + [steps: 7])                                          // Index check and ai*ai
+ *              + len(in)*(len(in)-1)/2*([steps: 29, bin: 3, arith: 1] + [steps: 51, bin: 9, arith: 1])    // ai*aj
+ *              [steps: 8, bin: 1]                                                                         // Ending
+ * total: [steps: -15 + 48*len(in) + 80*len(in)*(len(in)-1)/2,
+ *           bin: -5  +  6*len(in) + 23*len(in)*(len(in)-1)/2,
+ *         arith: -1  +  2*len(in) +  2*len(in)*(len(in)-1)/2]
  * -----------------------------
  */
 
 array_square:
-        %MAX_CNT_ARITH - CNT_ARITH   + 1  -    %ARRAY_MAX_LEN -  %ARRAY_MAX_LEN_SQ      :JMPN(outOfCountersArith)
-        %MAX_CNT_BINARY - CNT_BINARY - 1  +  9*%ARRAY_MAX_LEN -  9*%ARRAY_MAX_LEN_SQ    :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        + 3 + 25*%ARRAY_MAX_LEN - 51*%ARRAY_MAX_LEN_SQ     :JMPN(outOfCountersStep)
+        %MAX_CNT_ARITH - CNT_ARITH   + 1  -  2*%ARRAY_MAX_LEN -  2*%ARRAY_MAX_LEN_DIV_TWO       :JMPN(outOfCountersArith)
+        %MAX_CNT_BINARY - CNT_BINARY + 5  -  6*%ARRAY_MAX_LEN - 23*%ARRAY_MAX_LEN_DIV_TWO       :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        + 15 - 48*%ARRAY_MAX_LEN - 80*%ARRAY_MAX_LEN_DIV_TWO       :JMPN(outOfCountersStep)
 
         RR              :MSTORE(array_square_RR)
 
@@ -73,7 +74,7 @@ array_square:
 
 ; Begin of branching
 array_square_loop_index_check:
-        ; costs [steps: 7, bin: 0, arith: 0]
+        ; costs [steps: 7]
 
         ; out[i + len] = carry
         $ => A          :MLOAD(array_square_carry_chunk_1)
