@@ -27,14 +27,14 @@ VAR GLOBAL array_div_short_RR
  * -------------------------------------------
  *
  * Worst Path: A != 0, A > B, lenA > 1:
- *             [steps: 4]                                               // compare A and B
+ *             [steps: 16, bin: 2]                                      // compare A and B
  *             + [steps: 11, bin: 1] + (lenQ-1)*[steps: 4] + [steps: 3] // get Q and input Q and B to mul
- *             + [steps: 10 + 7*lenQ, bin: 1, arith: lenQ]              // multiply Q and B
+ *             + [steps: 13 + 7*lenQ, bin: 1, arith: lenQ]              // array_mul_short of Q and B
  *             + [steps: 10, bin: 2] + (lenQ+1)*[steps: 3] + [steps: 1] // R and Q·B to add
- *             + [steps: 14 + 6*lenQ, bin: 1 + lenQ]                    // add Q·B and R
+ *             + [steps: 16 + 6*lenQ, bin: 1 + lenQ]                    // array_add_short of Q·B and R
  *             + [steps: 3] + lenA*[steps: 3] + [steps: 2]              // compare A and Q·B + R and finish
- * Total: [steps: 57 + 3*lenA + 20*lenQ,
- *           bin: 5 + lenQ,
+ * Total: [steps: 75 + 3*lenA + 20*lenQ,
+ *           bin: 7 + lenQ,
  *         arith: lenQ]
  * -------------------------------------------
  * where:
@@ -46,8 +46,8 @@ VAR GLOBAL array_div_short_RR
 
 array_div_short:
         %MAX_CNT_ARITH - CNT_ARITH        -    %ARRAY_MAX_LEN   :JMPN(outOfCountersArith)
-        %MAX_CNT_BINARY - CNT_BINARY -  5 -    %ARRAY_MAX_LEN   :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 57 - 23*%ARRAY_MAX_LEN   :JMPN(outOfCountersStep)
+        %MAX_CNT_BINARY - CNT_BINARY -  7 -    %ARRAY_MAX_LEN   :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 72 - 23*%ARRAY_MAX_LEN   :JMPN(outOfCountersStep)
 
         RR              :MSTORE(array_div_short_RR)
 
@@ -55,14 +55,11 @@ array_div_short:
         C               :MSTORE(array_div_short_len_quo)
 
         ; Let's cover the edge cases
-        ; 1] Is C == 1 and inA == 0?
+        ; Is C == 1 and inA == 0?
         C - 1           :JMPNZ(array_div_short_inAGTinB) ; If len(inA) > 1, then we already know that inA > inB
         $ => A          :MLOAD(array_div_short_inA); Here, len(inA) = len(inB) = 1
         0 => B
-        $               :EQ, JMPC(array_div_short_inA_is_zero, array_div_short_equal_len)
-                        __array_div_short_inA_continue:
-
-        ; 2] Check if inA = inB, inA < inB or inA > inB
+        $               :EQ, JMPC(array_div_short_inA_is_zero)
 
 array_div_short_equal_len:
         ; Here, C = 1
@@ -161,7 +158,7 @@ array_div_short_inB_to_mul:
 array_div_short_mul_quo_inB:
                         :CALL(array_mul_short);  inputs: [array_mul_short_len_inA: C, array_mul_short_inA: array_div_short_quo, array_mul_short_inB: array_div_short_inB]
                                               ; outputs: [array_mul_short_len_out, array_mul_short_out]
-        ; block (R != 0): [steps: 10, bin: 1]
+        ; block (R != 0): [steps: 10, bin: 2]
 
         ; w.c. is when rem is not zero
 

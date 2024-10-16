@@ -104,6 +104,7 @@ module.exports = class myHelper {
         const addrA = Number(this.evalCommand(ctx, tag.params[0]));
         const lenA = Number(this.evalCommand(ctx, tag.params[1]));
         const addrB = Number(this.evalCommand(ctx, tag.params[2]));
+        const lenB = Number(this.evalCommand(ctx, tag.params[3]));
 
         let A = 0n;
         let B = 0n;
@@ -112,26 +113,24 @@ module.exports = class myHelper {
                 fea2scalar(ctx.Fr, ctx.mem[addrA + i]) *
                 (1n << (256n * BigInt(i)));
         }
-        for (let i = 0; i < 1; ++i) {
+        for (let i = 0; i < lenB; ++i) {
             B +=
                 fea2scalar(ctx.Fr, ctx.mem[addrB + i]) *
                 (1n << (256n * BigInt(i)));
         }
 
-        const Q = A / B;
+        const [Q,R] = [A / B, A % B];
         const lenQ = this.computeLen(Q);
-        console.log(`A: ${A}, lenA: ${lenA}`);
-        console.log(`B: ${B}, lenB: 1`);
-        console.log(`Q: ${Q}, lenQ: ${lenQ}`);
+        const lenR = this.computeLen(R);
 
-        let cntStep = 75 + 3 * lenA + 20 * lenQ;
-        let cntBinary = 7 + lenQ;
-        let cntArith = lenQ;
+        let cntStep = 74 + 7*lenA + 8*lenQ + 9*lenR + 19*lenQ*lenB;
+        let cntBinary = 6 - lenB + lenR + 2*lenQ*lenB;
+        let cntArith = lenQ*lenB;
         let counters = { cntStep, cntBinary, cntArith };
 
-        console.log(
-            `Expected DivLong Counters:\n${JSON.stringify(counters, null, 2)}`
-        );
+        // console.log(
+        //     `Expected DivLong Counters:\n${JSON.stringify(counters, null, 2)}`
+        // );
 
         ctx.expectedCounters = counters;
     }
@@ -156,9 +155,6 @@ module.exports = class myHelper {
 
         const Q = A / B;
         const lenQ = this.computeLen(Q);
-        console.log(`A: ${A}, lenA: ${lenA}`);
-        console.log(`B: ${B}, lenB: 1`);
-        console.log(`Q: ${Q}, lenQ: ${lenQ}`);
 
         let cntStep = 75 + 3 * lenA + 20 * lenQ;
         let cntBinary = 7 + lenQ;
@@ -167,6 +163,32 @@ module.exports = class myHelper {
 
         // console.log(
         //     `Expected DivShort Counters:\n${JSON.stringify(counters, null, 2)}`
+        // );
+
+        ctx.expectedCounters = counters;
+    }
+
+    eval_expectedDivTwoCounters(ctx, tag) {
+        const addrA = Number(this.evalCommand(ctx, tag.params[0]));
+        const lenA = Number(this.evalCommand(ctx, tag.params[1]));
+
+        let A = 0n;
+        for (let i = 0; i < lenA; ++i) {
+            A +=
+                fea2scalar(ctx.Fr, ctx.mem[addrA + i]) *
+                (1n << (256n * BigInt(i)));
+        }
+
+        const Q = A / 2n;
+        const lenQ = this.computeLen(Q);
+
+        let cntStep = 65 + 3*lenA + 22*lenQ;
+        let cntBinary = 5 + 3*lenQ;
+        let cntArith = 0;
+        let counters = { cntStep, cntBinary, cntArith };
+
+        // console.log(
+        //     `Expected DivTwo Counters:\n${JSON.stringify(counters, null, 2)}`
         // );
 
         ctx.expectedCounters = counters;
@@ -319,27 +341,13 @@ module.exports = class myHelper {
         // console.log(`nTimesEven: ${nTimesEven}, nTimesOdd: ${nTimesOdd}`);
 
         let counters = { cntStep: 0, cntBinary: 0, cntArith: 0 };
-        const a = setupAndFirstDivCounters();
-        const b = halfLoopCounters();
-        const c = fullLoopCounters();
-
-        for (const key in counters) {
-            counters[key] = a[key] + nTimesEven * b[key] + nTimesOdd * c[key];
-        }
-
-        // console.log(
-        //     `Expected ModExp Counters:\n${JSON.stringify(counters, null, 2)}`
-        // );
-
-        ctx.expectedCounters = counters;
-
-        function setupAndFirstDivCounters() {
-            // [steps: 76 + 10*len(B) + 3*len(M) + 8*len(Q(B,M)) + 12*len(R(B,M)) + 19*len(Q(B,M))*len(M),
+        const setupAndFirstDivCounters = () => {
+            // [steps: 84 + 10*len(B) + 3*len(M) + 8*len(Q(B,M)) + 12*len(R(B,M)) + 19*len(Q(B,M))*len(M),
             //    bin: 4 - len(M) + len(R(B,M)) + 2*len(Q(B,M))*len(M),
             //  arith: len(Q(B,M))*len(M)]
             return {
                 cntStep:
-                    76 +
+                    84 +
                     10 * lenB +
                     3 * lenM +
                     8 * this.computeLen(Q_B_M) +
@@ -351,51 +359,65 @@ module.exports = class myHelper {
             };
         }
 
-        function halfLoopCounters() {
-            // [steps: 139 +  82*len(M) + 6*len(E) + 80*len(M)*(len(M)-1)/2 + 19*len(M)² + 25*len(Q(E,2)),
-            //    bin: 5   +   6*len(M)            + 23*len(M)*(len(M)-1)/2 +  2*len(M)² +  2*len(Q(E,2)),
+        const halfLoopCounters = () => {
+            // [steps: 153 +  82*len(M) + 6*len(E) + 80*len(M)*(len(M)-1)/2 + 19*len(M)² + 25*len(Q(E,2)),
+            //    bin: 9   +   6*len(M)            + 23*len(M)*(len(M)-1)/2 +  2*len(M)² +  3*len(Q(E,2)),
             //  arith: -1  +   2*len(M)            +  2*len(M)*(len(M)-1)/2 +    len(M)²]
             return {
                 cntStep:
-                    139 +
+                    153 +
                     82 * lenM +
                     6 * lenE +
                     (80 * lenM * (lenM - 1)) / 2 +
                     19 * lenM ** 2 +
                     25 * lenQE2,
                 cntBinary:
-                    5 +
+                    9 +
                     6 * lenM +
                     (23 * lenM * (lenM - 1)) / 2 +
                     2 * lenM ** 2 +
-                    2 * lenQE2,
+                    3 * lenQE2,
                 cntArith:
                     -1 + 2 * lenM + (2 * lenM * (lenM - 1)) / 2 + lenM ** 2,
             };
         }
 
-        function fullLoopCounters() {
-            // [steps: 238 + 114*len(M) + 6*len(E) + 80*len(M)*(len(M)-1)/2 + 57*len(M)² + 25*len(Q(E,2)),
-            //    bin: 11  +   3*len(M)            + 23*len(M)*(len(M)-1)/2 +  6*len(M)² +  2*len(Q(E,2)),
+        const fullLoopCounters = () => {
+            // [steps: 263 + 114*len(M) + 6*len(E) + 80*len(M)*(len(M)-1)/2 + 57*len(M)² + 25*len(Q(E,2)),
+            //    bin: 17  +   3*len(M)            + 23*len(M)*(len(M)-1)/2 +  6*len(M)² +  3*len(Q(E,2)),
             //  arith: -2  +   2*len(M)            +  2*len(M)*(len(M)-1)/2 +  3*len(M)²]
             return {
                 cntStep:
-                    238 +
+                    263 +
                     114 * lenM +
                     6 * lenE +
                     (80 * lenM * (lenM - 1)) / 2 +
                     57 * lenM ** 2 +
                     25 * lenQE2,
                 cntBinary:
-                    11 +
+                    17 +
                     3 * lenM +
                     (23 * lenM * (lenM - 1)) / 2 +
                     6 * lenM ** 2 +
-                    2 * lenQE2,
+                    3 * lenQE2,
                 cntArith:
                     -2 + 2 * lenM + (2 * lenM * (lenM - 1)) / 2 + 3 * lenM ** 2,
             };
         }
+
+        const a = setupAndFirstDivCounters();
+        const b = halfLoopCounters();
+        const c = fullLoopCounters();
+
+        for (const key in counters) {
+            counters[key] = a[key] + nTimesEven * b[key] + nTimesOdd * c[key];
+        }
+
+        console.log(
+            `Expected ModExp Counters:\n${JSON.stringify(counters, null, 2)}`
+        );
+
+        ctx.expectedCounters = counters;
     }
 
     computeLen(x) {
