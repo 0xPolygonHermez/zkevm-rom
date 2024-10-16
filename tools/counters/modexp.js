@@ -90,7 +90,7 @@ module.exports = class myHelper {
                 (1n << (256n * BigInt(i)));
         }
 
-        let cntStep = 10 + 6*lenA;
+        let cntStep = 10 + 6 * lenA;
         let cntBinary = lenA;
         let cntArith = 0;
         let counters = { cntStep, cntBinary, cntArith };
@@ -119,13 +119,13 @@ module.exports = class myHelper {
                 (1n << (256n * BigInt(i)));
         }
 
-        const [Q,R] = [A / B, A % B];
+        const [Q, R] = [A / B, A % B];
         const lenQ = this.computeLen(Q);
         const lenR = this.computeLen(R);
 
-        let cntStep = 74 + 7*lenA + 8*lenQ + 9*lenR + 19*lenQ*lenB;
-        let cntBinary = 6 - lenB + lenR + 2*lenQ*lenB;
-        let cntArith = lenQ*lenB;
+        let cntStep = 74 + 7 * lenA + 8 * lenQ + 9 * lenR + 19 * lenQ * lenB;
+        let cntBinary = 6 - lenB + lenR + 2 * lenQ * lenB;
+        let cntArith = lenQ * lenB;
         let counters = { cntStep, cntBinary, cntArith };
 
         // console.log(
@@ -182,8 +182,8 @@ module.exports = class myHelper {
         const Q = A / 2n;
         const lenQ = this.computeLen(Q);
 
-        let cntStep = 65 + 3*lenA + 22*lenQ;
-        let cntBinary = 5 + 3*lenQ;
+        let cntStep = 65 + 3 * lenA + 22 * lenQ;
+        let cntBinary = 5 + 3 * lenQ;
         let cntArith = 0;
         let counters = { cntStep, cntBinary, cntArith };
 
@@ -213,9 +213,9 @@ module.exports = class myHelper {
                 (1n << (256n * BigInt(i)));
         }
 
-        let cntStep = 23 - 5*lenA - 12*lenB + 19*lenA*lenB;
-        let cntBinary = 2 - lenA - 2*lenB + 2*lenA*lenB;
-        let cntArith = lenA*lenB;
+        let cntStep = 23 - 5 * lenA - 12 * lenB + 19 * lenA * lenB;
+        let cntBinary = 2 - lenA - 2 * lenB + 2 * lenA * lenB;
+        let cntArith = lenA * lenB;
         let counters = { cntStep, cntBinary, cntArith };
 
         // console.log(`Expected MulLong Counters:\n${JSON.stringify(counters, null, 2)}`);
@@ -241,7 +241,7 @@ module.exports = class myHelper {
                 (1n << (256n * BigInt(i)));
         }
 
-        let cntStep = 13 + 7*lenA;
+        let cntStep = 13 + 7 * lenA;
         let cntBinary = 1;
         let cntArith = lenA;
         let counters = { cntStep, cntBinary, cntArith };
@@ -262,8 +262,8 @@ module.exports = class myHelper {
                 (1n << (256n * BigInt(i)));
         }
 
-        let cntStep = 6 + 9*lenA;
-        let cntBinary = - 1 + 2*lenA;
+        let cntStep = 6 + 9 * lenA;
+        let cntBinary = -1 + 2 * lenA;
         let cntArith = 0;
         let counters = { cntStep, cntBinary, cntArith };
 
@@ -354,10 +354,13 @@ module.exports = class myHelper {
                     12 * this.computeLen(R_B_M) +
                     19 * this.computeLen(Q_B_M) * lenM,
                 cntBinary:
-                    4 - lenM + this.computeLen(R_B_M) + 2 * this.computeLen(Q_B_M) * lenM,
+                    4 -
+                    lenM +
+                    this.computeLen(R_B_M) +
+                    2 * this.computeLen(Q_B_M) * lenM,
                 cntArith: this.computeLen(Q_B_M) * lenM,
             };
-        }
+        };
 
         const halfLoopCounters = () => {
             // [steps: 153 +  82*len(M) + 6*len(E) + 80*len(M)*(len(M)-1)/2 + 19*len(M)² + 25*len(Q(E,2)),
@@ -380,12 +383,12 @@ module.exports = class myHelper {
                 cntArith:
                     -1 + 2 * lenM + (2 * lenM * (lenM - 1)) / 2 + lenM ** 2,
             };
-        }
+        };
 
         const fullLoopCounters = () => {
             // [steps: 263 + 114*len(M) + 6*len(E) + 80*len(M)*(len(M)-1)/2 + 57*len(M)² + 25*len(Q(E,2)),
             //    bin: 17  +   3*len(M)            + 23*len(M)*(len(M)-1)/2 +  6*len(M)² +  3*len(Q(E,2)),
-            //  arith: -2  +   2*len(M)            +  2*len(M)*(len(M)-1)/2 +  3*len(M)²]
+            //  arith: -1  +   2*len(M)            +  2*len(M)*(len(M)-1)/2 +  3*len(M)²]
             return {
                 cntStep:
                     263 +
@@ -401,9 +404,9 @@ module.exports = class myHelper {
                     6 * lenM ** 2 +
                     3 * lenQE2,
                 cntArith:
-                    -2 + 2 * lenM + (2 * lenM * (lenM - 1)) / 2 + 3 * lenM ** 2,
+                    -1 + 2 * lenM + (2 * lenM * (lenM - 1)) / 2 + 3 * lenM ** 2,
             };
-        }
+        };
 
         const a = setupAndFirstDivCounters();
         const b = halfLoopCounters();
@@ -413,9 +416,9 @@ module.exports = class myHelper {
             counters[key] = a[key] + nTimesEven * b[key] + nTimesOdd * c[key];
         }
 
-        console.log(
-            `Expected ModExp Counters:\n${JSON.stringify(counters, null, 2)}`
-        );
+        // console.log(
+        //     `Expected ModExp Counters:\n${JSON.stringify(counters, null, 2)}`
+        // );
 
         ctx.expectedCounters = counters;
     }
