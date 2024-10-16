@@ -79,20 +79,19 @@ module.exports = class myHelper {
         const nTimesEven = lenE * 256 - nTimesOdd;
 
         let counters = {cntStep: 0, cntBinary: 0, cntArith: 0};
-        // I do an overstimation that the number is always odd!
         const a = setupAndFirstDivCounters();
-        const b = fullLoopCounters(); // halfLoopCounters();
+        const b = halfLoopCounters();
         const c = fullLoopCounters();
 
         for (const key in counters) {
             counters[key] = a[key] + nTimesEven * b[key] + nTimesOdd * c[key];
         }
 
-        // console.log(JSON.stringify(counters, null, 2));
+        console.log(`Expected ModExp Counters:\n${JSON.stringify(counters, null, 2)}`);
 
         ctx.emodExpCounters = counters;
 
-        function computeLenThisBase(x) {
+        function computeLen(x) {
             if (x === 0n) return 1;
 
             let len = 0;
@@ -112,16 +111,47 @@ module.exports = class myHelper {
                     76 +
                     10 * lenB +
                     3 * lenM +
-                    8 * computeLenThisBase(Q_B_M) +
-                    12 * computeLenThisBase(R_B_M) +
-                    19 * computeLenThisBase(Q_B_M) * lenM,
+                    8 * computeLen(Q_B_M) +
+                    12 * computeLen(R_B_M) +
+                    19 * computeLen(Q_B_M) * lenM,
                 cntBinary:
                     4 -
                     lenM +
-                    computeLenThisBase(R_B_M) +
-                    2 * computeLenThisBase(Q_B_M) * lenM,
+                    computeLen(R_B_M) +
+                    2 * computeLen(Q_B_M) * lenM,
                 cntArith:
-                    computeLenThisBase(Q_B_M) * lenM,
+                    computeLen(Q_B_M) * lenM,
+            };
+        }
+
+        function halfLoopCounters() {
+            // [steps: 171 - 2*len(B) + 6*len(E) + 3*len(M) + 51*len(B)² + 25*len(Q(E,2)) + 19*len(Q(B²,M))*len(M) + 8*len(Q(B²,M)) + 12*len(R(B²,M)),
+            //    bin: 11  - 9*len(B)            -   len(M) +  9*len(B)² +  2*len(Q(E,2)) +  2*len(Q(B²,M))*len(M)                  +    len(R(B²,M)),
+            //  arith: -1  +   len(B)                       +    len(B)²                  +    len(Q(B²,M))*len(M)]
+            return {
+                cntStep:
+                    171 -
+                    2*lenB +
+                    6 * lenE +
+                    3 * lenM +
+                    51 * lenB**2 +
+                    25 * lenQE2 +
+                    19 * computeLen(Q_Bsq_M) * lenM +
+                    8 * computeLen(Q_Bsq_M) +
+                    12 * computeLen(R_Bsq_M),
+                cntBinary:
+                    11 -
+                    9 * lenB -
+                    lenM +
+                    9 * lenB**2 +
+                    2 * lenQE2 +
+                    2 * computeLen(Q_Bsq_M) * lenM +
+                    computeLen(R_Bsq_M),
+                cntArith:
+                    -1 +
+                    lenB +
+                    lenB**2 +
+                    computeLen(Q_Bsq_M) * lenM,
             };
         }
 
@@ -138,9 +168,9 @@ module.exports = class myHelper {
                     54 * lenB**2 +
                     38 * lenB * lenM +
                     22 * lenQE2 +
-                    19 * computeLenThisBase(Q_Bsq_M) * lenM +
-                    8 * computeLenThisBase(Q_Bsq_M) +
-                    12 * computeLenThisBase(R_Bsq_M),
+                    19 * computeLen(Q_Bsq_M) * lenM +
+                    8 * computeLen(Q_Bsq_M) +
+                    12 * computeLen(R_Bsq_M),
                 cntBinary:
                     17 -
                     11 * lenB -
@@ -148,13 +178,14 @@ module.exports = class myHelper {
                     9 * lenB**2 +
                     4 * lenB * lenM +
                     2 * lenQE2 +
-                    2 * computeLenThisBase(Q_Bsq_M) * lenM,
+                    2 * computeLen(Q_Bsq_M) * lenM +
+                    computeLen(R_Bsq_M),
                 cntArith:
                     -1 +
                     lenB +
                     lenB**2 +
                     2 * lenB * lenM +
-                    computeLenThisBase(Q_Bsq_M) * lenM,
+                    computeLen(Q_Bsq_M) * lenM,
             };
         }
     }

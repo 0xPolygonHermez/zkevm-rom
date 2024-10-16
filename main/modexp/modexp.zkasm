@@ -84,23 +84,34 @@ VAR GLOBAL modexp_RR
 ; [steps: 2]                                                                                          // end
 ;
 ; -------------------------------------------
-; nIterations    = ⌊log₂(E)⌋
+; nIterations          = ⌊log₂(E)⌋
 ; num_times_E_is_odd   = HammingWeight(E) (i.e., number of 1s in the binary representation of E)
 ; num_times_E_is_even  = nIterations - num_times_E_is_odd
 ; -------------------------------------------
-;       · cost(first_part)    = [steps: 76 + 10*len(B) + 3*len(M) + 8*len(Q(B,M)) + 12*len(R(B,M)) + 19*len(Q(B,M))*len(M),
-;                                  bin: 4 - len(M) + len(R(B,M)) + 2*len(Q(B,M))*len(M),
-;                                arith: len(Q(B,M))*len(M)]
-;       · cost(odd_iteration) = [steps: 273 +    len(B) + 6*len(E) + 26*len(M) + 54*len(B)² + 38*len(B)*len(M) + 22*len(Q(E,2)) + 19*len(Q(B²,M))*len(M) + 8*len(Q(B²,M)) + 12*len(R(B²,M)),
-;                                  bin: 17  - 11*len(B)            -  2*len(M) +  9*len(B)² +  4*len(B)*len(M) +  2*len(Q(E,2)) +  2*len(Q(B²,M))*len(M)                  +    len(R(B²,M)) ,
-;                                arith: -1  +    len(B)                        +    len(B)² +  2*len(B)*len(M)                  +    len(Q(B²,M))*len(M)]
-;       · cost(last_part)     = [steps: 2]
+;       · cost(first_part)     = [steps: 76 + 10*len(B) + 3*len(M) + 8*len(Q(B,M)) + 12*len(R(B,M)) + 19*len(Q(B,M))*len(M),
+;                                   bin: 4 - len(M) + len(R(B,M)) + 2*len(Q(B,M))*len(M),
+;                                 arith: len(Q(B,M))*len(M)]
+;       · cost(even_iteration) = [steps: 171 - 2*len(B) + 6*len(E) + 3*len(M) + 51*len(B)² + 25*len(Q(E,2)) + 19*len(Q(B²,M))*len(M) + 8*len(Q(B²,M)) + 12*len(R(B²,M)),
+;                                   bin: 11  - 9*len(B)            -   len(M) +  9*len(B)² +  2*len(Q(E,2)) +  2*len(Q(B²,M))*len(M)                  +    len(R(B²,M)),
+;                                 arith: -1  +   len(B)                       +    len(B)²                  +    len(Q(B²,M))*len(M)]
+;       · cost(odd_iteration)  = [steps: 273 +    len(B) + 6*len(E) + 26*len(M) + 54*len(B)² + 38*len(B)*len(M) + 22*len(Q(E,2)) + 19*len(Q(B²,M))*len(M) + 8*len(Q(B²,M)) + 12*len(R(B²,M)),
+;                                   bin: 17  - 11*len(B)            -  2*len(M) +  9*len(B)² +  4*len(B)*len(M) +  2*len(Q(E,2)) +  2*len(Q(B²,M))*len(M)                  +    len(R(B²,M)),
+;                                 arith: -1  +    len(B)                        +    len(B)² +  2*len(B)*len(M)                  +    len(Q(B²,M))*len(M)]
+;       · cost(last_part)      = [steps: 2]
 ; -------------------------------------------
-; cost(w.c): cost(first_part) + ⌊log₂(E)⌋*odd_iteration + cost(last_part)
+; cost(w.c): cost(first_part) + num_times_E_is_even*cost(even_iteration) + num_times_E_is_odd*cost(odd_iteration) + cost(last_part)
 ; -------------------------------------------
-; Note: For the total count, we have used that O <= M, len(B²) <= 2*len(B), len(O·B) <= len(M·B) <= len(M) + len(B), Q(O·B,M) <= Q(M·B,M) = B and R(O·B,M) < M
+; Note: For the total count, we have used that:
+;               · O <= M,
+;               · len(B²) <= 2*len(B),
+;               · len(O·B) <= len(M·B) <= len(M) + len(B),
+;               · Q(O·B,M) <= Q(M·B,M) = B,
+;               · R(O·B,M) < M
 
 modexp:
+        $${recordModExpCounters()}
+        $${expectedModExpCounters(addr.modexp_B, mem.modexp_Blen, addr.modexp_E, mem.modexp_Elen, addr.modexp_M, mem.modexp_Mlen)}
+
         %MAX_CNT_STEPS - STEP - 7 - 3*%ARRAY_MAX_LEN - 3*%ARRAY_MAX_LEN - 1  :JMPN(outOfCountersStep) ; init and array div long
 
         RR              :MSTORE(modexp_RR)
@@ -413,4 +424,5 @@ modexp_rem_from_div3:
 
 modexp_end:
         $ => RR         :MLOAD(modexp_RR)
+        $${checkModExpCounters()}
                         :RETURN
