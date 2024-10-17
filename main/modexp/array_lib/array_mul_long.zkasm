@@ -4,8 +4,8 @@
 ;;
 ;; array_mul_long:
 ;;             in:
-;;                  · C ∈ [1, 32], the len of inA
-;;                  · D ∈ [1, 32], the len of inB
+;;                  · C ∈ [1, 64], the len of inA
+;;                  · D ∈ [2, 32], the len of inB
 ;;                  · inA ∈ [0, 2²⁵⁶ - 1]^C, the first input array
 ;;                  · inB ∈ [0, 2²⁵⁶ - 1]^D, the second input array
 ;;
@@ -13,28 +13,31 @@
 ;;                  · out = inA·inB, with len(out) <= C + D
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; function array_mul_long(a: bigint[], b: bigint[], base: bigint): bigint[] {
-;     const alen = a.length;
-;     const blen = b.length;
-;     const len = alen + blen;
-;     const result = new Array<bigint>(len).fill(0n);
-;     let product: bigint;
-;     let carry: bigint;
-;     for (let i = 0; i < alen; i++) {
-;         for (let j = 0; j < blen; j++) {
-;             product = a[i] * b[j] + out[i+j];
-;             carry = product / base;
-;             out[i+j] = product - carry * base;
-;             out[i + j + 1] += carry;
-;         }
-;     }
-;     trim(result);
-;     return result;
-; }
+;; WARNING: This function is tailored for checking that a = q·b + r in the array_div_long function.
+;;          In can be used for other purposes except for the worst case, i.e. when len(inA) == %ARRAY_MAX_LEN_DOUBLED.
+;;          Specifically, there is an implicit assumption that the output len of this function cannot be
+;;          greater than %ARRAY_MAX_LEN_DOUBLED, and do not allow to generate the proof in such case.
 
-VAR GLOBAL array_mul_long_inA[%ARRAY_MAX_LEN]
+; code
+; --------------------------
+; first_iteration_first_row       <-- Compute a[0]·b[0]
+; do {
+;     finish_first_row            <-- Compute a[0]·b[j] + out[j]
+; } while(inB_index_check)        <-- While 0 < j < len(b)
+; while(inA_index_check) {        <-- While 0 <  i < len(a)
+;       while (inB_index_check) { <-- While 0 <= j < len(b) - 1
+;               loop2inB          <-- Compute a[i]·b[j] + out[i+j]
+;       }
+;      loop2inB_last              <-- Compute a[i]·b[len(b)-1] + out[i+len(b)-1]
+; }
+; 1] check_carry                  <-- If there is a carry, append it to the result
+; 2] trim                         <-- Otherwise, trim the result
+; end
+; --------------------------
+
+VAR GLOBAL array_mul_long_inA[%ARRAY_MAX_LEN_DOUBLED]
 VAR GLOBAL array_mul_long_inB[%ARRAY_MAX_LEN]
-VAR GLOBAL array_mul_long_out[%ARRAY_MAX_LEN_DOUBLED]
+VAR GLOBAL array_mul_long_out[%ARRAY_MAX_LEN_DOUBLED] ; This cannot be bigger because we use it for division checking
 VAR GLOBAL array_mul_long_len_inA
 VAR GLOBAL array_mul_long_len_inB
 VAR GLOBAL array_mul_long_len_out
@@ -43,75 +46,99 @@ VAR GLOBAL array_mul_long_out_chunk_2
 
 VAR GLOBAL array_mul_long_RR
 
+/*
+ * RESOURCES:
+ * -----------------------------
+ * (worst case) [steps: 15, arith: 1] + (lenB-1)*[steps: 7, arith: 1] + [steps: 3] + (lenA-1)*((lenB-1)*[steps: 19, bin: 2, arith: 1] + [steps: 14, bin: 1, arith: 1]) + [steps: 7, bin: 1]
+ * total: [steps: 23 - 5*lenA - 12*lenB + 19*lenA*lenB, bin: 2 - lenA - 2*lenB + 2*lenA*lenB, arith: lenA*lenB]
+ * -----------------------------
+ */
+
 array_mul_long:
-        %MAX_CNT_ARITH - CNT_ARITH - 1        :JMPN(outOfCountersArith)
-        %MAX_CNT_STEPS - STEP      - 9        :JMPN(outOfCountersStep)
-
-        C => A
-        D => B
-        0 => C,D
-        ${A*B} => E :ARITH
-        A => C
-        B => D
-        ; E holds C*D
-
-        %MAX_CNT_BINARY - CNT_BINARY                 - 4*E                :JMPN(outOfCountersBinary)
-        %MAX_CNT_ARITH - CNT_ARITH                   - E                  :JMPN(outOfCountersArith)
-        %MAX_CNT_STEPS - STEP        - 7 - 2*C - 2*D - 33*E - 2 - 3*C - 1 :JMPN(outOfCountersStep)
+        %MAX_CNT_ARITH - CNT_ARITH                                                       -    %ARRAY_MAX_LEN_DOUBLED*%ARRAY_MAX_LEN     :JMPN(outOfCountersArith)
+        %MAX_CNT_BINARY - CNT_BINARY - 2  +   %ARRAY_MAX_LEN_DOUBLED +  2*%ARRAY_MAX_LEN -  2*%ARRAY_MAX_LEN_DOUBLED*%ARRAY_MAX_LEN     :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 20 + 5*%ARRAY_MAX_LEN_DOUBLED + 12*%ARRAY_MAX_LEN - 19*%ARRAY_MAX_LEN_DOUBLED*%ARRAY_MAX_LEN     :JMPN(outOfCountersStep)
 
         RR              :MSTORE(array_mul_long_RR)
 
         C               :MSTORE(array_mul_long_len_inA)
         D               :MSTORE(array_mul_long_len_inB)
-        C + D           :MSTORE(array_mul_long_len_out)
-        0               :MSTORE(array_mul_long_out_chunk_2) ; initialize the out chunk 2
 
-        C + D - 1 => E ; auxiliar index
-        0 => RCX   ; first index in loops
-        0 => RR    ; second index in loops
+        0 => RCX,RR     ; first and second indexes in loops
 
-array_mul_long_clean_out:
-        0               :MSTORE(array_mul_long_out + E)
-        E - 1 => E      :JMPN(array_mul_long_loopZero2inB, array_mul_long_clean_out)
-
-; Begin of branching
-array_mul_long_loop_index_check:
-        RCX + 1 => RCX
-        $ => B          :MLOAD(array_mul_long_len_inA)
-        B - RCX         :JMPZ(array_mul_long_prep_trim_in)
-
-        0 => RR ; reset the second index
-; End of branching
-
-array_mul_long_loopZero2inB:
+array_mul_long_first_iteration_first_row:
         ; The result will be stored as D·base + C
 
-        RCX => E
-        ; 1] a[i]·b[j], where a[i],b[j] ∈ [0,base-1]: This number cannot be GT (base - 2)·base + 1, two chunks
-        $ => A          :MLOAD(array_mul_long_inA + E)
-        $ => B          :MLOAD(array_mul_long_inB + RR)
+        ; a[0]·b[0], where a[0],b[0] ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
+        $ => A          :MLOAD(array_mul_long_inA)
+        $ => B          :MLOAD(array_mul_long_inB)
         0 => C
         $${var _arrayLongMul_AB = A*B}
         ${_arrayLongMul_AB >> 256} => D
-        ${_arrayLongMul_AB} => E :ARITH
+        ${_arrayLongMul_AB} => C :ARITH
 
-        ; 2] product = a[i]·b[j] + out[i+j], where out[i+j] ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
-        E => A
+        ; out[0] = product - carry·B
+        C               :MSTORE(array_mul_long_out)
+
+        ; out[1] = carry
+        1 => RR
+        D => C          :MSTORE(array_mul_long_out + RR)
+
+array_mul_long_finish_first_row:
+        ; The result will be stored as D·base + C
+
+        ; a[0]·b[j] + out[j], where a[0],b[j],out[j] ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
+        $ => B          :MLOAD(array_mul_long_inB + RR)
+        $${var _arrayLongMul_AB = A*B + C}
+        ${_arrayLongMul_AB >> 256} => D
+        ${_arrayLongMul_AB} => C :ARITH
+
+        ; C = result, D = carry
+
+        ; out[j] = product - carry·B
+        C               :MSTORE(array_mul_long_out + RR)
+
+        ; out[j+1] = carry
+        RR + 1 => RR,E
+        D => C          :MSTORE(array_mul_long_out + RR)
+
+        ; C = D = carry
+
+array_mul_long_inB_index_check:
+        $ - RR          :F_MLOAD(array_mul_long_len_inB), JMPNZ(array_mul_long_finish_first_row)
+
+array_mul_long_inA_index_check:
+        ; D = carry, E = last_index_out
+        $ - RCX - 1     :F_MLOAD(array_mul_long_len_inA), JMPZ(array_mul_long_check_carry)
+
+        RCX + 1 => RCX  ; update the first index
+        0 => RR         :MSTORE(array_mul_long_out_chunk_2) ; reset the second index and the out chunk 2
+
+array_mul_long_loop2inB:
+        ; costs [steps: 19, bin: 2, arith: 1]
+
+        ; The result will be stored as D·base + C
+
+        RCX => E
+        ; a[i]·b[j] + out[i+j], where a[i],b[j],out[i+j] ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
+        $ => A          :MLOAD(array_mul_long_inA + E)
+        $ => B          :MLOAD(array_mul_long_inB + RR)
         RCX + RR => E
-        $ => B          :MLOAD(array_mul_long_out + E)
-        $ => C          :ADD, JMPNC(__array_mul_long_no_carry_continue_1)
+        $ => C          :MLOAD(array_mul_long_out + E)
+        $${var _arrayLongMul_AB = A*B + C}
+        ${_arrayLongMul_AB >> 256} => D
+        ${_arrayLongMul_AB} => C :ARITH
+
+        $ => A          :MLOAD(array_mul_long_out_chunk_2), JMPZ(__array_mul_long_c2isZ_continue) ; out_chunk_2 ∈ [0,1]
         ;-----------------
-        ; Since here D ∈ [0, base - 2], there cannot be carry in the following addition
-        D => A
-        1 => B
-        $ => D          :ADD
-        ;-----------------
-                        __array_mul_long_no_carry_continue_1:
-        $ => A          :MLOAD(array_mul_long_out_chunk_2) ; out_chunk_2 ∈ [0,1]
         D => B
         $ => D          :ADD ; the number is of two chunks, no carry can be generated here
+                        __array_mul_long_c2isZ_continue:
+        ;-----------------
 
         ; NOTE: It cannot happen that a[i]·b[j] + out[i+j] produces carry and out_chunk_2 is 1.
+
+        ; C = result, D = carry
 
         ; out[i+j] = product - carry·B
         C               :MSTORE(array_mul_long_out + E)
@@ -122,34 +149,70 @@ array_mul_long_loopZero2inB:
         D => B
         $ => C          :ADD, JMPNC(__array_mul_long_no_carry_continue_2)
         ;-----------------
-        1               :MSTORE(array_mul_long_out_chunk_2)
-                        :JMP(__array_mul_long_carry_continue)
+        1               :MSTORE(array_mul_long_out_chunk_2), JMP(__array_mul_long_carry_continue)
                         __array_mul_long_no_carry_continue_2:
         0               :MSTORE(array_mul_long_out_chunk_2)
                         __array_mul_long_carry_continue:
         ;-----------------
 
+        ; C = carry
+
         C               :MSTORE(array_mul_long_out + E)
 
         RR + 1 => RR
-        $ => B          :MLOAD(array_mul_long_len_inB)
-        B - RR          :JMPZ(array_mul_long_loop_index_check, array_mul_long_loopZero2inB)
+        $ - RR - 1      :F_MLOAD(array_mul_long_len_inB), JMPZ(array_mul_long_loop2inB_last, array_mul_long_loop2inB)
 
-array_mul_long_prep_trim_in:
-        $ => C          :MLOAD(array_mul_long_len_out)
-        C - 1 => E
+array_mul_long_loop2inB_last:
+        ; costs [steps: 14, bin: 1, arith: 1]
 
-array_mul_long_trim_in:
-        $ => A          :MLOAD(array_mul_long_out + E)
-        A               :MSTORE(array_trim_in + E)
-        E - 1 => E      :JMPN(array_mul_long_trim, array_mul_long_trim_in)
+        ; The result will be stored as D·base + C
+
+        RCX => E
+        ; a[i]·b[lenB] + out[i+lenB], where a[i],b[lenB],out[i+lenB] ∈ [0,base-1]: This number cannot be GT (base - 1)·base, two chunks
+        $ => A          :MLOAD(array_mul_long_inA + E)
+        $ => B          :MLOAD(array_mul_long_inB + RR)
+        RCX + RR => E
+        $ => C          :MLOAD(array_mul_long_out + E)
+        $${var _arrayLongMul_AB = A*B + C}
+        ${_arrayLongMul_AB >> 256} => D
+        ${_arrayLongMul_AB} => C :ARITH
+
+        $ => A          :MLOAD(array_mul_long_out_chunk_2), JMPZ(__array_mul_long_c2isZ_continue2) ; out_chunk_2 ∈ [0,1]
+        ;-----------------
+        D => B
+        $ => D          :ADD ; the number is of two chunks, no carry can be generated here
+                        __array_mul_long_c2isZ_continue2:
+        ;-----------------
+
+        ; NOTE: It cannot happen that a[i]·b[lenB] + out[i+lenB] produces carry and out_chunk_2 is 1.
+
+        ; out[i+lenB] = product - carry·B
+        C               :MSTORE(array_mul_long_out + E)
+
+        ; out[i+lenB+1] = carry, where carry ∈ [0,base-1]
+        E + 1 => E
+
+        ; D = carry, E = last_index_out
+
+        ; In the exceptional case where we reached the allowed limit, we proceed to the carry check
+        E - %ARRAY_MAX_LEN_DOUBLED  :JMPZ(array_mul_long_check_carry)
+
+        D               :MSTORE(array_mul_long_out + E), JMP(array_mul_long_inA_index_check)
+
+array_mul_long_check_carry:
+        ; D = carry, E = last_index_out
+        D => A
+        0 => B
+        $               :EQ, JMPC(array_mul_long_trim)
+
+        ; out[E] != 0, then len(out) = E + 1
+        E - %ARRAY_MAX_LEN_DOUBLED  :JMPZ(failAssert)
+
+        E + 1           :MSTORE(array_mul_long_len_out), JMP(array_mul_long_end)
 
 array_mul_long_trim:
-                        :CALL(array_trim)
-
-        %MAX_CNT_STEPS - STEP - 3   :JMPN(outOfCountersStep)
-
-        C               :MSTORE(array_mul_long_len_out)
+        ; out[E] = 0, then len(out) = E
+        E               :MSTORE(array_mul_long_len_out)
 
 array_mul_long_end:
         $ => RR         :MLOAD(array_mul_long_RR)

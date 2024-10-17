@@ -1,7 +1,14 @@
 ; constants needed by executor C++
 INCLUDE "../main/constants.zkasm"
+INCLUDE "../main/modexp/constants.zkasm"
 
-CONSTL %ARRAY_BASE_MINUS_ONE = 115792089237316195423570985008687907853269984665640564039457584007913129639935n ; 2^256
+CONSTL %ARRAY_BASE_MINUS_ONE = 115792089237316195423570985008687907853269984665640564039457584007913129639935n ; 2^256-1
+CONSTL %ARRAY_BASE_MINUS_TWO = 115792089237316195423570985008687907853269984665640564039457584007913129639934n ; 2^256-2
+CONSTL %ARRAY_BASE_MINUS_THREE = 115792089237316195423570985008687907853269984665640564039457584007913129639933n ; 2^256-3
+CONSTL %ARRAY_BASE_HALF = 57896044618658097711785492504343953926634992332820282019728792003956564819968n ; 2^255
+CONSTL %ARRAY_BASE_HALF_MINUS_ONE = 57896044618658097711785492504343953926634992332820282019728792003956564819967n ; 2^255-1
+CONST %ARRAY_MAX_LEN_DOUBLED_MINUS_TWO = %ARRAY_MAX_LEN_DOUBLED - 2
+CONST %ARRAY_MAX_LEN_DIV_BY_TWO = %ARRAY_MAX_LEN / 2
 
 VAR GLOBAL lastHashKId
 VAR GLOBAL lastHashPId
@@ -45,38 +52,150 @@ start:
 
         ; addition with len(inA) >= len(inB)
         ; ---------------------------------------------------------------
-        ; 1] [2**256-1,2**256-1,2**256-1] + [2**256-1,2**256-1]
+        ; 1] inA = inB and len(inA) = len(inB) = 1
+        1 => C
+        1 => D
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_AGTB_inA)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_AGTB_inB)
+                                                                                        :CALL(array_add_AGTB)
+        %ARRAY_BASE_MINUS_TWO                                                           :MLOAD(array_add_AGTB_out)
+        1 => E
+        1                                                                               :MLOAD(array_add_AGTB_out + E)
+        2                                                                               :MLOAD(array_add_AGTB_len_out)
+
+        ; 2] inA < inB and len(inA) = len(inB) = 1
+        1 => C
+        1 => D
+        %ARRAY_BASE_MINUS_TWO                                                           :MSTORE(array_add_AGTB_inA)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_AGTB_inB)
+                                                                                        :CALL(array_add_AGTB)
+        %ARRAY_BASE_MINUS_THREE                                                         :MLOAD(array_add_AGTB_out)
+        1 => E
+        1                                                                               :MLOAD(array_add_AGTB_out + E)
+        2                                                                               :MLOAD(array_add_AGTB_len_out)
+
+        ; 3] [2**256-1,2**256-1,2**256-1] + [2**256-1,2**256-1]
         3 => C
         2 => D
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_AGTB_inA)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_AGTB_inA)
         1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_AGTB_inA + E)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_AGTB_inA + E)
         2 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_AGTB_inA + E)
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_AGTB_inB)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_AGTB_inA + E)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_AGTB_inB)
         1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_AGTB_inB + E)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_AGTB_inB + E)
                                                                                         :CALL(array_add_AGTB)
-        115792089237316195423570985008687907853269984665640564039457584007913129639934n :MLOAD(array_add_AGTB_out)
+        %ARRAY_BASE_MINUS_TWO                                                           :MLOAD(array_add_AGTB_out)
         1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MLOAD(array_add_AGTB_out + E)
+        %ARRAY_BASE_MINUS_ONE                                                           :MLOAD(array_add_AGTB_out + E)
         2 => E
         0n                                                                              :MLOAD(array_add_AGTB_out + E)
         3 => E
         1n                                                                              :MLOAD(array_add_AGTB_out + E)
         4                                                                               :MLOAD(array_add_AGTB_len_out)
+
+        ; 3] [2**256-1,2**256-1,2**256-1,2**256-1] + [0,1]
+        4 => C
+        2 => D
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_AGTB_inA)
+        1 => E
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_AGTB_inA + E)
+        2 => E
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_AGTB_inA + E)
+        3 => E
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_AGTB_inA + E)
+        0                                                                               :MSTORE(array_add_AGTB_inB)
+        1 => E
+        1                                                                               :MSTORE(array_add_AGTB_inB + E)
+                                                                                        :CALL(array_add_AGTB)
+        %ARRAY_BASE_MINUS_ONE                                                           :MLOAD(array_add_AGTB_out)
+        1 => E
+        0                                                                               :MLOAD(array_add_AGTB_out + E)
+        2 => E
+        0n                                                                              :MLOAD(array_add_AGTB_out + E)
+        3 => E
+        0n                                                                              :MLOAD(array_add_AGTB_out + E)
+        4 => E
+        1n                                                                              :MLOAD(array_add_AGTB_out + E)
+        5                                                                               :MLOAD(array_add_AGTB_len_out)
+
+        ; 4] [2**256-2,2**256-2,2**256-1,2**256-1] + [1]
+        4 => C
+        1 => D
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_AGTB_inA)
+        1 => E
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_AGTB_inA + E)
+        2 => E
+        %ARRAY_BASE_MINUS_TWO                                                           :MSTORE(array_add_AGTB_inA + E)
+        3 => E
+        %ARRAY_BASE_MINUS_TWO                                                           :MSTORE(array_add_AGTB_inA + E)
+        1n                                                                              :MSTORE(array_add_AGTB_inB)
+                                                                                        :CALL(array_add_AGTB)
+        0n                                                                              :MLOAD(array_add_AGTB_out)
+        1 => E
+        0n                                                                              :MLOAD(array_add_AGTB_out + E)
+        2 => E
+        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MLOAD(array_add_AGTB_out + E)
+        3 => E
+        115792089237316195423570985008687907853269984665640564039457584007913129639934n :MLOAD(array_add_AGTB_out + E)
+        4                                                                               :MLOAD(array_add_AGTB_len_out)
+
+        ; 5] [2**256-2]*%ARRAY_MAX_LEN_DOUBLED + [1]*%ARRAY_MAX_LEN
+        %ARRAY_MAX_LEN_DOUBLED => C
+        %ARRAY_MAX_LEN => D
+        C - 1 => E
+        D - 1 => RR
+        array_add_AGTB_wc_test_inA:
+                %ARRAY_BASE_MINUS_TWO   :MSTORE(array_add_AGTB_inA + E)
+                E - 1 => E              :JMPN(array_add_AGTB_wc_test_inB,array_add_AGTB_wc_test_inA)
+        array_add_AGTB_wc_test_inB:
+                1n                      :MSTORE(array_add_AGTB_inB + RR)
+                RR - 1 => RR            :JMPN(array_add_AGTB_wc_test_compute,array_add_AGTB_wc_test_inB)
+        array_add_AGTB_wc_test_compute:
+                                        :CALL(array_add_AGTB)
+        %ARRAY_MAX_LEN_DOUBLED => E     :MLOAD(array_add_AGTB_len_out)
+        E - 1 => E
+        array_add_AGTB_wc_test_check1:
+                %ARRAY_BASE_MINUS_TWO   :MLOAD(array_add_AGTB_out + E)
+                E - 1 => E
+                E - %ARRAY_MAX_LEN      :JMPN(array_add_AGTB_wc_test_check2,array_add_AGTB_wc_test_check1)
+        array_add_AGTB_wc_test_check2:
+                %ARRAY_BASE_MINUS_ONE   :MLOAD(array_add_AGTB_out + E)
+                E - 1 => E              :JMPN(array_add_AGTB_wc_test_end,array_add_AGTB_wc_test_check2)
+        array_add_AGTB_wc_test_end:
         ; ---------------------------------------------------------------
 
         ; short addition
         ; ---------------------------------------------------------------
-        ; 1] [2**256-1,2**256-1,2**256-1] + [2**256-1]
-        3 => C
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_short_inA)
+        ; 1] inA = inB and len(inA) = len(inB) = 1
+        1 => C
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_short_inA)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_short_inB)
+                                                                                        :CALL(array_add_short)
+        %ARRAY_BASE_MINUS_TWO                                                           :MLOAD(array_add_short_out)
         1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_short_inA + E)
+        1                                                                               :MLOAD(array_add_short_out + E)
+        2                                                                               :MLOAD(array_add_short_len_out)
+
+        ; 2] inA < inB and len(inA) = len(inB) = 1
+        1 => C
+        %ARRAY_BASE_MINUS_TWO                                                           :MSTORE(array_add_short_inA)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_short_inB)
+                                                                                        :CALL(array_add_short)
+        %ARRAY_BASE_MINUS_THREE                                                         :MLOAD(array_add_short_out)
+        1 => E
+        1                                                                               :MLOAD(array_add_short_out + E)
+        2                                                                               :MLOAD(array_add_short_len_out)
+
+        ; 3] [2**256-1,2**256-1,2**256-1] + [2**256-1]
+        3 => C
+        %ARRAY_BASE_MINUS_ONE :MSTORE(array_add_short_inA)
+        1 => E
+        %ARRAY_BASE_MINUS_ONE :MSTORE(array_add_short_inA + E)
         2 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_short_inA + E)
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_short_inB)
+        %ARRAY_BASE_MINUS_ONE :MSTORE(array_add_short_inA + E)
+        %ARRAY_BASE_MINUS_ONE :MSTORE(array_add_short_inB)
                                                                                         :CALL(array_add_short)
         115792089237316195423570985008687907853269984665640564039457584007913129639934n :MLOAD(array_add_short_out)
         1 => E
@@ -86,107 +205,314 @@ start:
         3 => E
         1n                                                                              :MLOAD(array_add_short_out + E)
         4                                                                               :MLOAD(array_add_short_len_out)
+
+        ;[2**256-1,2**256-1,2**256-1,2**256-1,2**256-1] + [1]
+        5 => C
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_short_inA)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_short_inA + 1)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_short_inA + 2)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_short_inA + 3)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_add_short_inA + 4)
+        1                                                                               :MSTORE(array_add_short_inB)
+                                                                                        :CALL(array_add_short)
+        0n                                                                              :MLOAD(array_add_short_out)
+        0n                                                                              :MLOAD(array_add_short_out + 1)
+        0n                                                                              :MLOAD(array_add_short_out + 2)
+        0n                                                                              :MLOAD(array_add_short_out + 3)
+        0n                                                                              :MLOAD(array_add_short_out + 4)
+        1n                                                                              :MLOAD(array_add_short_out + 5)
+        6                                                                               :MLOAD(array_add_short_len_out)
+
+        ; 4] [2**256-1]*%ARRAY_MAX_LEN + [1]
+        %ARRAY_MAX_LEN_MINUS_ONE => C
+        C - 1 => E
+        array_add_short_wc_test_inA:
+                %ARRAY_BASE_MINUS_ONE   :MSTORE(array_add_short_inA + E)
+                E - 1 => E              :JMPN(array_add_short_wc_test_compute,array_add_short_wc_test_inA)
+        array_add_short_wc_test_compute:
+                1n                      :MSTORE(array_add_short_inB)
+                                        :CALL(array_add_short)
+        %ARRAY_MAX_LEN => E             :MLOAD(array_add_short_len_out)
+        E - 1 => E
+                1n                      :MLOAD(array_add_short_out + E)
+        E - 1 => E
+        array_add_short_wc_test_check:
+                0n                      :MLOAD(array_add_short_out + E)
+                E - 1 => E              :JMPN(array_add_short_wc_test_end,array_add_short_wc_test_check)
+        array_add_short_wc_test_end:
         ; ---------------------------------------------------------------
 
-        ; multiplication
+        ; long multiplication
         ; ---------------------------------------------------------------
-        ; 1] len(inB) = len(inA) and inB > inA
+        ; 1] len(inA) = len(inB) and inA = inB
+        2 => C
+        2 => D
+        5n                                                                              :MSTORE(array_mul_long_inA)
+        1 => E
+        6n                                                                              :MSTORE(array_mul_long_inA + E)
+        5n                                                                              :MSTORE(array_mul_long_inB)
+        1 => E
+        6n                                                                              :MSTORE(array_mul_long_inB + E)
+                                                                                        :CALL(array_mul_long)
+        25n                                                                             :MLOAD(array_mul_long_out)
+        1 => E
+        60n                                                                             :MLOAD(array_mul_long_out + E)
+        2 => E
+        36n                                                                             :MLOAD(array_mul_long_out + E)
+        3                                                                               :MLOAD(array_mul_long_len_out)
+
+        ; 2] len(inA) = len(inB) and inA < inB
+        2 => C
+        2 => D
+        5n                                                                              :MSTORE(array_mul_long_inA)
+        1 => E
+        5n                                                                              :MSTORE(array_mul_long_inA + E)
+        5n                                                                              :MSTORE(array_mul_long_inB)
+        1 => E
+        6n                                                                              :MSTORE(array_mul_long_inB + E)
+                                                                                        :CALL(array_mul_long)
+        25n                                                                             :MLOAD(array_mul_long_out)
+        1 => E
+        55n                                                                             :MLOAD(array_mul_long_out + E)
+        2 => E
+        30n                                                                             :MLOAD(array_mul_long_out + E)
+        3                                                                               :MLOAD(array_mul_long_len_out)
+
+        ; 3] len(inA) = len(inB) and inA < inB
         3 => C
         3 => D
-        5n                                                                              :MSTORE(array_mul_inA)
+        5n                                                                              :MSTORE(array_mul_long_inA)
         1 => E
-        6n                                                                              :MSTORE(array_mul_inA + E)
+        6n                                                                              :MSTORE(array_mul_long_inA + E)
         2 => E
-        7n                                                                              :MSTORE(array_mul_inA + E)
+        7n                                                                              :MSTORE(array_mul_long_inA + E)
 
-        2n                                                                              :MSTORE(array_mul_inB)
+        2n                                                                              :MSTORE(array_mul_long_inB)
         1 => E
-        3n                                                                              :MSTORE(array_mul_inB + E)
+        3n                                                                              :MSTORE(array_mul_long_inB + E)
         2 => E
-        4n                                                                              :MSTORE(array_mul_inB + E)
-                                                                                        :CALL(array_mul)
-        10n                                                                             :MLOAD(array_mul_out)
+        4n                                                                              :MSTORE(array_mul_long_inB + E)
+                                                                                        :CALL(array_mul_long)
+        10n                                                                             :MLOAD(array_mul_long_out)
         1 => E
-        27n                                                                             :MLOAD(array_mul_out + E)
+        27n                                                                             :MLOAD(array_mul_long_out + E)
         2 => E
-        52n                                                                             :MLOAD(array_mul_out + E)
+        52n                                                                             :MLOAD(array_mul_long_out + E)
         3 => E
-        45n                                                                             :MLOAD(array_mul_out + E)
+        45n                                                                             :MLOAD(array_mul_long_out + E)
         4 => E
-        28n                                                                             :MLOAD(array_mul_out + E)
-        5                                                                               :MLOAD(array_mul_len_out)
+        28n                                                                             :MLOAD(array_mul_long_out + E)
+        5                                                                               :MLOAD(array_mul_long_len_out)
 
-        ; 2] len(inB) != len(inA)
+        ; 4] len(inA) < len(inB)
         2 => C
         3 => D
-        5n                                                                              :MSTORE(array_mul_inA)
+        5n                                                                              :MSTORE(array_mul_long_inA)
         1 => E
-        6n                                                                              :MSTORE(array_mul_inA + E)
+        6n                                                                              :MSTORE(array_mul_long_inA + E)
 
-        11n                                                                             :MSTORE(array_mul_inB)
+        11n                                                                             :MSTORE(array_mul_long_inB)
         1 => E
-        21n                                                                             :MSTORE(array_mul_inB + E)
+        21n                                                                             :MSTORE(array_mul_long_inB + E)
         2 => E
-        16n                                                                             :MSTORE(array_mul_inB + E)
-                                                                                        :CALL(array_mul)
-        55n                                                                             :MLOAD(array_mul_out)
+        16n                                                                             :MSTORE(array_mul_long_inB + E)
+                                                                                        :CALL(array_mul_long)
+        55n                                                                             :MLOAD(array_mul_long_out)
         1 => E
-        171n                                                                            :MLOAD(array_mul_out + E)
+        171n                                                                            :MLOAD(array_mul_long_out + E)
         2 => E
-        206n                                                                            :MLOAD(array_mul_out + E)
+        206n                                                                            :MLOAD(array_mul_long_out + E)
         3 => E
-        96n                                                                             :MLOAD(array_mul_out + E)
-        4                                                                               :MLOAD(array_mul_len_out)
+        96n                                                                             :MLOAD(array_mul_long_out + E)
+        4                                                                               :MLOAD(array_mul_long_len_out)
+
+        ; 5] [2**256-1] || [0]*%ARRAY_MAX_LEN_DOUBLED_MINUS_TWO * [1]*2
+        %ARRAY_MAX_LEN_DOUBLED_MINUS_ONE => C
+        2 => D
+        C - 1 => E
+        D - 1 => RR
+        %ARRAY_BASE_MINUS_ONE                   :MSTORE(array_mul_long_inA + E)
+        E - 1 => E
+        array_mul_long_wc_test_inA:
+                0n                              :MSTORE(array_mul_long_inA + E)
+                E - 1 => E                      :JMPN(array_mul_long_wc_test_inB,array_mul_long_wc_test_inA)
+        array_mul_long_wc_test_inB:
+                1n                              :MSTORE(array_mul_long_inB + RR)
+                RR - 1 => RR                    :JMPN(array_mul_long_wc_test_compute,array_mul_long_wc_test_inB)
+        array_mul_long_wc_test_compute:
+                                                :CALL(array_mul_long)
+        %ARRAY_MAX_LEN_DOUBLED => E             :MLOAD(array_mul_long_len_out)
+        E - 1 => E
+        array_mul_long_wc_test_check1:
+                %ARRAY_BASE_MINUS_ONE           :MLOAD(array_mul_long_out + E)
+                E - 1 => E
+                E - 62    :JMPN(array_mul_long_wc_test_check2,array_mul_long_wc_test_check1)
+        array_mul_long_wc_test_check2:
+                0n                              :MLOAD(array_mul_long_out + E)
+                E - 1 => E                      :JMPN(array_mul_long_wc_test_end,array_mul_long_wc_test_check2)
+        array_mul_long_wc_test_end:
         ; ---------------------------------------------------------------
 
         ; short multiplication
         ; ---------------------------------------------------------------
-        ; 1] [a, a, a] * a
+        ; 1] [2**256-1] * 2**256-1
+        1 => C
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_mul_short_inA)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_mul_short_inB)
+                                                                                        :CALL(array_mul_short)
+        1n                                                                              :MLOAD(array_mul_short_out)
+        1 => E
+        %ARRAY_BASE_MINUS_TWO                                                           :MLOAD(array_mul_short_out + E)
+        2                                                                               :MLOAD(array_mul_short_len_out)
+
+        ; 2] [2**256-2] * 2**256-1
+        1 => C
+        %ARRAY_BASE_MINUS_TWO                                                           :MSTORE(array_mul_short_inA)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_mul_short_inB)
+                                                                                        :CALL(array_mul_short)
+        2n                                                                              :MLOAD(array_mul_short_out)
+        1 => E
+        %ARRAY_BASE_MINUS_THREE                                                         :MLOAD(array_mul_short_out + E)
+        2                                                                               :MLOAD(array_mul_short_len_out)
+
+        ; 3] [2**256-1, 2**256-1, 2**256-1] * 2**256-1
         3 => C
-        1 => D
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_mul_inA)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_mul_short_inA)
         1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_mul_inA + E)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_mul_short_inA + E)
         2 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_mul_inA + E)
-
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_mul_inB)
-                                                                                        :CALL(array_mul)
-        1n                                                                              :MLOAD(array_mul_out)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_mul_short_inA + E)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_mul_short_inB)
+                                                                                        :CALL(array_mul_short)
+        1n                                                                              :MLOAD(array_mul_short_out)
         1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MLOAD(array_mul_out + E)
+        %ARRAY_BASE_MINUS_ONE                                                           :MLOAD(array_mul_short_out + E)
         2 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MLOAD(array_mul_out + E)
+        %ARRAY_BASE_MINUS_ONE                                                           :MLOAD(array_mul_short_out + E)
         3 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639934n :MLOAD(array_mul_out + E)
-        4                                                                               :MLOAD(array_mul_len_out)
+        %ARRAY_BASE_MINUS_TWO                                                           :MLOAD(array_mul_short_out + E)
+        4                                                                               :MLOAD(array_mul_short_len_out)
 
-        ; 2] [a, 100, a, 6] * 400
+        ; 2] [2**256-1, 100, 2**256-1, 6] * 400
         4 => C
-        1 => D
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_mul_inA)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_mul_short_inA)
         1 => E
-        100n                                                                            :MSTORE(array_mul_inA + E)
+        100n                                                                            :MSTORE(array_mul_short_inA + E)
         2 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_mul_inA + E)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_mul_short_inA + E)
         3 => E
-        6n                                                                              :MSTORE(array_mul_inA + E)
+        6n                                                                              :MSTORE(array_mul_short_inA + E)
+        400n                                                                            :MSTORE(array_mul_short_inB)
+                                                                                        :CALL(array_mul_short)
+        115792089237316195423570985008687907853269984665640564039457584007913129639536n :MLOAD(array_mul_short_out)
+        1 => E
+        40399n                                                                          :MLOAD(array_mul_short_out + E)
+        2 => E
+        115792089237316195423570985008687907853269984665640564039457584007913129639536n :MLOAD(array_mul_short_out + E)
+        3 => E
+        2799n                                                                           :MLOAD(array_mul_short_out + E)
+        4                                                                               :MLOAD(array_mul_short_len_out)
 
-        400n                                                                            :MSTORE(array_mul_inB)
-                                                                                        :CALL(array_mul)
-        115792089237316195423570985008687907853269984665640564039457584007913129639536n :MLOAD(array_mul_out)
+        ; 3] [2**255]*%ARRAY_MAX_LEN * [2]
+        %ARRAY_MAX_LEN => C
+        C - 1 => E
+        array_mul_short_wc_test_inA:
+                %ARRAY_BASE_HALF                :MSTORE(array_mul_short_inA + E)
+                E - 1 => E                      :JMPN(array_mul_short_wc_test_compute,array_mul_short_wc_test_inA)
+        array_mul_short_wc_test_compute:
+                2n                              :MSTORE(array_mul_short_inB)
+                                                :CALL(array_mul_short)
+        %ARRAY_MAX_LEN_PLUS_ONE => E            :MLOAD(array_mul_short_len_out)
+        E - 1 => E
+        array_mul_short_wc_test_check:
+                1n                              :MLOAD(array_mul_short_out + E)
+                E - 1 => E                      :JMPZ(array_mul_short_wc_test_end,array_mul_short_wc_test_check)
+        array_mul_short_wc_test_end:
+                0n                              :MLOAD(array_mul_short_out + E)
+        ; ---------------------------------------------------------------
+
+        ; multiplication by two
+        ; ---------------------------------------------------------------
+        ; 1] [0n]
+        1 => C
+        0n                                                                              :MSTORE(array_mul_two_in)
+                                                                                        :CALL(array_mul_two)
+        0n                                                                              :MLOAD(array_mul_two_out)
+        1                                                                               :MLOAD(array_mul_two_len_out)
+
+        ; 2] [1n]
+        1 => C
+        1n                                                                              :MSTORE(array_mul_two_in)
+                                                                                        :CALL(array_mul_two)
+        2n                                                                              :MLOAD(array_mul_two_out)
+        1                                                                               :MLOAD(array_mul_two_len_out)
+
+        ; 3] [4n]
+        1 => C
+        4n                                                                              :MSTORE(array_mul_two_in)
+                                                                                        :CALL(array_mul_two)
+        8n                                                                              :MLOAD(array_mul_two_out)
+        1                                                                               :MLOAD(array_mul_two_len_out)
+
+        ; 4] [4n, 4n]
+        2 => C
+        4n                                                                              :MSTORE(array_mul_two_in)
         1 => E
-        40399n                                                                          :MLOAD(array_mul_out + E)
+        4n                                                                              :MSTORE(array_mul_two_in + E)
+                                                                                        :CALL(array_mul_two)
+        8n                                                                              :MLOAD(array_mul_two_out)
+        1 => E
+        8n                                                                              :MLOAD(array_mul_two_out + E)
+        2                                                                               :MLOAD(array_mul_two_len_out)
+
+        ; 5] [2^255, 2^255]
+        2 => C
+        %ARRAY_BASE_HALF                                                                :MSTORE(array_mul_two_in)
+        1 => E
+        %ARRAY_BASE_HALF                                                                :MSTORE(array_mul_two_in + E)
+                                                                                        :CALL(array_mul_two)
+        0n                                                                              :MLOAD(array_mul_two_out)
+        1 => E
+        1n                                                                              :MLOAD(array_mul_two_out + E)
         2 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639536n :MLOAD(array_mul_out + E)
-        3 => E
-        2799n                                                                           :MLOAD(array_mul_out + E)
-        4                                                                               :MLOAD(array_mul_len_out)
+        1n                                                                              :MLOAD(array_mul_two_out + E)
+        3                                                                               :MLOAD(array_mul_two_len_out)
+
+        ; 6] [2^255-1] * %ARRAY_MAX_LEN
+        %ARRAY_MAX_LEN => C
+        C - 1 => E
+        array_mul_two_wc_test:
+        %ARRAY_BASE_HALF_MINUS_ONE                                                      :MSTORE(array_mul_two_in + E)
+        E - 1 => E                                                                      :JMPN(array_mul_two_wc_test_compute,array_mul_two_wc_test)
+        array_mul_two_wc_test_compute:
+                                                                                        :CALL(array_mul_two)
+        %ARRAY_MAX_LEN => E                                                             :MLOAD(array_mul_two_len_out)
+        E - 1 => E
+        array_mul_two_wc_test_check:
+        %ARRAY_BASE_MINUS_TWO :MLOAD(array_mul_two_out + E)
+        E - 1 => E                                                                      :JMPN(array_mul_two_wc_test_end,array_mul_two_wc_test_check)
+        array_mul_two_wc_test_end:
         ; ---------------------------------------------------------------
 
         ; squaring
         ; ---------------------------------------------------------------
-        ; 1] [4n, 4n, 4n, 3n, 2n, 4n]
+        ; 1] [5]
+        1 => C
+        5n                                                                              :MSTORE(array_square_in)
+                                                                                        :CALL(array_square)
+        25n                                                                             :MLOAD(array_square_out)
+        1                                                                               :MLOAD(array_square_len_out)
+
+        ; 2] [2**256-1]
+        1 => C
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_square_in)
+                                                                                        :CALL(array_square)
+        1n                                                                              :MLOAD(array_square_out)
+        1 => E
+        %ARRAY_BASE_MINUS_TWO                                                           :MLOAD(array_square_out + E)
+        2                                                                               :MLOAD(array_square_len_out)
+
+        ; 3] [4n, 4n, 4n, 3n, 2n, 4n]
         6 => C
         4n                                                                              :MSTORE(array_square_in)
         1 => E
@@ -223,7 +549,7 @@ start:
         16n                                                                             :MLOAD(array_square_out + E)
         11                                                                              :MLOAD(array_square_len_out)
 
-        ; 2] [49625181101706940895816136432294817651401421999560241731196107431962769845690n, 16541727033902313631938712144098272550467140666520080577065369143987589948564n, 2n]
+        ; 4] [49625181101706940895816136432294817651401421999560241731196107431962769845690n, 16541727033902313631938712144098272550467140666520080577065369143987589948564n, 2n]
         3 => C
         49625181101706940895816136432294817651401421999560241731196107431962769845690n  :MSTORE(array_square_in)
         1 => E
@@ -242,7 +568,7 @@ start:
         4n                                                                              :MLOAD(array_square_out + E)
         5                                                                               :MLOAD(array_square_len_out)
 
-        ; 3] [108509871213644914495224788117262720812102234692915980461799068728781566717980n, 97610657482852136417037764955262109743864410230427530868747251158690618238750n, 3n]
+        ; 5] [108509871213644914495224788117262720812102234692915980461799068728781566717980n, 97610657482852136417037764955262109743864410230427530868747251158690618238750n, 3n]
         3 => C
         108509871213644914495224788117262720812102234692915980461799068728781566717980n :MSTORE(array_square_in)
         1 => E
@@ -261,7 +587,7 @@ start:
         14n                                                                             :MLOAD(array_square_out + E)
         5                                                                               :MLOAD(array_square_len_out)
 
-        ; 4] [94296684984090328915786319894647341212298256830891608529662243544763352873524n,85801804490443701075961240310880668636621463408258506144468684495763969931231n]
+        ; 6] [94296684984090328915786319894647341212298256830891608529662243544763352873524n,85801804490443701075961240310880668636621463408258506144468684495763969931231n]
         2 => C
         94296684984090328915786319894647341212298256830891608529662243544763352873524n  :MSTORE(array_square_in)
         1 => E
@@ -276,10 +602,10 @@ start:
         63579038104476977130956937454941822659502127575865339775268690127769381598323n  :MLOAD(array_square_out + E)
         4                                                                               :MLOAD(array_square_len_out)
 
-        ; 5] [ARRAY_BASE-1,ARRAY_BASE/2+1,ARRAY_BASE-2]
+        ; 7] [ARRAY_BASE-1,ARRAY_BASE/2+1,ARRAY_BASE-2]
         ; this covers the edge case where the addition 2·a_i·a_j + out[i + j] produces a third chunk carry
         3 => C
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_square_in)
+        %ARRAY_BASE_MINUS_ONE :MSTORE(array_square_in)
         1 => E
         57896044618658097711785492504343953926634992332820282019728792003956564819969n  :MSTORE(array_square_in + E)
         2 => E
@@ -298,7 +624,7 @@ start:
         115792089237316195423570985008687907853269984665640564039457584007913129639933n :MLOAD(array_square_out + E)
         6                                                                               :MLOAD(array_square_len_out)
 
-        ; 6] [ARRAY_BASE/2+1,ARRAY_BASE/2+1,ARRAY_BASE-2]
+        ; 8] [ARRAY_BASE/2+1,ARRAY_BASE/2+1,ARRAY_BASE-2]
         ; this covers the edge case where out[i + j] has a non-zero second chunk (i.e., when j == len -1)
         ; and it produces carry when added to the second chunk of 2·a_i·a_j
         3 => C
@@ -321,13 +647,13 @@ start:
         115792089237316195423570985008687907853269984665640564039457584007913129639933n :MLOAD(array_square_out + E)
         6                                                                               :MLOAD(array_square_len_out)
 
-        ; 7] [ARRAY_BASE/2+1,ARRAY_BASE-1,ARRAY_BASE-2]
+        ; 9] [ARRAY_BASE/2+1,ARRAY_BASE-1,ARRAY_BASE-2]
         ; this covers the edge case where carry has a non-zero second chunk
         ; and it produces carry when added to the second chunk of 2·a_i·a_j + out[i + j]
         3 => C
         57896044618658097711785492504343953926634992332820282019728792003956564819969n  :MSTORE(array_square_in)
         1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_square_in + E)
+        %ARRAY_BASE_MINUS_ONE :MSTORE(array_square_in + E)
         2 => E
         115792089237316195423570985008687907853269984665640564039457584007913129639934n :MSTORE(array_square_in + E)
                                                                                         :CALL(array_square)
@@ -344,7 +670,7 @@ start:
         115792089237316195423570985008687907853269984665640564039457584007913129639934n :MLOAD(array_square_out + E)
         6                                                                               :MLOAD(array_square_len_out)
 
-        ; 8] [272043482145244634591109928786079352n,81877371507464127617551201542979628307507432471243237061821853600756754782485n,176318528146701254200802196825427983451687n]
+        ; 10] [272043482145244634591109928786079352n,81877371507464127617551201542979628307507432471243237061821853600756754782485n,176318528146701254200802196825427983451687n]
         ; this covers the edge case where carry is of the form -a_i·a_i
         ; and it produces carry when added to the second chunk of 2·a_i·a_i + out[i + i]
         ; e.g., when the subtraction is of the form (base² + y) - (y+1) = 0
@@ -375,79 +701,389 @@ start:
         5 => E
         268483n                                                                         :MLOAD(array_square_out + E)
         6                                                                               :MLOAD(array_square_len_out)
+
+        ; 11] [2**256-1] || [0]*%ARRAY_MAX_LEN_MINUS_ONE
+        %ARRAY_MAX_LEN => C
+        C - 1 => E
+        %ARRAY_BASE_MINUS_ONE   :MSTORE(array_square_in + E)
+        E - 1 => E
+        array_square_wc_test_inA:
+                0n                      :MSTORE(array_square_in + E)
+                E - 1 => E              :JMPN(array_square_wc_test_compute,array_square_wc_test_inA)
+        array_square_wc_test_compute:
+                                        :CALL(array_square)
+        %ARRAY_MAX_LEN_DOUBLED => E     :MLOAD(array_square_len_out)
+        E - 1 => E
+                %ARRAY_BASE_MINUS_TWO   :MLOAD(array_square_out + E)
+        E - 1 => E
+                1n                      :MLOAD(array_square_out + E)
+        E - 1 => E
+        array_square_wc_test_check:
+                0n                      :MLOAD(array_square_out + E)
+                E - 1 => E              :JMPN(array_square_wc_test_end,array_square_wc_test_check)
+        array_square_wc_test_end:
         ; ---------------------------------------------------------------
 
-        ; division
+        ; long division
         ; ---------------------------------------------------------------
-        ; 1] [9n, 8n, 7n, 6n] / 8n
-        4 => C
-        1 => D
-        9n                                                                              :MSTORE(array_div_inA)
-        1 => E
-        8n                                                                              :MSTORE(array_div_inA + E)
-        2 => E
-        7n                                                                              :MSTORE(array_div_inA + E)
-        3 => E
-        6n                                                                              :MSTORE(array_div_inA + E)
-
-        8n                                                                              :MSTORE(array_div_inB)
-                                                                                        :CALL(array_div)
-        1n                                                                              :MLOAD(array_div_quo)
-        1 => E
-        101318078082651670995624611882601919371611236582435493534525386006923988434945n :MLOAD(array_div_quo + E)
-        2 => E
-        86844066927987146567678238756515930889952488499230423029593188005934847229952n  :MLOAD(array_div_quo + E)
-        1n                                                                              :MLOAD(array_div_rem)
-        3                                                                               :MLOAD(array_div_len_quo)
-
-        ; 2] [a, 7n, a, 12n, a, 20n, a, 80n] / a
-        8 => C
-        1 => D
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_div_inA)
-        1 => E
-        7n                                                                              :MSTORE(array_div_inA + E)
-        2 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_div_inA + E)
-        3 => E
-        12n                                                                             :MSTORE(array_div_inA + E)
-        4 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_div_inA + E)
-        5 => E
-        20n                                                                             :MSTORE(array_div_inA + E)
-        6 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_div_inA + E)
-        7 => E
-        80n                                                                             :MSTORE(array_div_inA + E)
-
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_div_inB)
-                                                                                        :CALL(array_div)
-        120n                                                                            :MLOAD(array_div_quo)
-        1 => E
-        112n                                                                            :MLOAD(array_div_quo + E)
-        2 => E
-        113n                                                                            :MLOAD(array_div_quo + E)
-        3 => E
-        100n                                                                            :MLOAD(array_div_quo + E)
-        4 => E
-        101n                                                                            :MLOAD(array_div_quo + E)
-        5 => E
-        80n                                                                             :MLOAD(array_div_quo + E)
-        6 => E
-        81n                                                                             :MLOAD(array_div_quo + E)
-        119n                                                                            :MLOAD(array_div_rem)
-        7                                                                               :MLOAD(array_div_len_quo)
-
-        ; 3] inA == 0, inB != 0, len(inB) == 1
+        ; 1] inA == 0, inB != 0, len(inB) > 1
         1 => C
-        1 => D
-        0n                                                                              :MSTORE(array_div_inA)
+        2 => D
+        0n                                                                              :MSTORE(array_div_long_inA)
+        8n                                                                              :MSTORE(array_div_long_inB)
+        1 => E
+        1n                                                                              :MSTORE(array_div_long_inB + E)
+                                                                                        :CALL(array_div_long)
+        0n                                                                              :MLOAD(array_div_long_quo)
+        0n                                                                              :MLOAD(array_div_long_rem)
+        1                                                                               :MLOAD(array_div_long_len_quo)
+        1                                                                               :MLOAD(array_div_long_len_rem)
 
-        8n                                                                              :MSTORE(array_div_inB)
-                                                                                        :CALL(array_div)
-        0n                                                                              :MLOAD(array_div_quo)
-        0n                                                                              :MLOAD(array_div_rem)
-        1                                                                               :MLOAD(array_div_len_quo)
+        ; 2] inA < inB, 1 == len(inA) < len(inB)
+        1 => C
+        2 => D
+        7n                                                                              :MSTORE(array_div_long_inA)
+        7719472615821079694904732333912527190217998977709370935963838933860875309329n   :MSTORE(array_div_long_inB)
+        1 => E
+        17n                                                                             :MSTORE(array_div_long_inB + E)
+                                                                                        :CALL(array_div_long)
+        0n                                                                              :MLOAD(array_div_long_quo)
+        7n                                                                              :MLOAD(array_div_long_rem)
+        1                                                                               :MLOAD(array_div_long_len_quo)
+        1                                                                               :MLOAD(array_div_long_len_rem)
 
+        ; 3] inA < inB, 1 < len(inA) < len(inB)
+        2 => C
+        3 => D
+        10n                                                                             :MSTORE(array_div_long_inA)
+        1 => E
+        30n                                                                             :MSTORE(array_div_long_inA + E)
+        6n                                                                              :MSTORE(array_div_long_inB)
+        1 => E
+        7n                                                                              :MSTORE(array_div_long_inB + E)
+        2 => E
+        8n                                                                              :MSTORE(array_div_long_inB + E)
+                                                                                        :CALL(array_div_long)
+        0n                                                                              :MLOAD(array_div_long_quo)
+        10n                                                                             :MLOAD(array_div_long_rem)
+        1 => E
+        30n                                                                             :MSTORE(array_div_long_rem + E)
+        1n                                                                              :MLOAD(array_div_long_len_quo)
+        2n                                                                              :MLOAD(array_div_long_len_rem)
+
+        ; 4] inA == inB, len(inA),len(inB) > 1
+        2 => C
+        2 => D
+        10n                                                                             :MSTORE(array_div_long_inA)
+        1 => E
+        30n                                                                             :MSTORE(array_div_long_inA + E)
+        10n                                                                             :MSTORE(array_div_long_inB)
+        1 => E
+        30n                                                                             :MSTORE(array_div_long_inB + E)
+                                                                                        :CALL(array_div_long)
+        1n                                                                              :MLOAD(array_div_long_quo)
+        0n                                                                              :MLOAD(array_div_long_rem)
+        1                                                                               :MLOAD(array_div_long_len_quo)
+        1                                                                               :MLOAD(array_div_long_len_rem)
+
+        ; 5] inA == k·inB, len(inA),len(inB) > 1
+        2 => C
+        2 => D
+        4n                                                                              :MSTORE(array_div_long_inA)
+        1 => E
+        4n                                                                              :MSTORE(array_div_long_inA + E)
+        2n                                                                              :MSTORE(array_div_long_inB)
+        1 => E
+        2n                                                                              :MSTORE(array_div_long_inB + E)
+                                                                                        :CALL(array_div_long)
+        2n                                                                              :MLOAD(array_div_long_quo)
+        0n                                                                              :MLOAD(array_div_long_rem)
+        1                                                                               :MLOAD(array_div_long_len_quo)
+        1                                                                               :MLOAD(array_div_long_len_rem)
+
+        ; 6] inA > inB, len(inA) > len(inB) > 1
+        4 => C
+        2 => D
+        9n                                                                              :MSTORE(array_div_long_inA)
+        1 => E
+        8n                                                                              :MSTORE(array_div_long_inA + E)
+        2 => E
+        7n                                                                              :MSTORE(array_div_long_inA + E)
+        3 => E
+        6n                                                                              :MSTORE(array_div_long_inA + E)
+        8n                                                                              :MSTORE(array_div_long_inB)
+        1 => E
+        1n                                                                              :MSTORE(array_div_long_inB + E)
+                                                                                        :CALL(array_div_long)
+        335n                                                                            :MLOAD(array_div_long_quo)
+        1 => E
+        115792089237316195423570985008687907853269984665640564039457584007913129639895n :MLOAD(array_div_long_quo + E)
+        2 => E
+        5n                                                                              :MLOAD(array_div_long_quo + E)
+        115792089237316195423570985008687907853269984665640564039457584007913129637265n :MLOAD(array_div_long_rem)
+        3                                                                               :MLOAD(array_div_long_len_quo)
+        1                                                                               :MLOAD(array_div_long_len_rem)
+
+        ; 7] [2**256-1, 7n, 2**256-1, 12n, 2**256-1, 20n, 2**256-1, 80n] / [2**256-1, 2**256-1, 2**256-1, 2**256-1, 100n]
+        8 => C
+        5 => D
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_div_long_inA)
+        1 => E
+        7n                                                                              :MSTORE(array_div_long_inA + E)
+        2 => E
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_div_long_inA + E)
+        3 => E
+        12n                                                                             :MSTORE(array_div_long_inA + E)
+        4 => E
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_div_long_inA + E)
+        5 => E
+        20n                                                                             :MSTORE(array_div_long_inA + E)
+        6 => E
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_div_long_inA + E)
+        7 => E
+        80n                                                                             :MSTORE(array_div_long_inA + E)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_div_long_inB)
+        1 => E
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_div_long_inB + E)
+        2 => E
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_div_long_inB + E)
+        3 => E
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_div_long_inB + E)
+        4 => E
+        100n                                                                            :MSTORE(array_div_long_inB + E)
+                                                                                        :CALL(array_div_long)
+        87130681010257731209815790699606742543054641926620622445532439451498988639951n  :MLOAD(array_div_long_quo)
+        1 => E
+        76812574048516684092863920748337523031377118540573443471719387411189897879957n  :MLOAD(array_div_long_quo + E)
+        2 => E
+        92862962655669424052566829561422975605097710474424610764317468362781816839948n  :MLOAD(array_div_long_quo + E)
+        87130681010257731209815790699606742543054641926620622445532439451498988639950n  :MLOAD(array_div_long_rem)
+        1 => E
+        76812574048516684092863920748337523031377118540573443471719387411189897879965n  :MLOAD(array_div_long_rem + E)
+        2 => E
+        92862962655669424052566829561422975605097710474424610764317468362781816839947n  :MLOAD(array_div_long_rem + E)
+        3 => E
+        13n                                                                             :MLOAD(array_div_long_rem + E)
+        4 => E
+        84n                                                                             :MLOAD(array_div_long_rem + E)
+        3                                                                               :MLOAD(array_div_long_len_quo)
+        5                                                                               :MLOAD(array_div_long_len_rem)
+
+        ; 8] [82987931714326364316120253427931880709278140571418487333162713377057429160720n,4257238595720679277571917967782652353394431698489248379634099239588181418140n,15209178211456919413336795740141505754388379695813905932093982440742677791802n,88987534839350135473536361176867192550264928852523682165693061442019881855583n,14n], [4n, 6n, 7n]
+        5 => C
+        3 => D
+        82987931714326364316120253427931880709278140571418487333162713377057429160720n  :MSTORE(array_div_long_inA)
+        1 => E
+        4257238595720679277571917967782652353394431698489248379634099239588181418140n   :MSTORE(array_div_long_inA + E)
+        2 => E
+        15209178211456919413336795740141505754388379695813905932093982440742677791802n  :MSTORE(array_div_long_inA + E)
+        3 => E
+        88987534839350135473536361176867192550264928852523682165693061442019881855583n  :MSTORE(array_div_long_inA + E)
+        4 => E
+        14n                                                                             :MSTORE(array_div_long_inA + E)
+        4n                                                                              :MSTORE(array_div_long_inB)
+        1 => E
+        6n                                                                              :MSTORE(array_div_long_inB + E)
+        2 => E
+        7n                                                                              :MSTORE(array_div_long_inB + E)
+                                                                                        :CALL(array_div_long)
+        90526669110436282262084097418054683975846294708417529350769755852355732618090n  :MLOAD(array_div_long_quo)
+        1 => E
+        12712504977050019353362337310981027507180704121789097452241865920288554550795n  :MLOAD(array_div_long_quo + E)
+        2 => E
+        2n                                                                              :MLOAD(array_div_long_quo + E)
+        68257522984529821538496818781776868365702915734670062048456441991373887608168n  :MLOAD(array_div_long_rem)
+        1 => E
+        104999739448800080833043894267657885589213754954671066702793604491778345346033n :MSTORE(array_div_long_rem + E)
+        2 => E
+        4n                                                                              :MSTORE(array_div_long_rem + E)
+        3                                                                               :MLOAD(array_div_long_len_quo)
+        3                                                                               :MLOAD(array_div_long_len_rem)
+
+        ; 9] [0n,0n,0n,0n,87552057494100699607633960453116574392480272162273084008350826812719088235449n,29405388739667337424543497575767709934732594998639086405406332616399343873602n,370491411790392985199n], [0n, 0n, 8238129386n, 23102318237n]
+        7 => C
+        4 => D
+        0n                                                                              :MSTORE(array_div_long_inA)
+        1 => E
+        0n                                                                              :MSTORE(array_div_long_inA + E)
+        2 => E
+        0n                                                                              :MSTORE(array_div_long_inA + E)
+        3 => E
+        0n                                                                              :MSTORE(array_div_long_inA + E)
+        4 => E
+        87552057494100699607633960453116574392480272162273084008350826812719088235449n  :MSTORE(array_div_long_inA + E)
+        5 => E
+        29405388739667337424543497575767709934732594998639086405406332616399343873602n  :MSTORE(array_div_long_inA + E)
+        6 => E
+        370491411790392985199n                                                          :MSTORE(array_div_long_inA + E)
+        0n                                                                              :MSTORE(array_div_long_inB)
+        1 => E
+        0n                                                                              :MSTORE(array_div_long_inB + E)
+        2 => E
+        8238129386n                                                                     :MSTORE(array_div_long_inB + E)
+        3 => E
+        23102318237n                                                                    :MSTORE(array_div_long_inB + E)
+                                                                                        :CALL(array_div_long)
+        10624890954144362706283399919870985530330343554129711486796784890935496833177n  :MLOAD(array_div_long_quo)
+        1 => E
+        12699239907746414269759600684072701206520647567004427767570235373004025148518n  :MLOAD(array_div_long_quo + E)
+        2 => E
+        62973947849727744055941265906651873030488901951864462234513788026171769471385n  :MLOAD(array_div_long_quo + E)
+        3 => E
+        16036979838n                                                                    :MLOAD(array_div_long_quo + E)
+        0n                                                                              :MLOAD(array_div_long_rem)
+        1 => E
+        0n                                                                              :MSTORE(array_div_long_rem + E)
+        2 => E
+        43811746908501644357293832343774991028053014234938611947183500936834952782886n  :MSTORE(array_div_long_rem + E)
+        3 => E
+        6019321230n                                                                     :MSTORE(array_div_long_rem + E)
+        4                                                                               :MLOAD(array_div_long_len_quo)
+        4                                                                               :MLOAD(array_div_long_len_rem)
+
+        ; 10] [9,12,16,2,0,2**256-4], [2**256-1,2**256-1]
+	6 => C
+	2 => D
+	9n                                                                              :MSTORE(array_div_long_inA)
+	%ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_div_long_inB)
+	1 => E
+	12n                                                                             :MSTORE(array_div_long_inA + E)
+	%ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_div_long_inB + E)
+	2 => E
+	16n                                                                             :MSTORE(array_div_long_inA + E)
+	3 => E
+	2n                                                                              :MSTORE(array_div_long_inA + E)
+	4 => E
+	0n                                                                              :MSTORE(array_div_long_inA + E)
+	5 => E
+	115792089237316195423570985008687907853269984665640564039457584007913129639932n :MSTORE(array_div_long_inA + E)
+	                                                                                :CALL(array_div_long)
+        17n                                                                             :MLOAD(array_div_long_quo)
+        26n                                                                             :MLOAD(array_div_long_rem)
+        1 => E
+        115792089237316195423570985008687907853269984665640564039457584007913129639934n :MLOAD(array_div_long_quo + E)
+        10n                                                                             :MLOAD(array_div_long_rem + E)
+        2 => E
+        0n                                                                              :MLOAD(array_div_long_quo + E)
+        3 => E
+        115792089237316195423570985008687907853269984665640564039457584007913129639932n :MLOAD(array_div_long_quo + E)
+        4                                                                               :MLOAD(array_div_long_len_quo)
+        2                                                                               :MLOAD(array_div_long_len_rem)
+
+        ; 11] [2**256-1]*%ARRAY_MAX_LEN_DOUBLED / [1,1]
+        %ARRAY_MAX_LEN_DOUBLED => C
+        2 => D
+        C - 1 => E
+        D - 1 => RR
+        array_div_long_wc1_test_inA:
+                %ARRAY_BASE_MINUS_ONE           :MSTORE(array_div_long_inA + E)
+                E - 1 => E                      :JMPN(array_div_long_wc1_test_inB,array_div_long_wc1_test_inA)
+        array_div_long_wc1_test_inB:
+                1n                              :MSTORE(array_div_long_inB + RR)
+                RR - 1 => RR                    :JMPN(array_div_long_wc1_test_compute,array_div_long_wc1_test_inB)
+        array_div_long_wc1_test_compute:
+                                                :CALL(array_div_long)
+        %ARRAY_MAX_LEN_DOUBLED_MINUS_ONE => E   :MLOAD(array_div_long_len_quo)
+        1                                       :MLOAD(array_div_long_len_rem)
+        E - 1 => E
+        %ARRAY_BASE_MINUS_ONE                   :MLOAD(array_div_long_quo + E)
+        E - 1 => E
+        array_div_long_wc1_test_check1:
+                0n                              :MLOAD(array_div_long_quo + E)
+                E - 1 => E                      :JMPN(array_div_long_wc1_test_check2)
+                %ARRAY_BASE_MINUS_ONE           :MLOAD(array_div_long_quo + E)
+                E - 1 => E                      :JMPN(array_div_long_wc1_test_check2,array_div_long_wc1_test_check1)
+        array_div_long_wc1_test_check2:
+                0n                              :MLOAD(array_div_long_rem)
+
+        ; 12] [2**256-1]*%ARRAY_MAX_LEN_DOUBLED / [1]*%ARRAY_MAX_LEN
+        %ARRAY_MAX_LEN_DOUBLED => C
+        %ARRAY_MAX_LEN => D
+        C - 1 => E
+        D - 1 => RR
+        array_div_long_wc2_test_inA:
+                %ARRAY_BASE_MINUS_ONE           :MSTORE(array_div_long_inA + E)
+                E - 1 => E                      :JMPN(array_div_long_wc2_test_inB,array_div_long_wc2_test_inA)
+        array_div_long_wc2_test_inB:
+                1n                              :MSTORE(array_div_long_inB + RR)
+                RR - 1 => RR                    :JMPN(array_div_long_wc2_test_compute,array_div_long_wc2_test_inB)
+        array_div_long_wc2_test_compute:
+                                                :CALL(array_div_long)
+        %ARRAY_MAX_LEN_PLUS_ONE => E            :MLOAD(array_div_long_len_quo)
+        1                                       :MLOAD(array_div_long_len_rem)
+        E - 1 => E
+        %ARRAY_BASE_MINUS_ONE                   :MLOAD(array_div_long_quo + E)
+        E - 1 => E
+        array_div_long_wc2_test_check1:
+                0n                              :MLOAD(array_div_long_quo + E)
+                E - 1 => E                      :JMPZ(array_div_long_wc2_test_check2,array_div_long_wc2_test_check1)
+        array_div_long_wc2_test_check2:
+                %ARRAY_BASE_MINUS_ONE           :MLOAD(array_div_long_quo + E)
+                0n                              :MLOAD(array_div_long_rem)
+
+        ; 13] [2**256-2]*%ARRAY_MAX_LEN_DOUBLED_MINUS_ONE || [2**256-1] / [1]*%ARRAY_MAX_LEN
+        %ARRAY_MAX_LEN_DOUBLED => C
+        %ARRAY_MAX_LEN => D
+        C - 1 => E
+        D - 1 => RR
+        array_div_long_wc3_test_inA:
+                %ARRAY_BASE_MINUS_TWO           :MSTORE(array_div_long_inA + E)
+                E - 1 => E                      :JMPZ(array_div_long_wc3_test_inA_part2,array_div_long_wc3_test_inA)
+        array_div_long_wc3_test_inA_part2:
+                %ARRAY_BASE_MINUS_ONE           :MSTORE(array_div_long_inA + E)
+        array_div_long_wc3_test_inB:
+                1n                              :MSTORE(array_div_long_inB + RR)
+                RR - 1 => RR                    :JMPN(array_div_long_wc3_test_compute,array_div_long_wc3_test_inB)
+        array_div_long_wc3_test_compute:
+                                                :CALL(array_div_long)
+        %ARRAY_MAX_LEN_PLUS_ONE => E            :MLOAD(array_div_long_len_quo)
+        1                                       :MLOAD(array_div_long_len_rem)
+        E - 1 => E
+        %ARRAY_BASE_MINUS_TWO                   :MLOAD(array_div_long_quo + E)
+        E - 1 => E
+        array_div_long_wc3_test_check1:
+                0n                              :MLOAD(array_div_long_quo + E)
+                E - 1 => E                      :JMPZ(array_div_long_wc3_test_check2,array_div_long_wc3_test_check1)
+        array_div_long_wc3_test_check2:
+                %ARRAY_BASE_MINUS_TWO           :MLOAD(array_div_long_quo + E)
+                1n                              :MLOAD(array_div_long_rem)
+
+        ; 14] [2**256-2]*%ARRAY_MAX_LEN_DOUBLED_MINUS_TWO || [2**256-1, 2**256-1] / [2]*%ARRAY_MAX_LEN
+        %ARRAY_MAX_LEN_DOUBLED => C
+        %ARRAY_MAX_LEN => D
+        C - 1 => E
+        D - 1 => RR
+        array_div_long_wc4_test_inA:
+                %ARRAY_BASE_MINUS_TWO           :MSTORE(array_div_long_inA + E)
+                E - 1 => E
+                E - 1                           :JMPZ(array_div_long_wc4_test_inA_part2,array_div_long_wc4_test_inA)
+        array_div_long_wc4_test_inA_part2:
+                %ARRAY_BASE_MINUS_ONE           :MSTORE(array_div_long_inA + E)
+                %ARRAY_BASE_MINUS_ONE           :MSTORE(array_div_long_inA)
+        array_div_long_wc4_test_inB:
+                2n                              :MSTORE(array_div_long_inB + RR)
+                RR - 1 => RR                    :JMPN(array_div_long_wc4_test_compute,array_div_long_wc4_test_inB)
+        array_div_long_wc4_test_compute:
+                                                :CALL(array_div_long)
+        %ARRAY_MAX_LEN_PLUS_ONE => E            :MLOAD(array_div_long_len_quo)
+        2                                       :MLOAD(array_div_long_len_rem)
+        E - 1 => E
+        %ARRAY_BASE_HALF_MINUS_ONE              :MLOAD(array_div_long_quo + E)
+        E - 1 => E
+        array_div_long_wc4_test_check1:
+                0n                              :MLOAD(array_div_long_quo + E)
+                E - 1 => E                      :JMPZ(array_div_long_wc4_test_check2,array_div_long_wc4_test_check1)
+        array_div_long_wc4_test_check2:
+                %ARRAY_BASE_HALF_MINUS_ONE      :MLOAD(array_div_long_quo + E)
+                1 => E
+                1n                              :MLOAD(array_div_long_rem + E)
+                1n                              :MLOAD(array_div_long_rem)
+        ; ---------------------------------------------------------------
+
+
+        ; short division
+        ; ---------------------------------------------------------------
+        ; 1] inA == 0, inB != 0
         1 => C
         1 => D
         0n                                                                              :MSTORE(array_div_short_inA)
@@ -457,143 +1093,7 @@ start:
         0n                                                                              :MLOAD(array_div_short_rem)
         1                                                                               :MLOAD(array_div_short_len_quo)
 
-        ; 4] inA == 0, inB != 0, len(inB) > 1
-        1 => C
-        2 => D
-        0n                                                                              :MSTORE(array_div_inA)
-
-        8n                                                                              :MSTORE(array_div_inB)
-        1 => E
-        1n                                                                              :MSTORE(array_div_inB + E)
-                                                                                        :CALL(array_div)
-        0n                                                                              :MLOAD(array_div_quo)
-        0n                                                                              :MLOAD(array_div_rem)
-
-        1 => C
-        2 => D
-        0n                                                                              :MSTORE(array_div_long_inA)
-        8n                                                                              :MSTORE(array_div_long_inB)
-        1 => E
-        8n                                                                              :MSTORE(array_div_long_inB + E)
-                                                                                        :CALL(array_div_long)
-        0n                                                                              :MLOAD(array_div_long_quo)
-        0n                                                                              :MLOAD(array_div_long_rem)
-        1                                                                               :MLOAD(array_div_long_len_quo)
-
-        ; 5] inA != 0, inB == 0 -> error
-        1 => C
-        1 => D
-        8n                                                                              :MSTORE(array_div_long_inA)
-        0n                                                                              :MSTORE(array_div_long_inB)
-                                                                                        :CALL(array_div_long)
-        1 => A
-        B                                                                               :ASSERT
-
-        2 => C
-        1 => D
-        0n                                                                              :MSTORE(array_div_inA)
-        1 => E
-        30n                                                                             :MSTORE(array_div_inA + E)
-
-        0n                                                                              :MSTORE(array_div_inB)
-                                                                                        :CALL(array_div)
-        1 => A
-        B                                                                               :ASSERT
-
-        ; 6] inA == inB == 0 -> error
-        1 => C
-        1 => D
-        0n                                                                              :MSTORE(array_div_long_inA)
-        0n                                                                              :MSTORE(array_div_long_inB)
-                                                                                        :CALL(array_div_long)
-        1 => A
-        B                                                                               :ASSERT
-
-        1 => C
-        1 => D
-        0n                                                                              :MSTORE(array_div_short_inA)
-        0n                                                                              :MSTORE(array_div_short_inB)
-                                                                                        :CALL(array_div_short)
-        1 => A
-        B                                                                               :ASSERT
-
-        ; 7] inA == inB
-        1 => C
-        1 => D
-        10n                                                                             :MSTORE(array_div_inA)
-        10n                                                                             :MSTORE(array_div_inB)
-                                                                                        :CALL(array_div)
-        1n                                                                              :MLOAD(array_div_quo)
-        0n                                                                              :MLOAD(array_div_rem)
-        1                                                                               :MLOAD(array_div_len_quo)
-
-        2 => C
-        2 => D
-        10n                                                                             :MSTORE(array_div_inA)
-        1 => E
-        30n                                                                             :MSTORE(array_div_inA + E)
-
-        10n                                                                             :MSTORE(array_div_inB)
-        1 => E
-        30n                                                                             :MSTORE(array_div_inB + E)
-                                                                                        :CALL(array_div)
-        1n                                                                              :MLOAD(array_div_quo)
-        0n                                                                              :MLOAD(array_div_rem)
-
-        1 => C
-        1 => D
-        10n                                                                             :MSTORE(array_div_long_inA)
-        10n                                                                             :MSTORE(array_div_long_inB)
-                                                                                        :CALL(array_div_long)
-        1n                                                                              :MLOAD(array_div_long_quo)
-        0n                                                                              :MLOAD(array_div_long_rem)
-        1                                                                               :MLOAD(array_div_long_len_quo)
-
-        1 => C
-        1 => D
-        10n                                                                             :MSTORE(array_div_short_inA)
-        10n                                                                             :MSTORE(array_div_short_inB)
-                                                                                        :CALL(array_div_short)
-        1n                                                                              :MLOAD(array_div_short_quo)
-        0n                                                                              :MLOAD(array_div_short_rem)
-        1                                                                               :MLOAD(array_div_short_len_quo)
-
-        ; 8] inA < inB
-        1 => C
-        1 => D
-        10n                                                                             :MSTORE(array_div_inA)
-        11n                                                                             :MSTORE(array_div_inB)
-                                                                                        :CALL(array_div)
-        0n                                                                              :MLOAD(array_div_quo)
-        10n                                                                             :MLOAD(array_div_rem)
-        1                                                                               :MLOAD(array_div_len_quo)
-
-        2 => C
-        3 => D
-        10n                                                                             :MSTORE(array_div_inA)
-        1 => E
-        30n                                                                             :MSTORE(array_div_inA + E)
-
-        6n                                                                              :MSTORE(array_div_inB)
-        1 => E
-        7n                                                                              :MSTORE(array_div_inB + E)
-        2 => E
-        8n                                                                              :MSTORE(array_div_inB + E)
-                                                                                        :CALL(array_div)
-        0n                                                                              :MLOAD(array_div_quo)
-        10n                                                                             :MLOAD(array_div_rem)
-        1 => E
-        30n                                                                             :MSTORE(array_div_rem + E)
-
-        1 => C
-        1 => D
-        10n                                                                             :MSTORE(array_div_long_inA)
-        11n                                                                             :MSTORE(array_div_long_inB)
-                                                                                        :CALL(array_div_long)
-        0n                                                                              :MLOAD(array_div_long_quo)
-        10n                                                                             :MLOAD(array_div_long_rem)
-        1                                                                               :MLOAD(array_div_long_len_quo)
-
+        ; 2] inA < inB
         1 => C
         1 => D
         10n                                                                             :MSTORE(array_div_short_inA)
@@ -603,441 +1103,213 @@ start:
         10n                                                                             :MLOAD(array_div_short_rem)
         1                                                                               :MLOAD(array_div_short_len_quo)
 
-        ; 9] [28948022309329048855892746252171976963317496166410141009864396001978282409984n, 1n] / 2
+        ; 3] inA == inB
+        1 => C
+        1 => D
+        10n                                                                             :MSTORE(array_div_short_inA)
+        10n                                                                             :MSTORE(array_div_short_inB)
+                                                                                        :CALL(array_div_short)
+        1n                                                                              :MLOAD(array_div_short_quo)
+        0n                                                                              :MLOAD(array_div_short_rem)
+        1                                                                               :MLOAD(array_div_short_len_quo)
+
+        ; 4] inA = k·inB
+        1 => C
+        1 => D
+        4n                                                                              :MSTORE(array_div_short_inA)
+        2n                                                                              :MSTORE(array_div_short_inB)
+                                                                                        :CALL(array_div_short)
+        2n                                                                              :MLOAD(array_div_short_quo)
+        0n                                                                              :MLOAD(array_div_short_rem)
+        1                                                                               :MLOAD(array_div_short_len_quo)
+
+        ; 5] [9n, 8n, 7n, 6n] / 8n
+        4 => C
+        1 => D
+        9n                                                                              :MSTORE(array_div_short_inA)
+        1 => E
+        8n                                                                              :MSTORE(array_div_short_inA + E)
+        2 => E
+        7n                                                                              :MSTORE(array_div_short_inA + E)
+        3 => E
+        6n                                                                              :MSTORE(array_div_short_inA + E)
+        8n                                                                              :MSTORE(array_div_short_inB)
+                                                                                        :CALL(array_div_short)
+        1n                                                                              :MLOAD(array_div_short_quo)
+        1 => E
+        101318078082651670995624611882601919371611236582435493534525386006923988434945n :MLOAD(array_div_short_quo + E)
+        2 => E
+        86844066927987146567678238756515930889952488499230423029593188005934847229952n  :MLOAD(array_div_short_quo + E)
+        1n                                                                              :MLOAD(array_div_short_rem)
+        3                                                                               :MLOAD(array_div_short_len_quo)
+
+        ; 6] [2**256-1, 7n, 2**256-1, 12n, 2**256-1, 20n, 2**256-1, 80n] / 2**256-1
+        8 => C
+        1 => D
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_div_short_inA)
+        1 => E
+        7n                                                                              :MSTORE(array_div_short_inA + E)
+        2 => E
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_div_short_inA + E)
+        3 => E
+        12n                                                                             :MSTORE(array_div_short_inA + E)
+        4 => E
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_div_short_inA + E)
+        5 => E
+        20n                                                                             :MSTORE(array_div_short_inA + E)
+        6 => E
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_div_short_inA + E)
+        7 => E
+        80n                                                                             :MSTORE(array_div_short_inA + E)
+        %ARRAY_BASE_MINUS_ONE                                                           :MSTORE(array_div_short_inB)
+                                                                                        :CALL(array_div_short)
+        120n                                                                            :MLOAD(array_div_short_quo)
+        1 => E
+        112n                                                                            :MLOAD(array_div_short_quo + E)
+        2 => E
+        113n                                                                            :MLOAD(array_div_short_quo + E)
+        3 => E
+        100n                                                                            :MLOAD(array_div_short_quo + E)
+        4 => E
+        101n                                                                            :MLOAD(array_div_short_quo + E)
+        5 => E
+        80n                                                                             :MLOAD(array_div_short_quo + E)
+        6 => E
+        81n                                                                             :MLOAD(array_div_short_quo + E)
+        119n                                                                            :MLOAD(array_div_short_rem)
+        7                                                                               :MLOAD(array_div_short_len_quo)
+
+        ; 7] [28948022309329048855892746252171976963317496166410141009864396001978282409984n, 1n] / 2
         2 => C
         1 => D
-        28948022309329048855892746252171976963317496166410141009864396001978282409984n  :MSTORE(array_div_inA)
+        28948022309329048855892746252171976963317496166410141009864396001978282409984n  :MSTORE(array_div_short_inA)
         1 => E
-        1n                                                                              :MSTORE(array_div_inA + E)
+        1n                                                                              :MSTORE(array_div_short_inA + E)
 
-        2n                                                                              :MSTORE(array_div_inB)
-                                                                                        :CALL(array_div)
-        72370055773322622139731865630429942408293740416025352524660990004945706024960n  :MLOAD(array_div_quo)
-        1                                                                               :MLOAD(array_div_len_quo)
+        2n                                                                              :MSTORE(array_div_short_inB)
+                                                                                        :CALL(array_div_short)
+        72370055773322622139731865630429942408293740416025352524660990004945706024960n  :MLOAD(array_div_short_quo)
+        1                                                                               :MLOAD(array_div_short_len_quo)
 
-        ; 10] [72370055773322622139731865630429942408293740416025352524660990004945706024960n] / 2
+        ; 8] [72370055773322622139731865630429942408293740416025352524660990004945706024960n] / 2
         1 => C
         1 => D
-        72370055773322622139731865630429942408293740416025352524660990004945706024960n  :MSTORE(array_div_inA)
-        2n                                                                              :MSTORE(array_div_inB)
-                                                                                        :CALL(array_div)
-        36185027886661311069865932815214971204146870208012676262330495002472853012480n  :MLOAD(array_div_quo)
-        1                                                                               :MLOAD(array_div_len_quo)
+        72370055773322622139731865630429942408293740416025352524660990004945706024960n  :MSTORE(array_div_short_inA)
+        2n                                                                              :MSTORE(array_div_short_inB)
+                                                                                        :CALL(array_div_short)
+        36185027886661311069865932815214971204146870208012676262330495002472853012480n  :MLOAD(array_div_short_quo)
+        1                                                                               :MLOAD(array_div_short_len_quo)
 
-        ; 11] len(inB) = len(inA) and inB > inA
-        4 => C
-        2 => D
-        9n                                                                              :MSTORE(array_div_inA)
-        1 => E
-        8n                                                                              :MSTORE(array_div_inA + E)
-        2 => E
-        7n                                                                              :MSTORE(array_div_inA + E)
-        3 => E
-        6n                                                                              :MSTORE(array_div_inA + E)
+        ; 9] [2**256-2]*%ARRAY_MAX_LEN / [2]
+        %ARRAY_MAX_LEN => C
+        C - 1 => E
+        array_div_short_wc_test_inA:
+                %ARRAY_BASE_MINUS_TWO           :MSTORE(array_div_short_inA + E)
+                E - 1 => E                      :JMPN(array_div_short_wc_test_compute,array_div_short_wc_test_inA)
+        array_div_short_wc_test_compute:
+                2n                              :MSTORE(array_div_short_inB)
+                                                :CALL(array_div_short)
+        %ARRAY_MAX_LEN => E                     :MLOAD(array_div_short_len_quo)
+        E - 1 => E
+        array_div_short_wc_test_check1:
+                %ARRAY_BASE_HALF_MINUS_ONE      :MLOAD(array_div_short_quo + E)
+                E - 1 => E                      :JMPN(array_div_short_wc_test_check2,array_div_short_wc_test_check1)
+        array_div_short_wc_test_check2:
+                0n                              :MLOAD(array_div_short_rem)
 
-        8n                                                                              :MSTORE(array_div_inB)
-        1 => E
-        1n                                                                              :MSTORE(array_div_inB + E)
-                                                                                        :CALL(array_div)
-        335n                                                                            :MLOAD(array_div_quo)
-        1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639895n :MLOAD(array_div_quo + E)
-        2 => E
-        5n                                                                              :MLOAD(array_div_quo + E)
-        115792089237316195423570985008687907853269984665640564039457584007913129637265n :MLOAD(array_div_rem)
+        ; 10] [1]*%ARRAY_MAX_LEN / [2]
+        %ARRAY_MAX_LEN => C
+        C - 1 => E
+        array_div_short_wc2_test_inA:
+                1n                              :MSTORE(array_div_short_inA + E)
+                E - 1 => E                      :JMPN(array_div_short_wc2_test_compute,array_div_short_wc2_test_inA)
+        array_div_short_wc2_test_compute:
+                2n                              :MSTORE(array_div_short_inB)
+                                                :CALL(array_div_short)
+        %ARRAY_MAX_LEN_MINUS_ONE => E           :MLOAD(array_div_short_len_quo)
+        E - 1 => E
+        array_div_short_wc2_test_check1:
+                %ARRAY_BASE_HALF                :MLOAD(array_div_short_quo + E)
+                E - 1 => E                      :JMPN(array_div_short_wc2_test_check2,array_div_short_wc2_test_check1)
+        array_div_short_wc2_test_check2:
+                1n                              :MLOAD(array_div_short_rem)
 
-        ; 12] [a, 7n, a, 12n, a, 20n, a, 80n] / [a, a, a, a, 100n]
-        8 => C
-        5 => D
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_div_inA)
-        1 => E
-        7n                                                                              :MSTORE(array_div_inA + E)
-        2 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_div_inA + E)
-        3 => E
-        12n                                                                             :MSTORE(array_div_inA + E)
-        4 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_div_inA + E)
-        5 => E
-        20n                                                                             :MSTORE(array_div_inA + E)
-        6 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_div_inA + E)
-        7 => E
-        80n                                                                             :MSTORE(array_div_inA + E)
+        ; 11] [2**256-2]*%ARRAY_MAX_LEN_MINUS_ONE || [2**256-1] / [2]
+        %ARRAY_MAX_LEN => C
+        C - 1 => E
+        array_div_short_wc3_test_inA:
+                %ARRAY_BASE_MINUS_TWO           :MSTORE(array_div_short_inA + E)
+                E - 1 => E                      :JMPZ(array_div_short_wc3_test_inA_part2,array_div_short_wc3_test_inA)
+        array_div_short_wc3_test_inA_part2:
+                %ARRAY_BASE_MINUS_ONE           :MSTORE(array_div_short_inA + E)
+        array_div_short_wc3_test_inB:
+                2n                              :MSTORE(array_div_short_inB)
+                                                :CALL(array_div_short)
+        %ARRAY_MAX_LEN => E                     :MLOAD(array_div_short_len_quo)
+        E - 1 => E
+        array_div_short_wc3_test_check1:
+                %ARRAY_BASE_HALF_MINUS_ONE      :MLOAD(array_div_short_quo + E)
+                E - 1 => E                      :JMPZ(array_div_short_wc3_test_check2,array_div_short_wc3_test_check1)
+        array_div_short_wc3_test_check2:
+                %ARRAY_BASE_HALF_MINUS_ONE      :MLOAD(array_div_short_quo + E)
+                1n                              :MLOAD(array_div_short_rem)
+        ; ---------------------------------------------------------------
 
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_div_inB)
-        1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_div_inB + E)
-        2 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_div_inB + E)
-        3 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_div_inB + E)
-        4 => E
-        100n                                                                            :MSTORE(array_div_inB + E)
-                                                                                        :CALL(array_div)
-        87130681010257731209815790699606742543054641926620622445532439451498988639951n  :MLOAD(array_div_quo)
-        1 => E
-        76812574048516684092863920748337523031377118540573443471719387411189897879957n  :MLOAD(array_div_quo + E)
-        2 => E
-        92862962655669424052566829561422975605097710474424610764317468362781816839948n  :MLOAD(array_div_quo + E)
-        87130681010257731209815790699606742543054641926620622445532439451498988639950n  :MLOAD(array_div_rem)
-        1 => E
-        76812574048516684092863920748337523031377118540573443471719387411189897879965n  :MLOAD(array_div_rem + E)
-        2 => E
-        92862962655669424052566829561422975605097710474424610764317468362781816839947n  :MLOAD(array_div_rem + E)
-        3 => E
-        13n                                                                             :MLOAD(array_div_rem + E)
-        4 => E
-        84n                                                                             :MLOAD(array_div_rem + E)
-
-        ; 13] [82987931714326364316120253427931880709278140571418487333162713377057429160720n,4257238595720679277571917967782652353394431698489248379634099239588181418140n,15209178211456919413336795740141505754388379695813905932093982440742677791802n,88987534839350135473536361176867192550264928852523682165693061442019881855583n,14n], [4n, 6n, 7n]
-        5 => C
-        3 => D
-        82987931714326364316120253427931880709278140571418487333162713377057429160720n  :MSTORE(array_div_inA)
-        1 => E
-        4257238595720679277571917967782652353394431698489248379634099239588181418140n   :MSTORE(array_div_inA + E)
-        2 => E
-        15209178211456919413336795740141505754388379695813905932093982440742677791802n  :MSTORE(array_div_inA + E)
-        3 => E
-        88987534839350135473536361176867192550264928852523682165693061442019881855583n  :MSTORE(array_div_inA + E)
-        4 => E
-        14n                                                                             :MSTORE(array_div_inA + E)
-
-        4n                                                                              :MSTORE(array_div_inB)
-        1 => E
-        6n                                                                              :MSTORE(array_div_inB + E)
-        2 => E
-        7n                                                                              :MSTORE(array_div_inB + E)
-                                                                                        :CALL(array_div)
-        90526669110436282262084097418054683975846294708417529350769755852355732618090n  :MLOAD(array_div_quo)
-        1 => E
-        12712504977050019353362337310981027507180704121789097452241865920288554550795n  :MLOAD(array_div_quo + E)
-        2 => E
-        2n                                                                              :MLOAD(array_div_quo + E)
-        68257522984529821538496818781776868365702915734670062048456441991373887608168n  :MLOAD(array_div_rem)
-        1 => E
-        104999739448800080833043894267657885589213754954671066702793604491778345346033n :MSTORE(array_div_rem + E)
-        2 => E
-        4n                                                                              :MSTORE(array_div_rem + E)
-        3                                                                               :MLOAD(array_div_len_quo)
-        3                                                                               :MLOAD(array_div_len_rem)
-
-        ; 14] [0n,0n,0n,0n,87552057494100699607633960453116574392480272162273084008350826812719088235449n,29405388739667337424543497575767709934732594998639086405406332616399343873602n,370491411790392985199n], [0n, 0n, 8238129386n, 23102318237n]
-        7 => C
-        4 => D
-        0n                                                                              :MSTORE(array_div_inA)
-        1 => E
-        0n                                                                              :MSTORE(array_div_inA + E)
-        2 => E
-        0n                                                                              :MSTORE(array_div_inA + E)
-        3 => E
-        0n                                                                              :MSTORE(array_div_inA + E)
-        4 => E
-        87552057494100699607633960453116574392480272162273084008350826812719088235449n  :MSTORE(array_div_inA + E)
-        5 => E
-        29405388739667337424543497575767709934732594998639086405406332616399343873602n  :MSTORE(array_div_inA + E)
-        6 => E
-        370491411790392985199n                                                          :MSTORE(array_div_inA + E)
-
-        0n                                                                              :MSTORE(array_div_inB)
-        1 => E
-        0n                                                                              :MSTORE(array_div_inB + E)
-        2 => E
-        8238129386n                                                                     :MSTORE(array_div_inB + E)
-        3 => E
-        23102318237n                                                                    :MSTORE(array_div_inB + E)
-                                                                                        :CALL(array_div)
-        10624890954144362706283399919870985530330343554129711486796784890935496833177n  :MLOAD(array_div_quo)
-        1 => E
-        12699239907746414269759600684072701206520647567004427767570235373004025148518n  :MLOAD(array_div_quo + E)
-        2 => E
-        62973947849727744055941265906651873030488901951864462234513788026171769471385n  :MLOAD(array_div_quo + E)
-        3 => E
-        16036979838n                                                                    :MLOAD(array_div_quo + E)
-        0n                                                                              :MLOAD(array_div_rem)
-        1 => E
-        0n                                                                              :MSTORE(array_div_rem + E)
-        2 => E
-        43811746908501644357293832343774991028053014234938611947183500936834952782886n  :MSTORE(array_div_rem + E)
-        3 => E
-        6019321230n                                                                     :MSTORE(array_div_rem + E)
-        4                                                                               :MLOAD(array_div_len_quo)
-        4                                                                               :MLOAD(array_div_len_rem)
-
-        ; 15] [7n], [7719472615821079694904732333912527190217998977709370935963838933860875309329n, 17n]
+        ; division by two
+        ; ---------------------------------------------------------------
+        ; 1] [0n]
         1 => C
-        2 => D
-        7n                                                                              :MSTORE(array_div_inA)
-        7719472615821079694904732333912527190217998977709370935963838933860875309329n   :MSTORE(array_div_inB)
-        1 => E
-        17n                                                                             :MSTORE(array_div_inB + E)
-                                                                                        :CALL(array_div)
-        0n                                                                              :MLOAD(array_div_quo)
-        7n                                                                              :MLOAD(array_div_rem)
-        1                                                                               :MLOAD(array_div_len_quo)
-        1                                                                               :MLOAD(array_div_len_rem)
+        0n                                                                              :MSTORE(array_div_two_in)
+                                                                                        :CALL(array_div_two)
+        0n                                                                              :MLOAD(array_div_two_quo)
+        1                                                                               :MLOAD(array_div_two_len_quo)
 
-        ; 16] [9,12,16,2,0,2**256-4], [2**256-1,2**256-1]
-	6 => C
-	2 => D
-	9n                                                                              :MSTORE(array_div_inA)
-	115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_div_inB)
-	1 => E
-	12n                                                                             :MSTORE(array_div_inA + E)
-	115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_div_inB + E)
-	2 => E
-	16n                                                                             :MSTORE(array_div_inA + E)
-	3 => E
-	2n                                                                              :MSTORE(array_div_inA + E)
-	4 => E
-	0n                                                                              :MSTORE(array_div_inA + E)
-	5 => E
-	115792089237316195423570985008687907853269984665640564039457584007913129639932n :MSTORE(array_div_inA + E)
-	                                                                                :CALL(array_div)
-        4                                                                               :MLOAD(array_div_len_quo)
-        2                                                                               :MLOAD(array_div_len_rem)
-        17n                                                                             :MLOAD(array_div_quo)
-        26n                                                                             :MLOAD(array_div_rem)
-        1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639934n :MLOAD(array_div_quo + E)
-        10n                                                                             :MLOAD(array_div_rem + E)
-        2 => E
-        0n                                                                              :MLOAD(array_div_quo + E)
-        3 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639932n :MLOAD(array_div_quo + E)
-        ; ---------------------------------------------------------------
+        ; 2] [1n]
+        1 => C
+        1n                                                                              :MSTORE(array_div_two_in)
+                                                                                        :CALL(array_div_two)
+        0n                                                                              :MLOAD(array_div_two_quo)
+        1                                                                               :MLOAD(array_div_two_len_quo)
 
-        ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-        ;; UNUSED
-        ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+        ; 3] [2n]
+        1 => C
+        2n                                                                              :MSTORE(array_div_two_in)
+                                                                                        :CALL(array_div_two)
+        1n                                                                              :MLOAD(array_div_two_quo)
+        1                                                                               :MLOAD(array_div_two_len_quo)
 
-        ; addition
-        ; ---------------------------------------------------------------
-        ; 1] len(inA) = len(inB)
-        3 => C
-        3 => D
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_inA)
-        1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_inA + E)
-        2 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_inA + E)
+        ; 4] [4n]
+        1 => C
+        4n                                                                              :MSTORE(array_div_two_in)
+                                                                                        :CALL(array_div_two)
+        2n                                                                              :MLOAD(array_div_two_quo)
+        1                                                                               :MLOAD(array_div_two_len_quo)
 
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_inB)
+        ; 5] [4n, 4n]
+        2 => C
+        4n                                                                              :MSTORE(array_div_two_in)
         1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_inB + E)
-        2 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_inB + E)
-                                                                                        :CALL(array_add)
-        115792089237316195423570985008687907853269984665640564039457584007913129639934n :MLOAD(array_add_out)
+        4n                                                                              :MSTORE(array_div_two_in + E)
+                                                                                        :CALL(array_div_two)
+        2n                                                                              :MLOAD(array_div_two_quo)
         1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MLOAD(array_add_out + E)
-        2 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MLOAD(array_add_out + E)
-        3 => E
-        1n                                                                              :MLOAD(array_add_out + E)
-        4                                                                               :MLOAD(array_add_len_out)
+        2n                                                                              :MLOAD(array_div_two_quo + E)
+        2                                                                               :MLOAD(array_div_two_len_quo)
 
-        ; 2] len(inA) = len(inB) + 1
-        3 => C
-        2 => D
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_inA)
-        1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_inA + E)
-        2 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_inA + E)
-
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_inB)
-        1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MSTORE(array_add_inB + E)
-                                                                                        :CALL(array_add)
-        115792089237316195423570985008687907853269984665640564039457584007913129639934n :MLOAD(array_add_out)
-        1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MLOAD(array_add_out + E)
-        2 => E
-        0n                                                                              :MLOAD(array_add_out + E)
-        3 => E
-        1n                                                                              :MLOAD(array_add_out + E)
-        4                                                                               :MLOAD(array_add_len_out)
-
-        ; 3] len(inA) = len(inB) + 3
-        7 => C
-        4 => D
-        0n                                                                              :MSTORE(array_add_inA)
-        1 => E
-        0n                                                                              :MSTORE(array_add_inA + E)
-        2 => E
-        71980342328814551066277152664912916825216970430701952092274083071078176857050n  :MSTORE(array_add_inA + E)
-        3 => E
-        115792089237316195423570985008687907853269984665640564039457584007907110318705n :MSTORE(array_add_inA + E)
-        4 => E
-        87552057494100699607633960453116574392480272162273084008350826812719088235448n  :MSTORE(array_add_inA + E)
-        5 => E
-        29405388739667337424543497575767709934732594998639086405406332616399343873602n  :MSTORE(array_add_inA + E)
-        6 => E
-        370491411790392985199n                                                          :MSTORE(array_add_inA + E)
-
-        0n                                                                              :MSTORE(array_add_inB)
-        1 => E
-        0n                                                                              :MSTORE(array_add_inB + E)
-        2 => E
-        43811746908501644357293832343774991028053014234938611947183500936834952782886n  :MSTORE(array_add_inB + E)
-        3 => E
-        6019321230n                                                                     :MSTORE(array_add_inB + E)
-                                                                                        :CALL(array_add)
-        0n                                                                              :MLOAD(array_add_out)
-        1 => E
-        0n                                                                              :MLOAD(array_add_out + E)
-        2 => E
-        0n                                                                              :MLOAD(array_add_out + E)
-        3 => E
-        0n                                                                              :MLOAD(array_add_out + E)
-        4 => E
-        87552057494100699607633960453116574392480272162273084008350826812719088235449n  :MLOAD(array_add_out + E)
-        5 => E
-        29405388739667337424543497575767709934732594998639086405406332616399343873602n  :MLOAD(array_add_out + E)
-        6 => E
-        370491411790392985199n                                                          :MLOAD(array_add_out + E)
-        7                                                                               :MLOAD(array_add_len_out)
-
-        ; 4] len(inA) = len(inB) - 3
-        4 => C
-        7 => D
-        0n                                                                              :MSTORE(array_add_inA)
-        1 => E
-        0n                                                                              :MSTORE(array_add_inA + E)
-        2 => E
-        43811746908501644357293832343774991028053014234938611947183500936834952782886n  :MSTORE(array_add_inA + E)
-        3 => E
-        6019321230n                                                                     :MSTORE(array_add_inA + E)
-
-        0n                                                                              :MSTORE(array_add_inB)
-        1 => E
-        0n                                                                              :MSTORE(array_add_inB + E)
-        2 => E
-        71980342328814551066277152664912916825216970430701952092274083071078176857050n  :MSTORE(array_add_inB + E)
-        3 => E
-        115792089237316195423570985008687907853269984665640564039457584007907110318705n :MSTORE(array_add_inB + E)
-        4 => E
-        87552057494100699607633960453116574392480272162273084008350826812719088235448n  :MSTORE(array_add_inB + E)
-        5 => E
-        29405388739667337424543497575767709934732594998639086405406332616399343873602n  :MSTORE(array_add_inB + E)
-        6 => E
-        370491411790392985199n                                                          :MSTORE(array_add_inB + E)
-                                                                                        :CALL(array_add)
-        0n                                                                              :MLOAD(array_add_out)
-        1 => E
-        0n                                                                              :MLOAD(array_add_out + E)
-        2 => E
-        0n                                                                              :MLOAD(array_add_out + E)
-        3 => E
-        0n                                                                              :MLOAD(array_add_out + E)
-        4 => E
-        87552057494100699607633960453116574392480272162273084008350826812719088235449n  :MLOAD(array_add_out + E)
-        5 => E
-        29405388739667337424543497575767709934732594998639086405406332616399343873602n  :MLOAD(array_add_out + E)
-        6 => E
-        370491411790392985199n                                                          :MLOAD(array_add_out + E)
-        7                                                                               :MLOAD(array_add_len_out)
-        ; ---------------------------------------------------------------
-
-        ; subtraction with len(inA) >= len(inB)
-        ; ---------------------------------------------------------------
-        ; 1] len(inA) > len(inB) and inA_i >= inb_i for all i
-        3 => C
-        2 => D
-        5n                                                                              :MSTORE(array_sub_AGTB_inA)
-        1 => E
-        6n                                                                              :MSTORE(array_sub_AGTB_inA + E)
-        2 => E
-        7n                                                                              :MSTORE(array_sub_AGTB_inA + E)
-
-        2n                                                                              :MSTORE(array_sub_AGTB_inB)
-        1 => E
-        3n                                                                              :MSTORE(array_sub_AGTB_inB + E)
-                                                                                        :CALL(array_sub_AGTB)
-        3n                                                                              :MLOAD(array_sub_AGTB_out)
-        1 => E
-        3n                                                                              :MLOAD(array_sub_AGTB_out + E)
-        2 => E
-        7n                                                                              :MLOAD(array_sub_AGTB_out + E)
-
-        ; 2] len(inA) > len(inB) and inA_i < inb_i for some i
-        3 => C
-        2 => D
-        5n                                                                              :MSTORE(array_sub_AGTB_inA)
-        1 => E
-        6n                                                                              :MSTORE(array_sub_AGTB_inA + E)
-        2 => E
-        7n                                                                              :MSTORE(array_sub_AGTB_inA + E)
-
-        6n                                                                              :MSTORE(array_sub_AGTB_inB)
-        1 => E
-        3n                                                                              :MSTORE(array_sub_AGTB_inB + E)
-                                                                                        :CALL(array_sub_AGTB)
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MLOAD(array_sub_AGTB_out)
-        1 => E
-        2n                                                                              :MLOAD(array_sub_AGTB_out + E)
-        2 => E
-        7n                                                                              :MLOAD(array_sub_AGTB_out + E)
-
-        ; 3] len(inA) > len(inB) and inA_i < inB_i for all i lower than len(inA)
-        3 => C
-        2 => D
-        5n                                                                              :MSTORE(array_sub_AGTB_inA)
-        1 => E
-        1n                                                                              :MSTORE(array_sub_AGTB_inA + E)
-        2 => E
-        7n                                                                              :MSTORE(array_sub_AGTB_inA + E)
-
-        6n                                                                              :MSTORE(array_sub_AGTB_inB)
-        1 => E
-        8n                                                                              :MSTORE(array_sub_AGTB_inB + E)
-                                                                                        :CALL(array_sub_AGTB)
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MLOAD(array_sub_AGTB_out)
-        1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639928n :MLOAD(array_sub_AGTB_out + E)
-        2 => E
-        6n                                                                              :MLOAD(array_sub_AGTB_out + E)
-
-        ; 4] len(inB) > len(inA) and inB_i < inA_i for all i lower than len(inB)
-        3 => C
-        2 => D
-        6n                                                                              :MSTORE(array_sub_AGTB_inB)
-        1 => E
-        8n                                                                              :MSTORE(array_sub_AGTB_inB + E)
-
-        5n                                                                              :MSTORE(array_sub_AGTB_inA)
-        1 => E
-        1n                                                                              :MSTORE(array_sub_AGTB_inA + E)
-        2 => E
-        7n                                                                              :MSTORE(array_sub_AGTB_inA + E)
-                                                                                        :CALL(array_sub_AGTB)
-        115792089237316195423570985008687907853269984665640564039457584007913129639935n :MLOAD(array_sub_AGTB_out)
-        1 => E
-        115792089237316195423570985008687907853269984665640564039457584007913129639928n :MLOAD(array_sub_AGTB_out + E)
-        2 => E
-        6n                                                                              :MLOAD(array_sub_AGTB_out + E)
-
-        ; 5] len(inB) = len(inA) and inB > inA
-        3 => C
-        3 => D
-        6n                                                                              :MSTORE(array_sub_AGTB_inB)
-        1 => E
-        8n                                                                              :MSTORE(array_sub_AGTB_inB + E)
-        2 => E
-        8n                                                                              :MSTORE(array_sub_AGTB_inB + E)
-
-        7n                                                                              :MSTORE(array_sub_AGTB_inA)
-        1 => E
-        8n                                                                              :MSTORE(array_sub_AGTB_inA + E)
-        2 => E
-        8n                                                                              :MSTORE(array_sub_AGTB_inA + E)
-                                                                                        :CALL(array_sub_AGTB)
-        1n                                                                              :MLOAD(array_sub_AGTB_out)
-        1 => E
-        0n                                                                              :MLOAD(array_sub_AGTB_out + E)
-        2 => E
-        0n                                                                              :MLOAD(array_sub_AGTB_out + E)
+        ; 6] [4n] * %ARRAY_MAX_LEN
+        %ARRAY_MAX_LEN => C
+        C - 1 => E
+        array_div_two_wc_test:
+        4n                                                                              :MSTORE(array_div_two_in + E)
+        E - 1 => E                                                                      :JMPN(array_div_two_wc_test_compute,array_div_two_wc_test)
+        array_div_two_wc_test_compute:
+                                                                                        :CALL(array_div_two)
+        %ARRAY_MAX_LEN => E                                                             :MLOAD(array_div_two_len_quo)
+        E - 1 => E
+        array_div_two_wc_test_check:
+        2n                                                                              :MLOAD(array_div_two_quo + E)
+        E - 1 => E                                                                      :JMPN(array_div_two_wc_test_end,array_div_two_wc_test_check)
+        array_div_two_wc_test_end:
         ; ---------------------------------------------------------------
 
         :JMP(end)
@@ -1080,20 +1352,12 @@ opINVALID:
 checkAndSaveFrom:
                          :JMP(opINVALID)
 
-INCLUDE "../main/modexp/constants.zkasm"
-
-INCLUDE "../main/modexp/array_lib/utils/array_trim.zkasm"
-INCLUDE "../main/modexp/array_lib/utils/array_compare.zkasm"
-
 INCLUDE "../main/modexp/array_lib/array_add_short.zkasm"
 INCLUDE "../main/modexp/array_lib/array_add_AGTB.zkasm"
 INCLUDE "../main/modexp/array_lib/array_mul_long.zkasm"
 INCLUDE "../main/modexp/array_lib/array_mul_short.zkasm"
-INCLUDE "../main/modexp/array_lib/array_mul.zkasm"
+INCLUDE "../main/modexp/array_lib/array_mul_two.zkasm"
 INCLUDE "../main/modexp/array_lib/array_square.zkasm"
 INCLUDE "../main/modexp/array_lib/array_div_long.zkasm"
 INCLUDE "../main/modexp/array_lib/array_div_short.zkasm"
-INCLUDE "../main/modexp/array_lib/array_div.zkasm"
-
-INCLUDE "../main/modexp/array_lib/unused/array_sub_AGTB.zkasm"
-INCLUDE "../main/modexp/array_lib/unused/array_add.zkasm"
+INCLUDE "../main/modexp/array_lib/array_div_two.zkasm"
