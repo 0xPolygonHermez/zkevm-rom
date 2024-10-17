@@ -23,27 +23,27 @@ VAR GLOBAL array_div_two_RR
  * RESOURCES:
  * -------------------------------------------
  *
- * Worst Path: A != 0, inA > 2, len(A) > 1:
- *             [steps: 5]                                                 // compare A and 2
- *             + [steps: 11, bin: 1] + (len(Q)-1)*[steps: 4] + [steps: 1] // get Q and input Q to mul_two
- *             + [steps: 4 + 9*len(Q), bin: len(Q) - 1]                   // multiply Q by 2
- *             + [steps: 9, bin: 2] + len(2·Q)*[steps: 3] + [steps: 1]    // R and 2·Q to add
- *             + [steps: 8 + 6*len(2·Q), bin: len(2·Q) - 1]               // add 2·Q and R
- *             + [steps: 3] + len(A)*[steps: 3] + [steps: 2]              // compare A and Q·B + R and finish
- * Total: [steps: 49 + 3*len(A) + 22*len(Q),
- *           bin: 2 + 2*len(Q),
+ * Worst Path: A != 0, inA > 2, lenA > 1:
+ *             [steps: 15, bin: 2]                                      // compare A and 2
+ *             + [steps: 11, bin: 1] + (lenQ-1)*[steps: 4] + [steps: 1] // get Q and input Q to mul_two
+ *             + [steps: 6 + 9*lenQ, bin: - 1 + 2*lenQ]                 // array_mul_two of Q
+ *             + [steps: 9, bin: 2] + (lenQ+1)*[steps: 3] + [steps: 1]  // R and 2·Q to add
+ *             + [steps: 16 + 6*lenQ, bin: 1 + lenQ]                    // array_add_short of 2·Q and R
+ *             + [steps: 3] + lenA*[steps: 3] + [steps: 2]              // compare A and Q·B + R and finish
+ * Total: [steps: 65 + 3*lenA + 22*lenQ,
+ *           bin: 5 + 3*lenQ,
  *         arith: 0]
  * -------------------------------------------
  * where:
  *         R = Remainder of A / B
  *         Q = Quotient of A / B
  *
- * Note: For the total count, we have used the fact that len(2·Q) <= len(Q) + 1
+ * Note: For the total count, we have used the fact that len(2·Q) <= lenQ + 1
  */
 
 array_div_two:
-        %MAX_CNT_BINARY - CNT_BINARY -  2 - 2*%ARRAY_MAX_LEN                             :JMPN(outOfCountersBinary)
-        %MAX_CNT_STEPS - STEP        - 49 - 25*%ARRAY_MAX_LEN :JMPN(outOfCountersStep) ; till array_mul_two
+        %MAX_CNT_BINARY - CNT_BINARY -  5 -  3*%ARRAY_MAX_LEN   :JMPN(outOfCountersBinary)
+        %MAX_CNT_STEPS - STEP        - 63 - 25*%ARRAY_MAX_LEN   :JMPN(outOfCountersStep) ; till array_mul_two
 
         RR              :MSTORE(array_div_two_RR)
 
