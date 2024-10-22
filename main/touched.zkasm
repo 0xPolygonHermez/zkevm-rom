@@ -23,21 +23,20 @@ revertTouched:
 isColdAddress:
     ; checks zk-counters
     %MAX_CNT_STEPS - STEP - 100                                             :JMPN(outOfCountersStep)
-    %MAX_CNT_BINARY - CNT_BINARY - 4                                        :JMPN(outOfCountersBinary)
+    %MAX_CNT_BINARY - CNT_BINARY - 2                                        :JMPN(outOfCountersBinary)
     %MAX_CNT_POSEIDON_G - CNT_POSEIDON_G - %MAX_CNT_POSEIDON_SLOAD_SSTORE*2 :JMPN(outOfCountersPoseidon)
     ; store previous registers values temporary
     B               :MSTORE(tmpB)
     C               :MSTORE(tmpC)
     E               :MSTORE(tmpE)
 
-    ; if address is a zero address check if it is warm
-    0 => B
-    $                           :EQ, JMPC(checkWarmed)
     ; if address is a precompiled considered as warm address
-    10 => B
-    $                           :LT, JMPC(finishColdPrecompiled)
-    0x100 => B
-    $                           :EQ, JMPC(finishColdPrecompiled)
+    0x101 => B
+    $                           :LT, JMPNC(checkWarmed)
+    ; if address is a zero address check if it is warm (A <= 256)
+    A                           :JMPZ(checkWarmed)
+    A - 0x100                   :JMPZ(finishColdPrecompiled)
+    A - 10                      :JMPN(finishColdPrecompiled)
 
 checkWarmed:
     ; save current state root & load touched root
