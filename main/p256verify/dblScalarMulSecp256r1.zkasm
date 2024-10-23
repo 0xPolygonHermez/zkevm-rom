@@ -3,11 +3,11 @@
 ;; dblScalarMulSecp256r1:
 ;;              in: Points p1 = (p1_x, p1_y), p2 = (p2_x, p2_y) and scalars k1, k2
 ;;             out:
-;;              · p3 = (p3_x, p3_y) ∈ E(Fp)
+;;              · p3 = [k1]·P1 + [k2]·P2 = (p3_x, p3_y) ∈ E(Fp)
 ;;              · Variable p3_is_zero = 0 or 1, to indicate whether p3 is the point at infinity or not
 ;;
 ;;  PRE: p1 = (p1_x, p1_y), p2 = (p2_x, p2_y) are in E(Fp)\{𝒪} and p1_x,p1_y,p2_x,p2_y are in Fp.
-;        Moreover, k1,k2 are in Fn and they cannot be both zero.
+;;       Moreover, k1,k2 are in Fn and they cannot be both zero.
 ;; POST: The resulting coordinates p3_x,p3_y are in Fp.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -59,9 +59,8 @@ dblScalarMulSecp256r1:
 
 	; receive the maximum length (minus one) between the binary representations of k1 and k2
 	; Note that 0 <= max(len(k1)-1,len(k2)-1) <= 255
-        $0{receiveLen(mem.dblScalarMulSecp256r1_k1, mem.dblScalarMulSecp256r1_k2)} => A,RR
-	256 => B
-	1 		:LT
+        $0{receiveLen(mem.dblScalarMulSecp256r1_k1, mem.dblScalarMulSecp256r1_k2)} => RR 	:JMPN(failAssert)
+	255 - RR    	:JMPN(failAssert)
 
         ; start the acummulator of k1 and k2
         0 => RCX   	:MSTORE(dblScalarMulSecp256r1_acum_k1)
