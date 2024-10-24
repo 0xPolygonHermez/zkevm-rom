@@ -148,12 +148,44 @@ test_p256verify:
         ; Inputs:  A = hash, B = r, C = s, D = x, E = y
         ; Outputs: A = result, B = result_code
 
+	; zero hash tests: take any public key (x,y) and set the signature (r,y) = (x,x)
+	0x0 => A ; hash
+	%SECP256R1_G_X => B ; r
+	%SECP256R1_G_X => C ; s
+	%SECP256R1_G_X => D ; x
+	%SECP256R1_G_Y => E ; y
+	:CALL(p256verify)
+	1 :ASSERT
+	B => A
+	0 :ASSERT
+
+	0x0 => A ; hash
+	0x2927b10512bae3eddcfe467828128bad2903269919f7086069c8c4df6c732838n => B ; r
+	0x2927b10512bae3eddcfe467828128bad2903269919f7086069c8c4df6c732838n => C ; s
+	0x2927b10512bae3eddcfe467828128bad2903269919f7086069c8c4df6c732838n => D ; x
+	0xc7787964eaac00e5921fb1498a60f4606766b3d9685001558d1a974e7341513en => E ; y
+	:CALL(p256verify)
+	1 :ASSERT
+	B => A
+	0 :ASSERT
+
         ; Tests from https://github.com/ulerdogan/go-ethereum/blob/ulerdogan-secp256r1/core/vm/testdata/precompiles/p256Verify.json
 
 	; 1] wycheproof/ecdsa_secp256r1_sha256_p1363_test.json EcdsaP1363Verify SHA-256 #1: signature malleability
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
 	0x2ba3a8be6b94d5ec80a6d9d1190a436effe50d85a1eee859b8cc6af9bd5c2e18n => B ; r
 	0x4cd60b855d442f5b3c7b11eb6c4e0ae7525fe710fab9aa7c77a67f79e6fadd76n => C ; s
+	0x2927b10512bae3eddcfe467828128bad2903269919f7086069c8c4df6c732838n => D ; x
+	0xc7787964eaac00e5921fb1498a60f4606766b3d9685001558d1a974e7341513en => E ; y
+	:CALL(p256verify)
+	1 :ASSERT
+	B => A
+	0 :ASSERT
+
+	; same test but with the s = n - s
+	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
+	0x2ba3a8be6b94d5ec80a6d9d1190a436effe50d85a1eee859b8cc6af9bd5c2e18n => B ; r
+	0xb329f479a2bbd0a5c384ee1493b1f5186a87139cac5df4087c134b49156847dbn => C ; s
 	0x2927b10512bae3eddcfe467828128bad2903269919f7086069c8c4df6c732838n => D ; x
 	0xc7787964eaac00e5921fb1498a60f4606766b3d9685001558d1a974e7341513en => E ; y
 	:CALL(p256verify)
@@ -170,7 +202,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 3] wycheproof/ecdsa_secp256r1_sha256_p1363_test.json EcdsaP1363Verify SHA-256 #5: Modified r or s, e.g. by adding or subtracting the order of the group
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -181,7 +213,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 4] wycheproof/ecdsa_secp256r1_sha256_p1363_test.json EcdsaP1363Verify SHA-256 #8: Modified r or s, e.g. by adding or subtracting the order of the group
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -192,7 +224,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 5] wycheproof/ecdsa_secp256r1_sha256_p1363_test.json EcdsaP1363Verify SHA-256 #9: Signature with special case values for r and s
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -291,7 +323,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 14] wycheproof/ecdsa_secp256r1_sha256_p1363_test.json EcdsaP1363Verify SHA-256 #18: Signature with special case values for r and s
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -313,7 +345,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 16] wycheproof/ecdsa_secp256r1_sha256_p1363_test.json EcdsaP1363Verify SHA-256 #20: Signature with special case values for r and s
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -445,7 +477,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 28] wycheproof/ecdsa_secp256r1_sha256_p1363_test.json EcdsaP1363Verify SHA-256 #32: Signature with special case values for r and s
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -467,7 +499,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 30] wycheproof/ecdsa_secp256r1_sha256_p1363_test.json EcdsaP1363Verify SHA-256 #34: Signature with special case values for r and s
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -1963,7 +1995,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 166] wycheproof/ecdsa_secp256r1_sha256_p1363_test.json EcdsaP1363Verify SHA-256 #175: comparison with point at infinity
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -2117,7 +2149,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 180] wycheproof/ecdsa_secp256r1_sha256_p1363_test.json EcdsaP1363Verify SHA-256 #189: testing point duplication
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -2150,7 +2182,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 183] wycheproof/ecdsa_secp256r1_sha256_p1363_test.json EcdsaP1363Verify SHA-256 #192: pseudorandom signature
 	0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855n => A ; hash
@@ -2502,7 +2534,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 215] wycheproof/ecdsa_secp256r1_sha256_test.json EcdsaVerify SHA-256 #120: modify last byte of integer
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -2513,7 +2545,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 216] wycheproof/ecdsa_secp256r1_sha256_test.json EcdsaVerify SHA-256 #121: modify last byte of integer
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -2524,7 +2556,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 217] wycheproof/ecdsa_secp256r1_sha256_test.json EcdsaVerify SHA-256 #124: truncated integer
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -2535,7 +2567,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 218] wycheproof/ecdsa_secp256r1_sha256_test.json EcdsaVerify SHA-256 #133: Modified r or s, e.g. by adding or subtracting the order of the group
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -2546,7 +2578,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 219] wycheproof/ecdsa_secp256r1_sha256_test.json EcdsaVerify SHA-256 #134: Modified r or s, e.g. by adding or subtracting the order of the group
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -2557,7 +2589,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 220] wycheproof/ecdsa_secp256r1_sha256_test.json EcdsaVerify SHA-256 #137: Modified r or s, e.g. by adding or subtracting the order of the group
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -2568,7 +2600,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 221] wycheproof/ecdsa_secp256r1_sha256_test.json EcdsaVerify SHA-256 #139: Modified r or s, e.g. by adding or subtracting the order of the group
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -2579,7 +2611,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 222] wycheproof/ecdsa_secp256r1_sha256_test.json EcdsaVerify SHA-256 #143: Modified r or s, e.g. by adding or subtracting the order of the group
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -2590,7 +2622,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 223] wycheproof/ecdsa_secp256r1_sha256_test.json EcdsaVerify SHA-256 #177: Signature with special case values for r and s
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -2667,7 +2699,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 230] wycheproof/ecdsa_secp256r1_sha256_test.json EcdsaVerify SHA-256 #189: Signature with special case values for r and s
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -4086,7 +4118,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 359] wycheproof/ecdsa_secp256r1_sha256_test.json EcdsaVerify SHA-256 #357: testing point duplication
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -4119,7 +4151,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 362] wycheproof/ecdsa_secp256r1_sha256_test.json EcdsaVerify SHA-256 #360: pseudorandom signature
 	0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855n => A ; hash
@@ -4471,7 +4503,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 394] wycheproof/ecdsa_test.json EcdsaVerify SHA-256 #120: modify last byte of integer
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -4482,7 +4514,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 395] wycheproof/ecdsa_test.json EcdsaVerify SHA-256 #121: modify last byte of integer
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -4493,7 +4525,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 396] wycheproof/ecdsa_test.json EcdsaVerify SHA-256 #124: truncated integer
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -4504,7 +4536,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 397] wycheproof/ecdsa_test.json EcdsaVerify SHA-256 #133: Modified r or s, e.g. by adding or subtracting the order of the group
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -4515,7 +4547,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 398] wycheproof/ecdsa_test.json EcdsaVerify SHA-256 #134: Modified r or s, e.g. by adding or subtracting the order of the group
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -4526,7 +4558,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 399] wycheproof/ecdsa_test.json EcdsaVerify SHA-256 #137: Modified r or s, e.g. by adding or subtracting the order of the group
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -4537,7 +4569,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 400] wycheproof/ecdsa_test.json EcdsaVerify SHA-256 #139: Modified r or s, e.g. by adding or subtracting the order of the group
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -4548,7 +4580,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 401] wycheproof/ecdsa_test.json EcdsaVerify SHA-256 #143: Modified r or s, e.g. by adding or subtracting the order of the group
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -4559,7 +4591,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 402] wycheproof/ecdsa_test.json EcdsaVerify SHA-256 #177: Signature with special case values for r and s
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -4636,7 +4668,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 409] wycheproof/ecdsa_test.json EcdsaVerify SHA-256 #189: Signature with special case values for r and s
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -6055,7 +6087,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 538] wycheproof/ecdsa_test.json EcdsaVerify SHA-256 #707: testing point duplication
 	0x532eaabd9574880dbf76b9b8cc00832c20a6ec113d682299550d7a6e0f345e25n => A ; hash
@@ -6088,7 +6120,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 541] wycheproof/ecdsa_test.json EcdsaVerify SHA-256 #1210: pseudorandom signature
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -6418,7 +6450,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 571] wycheproof/ecdsa_webcrypto_test.json EcdsaP1363Verify SHA-256 #5: Modified r or s, e.g. by adding or subtracting the order of the group
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -6429,7 +6461,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 572] wycheproof/ecdsa_webcrypto_test.json EcdsaP1363Verify SHA-256 #8: Modified r or s, e.g. by adding or subtracting the order of the group
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -6440,7 +6472,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 573] wycheproof/ecdsa_webcrypto_test.json EcdsaP1363Verify SHA-256 #9: Signature with special case values for r and s
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -6539,7 +6571,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 582] wycheproof/ecdsa_webcrypto_test.json EcdsaP1363Verify SHA-256 #18: Signature with special case values for r and s
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -6561,7 +6593,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 584] wycheproof/ecdsa_webcrypto_test.json EcdsaP1363Verify SHA-256 #20: Signature with special case values for r and s
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -6693,7 +6725,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 596] wycheproof/ecdsa_webcrypto_test.json EcdsaP1363Verify SHA-256 #32: Signature with special case values for r and s
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -6715,7 +6747,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 598] wycheproof/ecdsa_webcrypto_test.json EcdsaP1363Verify SHA-256 #34: Signature with special case values for r and s
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
@@ -8211,7 +8243,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 734] wycheproof/ecdsa_webcrypto_test.json EcdsaP1363Verify SHA-256 #175: comparison with point at infinity
 	0x532eaabd9574880dbf76b9b8cc00832c20a6ec113d682299550d7a6e0f345e25n => A ; hash
@@ -8365,7 +8397,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 748] wycheproof/ecdsa_webcrypto_test.json EcdsaP1363Verify SHA-256 #189: testing point duplication
 	0x532eaabd9574880dbf76b9b8cc00832c20a6ec113d682299550d7a6e0f345e25n => A ; hash
@@ -8398,7 +8430,7 @@ test_p256verify:
 	:CALL(p256verify)
 	0 :ASSERT
 	B => A
-	0 :ASSERT
+	10 :ASSERT
 
 	; 751] wycheproof/ecdsa_webcrypto_test.json EcdsaP1363Verify SHA-256 #269: pseudorandom signature
 	0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023n => A ; hash
