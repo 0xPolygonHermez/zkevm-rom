@@ -86,11 +86,11 @@ dblScalarMulSecp256r1:
         ${B == D}     	:JMPNZ(dblScalarMulSecp256r1SameInitialPoints)
 	; [steps: 15, bin: 1, arith: 0]
 
-        ; verify path p1_y != p2_y <==> p1_y = -p2_y <==> p1_y + p2_y = 0
+        ; verify path p1_y != p2_y <==> p1_y = -p2_y (mod p) <==> p1_y + p2_y = 0 (mod p) <==> p1_y + p2_y ∊ {0,SECP256R1_P}
         ; Note: In this path we could use a binary, but we use an arith
 	;       because in this path we do not perform point arithmetic
 
-        ; y must be distinct from 0, because there are no points with y = 0
+        ; y must be distinct from 0, because there are no points with y = 0, then p1_y + p2_y = SECP256R1_P
 
 	; check p1_y + p2_y = SECP256R1_P
         B => A        ; A = p1_y
@@ -295,13 +295,11 @@ dblScalarMulSecp256r1_x_equals_before_add:
         1              	:MSTORE(dblScalarMulSecp256r1_p3_zero), JMP(dblScalarMulSecp256r1_double)
 
 dblScalarMulSecp256r1_same_point_to_add:
-        ; must check really are equals, use MLOAD as ASSERT
-        ; ASSERT(D == dblScalarMulSecp256r1_p3_y)
-
+	; verify path p3_y == p_y (D)
         D       	:MLOAD(dblScalarMulSecp256r1_p3_y)
+
         C => A
         D => B
-
         ; (A,B) * 2 = (E, op)
         ${xDblPointEc_secp256r1(A,B)} => E  	:MSTORE(dblScalarMulSecp256r1_p3_x)
         ${yDblPointEc_secp256r1(A,B)}  		:ARITH_SECP256R1_ECADD_SAME, MSTORE(dblScalarMulSecp256r1_p3_y), JMP(dblScalarMulSecp256r1_double)
