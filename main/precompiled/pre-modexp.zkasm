@@ -72,6 +72,7 @@ funcModexp:
     ; get exp offset = 96 bytes (Bsize | Esize | Msize) + Bsize
     $ => A                              :MLOAD(modexp_Bsize)
     96 => B
+    ; check carry ADD --> outOfGas
     $ => A                              :ADD, JMPC(outOfGas)
     $ => B                              :MLOAD(txCalldataLen)
     ; expLenBits = bit length of first 32 bytes of exp
@@ -195,10 +196,12 @@ lastChecks:
     ; B = max(200, multiplication_complexity * iteration_count / 3)
     GAS - B => GAS                      :JMPN(outOfGas)
     ; check first modulo size and base size to match ethereum specification
+    ; https://github.com/0xPolygonHermez/ethereumjs-monorepo/blob/master/packages/evm/src/precompiles/05-modexp.ts#L142
     0 => A
     $ => B                              :MLOAD(modexp_Msize)
     $                                   :EQ, JMPC(preEndMODEXP)  ; if Msize = 0 --> preEndMODEXP
     ; Msize > 0 from here
+    ; https://github.com/0xPolygonHermez/ethereumjs-monorepo/blob/master/packages/evm/src/precompiles/05-modexp.ts#L135
     $ => B                              :MLOAD(modexp_Bsize)
     $                                   :EQ, JMPC(save0out)      ; if Bsize = 0 --> save0out
     ; Bsize > 0 from here
@@ -252,11 +255,11 @@ save1out:
     1                                   :MSTORE(modexp_out), JMP(finalMODEXP)
 
 save0out:
+    ; return with Msize (check Msize < MAX_SIZE_MODEXP)
     $ => B                              :MLOAD(modexp_Msize)
     %MAX_SIZE_MODEXP => A
     $                                   :LT,JMPC(preFailModExpLength)
     0                                   :MSTORE(modexp_out), JMP(finalMODEXP)
-
 
 finalMODEXP:
     %MAX_CNT_STEPS - STEP - 100         :JMPN(outOfCountersStep)
@@ -283,7 +286,7 @@ finalMODEXPreturn:
     E                                   :MSTORE(modexp_returnFirstIndex)
     $ => A                              :MLOAD(arithRes2)
     A                                   :JMPZ(memoryLoop)
-    
+
     ; if Msize % 32 > 0, copy last bytes, else --> memoryLoop
     A => C
     ; A = 0x0000000000000000000000000000000000000000XXXXXXXXXXXXXXXXXXXXXXXX
