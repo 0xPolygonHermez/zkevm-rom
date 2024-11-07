@@ -1,5 +1,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;  PRE: The input arrays have been trimmed and inB != 0.
+;;  PRE: The input arrays have been trimmed and inB != 0,1.
 ;; POST: The quotient is trimmed.
 ;;
 ;; array_div_short:
@@ -55,14 +55,16 @@ array_div_short:
         C               :MSTORE(array_div_short_len_quo)
 
         ; Let's cover the edge cases
-        ; Is C == 1 and inA == 0?
+        ; 1] Is C == 1 and inA == 0?
         C - 1           :JMPNZ(array_div_short_inAGTinB) ; If len(inA) > 1, then we already know that inA > inB
-        $ => A          :MLOAD(array_div_short_inA); Here, len(inA) = len(inB) = 1
+
+        ; Here, len(inA) = len(inB) = 1
+        $ => A          :MLOAD(array_div_short_inA)
         0 => B
         $               :EQ, JMPC(array_div_short_inA_is_zero)
 
 array_div_short_equal_len:
-        ; Here, C = 1
+        ; 2] Check if inA = inB, inA < inB or inA > inB
 
         ; If the lengths are equal, then we must compare the only chunk
         $0{signedComparison(addr.array_div_short_inA,addr.array_div_short_inB)} => RR :JMPZ(array_div_short_check_same_input)
@@ -76,9 +78,7 @@ array_div_short_equal_len:
 
         RR          :JMPN(array_div_short_check_inALTinB)
 
-        1 - RR      :JMPN(failAssert) ; if 1 < RR ERROR
-
-        ; Ensure that the chunk is higher
+        ; Ensure inB < inA
         $ => A          :MLOAD(array_div_short_inB)
         $ => B          :MLOAD(array_div_short_inA)
         1               :LT, JMP(array_div_short_inAGTinB)
@@ -101,8 +101,7 @@ array_div_short_same_input:
         0               :MSTORE(array_div_short_rem), JMP(array_div_short_end)
 
 array_div_short_check_inALTinB:
-        RR + 1          :JMPN(failAssert) ; if RR < -1 ERROR
-
+        ; Ensure inA < inB
         $ => A          :MLOAD(array_div_short_inA)
         $ => B          :MLOAD(array_div_short_inB)
         1               :LT
@@ -138,7 +137,6 @@ array_div_short_inAGTinB:
         ; 3] Let's multiply the quotient by inB
 
         C               :MSTORE(array_div_short_len_quo)
-        C - 1 => RR
 
         ; save the first non-zero chunk of quo
         A               :MSTORE(array_div_short_quo + RR)
@@ -199,7 +197,6 @@ array_div_short_check_result_eq_inA1:
         $ => A          :MLOAD(array_add_short_out + RR)
         A               :MLOAD(array_div_short_inA + RR)
         RR - 1 => RR    :JMPN(array_div_short_end, array_div_short_check_result_eq_inA1)
-
 
 ; Path with remainder equal to 0
 array_div_short_rem_is_zero:

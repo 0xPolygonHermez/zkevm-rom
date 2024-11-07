@@ -14,9 +14,13 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; Note: If hash = 0, then one can forge a valid signature:
+; Note1 ZeroHash: If hash = 0, then one can forge a valid signature:
 ;       https://crypto.stackexchange.com/questions/50279/how-should-ecdsa-handle-the-null-hash
-; We anyways do not check for this case, as it happens with negligible probability
+; We anyways do not check for this case, as it happens with negligible probability.
+
+; Note2 Malleability: Given a signature (r,s) over a message m, the signature (r,N-s) is also valid for the same message:
+;       https://github.com/cosmos/cosmos-sdk/issues/9723, https://eips.ethereum.org/EIPS/eip-2
+; This opens the door to replay attacks. This is not checked in this precompiled.
 
 ; inputs
 VAR GLOBAL p256verify_hash
@@ -26,6 +30,7 @@ VAR GLOBAL p256verify_x
 VAR GLOBAL p256verify_y
 
 VAR GLOBAL p256verify_x3
+VAR GLOBAL p256verify_y2
 VAR GLOBAL p256verify_s_inv
 VAR GLOBAL p256verify_u1
 VAR GLOBAL p256verify_u2
@@ -35,16 +40,17 @@ VAR GLOBAL p256verify_RR
 INCLUDE "constants.zkasm"
 
 ; ERROR CODES (B)
-; 0 - no error
-; 1 - r is zero
-; 2 - r is too big
-; 3 - s is zero
-; 4 - s is too big
-; 5 - x is too big
-; 6 - y is too big
-; 7 - PK is the point at infinity
-; 8 - PK is not in the curve
-; 9 - result is the point at infinity
+; 0  - no error
+; 1  - r is zero
+; 2  - r is too big
+; 3  - s is zero
+; 4  - s is too big
+; 5  - x is too big
+; 6  - y is too big
+; 7  - PK is the point at infinity
+; 8  - PK is not in the curve
+; 9  - result is the point at infinity
+; 10 - signature not verified
 
 ; RESOURCES:
 ;           · r is zero:      [steps: 13,   bin: 1,  arith: 0]
@@ -76,31 +82,31 @@ p256verify_correctness_checks:
         ; 1] Check that r in [1,N-1]
         0n => A
         $ => B          :MLOAD(p256verify_r)
-        $               :EQ, JMPC(p256verify_r_is_zero)
+        $               :EQ, JMPC(p256verify_error_r_is_zero)
         %SECP256R1_N_MINUS_ONE => A
-        $               :LT, JMPC(p256verify_r_is_too_big)
+        $               :LT, JMPC(p256verify_error_r_is_too_big)
 
         ; 2] Check that s in [1,N-1]
         $ => B          :MLOAD(p256verify_s)
-        $               :LT, JMPC(p256verify_s_is_too_big)
+        $               :LT, JMPC(p256verify_error_s_is_too_big)
         0n => A
-        $               :EQ, JMPC(p256verify_s_is_zero)
+        $               :EQ, JMPC(p256verify_error_s_is_zero)
 
         ; 3] Check that x in [0,P-1]
         %SECP256R1_P_MINUS_ONE => A
         $ => B          :MLOAD(p256verify_x)
-        $               :LT, JMPC(p256verify_x_is_too_big)
+        $               :LT, JMPC(p256verify_error_x_is_too_big)
 
         ; 4] Check that y in [0,P-1]
         $ => B          :MLOAD(p256verify_y)
-        $               :LT, JMPC(p256verify_y_is_too_big)
+        $               :LT, JMPC(p256verify_error_y_is_too_big)
 
         ; 5] Check whether PK = (x,y) is the point at infinity 𝒪
         0n => B
         $ => A          :MLOAD(p256verify_x)
         $               :EQ, JMPNC(p256verify_pk_not_point_at_infinity)
         $ => A          :MLOAD(p256verify_y)
-        $               :EQ, JMPC(p256verify_pk_point_at_infinity)
+        $               :EQ, JMPC(p256verify_error_pk_point_at_infinity)
         ; [steps: 29, bin: 8, arith: 0]
 
 p256verify_pk_not_point_at_infinity:
@@ -123,14 +129,14 @@ p256verify_pk_not_point_at_infinity:
 
         $ => A          :MLOAD(p256verify_x3), CALL(addFpSecp256r1) ; [in: A,C, out: C] [steps: 10, bin: 1, arith: 2]
         ; C = x³ + a·x + b
-        C               :MSTORE(p256verify_x3)
+        C               :MSTORE(p256verify_y2)
 
         $ => A          :MLOAD(p256verify_y), CALL(squareFpSecp256r1) ; [in: A, out: A] [steps: 11, bin: 1, arith: 2]
         ; A = y²
 
         ; 1.2] Check if LHS == RHS
-        $ => B          :MLOAD(p256verify_x3)
-        $               :EQ, JMPNC(p256verify_pk_not_in_curve)
+        $ => B          :MLOAD(p256verify_y2)
+        $               :EQ, JMPNC(p256verify_error_pk_not_in_curve)
         ; [steps: 100, bin: 15, arith: 12]
 
 p256verify_scalars:
@@ -163,12 +169,12 @@ p256verify_ecp:
         $ => A          :MLOAD(p256verify_x)
         A               :MSTORE(dblScalarMulSecp256r1_p2_x)
         $ => A          :MLOAD(p256verify_y)
-        A               :MSTORE(dblScalarMulSecp256r1_p2_y), CALL(dblScalarMulSecp256r1) ; [steps: 6459, bin: 1, arith: 513]
+        A               :MSTORE(dblScalarMulSecp256r1_p2_y), CALL(dblScalarMulSecp256r1) ; [in: [k1, p1_x, p1_y, k2, p2_x, p2_y], out: [p3_is_zero, p3_x, p3_y]] [steps: 6459, bin: 1, arith: 513]
         ; [steps: 7707, bin: 19, arith: 531]
 
 p256verify_verification:
         ; check if result of dblScalarMulSecp256k1 is point at infinity
-        $               :MLOAD(dblScalarMulSecp256r1_p3_zero), JMPNZ(p256verify_result_point_at_infinity)
+        $               :MLOAD(dblScalarMulSecp256r1_p3_zero), JMPNZ(p256verify_error_result_point_at_infinity)
 
         ; check if the x-coordinate of the result is equal to r
         ; perform modular reduction is p3_x >= SECP256R1_N
@@ -187,7 +193,7 @@ p256verify_assign_a:
 
 p256verify_final_check:
         $ => B          :MLOAD(p256verify_r)
-        $ => A          :EQ
+        $ => A          :EQ, JMPNC(p256verify_error_signature_not_verified)
         ; A = 1 if the signature is valid; 0 otherwise
 
         ; program ended with no errors
@@ -195,32 +201,35 @@ p256verify_final_check:
         ; till the end -> [steps: 7718, bin: 22, arith: 531]
 
 ; ERRORS
-p256verify_r_is_zero:
+p256verify_error_r_is_zero:
         1 => B          :JMP(p256verify_error)
 
-p256verify_r_is_too_big:
+p256verify_error_r_is_too_big:
         2 => B          :JMP(p256verify_error)
 
-p256verify_s_is_zero:
+p256verify_error_s_is_zero:
         3 => B          :JMP(p256verify_error)
 
-p256verify_s_is_too_big:
+p256verify_error_s_is_too_big:
         4 => B          :JMP(p256verify_error)
 
-p256verify_x_is_too_big:
+p256verify_error_x_is_too_big:
         5 => B          :JMP(p256verify_error)
 
-p256verify_y_is_too_big:
+p256verify_error_y_is_too_big:
         6 => B          :JMP(p256verify_error)
 
-p256verify_pk_point_at_infinity:
+p256verify_error_pk_point_at_infinity:
         7 => B          :JMP(p256verify_error)
 
-p256verify_pk_not_in_curve:
+p256verify_error_pk_not_in_curve:
         8 => B          :JMP(p256verify_error)
 
-p256verify_result_point_at_infinity:
+p256verify_error_result_point_at_infinity:
         9 => B          :JMP(p256verify_error)
+
+p256verify_error_signature_not_verified:
+        10 => B         :JMP(p256verify_end)
 
 p256verify_error:
         0 => A
