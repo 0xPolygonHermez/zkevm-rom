@@ -26,7 +26,8 @@ VAR GLOBAL preGAS
 preFailModExpLength:
     $ => SR         :MLOAD(initSR), CALL(revertTouched)
                     :CALL(revertBlockInfoTree)
-    $ => A          :MLOAD(originCTX), JMPZ(errorAtFirstContext)
+    $${eventLog(onError, revert)}
+    $ => A          :MLOAD(originCTX), JMPZ(preFailModExpLengthCTX0)
     A => CTX
     ; Add return data context value to origin context
     ; Clear return data context
@@ -40,3 +41,9 @@ preFailModExpLength:
     $ => SP         :MLOAD(lastSP)
     $ => PC         :MLOAD(lastPC)
     0               :MSTORE(SP++), JMP(readCode)
+
+preFailModExpLengthCTX0:
+    ; return preGAS
+    $ => A          :MLOAD(preGAS)
+    0               :MSTORE(preGAS)
+    A + GAS => GAS  :JMP(handleGasFromError)

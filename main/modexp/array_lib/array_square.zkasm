@@ -12,6 +12,19 @@
 
 ; Matrix visualization: https://hackmd.io/C9KQPGoaSICStIQQFweBlw?view
 
+;                                             a3    a2    a1      a0
+;                                           * a3    a2    a1      a0
+;              ------------------------------------------------------- 0
+;                                    Y       2*a0*a2   2*a0*a1  a0*a0
+;              ------------------------------------------------------- 1
+;                    2*a1*a3+Z    2*a1*a2     a1*a1        X      0
+;              ------------------------------------------------------- 2
+;       Z   Y     2*a2*a3   a2*a2        X          X        0     0
+;              ------------------------------------------------------- 3
+;         a3*a3     X        X          X          0        0      0
+;              ------------------------------------------------------- 4
+;                               RESULT
+
 ; code
 ; --------------------------
 ; first_iteration_first_row       <-- Compute a[0]·b[0]
@@ -75,18 +88,20 @@ array_square:
 ; Begin of branching
 array_square_loop_index_check:
         ; costs [steps: 7]
+        ; B = len(in)
 
         ; out[i + len] = carry
         $ => A          :MLOAD(array_square_carry_chunk_1)
         RCX + B => E
         A               :MSTORE(array_square_out + E)
 
+        ; if the carry has two chunks, store the second one to be used in the next iteration
         $ => A          :MLOAD(array_square_carry_chunk_2)
         A               :MSTORE(array_square_out_chunk_2)
 
         ; update indices
-        RCX + 1 => RCX,RR,A
-        B - A           :JMPZ(array_square_prep_trim, array_square_ai_times_ai)
+        RCX + 1 => RCX,RR
+        B - RR          :JMPZ(array_square_prep_trim, array_square_first_iteration_loopDiagonal2len)
 ; End of branching
 
 ; Begin of first row
@@ -111,42 +126,48 @@ array_square_first_iteration_first_row:
         ; update the index
         1 => RR
         $ => B          :MLOAD(array_square_len_in)
-        B - RR          :JMPZ(array_square_loop_index_check)
+        B - RR          :JMPNZ(array_square_finish_first_row)
+
+        ; if only one chunk, set out[1] = carry
+        D               :MSTORE(array_square_out + 1), JMP(array_square_prep_trim)
 
 array_square_finish_first_row:
         ; costs [steps: 35, bin: 6, arith: 1]
+        ; PRE: 'carry_chunk_2, 'carry_chunk_1
 
-        ; The result will be stored as D·base + C
+        ; POST: The result will be stored as chunk_3·base² + D·base + C
 
-        ; 1] a[0]·a[j]
+        ; 1] a[0]·a[j], j >= 1
         $ => A          :MLOAD(array_square_in)
         $ => B          :MLOAD(array_square_in + RR)
-        0 => C
-        $${var _arraySquare_a0a0 = A*B}
-        ${_arraySquare_a0a0 >> 256} => D
-        ${_arraySquare_a0a0} => C :ARITH
-        D              :MSTORE(array_square_aiaj_chunk_2)
+        0 => C          ; We cannot add anything here because we need to multiply a[0]·a[j] by 2
+        $${var _arraySquare_a0aj = A*B}
+        ${_arraySquare_a0aj >> 256} => D
+        ${_arraySquare_a0aj} => C :ARITH
+        D              :MSTORE(array_square_aiaj_chunk_2) ; carry(a[0]·a[j])
 
         ; 2] 2·a[0]·a[j]
         C => A,B
         $ => C          :ADD, JMPNC(__array_square_no_carry_continue_1)
         ;-----------------
         ; Since here D ∈ [0, base - 2], there cannot be carry in the following addition
-        D => A
+        D => A          ; carry(a[0]·a[j])
         1 => B
-        $ => D          :ADD
+        $ => D          :ADD ; carry(a[0]·a[j]) + 1
         ;-----------------
                         __array_square_no_carry_continue_1:
 
-        $ => A          :MLOAD(array_square_aiaj_chunk_2)
+        ; duplicate the carry of a[0]·a[j]
+        $ => A          :MLOAD(array_square_aiaj_chunk_2) ; carry(a[0]·a[j])
         D => B
-        $ => D          :ADD, JMPNC(__array_square_no_carry_continue_2)
+        $ => D          :ADD, JMPNC(__array_square_no_carry_continue_2) ; 2·carry(a[0]·a[j]) or 2·carry(a[0]·a[j]) + 1
         ;-----------------
         1               :MSTORE(array_square_chunk_3)
         ;-----------------
                         __array_square_no_carry_continue_2:
+        ; 2·a[0]·a[j] = chunk_3·base² + D·base + C
 
-        ; 3] 2·a[0]·a[j] + carry
+        ; 3] 2·a[0]·a[j] + carry_chunk_2·B + carry_chunk_1
         C => A
         $ => B          :MLOAD(array_square_carry_chunk_1)
         $ => C          :ADD, JMPNC(__array_square_no_carry_continue_3)
@@ -155,17 +176,22 @@ array_square_finish_first_row:
         D => A
         1 => B
         $ => D          :ADD, JMPNC(__array_square_no_carry_continue_3)
+        ; NOTE: It cannot happen that chunk_3 = 1 and 2·a[0]·a[j] + carry_chunk_1 produces carry
         1               :MSTORE(array_square_chunk_3)
         ;-----------------
                         __array_square_no_carry_continue_3:
+        ; 2·a[0]·a[j] + carry_chunk_1 = chunk_3·base² + D·base + C
 
+        ; Now add carry_chunk_2·B
         D => A
         $ => B          :MLOAD(array_square_carry_chunk_2)
         $ => D          :ADD, JMPNC(__array_square_no_carry_continue_4)
         ;-----------------
+        ; NOTE: It cannot happen that chunk_3 = 1 and 2·a[0]·a[j] + carry_chunk_2·B produces carry
         1               :MSTORE(array_square_chunk_3)
         ;-----------------
                         __array_square_no_carry_continue_4:
+        ; 2·a[0]·a[j] + carry_chunk_2·B + carry_chunk_1 = chunk_3·base² + D·base + C
 
         ; carry = product / base
         D               :MSTORE(array_square_carry_chunk_1)
@@ -183,48 +209,24 @@ array_square_finish_first_row:
         B - RR          :JMPZ(array_square_loop_index_check, array_square_finish_first_row)
 ; End of first row
 
-array_square_ai_times_ai:
-        ; costs [steps: 6, bin: 0, arith: 1]
-
-        ; carry = 0 - a[i]·a[i]
-        ; a[i]·a[i], where a[i] ∈ [0,base-1]: This number cannot be GT (base - 2)·base + 1, two chunks
-        $ => A,B       :MLOAD(array_square_in + RR)
-        0 => C
-        $${var _arraySquare_aiai = A*B}
-        ${_arraySquare_aiai >> 256} => D
-        ${_arraySquare_aiai} => C :ARITH
-        C               :MSTORE(array_square_carry_chunk_1)
-        D               :MSTORE(array_square_carry_chunk_2)
-
-array_square_first_iteration_loopRR2len:
+; Begin of remaining rows
+array_square_first_iteration_loopDiagonal2len:
         ; costs [steps: 29, bin: 3, arith: 1]
 
-        ; product = a[i]·a[i] + out[2i] (in the worst case, this is a 3-chunk number)
-        ; The result will be stored as array_square_chunk_3·base² + D·base + C
+        ; product = a[i]·a[i] + out[2i] (in the worst case, this is a 2-chunk number)
+        ; The result will be stored as D·base + C
 
-        ; 1] a[i]·a[i]
+        ; a[i]·a[i] + out[2i]
         $ => A,B        :MLOAD(array_square_in + RR)
-        0 => C
-        $${var _arraySquare_ai = A*B}
-        ${_arraySquare_ai >> 256} => D
-        ${_arraySquare_ai} => C :ARITH
-        D              :MSTORE(array_square_aiaj_chunk_2)
-
-        ; 3] a[i]·a[i] + out[2i]
         2*RR => E
-        $ => A          :MLOAD(array_square_out + E)
-        C => B
-        $ => C          :ADD, JMPNC(__array_square_no_carry_continue_5)
-        ;-----------------
-        ; Since here D ∈ [0, base - 1], there can be carry in the following addition
-        D => A
-        1 => B
-        $ => D          :ADD, JMPNC(__array_square_no_carry_continue_5)
-        1               :MSTORE(array_square_chunk_3)
-        ;-----------------
-                        __array_square_no_carry_continue_5:
+        $ => C          :MLOAD(array_square_out + E)
+        $${var _arraySquare_aiai = A*B + C}
+        ${_arraySquare_aiai >> 256} => D
+        ${_arraySquare_aiai} => C :ARITH
+        D               :MSTORE(array_square_aiaj_chunk_2)
 
-        ; The output can have two chunks only if i == len-1, so we must jump the following block of code if i < len-1
+        ; When i == len-1, the iteration a[i]·a[i] becomes the last iteration of such row
+        ; Therefore, we must add the second carry chunk of the last iteration of the previous row (saved on out_chunk_2)
         RR + 1 => A
         $ => B          :MLOAD(array_square_len_in)
         B - A           :JMPNZ(__array_square_no_carry_continue_6)
@@ -252,10 +254,10 @@ array_square_first_iteration_loopRR2len:
         $ => B          :MLOAD(array_square_len_in)
         B - RR          :JMPZ(array_square_loop_index_check)
 
-array_square_loopRR2len:
+array_square_loopDiagonal2len:
         ; costs [steps: 51, bin: 9, arith: 1]
 
-        ; product = 2·(a[i]·a[j]) + out[i+j] + carry (in the worst case, this is a 3-chunk number)
+        ; product = 2·(a[i]·a[j]) + out[i+j] + carry, j > i (in the worst case, this is a 3-chunk number)
         ; The result will be stored as array_square_chunk_3·base² + D·base + C
 
         ; 1] a[i]·a[j], where a[i],a[j] ∈ [0,base-1]: This number cannot be GT (base - 2)·base + 1, two chunks
@@ -279,6 +281,7 @@ array_square_loopRR2len:
         ;-----------------
                         __array_square_no_carry_continue_7:
 
+        ; duplicate the carry of a[i]·a[j]
         $ => A          :MLOAD(array_square_aiaj_chunk_2)
         D => B
         $ => D          :ADD, JMPNC(__array_square_no_carry_continue_8)
@@ -286,6 +289,7 @@ array_square_loopRR2len:
         1               :MSTORE(array_square_chunk_3)
         ;-----------------
                         __array_square_no_carry_continue_8:
+        ; 2·a[i]·a[j] = chunk_3·base² + D·base + C
 
         ; 3] 2·a[i]·a[j] + out[i+j]:
         ;       a) j < len-1:  This number cannot be GT base² + (base - 3)·base + 1, as out[i+j] < base
@@ -300,16 +304,18 @@ array_square_loopRR2len:
         D => A
         1 => B
         $ => D          :ADD, JMPNC(__array_square_no_carry_continue_9)
+        ; NOTE: It cannot happen that chunk_3 = 1 and 2·a[i]·a[j] + out[i+j] produces carry
         1               :MSTORE(array_square_chunk_3)
         ;-----------------
                         __array_square_no_carry_continue_9:
+        ; 2·a[i]·a[j] + out[i+j] = chunk_3·base² + D·base + C
 
-        ; The output can have two chunks only if j == len-1, so we must jump the following block of code if j < len-1
+        ; 4] When j == len-1, we must add the second carry chunk of the last iteration of the previous row (saved on out_chunk_2)
         RR + 1 => A
         $ => B          :MLOAD(array_square_len_in)
         B - A           :JMPNZ(__array_square_no_carry_continue_10)
         ; Add the second output chunk
-        $ => A          :MLOAD(array_square_out_chunk_2)
+        $ => A          :MLOAD(array_square_out_chunk_2) ; out_chunk_2 ∈ [0,1]
         D => B
         $ => D          :ADD, JMPNC(__array_square_no_carry_continue_10)
         ;-----------------
@@ -317,7 +323,7 @@ array_square_loopRR2len:
         ;-----------------
                         __array_square_no_carry_continue_10:
 
-        ; 4] product = 2·a[i]·a[j] + out[i+j] + carry: This number cannot be GT base² + (base - 2)·base, three chunks
+        ; 5] product = 2·a[i]·a[j] + out[i+j] + carry_chunk_2·B + carry_chunk_1: This number cannot be GT base² + (base - 2)·base, three chunks
         C => A
         $ => B          :MLOAD(array_square_carry_chunk_1)
         $ => C          :ADD, JMPNC(__array_square_no_carry_continue_11)
@@ -329,7 +335,9 @@ array_square_loopRR2len:
         1               :MSTORE(array_square_chunk_3)
         ;-----------------
                         __array_square_no_carry_continue_11:
+        ; 2·a[i]·a[j] + out[i+j] + carry_chunk_1 = chunk_3·base² + D·base + C
 
+        ; Now add carry_chunk_2·B
         D => A
         $ => B          :MLOAD(array_square_carry_chunk_2)
         $ => D          :ADD, JMPNC(__array_square_no_carry_continue_12)
@@ -337,6 +345,7 @@ array_square_loopRR2len:
         1               :MSTORE(array_square_chunk_3)
         ;-----------------
                         __array_square_no_carry_continue_12:
+        ; 2·a[i]·a[j] + out[i+j] + carry_chunk_2·B + carry_chunk_1 = chunk_3·base² + D·base + C
 
         ; carry = product / base; This number cannot be greater than base + (base - 2)
         D               :MSTORE(array_square_carry_chunk_1)
@@ -351,7 +360,8 @@ array_square_loopRR2len:
         ; update the index
         RR + 1 => RR
         $ => B          :MLOAD(array_square_len_in)
-        B - RR          :JMPZ(array_square_loop_index_check, array_square_loopRR2len)
+        B - RR          :JMPZ(array_square_loop_index_check, array_square_loopDiagonal2len)
+; End of remaining rows
 
 array_square_prep_trim:
         ; costs [steps: 8, bin: 1, arith: 0]

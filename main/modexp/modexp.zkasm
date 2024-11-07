@@ -1,5 +1,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;  PRE: B, E, M have been trimmed.
+;;  PRE: B, E, M have been trimmed, M != 0,1, B != 0,1 and E != 0.
 ;; POST: out is trimmed
 ;;
 ;; modexp:
@@ -18,11 +18,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; function modexp(base: bigint[], exp: bigint[], mod: bigint[]): bigint[] {
-;;     if (array_is_zero(mod) || array_is_one(mod)) return [0n];
-;;     if (array_is_zero(base)) return [0n];
-;;     if (array_is_one(base)) return [1n];
-;;     if (array_is_zero(e)) return [1n];
-;;
 ;;     let out = [1n];
 ;;     let base = array_div(base, mod)[1];
 ;;     while (!array_is_zero(exp)) {
@@ -30,11 +25,13 @@
 ;;         if (isOdd(exp)) {
 ;;             out = array_div(array_mul(out, base),mod)[1];
 ;;         }
-;;         exp = array_div_two(exp);
+;;         exp = array_div_two(exp)[0];
 ;;         base = array_div(array_square(base),mod)[1];
 ;;     }
 ;;     return r;
 ;; };
+
+;; TODO: Context variables instead of global ones????
 
 VAR GLOBAL modexp_Blen
 VAR GLOBAL modexp_Elen
@@ -237,7 +234,7 @@ modexp_mul_long_out_and_B:
         $ => C          :MLOAD(array_mul_long_len_out)
         $ => D          :MLOAD(modexp_Mlen)
         C - 1 => RR
-        D - 1 => E      :JMPNZ(modexp_mul_long_out_to_div_long, modexp_mul_long_out_to_div_short)
+        D - 1 => E      :JMPNZ(modexp_mul_long_out_to_div_long, modexp_mul_long_out_to_div_short) ; Note: div_short cannot happen here
 
 ; Compute out = (out * B) % M
 ;--------------------------------
@@ -265,7 +262,7 @@ modexp_div_short_out_and_M1:
 
         1               :MSTORE(modexp_outlen)
         $ => A          :MLOAD(array_div_short_rem)
-        A               :MSTORE(modexp_out), JMP(return_modexp_loop_multiply)
+        A               :MSTORE(modexp_out), JMP(__return_modexp_loop_multiply)
 
 ; 3] Mul short out to div long
 modexp_mul_short_out_to_div_long:
@@ -297,7 +294,7 @@ modexp_div_long_out_and_M1:
 modexp_rem_from_div2:
         $ => A          :MLOAD(array_div_long_rem + RR)
         A               :MSTORE(modexp_out + RR)
-        RR - 1 => RR    :JMPN(return_modexp_loop_multiply, modexp_rem_from_div2)
+        RR - 1 => RR    :JMPN(__return_modexp_loop_multiply, modexp_rem_from_div2)
 ; -------------------
 ; End of branching
 
@@ -324,7 +321,7 @@ modexp_loop:
         $ => A          :MLOAD(modexp_E)
         1 => B
         $               :AND, JMPC(modexp_loop_multiply) ; In the worst case, the exponent is odd in each iteration
-                        return_modexp_loop_multiply:
+                        __return_modexp_loop_multiply:
 
         $ => C          :MLOAD(modexp_Elen)
         C - 1 => RR
