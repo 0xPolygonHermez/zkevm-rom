@@ -36,13 +36,15 @@ funcP256VERIFY:
    $ => D                              :MLOAD(readXFromCalldataResult)
    ; read y [32 bytes]
    E + 32 => E                         :MSTORE(readXFromCalldataOffset), CALL(readFromCalldataOffset); in: [readXFromCalldataOffset: offset value, readXFromCalldataLength: length value], out: [readXFromCalldataResult: result value]
-   $ => E                              :MLOAD(readXFromCalldataResult), CALL(p256verify) ;in: [A: hash, B: r, C: s, D: x, E: y], out: [A: result, B: result_code]
+   $ => E                              :MLOAD(readXFromCalldataResult)
+
+   ; call p256verify
+                                       :CALL(p256verify) ;in: [A: hash, B: r, C: s, D: x, E: y], out: [A: result, B: result_code]
    B                                   :JMPNZ(endP256VERIFYFail)
-   A                                   :JMPZ(preEndP256VERIFY)
 
    ; write result p256verify into memory
    0 => E
-   A                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
+   1                                   :MSTORE(bytesToStore), CALL(MSTORE32); in: [bytesToStore, E: offset] out: [E: new offset]
 
    ; prepare return data
    0                                   :MSTORE(retDataOffset)
