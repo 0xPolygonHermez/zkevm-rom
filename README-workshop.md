@@ -1,5 +1,5 @@
 # Workshop ethCC-24
-This repository contains all the code shown at the workshop ethcc-24
+This repository contains all the code shown at the workshop devcon-24
 
 ## Usage
 - install dependencies:

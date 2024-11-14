@@ -18,6 +18,7 @@ absIsNeg:
     $ => A          :SUB
     1 => B          :RETURN
 
+VAR GLOBAL __MSTOREX_len
 VAR GLOBAL tmpVarBgetLen
 VAR GLOBAL tmpVarCgetLen
 VAR GLOBAL tmpVarDgetLen
@@ -2429,3 +2430,74 @@ saveCalldataPointer:
     B                   :MSTORE(calldataOffset), RETURN
 
 INCLUDE "./utils/get-len-bytes-new.zkasm"
+
+; @info save value to memory < 32 bytes with offset
+; @in bytesToStore => bytes to store in memory
+; @in E => offset
+; @in C => length
+; @out E => new offset
+
+MSTOREX_new:
+        ; check step counters
+        %MAX_CNT_STEPS - STEP - 20              :JMPN(outOfCountersStep)
+        %MAX_CNT_MEM_ALIGN - CNT_MEM_ALIGN - 1  :JMPN(outOfCountersMemalign)
+
+        C           :MSTORE(__MSTOREX_len), JMPZ(__MSTOREX_end_new)
+
+        A           :SAVE(B,C,D,E,RR,RCX)
+        C           :JMP_GT(32, errorMLOADMSTORE)
+
+__MSTOREX_afterSave_new:
+
+        ; verification without binary, required in non trust if E > 2**32, after that will verify two paths
+        ; path E < 2**32:
+        ;   A0 < 2**32 => JMPN fails (if A0 < 0 then path __errorEmore32bits)
+        ;   A7..A1 == 0 because use $0
+        ;   A < 2**32
+        ;   E == A if not ASSERT fails => E < 2**32
+        ;   E >= MAX_MEM_EXPANSION_BYTES ==> errorMLOADMSTORE
+
+        $0{E > 0xFFFFFFFF ? -1:E} => A  :JMPN(__errorEmore32bits)
+        E                               :ASSERT,JMP_GE(%MAX_MEM_EXPANSION_BYTES, errorMLOADMSTORE)
+
+        $0{E / 32} => RR                :JMPN(failAssert)
+        ; RR = 32 bits positive value
+
+        $BYTE{E%32} => RCX,A
+        RCX                             :JMP_GT(31, failAssert)
+
+        ; E === 32 * RR + A (RCX)
+        ; E - 32 * RR === A
+        ; secure: E < MAX_MEM_EXPASION_BYTES < 32 bits, RR < 32 bits, 32*RR < 37 bits, all < 38 bits
+        E - 32 * RR                 :ASSERT
+
+        RCX + %MEM_ALIGN_LEN * C + %MEM_ALIGN_LEFT_ALIGNMENT => C     :JMP_EQ(%MEM_ALIGN_LEN * 32 + %MEM_ALIGN_LEFT_ALIGNMENT, __MSTORE32_offset0_len32_new)
+
+        $ => A                  :MLOAD(MEM:RR)
+        $ => B                  :MLOAD(MEM:RR+1)
+
+        ${memAlignWR_W0(A,mem.bytesToStore,C)} => D    :MSTORE(MEM:RR)      ; no trust calculate W0
+        ${memAlignWR_W1(B,mem.bytesToStore,C)} => E    :MSTORE(MEM:RR + 1)  ; no trust calculate W1
+
+        $                       :MEM_ALIGN_WR,MLOAD(bytesToStore),JMP(__MSTORE32_restore_new)
+
+__MSTORE32_offset0_len32_new:
+        $ => C                  :MLOAD(bytesToStore)
+        C                       :MSTORE(MEM:RR)
+
+__MSTORE32_restore_new:
+        $ => A                  :RESTORE
+        __MSTOREX_len + E => E  :RETURN
+
+
+__MSTOREX_end_new:
+                                :RETURN
+
+__errorEmore32bits:
+        ; path E >= 2**32 must be verified (dual path protection)
+        ; E >= 2**32 === !(E < 2**32)
+        E => A
+        2n**32n => B
+        ; don't check binary counter, because here was a problem of dual path, if check
+        ; before this path was a performance problem. It's only one binary and it's outOfGas
+        0   :LT,JMP(errorMLOADMSTORE)
