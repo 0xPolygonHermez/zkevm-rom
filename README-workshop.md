@@ -1,4 +1,4 @@
-# Workshop ethCC-24
+# Workshop devcon-24
 This repository contains all the code shown at the workshop devcon-24
 
 ## Usage
@@ -7,58 +7,57 @@ This repository contains all the code shown at the workshop devcon-24
 npm i
 ````
 
-## VerifyMerkleProof
+## opPUSH
 ### Paths
 - tests:
-  - `./test/verify-merkle-proof/verify-merkle-proof-old.zkasm`
-  - `./test/verify-merkle-proof/verify-merkle-proof.zkasm`
+  - `./test/read-push.zkasm`
+  - `./test/read-push-OLD.zkasm`
 - tool to run tests: `./tools/run-tests-zkasm.js`
 - function tested in the main code:
-  - `verifyMerkleProof` --> file: `./main/utils.zkasm`, line 1754
-  - `verifyMerkleProof_old` --> file: `./main/utils.zkasm`, line 1663
+  - `readPush` --> file: `./main/utils.zkasm`, line 1004
+  - `readPushOLD` --> file: `./main/utils.zkasm`, line 2389
 
 ### Run tests
 - From the repository root:
 - old version:
 ```
-node tools/run-tests-zkasm.js ./test/verify-merkle-proof/verify-merkle-proof-old.zkasm --verbose -i ./test/verify-merkle-proof/input.json
+node tools/run-tests-zkasm.js ./test/read-push.zkasm --verbose
 ```
 - new version:
 ```
-node tools/run-tests-zkasm.js ./test/verify-merkle-proof/verify-merkle-proof.zkasm --verbose -i ./test/verify-merkle-proof/input.json
+node tools/run-tests-zkasm.js ./test/read-push-OLD.zkasm --verbose
 ```
 
 ### zk-counters
 - old:
 ```
 {
-  cntArith: 0,
-  cntBinary: 33,
-  cntKeccakF: 33,
-  cntSha256F: 0,
-  cntMemAlign: 0,
-  cntPoseidonG: 0,
-  cntPaddingPG: 0,
-  cntSteps: 611
+  cntArith: 0n,
+  cntBinary: 278n,
+  cntKeccakF: 0n,
+  cntSha256F: 0n,
+  cntMemAlign: 0n,
+  cntPoseidonG: 2n,
+  cntPaddingPG: 2n,
+  cntSteps: 6417
 }
 ```
 - new:
 ```
 {
-  cntArith: 0,
-  cntBinary: 1,
-  cntKeccakF: 33,
-  cntSha256F: 0,
-  cntMemAlign: 0,
-  cntPoseidonG: 0,
-  cntPaddingPG: 0,
-  cntSteps: 233
+  cntArith: 0n,
+  cntBinary: 1n,
+  cntKeccakF: 0n,
+  cntSha256F: 0n,
+  cntMemAlign: 0n,
+  cntPoseidonG: 2n,
+  cntPaddingPG: 2n,
+  cntSteps: 1068
 }
 ```
-- optimization:
-```
-{
-  cntBinary: 96%,
-  cntSteps: 61%
-}
-```
+
+### MSTOREX comparison tests
+````
+node counters/counters-executor.js --test MSTOREX
+node counters/counters-executor.js --test MSTOREX_NEW
+````
