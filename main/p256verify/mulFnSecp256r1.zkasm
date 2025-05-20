@@ -1,0 +1,35 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; mulFnSecp256r1:
+;;              in: A,B
+;;             out: C = A·B (mod SECP256R1_N)
+;;
+;;  PRE: Inputs can be any 256-bit number
+;; POST: The result is in Fn
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; RESOURCES:
+; -----------------------------
+; [steps: 10, bin: 1, arith: 2]
+; -----------------------------
+
+mulFnSecp256r1:
+        ; 1] Compute and check the sum over Z
+        ; A·B + [0] = [D]·2²⁵⁶ + [E]
+        0 => C
+        $${var _mulFnSecp256r1_AB = A * B}
+        ${_mulFnSecp256r1_AB >> 256} => D
+        ${_mulFnSecp256r1_AB} => E :ARITH
+
+        ; 2] Check it over Fn, that is, it must be satisfied that:
+        ; [SECP256R1_N]·[(A·B) / SECP256R1_N] + [C / SECP256R1_N] = D·2²⁵⁶ + E
+        ; where C < SECP256R1_N
+        %SECP256R1_N => A
+        ${_mulFnSecp256r1_AB / const.SECP256R1_N} => B        ; quotient  (256 bits)
+        ${_mulFnSecp256r1_AB % const.SECP256R1_N} => C        ; remainder (256 bits)
+        E :ARITH
+
+        ; 3] Check that the result is lower than SECP256R1_N
+        A => B
+        C => A
+        1       :LT, RETURN
