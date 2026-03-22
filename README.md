@@ -1,5 +1,5 @@
 # zkevm-rom
-This repository contains the zkasm source code of the polygon-hermez zkevm
+This repository contains the zkasm source code of the Polygon zkevm
 
 ## Usage
 ````
