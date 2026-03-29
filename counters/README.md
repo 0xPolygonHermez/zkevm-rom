@@ -1,6 +1,6 @@
 ## Counters testing tool  
 
-The purpose of this tool is to detect counters altertions in zkrom code.  
+The purpose of this tool is to detect counters alterations in zkrom code.  
 A unit test is created for each function and opcode of the zkEVM. The structure of the test is the following:  
 `````
 INCLUDE "../initIncludes.zkasm" // Include the files imported at the beginning of the test
