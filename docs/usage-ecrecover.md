@@ -4,7 +4,7 @@ This repo contains the zkasm subroutine to calculate ecrecover
 
 ## Usage
 
-1) Add the npm dependecy, to doit add following line in dependecies of package.json, after that executes npm update
+1) Add the npm dependency. To do it, add the following line in dependencies of package.json, then execute npm update
 ````
 "zk_ecrecover": "https://github.com/hermeznetwork/zk_ecrecover.git"
 ````
@@ -40,7 +40,7 @@ After setting parameters, call ecrecover_pbv (params by vars)
 
 ## Return Codes
 
-Subroutine ecrecover returns in A register the address; if an error happens return 0 in A registger, and return error reason in B register.
+Subroutine ecrecover returns in A register the address; if an error happens return 0 in A register, and return error reason in B register.
 ````
 1 - r is zero (0)
 2 - r is too big
